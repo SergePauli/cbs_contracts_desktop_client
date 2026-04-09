@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Services
     public partial class UserService : ObservableObject
     {
         [ObservableProperty]
-        private User? currentUser;
+        public partial User? CurrentUser { get; set; }
 
         public bool IsAuthenticated => CurrentUser != null;
 

@@ -13,22 +13,22 @@ namespace CbsContractsDesktopClient.ViewModels
         private readonly UserService _userService;
 
         [ObservableProperty]
-        private string username = string.Empty;
+        public partial string Username { get; set; } = string.Empty;
 
         [ObservableProperty]
-        private string password = string.Empty;
+        public partial string Password { get; set; } = string.Empty;
 
         [ObservableProperty]
-        private bool isLoading = false;
+        public partial bool IsLoading { get; set; }
 
         [ObservableProperty]
-        private string errorMessage = string.Empty;
+        public partial string ErrorMessage { get; set; } = string.Empty;
 
         [ObservableProperty]
-        private string debugLoginResponse = string.Empty;
+        public partial string DebugLoginResponse { get; set; } = string.Empty;
 
         [ObservableProperty]
-        private bool rememberMe = false;
+        public partial bool RememberMe { get; set; }
 
         public LoginViewModel(AuthService authService, UserService userService, CredentialManagerService credentialManagerService)
         {
