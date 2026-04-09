@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace CbsContractsDesktopClient.Services
 {
-    public class AuthService
+    public class AuthService : IAuthService
     {
         private readonly HttpClient _httpClient;
 

@@ -5,7 +5,7 @@ using System.Text;
 
 namespace CbsContractsDesktopClient.Services
 {
-    public class CredentialManagerService
+    public class CredentialManagerService : ICredentialManagerService
     {
         private const string TargetName = "CBS.Contracts.Desktop";
         private const int CredTypeGeneric = 1;

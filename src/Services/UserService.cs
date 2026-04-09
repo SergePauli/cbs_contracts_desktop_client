@@ -3,7 +3,7 @@ using CbsContractsDesktopClient.Models;
 
 namespace CbsContractsDesktopClient.Services
 {
-    public partial class UserService : ObservableObject
+    public partial class UserService : ObservableObject, IUserService
     {
         [ObservableProperty]
         public partial User? CurrentUser { get; set; }

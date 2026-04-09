@@ -22,9 +22,9 @@ namespace CbsContractsDesktopClient
         {
             var services = new ServiceCollection();
 
-            services.AddSingleton<CredentialManagerService>();
-            services.AddSingleton<UserService>();
-            services.AddHttpClient<AuthService>(client =>
+            services.AddSingleton<ICredentialManagerService, CredentialManagerService>();
+            services.AddSingleton<IUserService, UserService>();
+            services.AddHttpClient<IAuthService, AuthService>(client =>
             {
                 client.BaseAddress = new Uri("http://serge-lenovo:5000");
                 client.DefaultRequestHeaders.Accept.Clear();

@@ -8,9 +8,9 @@ namespace CbsContractsDesktopClient.ViewModels
 {
     public partial class LoginViewModel : ObservableObject
     {
-        private readonly AuthService _authService;
-        private readonly CredentialManagerService _credentialManagerService;
-        private readonly UserService _userService;
+        private readonly IAuthService _authService;
+        private readonly ICredentialManagerService _credentialManagerService;
+        private readonly IUserService _userService;
 
         [ObservableProperty]
         public partial string Username { get; set; } = string.Empty;
@@ -30,7 +30,7 @@ namespace CbsContractsDesktopClient.ViewModels
         [ObservableProperty]
         public partial bool RememberMe { get; set; }
 
-        public LoginViewModel(AuthService authService, UserService userService, CredentialManagerService credentialManagerService)
+        public LoginViewModel(IAuthService authService, IUserService userService, ICredentialManagerService credentialManagerService)
         {
             _authService = authService;
             _userService = userService;
