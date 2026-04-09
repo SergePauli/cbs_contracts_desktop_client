@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.Views;
+using CbsContractsDesktopClient.Views.Shell;
 using System.IO;
 using Windows.Graphics;
 
@@ -58,47 +59,7 @@ namespace CbsContractsDesktopClient
         private void OnLoginSucceeded()
         {
             RootGrid.Children.Clear();
-
-            var contentPanel = new StackPanel
-            {
-                Spacing = 16,
-                Margin = new Thickness(24)
-            };
-
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = $"Добро пожаловать, {_loginViewModel.Username}!",
-                FontSize = 28,
-                FontWeight = FontWeights.SemiBold
-            });
-
-            contentPanel.Children.Add(new TextBlock
-            {
-                Text = "Временный debug-вывод сырого ответа авторизации",
-                FontSize = 16,
-                Opacity = 0.8
-            });
-
-            var debugBox = new TextBox
-            {
-                Text = _loginViewModel.DebugLoginResponse,
-                IsReadOnly = true,
-                AcceptsReturn = true,
-                TextWrapping = TextWrapping.NoWrap,
-                FontFamily = new FontFamily("Consolas"),
-                MinHeight = 520,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
-
-            contentPanel.Children.Add(new ScrollViewer
-            {
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = debugBox
-            });
-
-            RootGrid.Children.Add(contentPanel);
+            RootGrid.Children.Add(new AppShellPage());
         }
     }
 }
