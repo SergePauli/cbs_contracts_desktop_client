@@ -1,0 +1,9 @@
+<Window
+    x:Class="CbsContractsDesktopClient.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:CbsContractsDesktopClient"
+    Title="CBS Contracts Desktop Client">
+
+    <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" />
+</Window>

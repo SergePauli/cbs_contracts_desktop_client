@@ -1,0 +1,104 @@
+﻿using Microsoft.UI.Text;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using CbsContractsDesktopClient.ViewModels;
+using CbsContractsDesktopClient.Views;
+using System.IO;
+using Windows.Graphics;
+
+namespace CbsContractsDesktopClient
+{
+    public sealed partial class MainWindow : Window
+    {
+        private static readonly SizeInt32 PreferredWindowSize = new(1440, 900);
+        private const int WindowPadding = 24;
+
+        private readonly LoginViewModel _loginViewModel;
+
+        public MainWindow(LoginViewModel loginViewModel)
+        {
+            this.InitializeComponent();
+            _loginViewModel = loginViewModel;
+
+            ConfigureWindowIcon();
+            ConfigureWindowBounds();
+
+            var loginPage = new LoginPage(_loginViewModel);
+            loginPage.LoginSucceeded += OnLoginSucceeded;
+            RootGrid.Children.Add(loginPage);
+        }
+
+        private void ConfigureWindowBounds()
+        {
+            var displayArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+            var workArea = displayArea.WorkArea;
+
+            var targetWidth = Math.Min(PreferredWindowSize.Width, Math.Max(960, workArea.Width - WindowPadding * 2));
+            var targetHeight = Math.Min(PreferredWindowSize.Height, Math.Max(700, workArea.Height - WindowPadding * 2));
+
+            var size = new SizeInt32(targetWidth, targetHeight);
+            AppWindow.Resize(size);
+
+            var x = workArea.X + Math.Max(0, (workArea.Width - size.Width) / 2);
+            var y = workArea.Y + Math.Max(0, (workArea.Height - size.Height) / 2);
+            AppWindow.Move(new PointInt32(x, y));
+        }
+
+        private void ConfigureWindowIcon()
+        {
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "favicon.ico");
+            if (File.Exists(iconPath))
+            {
+                AppWindow.SetIcon(iconPath);
+            }
+        }
+
+        private void OnLoginSucceeded()
+        {
+            RootGrid.Children.Clear();
+
+            var contentPanel = new StackPanel
+            {
+                Spacing = 16,
+                Margin = new Thickness(24)
+            };
+
+            contentPanel.Children.Add(new TextBlock
+            {
+                Text = $"Добро пожаловать, {_loginViewModel.Username}!",
+                FontSize = 28,
+                FontWeight = FontWeights.SemiBold
+            });
+
+            contentPanel.Children.Add(new TextBlock
+            {
+                Text = "Временный debug-вывод сырого ответа авторизации",
+                FontSize = 16,
+                Opacity = 0.8
+            });
+
+            var debugBox = new TextBox
+            {
+                Text = _loginViewModel.DebugLoginResponse,
+                IsReadOnly = true,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.NoWrap,
+                FontFamily = new FontFamily("Consolas"),
+                MinHeight = 520,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+
+            contentPanel.Children.Add(new ScrollViewer
+            {
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Content = debugBox
+            });
+
+            RootGrid.Children.Add(contentPanel);
+        }
+    }
+}
