@@ -7,6 +7,7 @@
     <AssemblyName>CbsContractsDesktopClient</AssemblyName>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\favicon.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

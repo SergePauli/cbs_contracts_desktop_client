@@ -15,6 +15,7 @@ namespace CbsContractsDesktopClient.Views
             this.InitializeComponent();
             ViewModel = viewModel;
             ViewModel.LoginSucceeded += OnLoginSucceeded;
+            Unloaded += OnUnloaded;
             DataContext = ViewModel;
 
             PasswordInput.Password = ViewModel.Password;
@@ -23,6 +24,12 @@ namespace CbsContractsDesktopClient.Views
         private void OnLoginSucceeded()
         {
             LoginSucceeded?.Invoke();
+        }
+
+        private void OnUnloaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            ViewModel.LoginSucceeded -= OnLoginSucceeded;
+            Unloaded -= OnUnloaded;
         }
 
         private void PasswordBox_PasswordChanged(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)

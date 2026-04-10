@@ -1,11 +1,9 @@
-﻿using Microsoft.UI.Text;
-using Microsoft.UI.Windowing;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
+﻿using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.Views;
 using CbsContractsDesktopClient.Views.Shell;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
 using System.IO;
 using Windows.Graphics;
 
@@ -16,19 +14,18 @@ namespace CbsContractsDesktopClient
         private static readonly SizeInt32 PreferredWindowSize = new(1440, 900);
         private const int WindowPadding = 24;
 
+        private readonly IAuthService _authService;
         private readonly LoginViewModel _loginViewModel;
 
-        public MainWindow(LoginViewModel loginViewModel)
+        public MainWindow(LoginViewModel loginViewModel, IAuthService authService)
         {
-            this.InitializeComponent();
+            InitializeComponent();
             _loginViewModel = loginViewModel;
+            _authService = authService;
 
             ConfigureWindowIcon();
             ConfigureWindowBounds();
-
-            var loginPage = new LoginPage(_loginViewModel);
-            loginPage.LoginSucceeded += OnLoginSucceeded;
-            RootGrid.Children.Add(loginPage);
+            ShowLoginPage();
         }
 
         private void ConfigureWindowBounds()
@@ -56,10 +53,33 @@ namespace CbsContractsDesktopClient
             }
         }
 
-        private void OnLoginSucceeded()
+        private void ShowLoginPage()
         {
             RootGrid.Children.Clear();
-            RootGrid.Children.Add(new AppShellPage());
+
+            var loginPage = new LoginPage(_loginViewModel);
+            loginPage.LoginSucceeded += OnLoginSucceeded;
+            RootGrid.Children.Add(loginPage);
+        }
+
+        private void ShowShellPage()
+        {
+            RootGrid.Children.Clear();
+
+            var appShellPage = new AppShellPage();
+            appShellPage.LogoutRequested += OnLogoutRequested;
+            RootGrid.Children.Add(appShellPage);
+        }
+
+        private void OnLoginSucceeded()
+        {
+            ShowShellPage();
+        }
+
+        private void OnLogoutRequested()
+        {
+            _authService.Logout();
+            ShowLoginPage();
         }
     }
 }

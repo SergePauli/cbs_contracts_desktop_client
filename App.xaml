@@ -9,6 +9,9 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <controls:XamlControlsResources />
+                <ResourceDictionary Source="src/Styles/Theme/ShellColors.xaml" />
+                <ResourceDictionary Source="src/Styles/Theme/ShellLayout.xaml" />
+                <ResourceDictionary Source="src/Styles/Theme/Typography.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <helpers:BoolNegationConverter x:Key="BoolNegationConverter" />
