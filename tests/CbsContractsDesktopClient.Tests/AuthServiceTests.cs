@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Services;
 using Xunit;
 
@@ -91,7 +92,7 @@ public class AuthServiceTests
             BaseAddress = new Uri("http://localhost/")
         };
 
-        return new AuthService(httpClient);
+        return new AuthService(httpClient, new StubUserService());
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
@@ -106,6 +107,28 @@ public class AuthServiceTests
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             return _handler(request);
+        }
+    }
+
+    private sealed class StubUserService : IUserService
+    {
+        public User? CurrentUser { get; set; }
+
+        public bool IsAuthenticated => CurrentUser != null;
+
+        public void SetCurrentUser(User user)
+        {
+            CurrentUser = user;
+        }
+
+        public void ClearCurrentUser()
+        {
+            CurrentUser = null;
+        }
+
+        public bool HasRole(string role)
+        {
+            return CurrentUser?.Role?.Equals(role, StringComparison.OrdinalIgnoreCase) == true;
         }
     }
 }

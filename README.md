@@ -59,6 +59,7 @@
 - Раздел `Справочники` сделан collapsible и по умолчанию свернут.
 - `TopBarView` использует `BreadcrumbBar`, кнопку сворачивания sidebar и `ToggleButton` audit panel.
 - Обычный текст переведен на общие типографические стили из `Typography.xaml`.
+- В `ContentHostView` начата интеграция табличного рабочего экрана на базе `WinUI.TableView`.
 
 ### Общий shell-state
 
@@ -132,6 +133,18 @@
 
 1. `dotnet test`
 
+Локальные integration smoke-тесты для внутренних API:
+
+1. Поднять оба внутренних API локально или в доступной сети.
+2. Задать переменные окружения:
+   - `CBS_TEST_USERNAME`
+   - `CBS_TEST_PASSWORD`
+   - опционально `CBS_TEST_PRIMARY_API_URL`
+   - опционально `CBS_TEST_DATA_API_URL`
+3. Запустить `dotnet test`.
+
+По умолчанию локальные integration-тесты используют `admin / 1235`, если `CBS_TEST_USERNAME` и `CBS_TEST_PASSWORD` не заданы явно.
+
 Хорошие следующие кандидаты на покрытие:
 
 - `AppShellViewModel`
@@ -147,3 +160,7 @@
 - обработка `401` и истечения токена
 - формы регистрации и восстановления пароля
 - перенос следующих экранов из web-клиента
+
+## Исследование DataGrid для WinUI 3
+
+- Отдельная заметка по поиску open-source табличного контрола и принятому решению лежит в [docs/WinUI-Table-Control-Research.md](docs/WinUI-Table-Control-Research.md).

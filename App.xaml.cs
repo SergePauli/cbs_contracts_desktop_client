@@ -12,6 +12,9 @@ namespace CbsContractsDesktopClient
 {
     public partial class App : Application
     {
+        private static readonly Uri PrimaryApiUri = new("http://serge-lenovo:5000/");
+        private static readonly Uri DataQueryApiUri = new("http://serge-lenovo:8080/");
+
         public static IServiceProvider Services { get; private set; } = null!;
 
         public App()
@@ -28,9 +31,16 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IUserService, UserService>();
             services.AddSingleton<INavigationMenuService, NavigationMenuService>();
             services.AddSingleton<AppShellViewModel>();
+            services.AddSingleton<StatusTableViewModel>();
+            services.AddHttpClient<IDataQueryService, DataQueryService>(client =>
+            {
+                client.BaseAddress = DataQueryApiUri;
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            });
             services.AddHttpClient<IAuthService, AuthService>(client =>
             {
-                client.BaseAddress = new Uri("http://serge-lenovo:5000");
+                client.BaseAddress = PrimaryApiUri;
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });

@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:tv="using:WinUI.TableView"
     mc:Ignorable="d">
 
     <Grid Padding="0">
@@ -23,7 +24,7 @@
                 VerticalAlignment="Center"
                 FontSize="26"
                 Foreground="{StaticResource ShellPrimaryTextBrush}"
-                Text="Люди" />
+                Text="Справочники" />
 
             <Button
                 Grid.Column="1"
@@ -54,13 +55,25 @@
                 <Border
                     Background="{StaticResource ShellPanelBackgroundBrush}"
                     CornerRadius="{StaticResource ShellPanelTopCornerRadius}">
-                    <TextBlock
-                        Margin="24,0,24,0"
-                        Style="{StaticResource SubtitleTextBlockStyle}"
-                        VerticalAlignment="Center"
-                        FontSize="22"
-                        Foreground="{StaticResource ShellPrimaryTextBrush}"
-                        Text="Все контакты" />
+                    <Grid Margin="24,0,24,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <TextBlock
+                            Style="{StaticResource SubtitleTextBlockStyle}"
+                            VerticalAlignment="Center"
+                            FontSize="22"
+                            Foreground="{StaticResource ShellPrimaryTextBrush}"
+                            Text="Status / item" />
+
+                        <TextBlock
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            Text="Проверка нового DataQueryService на реальном справочнике" />
+                    </Grid>
                 </Border>
 
                 <Grid
@@ -68,11 +81,58 @@
                     Background="{StaticResource ShellMutedPanelBackgroundBrush}"
                     CornerRadius="{StaticResource ShellPanelBottomCornerRadius}"
                     Padding="{StaticResource ShellContentBodyPadding}">
-                    <TextBlock
-                        Style="{StaticResource BodyTextBlockStyle}"
-                        FontSize="14"
-                        Foreground="{StaticResource ShellSecondaryTextBrush}"
-                        Text="Здесь позже будет host рабочих страниц. Поверхность остаётся лёгкой и почти без визуального шума." />
+                    <Grid RowSpacing="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="12">
+                            <ProgressRing
+                                Width="18"
+                                Height="18"
+                                IsActive="{Binding IsLoading}" />
+
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource ShellSecondaryTextBrush}"
+                                Text="Таблица загружает model=Status, preset=item из второго внутреннего API." />
+                        </StackPanel>
+
+                        <Grid Grid.Row="1">
+                            <tv:TableView
+                                AutoGenerateColumns="False"
+                                IsReadOnly="True"
+                                ItemsSource="{Binding Items}">
+                                <tv:TableView.Columns>
+                                    <tv:TableViewTextColumn
+                                        Header="ID"
+                                        Binding="{Binding Id}" />
+                                    <tv:TableViewTextColumn
+                                        Header="Name"
+                                        Binding="{Binding Name}" />
+                                </tv:TableView.Columns>
+                            </tv:TableView>
+
+                            <Border
+                                Padding="16"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Top"
+                                Background="{StaticResource ShellPanelBackgroundBrush}"
+                                BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="12"
+                                Visibility="{Binding ErrorMessage, Converter={StaticResource StringVisibilityConverter}}">
+                                <TextBlock
+                                    MaxWidth="520"
+                                    Foreground="IndianRed"
+                                    Text="{Binding ErrorMessage}"
+                                    TextWrapping="WrapWholeWords" />
+                            </Border>
+                        </Grid>
+                    </Grid>
                 </Grid>
             </Grid>
         </Border>
