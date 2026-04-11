@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using System;
 using System.Net.Http;
@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.ViewModels;
+using CbsContractsDesktopClient.ViewModels.Shell;
 
 namespace CbsContractsDesktopClient
 {
@@ -26,6 +27,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ICredentialManagerService, CredentialManagerService>();
             services.AddSingleton<IUserService, UserService>();
             services.AddSingleton<INavigationMenuService, NavigationMenuService>();
+            services.AddSingleton<AppShellViewModel>();
             services.AddHttpClient<IAuthService, AuthService>(client =>
             {
                 client.BaseAddress = new Uri("http://serge-lenovo:5000");

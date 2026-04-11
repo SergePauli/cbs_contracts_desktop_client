@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:shell="using:CbsContractsDesktopClient.Models.Shell"
     mc:Ignorable="d">
 
     <Border
@@ -22,52 +23,47 @@
                 <TextBlock
                     Style="{StaticResource SubtitleTextBlockStyle}"
                     Foreground="{StaticResource ShellPrimaryTextBrush}"
-                    Text="Аудит" />
+                    Text="{x:Bind ViewModel.AuditPanelState.Title, Mode=OneWay}" />
                 <TextBlock
                     Style="{StaticResource BodyTextBlockStyle}"
                     FontSize="13"
                     Foreground="{StaticResource ShellSecondaryTextBrush}"
-                    Text="Компактная правая панель. Позже станет скрывающейся." />
+                    Text="{x:Bind ViewModel.AuditPanelState.Description, Mode=OneWay}"
+                    TextWrapping="Wrap" />
             </StackPanel>
 
-            <StackPanel
+            <ItemsControl
                 Grid.Row="1"
                 Margin="0,18,0,0"
-                Spacing="10">
-                <Border
-                    Padding="12"
-                    Background="{StaticResource ShellAccentPanelBackgroundBrush}"
-                    CornerRadius="{StaticResource ShellAuditItemCornerRadius}">
-                    <StackPanel Spacing="4">
-                        <TextBlock
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            FontSize="13"
-                            Foreground="{StaticResource ShellPrimaryTextBrush}"
-                            Text="12:40 Обновлено" />
-                        <TextBlock
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Foreground="{StaticResource ShellSecondaryTextBrush}"
-                            Text="Изменены основные поля карточки." />
-                    </StackPanel>
-                </Border>
-
-                <Border
-                    Padding="12"
-                    Background="{StaticResource ShellAccentPanelBackgroundAltBrush}"
-                    CornerRadius="{StaticResource ShellAuditItemCornerRadius}">
-                    <StackPanel Spacing="4">
-                        <TextBlock
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            FontSize="13"
-                            Foreground="{StaticResource ShellPrimaryTextBrush}"
-                            Text="11:55 Создано" />
-                        <TextBlock
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Foreground="{StaticResource ShellSecondaryTextBrush}"
-                            Text="Здесь позже будет таймлайн изменений." />
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+                ItemsSource="{x:Bind ViewModel.AuditPanelState.Entries, Mode=OneWay}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="shell:AuditEntry">
+                        <Border
+                            Padding="12"
+                            Margin="0,0,0,10"
+                            Background="{StaticResource ShellAccentPanelBackgroundBrush}"
+                            CornerRadius="{StaticResource ShellAuditItemCornerRadius}">
+                            <StackPanel Spacing="4">
+                                <TextBlock
+                                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                                    FontSize="13"
+                                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                                    Text="{x:Bind Timestamp}" />
+                                <TextBlock
+                                    Style="{StaticResource BodyTextBlockStyle}"
+                                    FontSize="13"
+                                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                                    Text="{x:Bind Title}" />
+                                <TextBlock
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{StaticResource ShellSecondaryTextBrush}"
+                                    Text="{x:Bind Description}"
+                                    TextWrapping="Wrap" />
+                            </StackPanel>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </Grid>
     </Border>
 </UserControl>

@@ -2,77 +2,74 @@
     x:Class="CbsContractsDesktopClient.Views.Shell.TopBarView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
     <Border
         BorderBrush="{StaticResource ShellPanelBorderBrush}"
-        BorderThickness="0,0,0,1">
-        <Grid Padding="{StaticResource ShellTopBarPadding}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="320" />
-        </Grid.ColumnDefinitions>
+        BorderThickness="0,0,0,1"
+        Background="{StaticResource ShellPanelBackgroundBrush}">
+        <Grid Padding="{StaticResource ShellTopBarPadding}" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
 
-        <Button
-            Width="{StaticResource ShellBackButtonSize}"
-            Height="{StaticResource ShellBackButtonSize}"
-            Padding="0"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Center"
-            Background="Transparent"
-            BorderBrush="{x:Null}"
-            Content="&#xE76B;"
-            FontFamily="Segoe Fluent Icons"
-            FontSize="14"
-            Foreground="{StaticResource ShellSecondaryTextBrush}" />
-
-        <Button
-            Grid.Column="1"
-            Width="{StaticResource ShellBackButtonSize}"
-            Height="{StaticResource ShellBackButtonSize}"
-            Padding="0"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Center"
-            Background="Transparent"
-            BorderBrush="{x:Null}"
-            Content="&#xE76C;"
-            FontFamily="Segoe Fluent Icons"
-            FontSize="14"
-            Foreground="{StaticResource ShellAccentMutedBrush}" />
-
-        <Border
-            Grid.Column="3"
-            Height="{StaticResource ShellSearchHeight}"
-            VerticalAlignment="Center"
-            Background="{StaticResource ShellPanelBackgroundBrush}"
-            BorderBrush="{StaticResource ShellPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource ShellSearchCornerRadius}">
-            <Grid Padding="{StaticResource ShellTopBarSearchPadding}">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-
-                <TextBlock
-                    VerticalAlignment="Center"
+            <Button
+                x:Name="SidebarToggleButton"
+                Grid.Column="0"
+                Width="{StaticResource ShellBackButtonSize}"
+                Height="{StaticResource ShellBackButtonSize}"
+                Padding="0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Background="Transparent"
+                BorderBrush="{x:Null}"
+                Click="SidebarToggleButton_Click"
+                ToolTipService.ToolTip="Свернуть или раскрыть меню">
+                <FontIcon
+                    Glyph="&#xE700;"
                     FontFamily="Segoe Fluent Icons"
                     FontSize="14"
-                    Foreground="{StaticResource ShellSecondaryTextBrush}"
-                    Text="&#xE721;" />
-                <TextBlock
-                    Grid.Column="1"
-                    Margin="12,0,0,0"
-                    Style="{StaticResource BodyTextBlockStyle}"
-                    VerticalAlignment="Center"
-                    Foreground="{StaticResource ShellSecondaryTextBrush}"
-                    Text="Поиск" />
-            </Grid>
-        </Border>
+                    Foreground="{StaticResource ShellSecondaryTextBrush}" />
+            </Button>
+
+            <controls:BreadcrumbBar
+                x:Name="TopBreadcrumbBar"
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}"
+                ItemClicked="TopBreadcrumbBar_ItemClicked" />
+
+            <ContentPresenter
+                x:Name="TopBarActionsHost"
+                Grid.Column="2"
+                VerticalAlignment="Center"
+                Content="{x:Bind RightContent, Mode=OneWay}" />
+
+            <primitives:ToggleButton
+                x:Name="AuditPanelToggleButton"
+                Grid.Column="3"
+                Width="{StaticResource ShellBackButtonSize}"
+                Height="{StaticResource ShellBackButtonSize}"
+                Padding="0"
+                VerticalAlignment="Center"
+                Background="Transparent"
+                BorderBrush="{x:Null}"
+                Click="AuditPanelToggleButton_Click"
+                IsChecked="{x:Bind ViewModel.IsAuditPanelOpen, Mode=OneWay}"
+                ToolTipService.ToolTip="Показать или скрыть аудит">
+                <FontIcon
+                    Glyph="&#xE7C1;"
+                    FontFamily="Segoe Fluent Icons"
+                    FontSize="14"
+                    Foreground="{StaticResource ShellSecondaryTextBrush}" />
+            </primitives:ToggleButton>
         </Grid>
     </Border>
 </UserControl>

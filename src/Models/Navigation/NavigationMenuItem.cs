@@ -8,6 +8,7 @@ namespace CbsContractsDesktopClient.Models.Navigation
         private string _title = string.Empty;
         private string _glyph = string.Empty;
         private string _route = string.Empty;
+        private string _sectionTitle = string.Empty;
         private bool _isSelected;
         private bool _isAction;
         private string _background = "Transparent";
@@ -33,6 +34,12 @@ namespace CbsContractsDesktopClient.Models.Navigation
         {
             get => _route;
             set => SetField(ref _route, value);
+        }
+
+        public string SectionTitle
+        {
+            get => _sectionTitle;
+            set => SetField(ref _sectionTitle, value);
         }
 
         public bool IsSelected

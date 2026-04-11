@@ -9,9 +9,9 @@
 
     <Grid Background="{StaticResource ShellWindowBackgroundBrush}">
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="{StaticResource ShellSidebarWidth}" />
+            <ColumnDefinition x:Name="SidebarColumn" Width="{StaticResource ShellSidebarWidth}" />
             <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="{StaticResource ShellAuditWidth}" />
+            <ColumnDefinition x:Name="AuditColumn" Width="{StaticResource ShellAuditWidth}" />
         </Grid.ColumnDefinitions>
 
         <shell:NavigationSidebarView x:Name="SidebarView" Grid.Column="0" />
@@ -23,11 +23,14 @@
                 <RowDefinition Height="{StaticResource ShellFooterHeight}" />
             </Grid.RowDefinitions>
 
-            <shell:TopBarView Grid.Row="0" />
+            <shell:TopBarView x:Name="TopBarControl" Grid.Row="0" />
             <shell:ContentHostView Grid.Row="1" Margin="{StaticResource ShellContentHostMargin}" />
             <shell:FooterBarView Grid.Row="2" />
         </Grid>
 
-        <shell:AuditPanelView Grid.Column="2" Margin="{StaticResource ShellAuditMargin}" />
+        <shell:AuditPanelView
+            x:Name="AuditPanelControl"
+            Grid.Column="2"
+            Margin="{StaticResource ShellAuditMargin}" />
     </Grid>
 </Page>

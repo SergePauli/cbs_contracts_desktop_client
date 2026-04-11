@@ -1,8 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
 using System.Linq;
 using CbsContractsDesktopClient.Models.Navigation;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
+using CbsContractsDesktopClient.ViewModels.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -12,7 +15,9 @@ namespace CbsContractsDesktopClient.Views.Shell
     public sealed partial class NavigationSidebarView : UserControl
     {
         private readonly IUserService _userService;
+        private readonly AppShellViewModel _viewModel;
         private readonly IReadOnlyList<NavigationMenuSection> _sections;
+
         public event Action? LogoutRequested;
 
         public NavigationSidebarView()
@@ -20,8 +25,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             InitializeComponent();
 
             _userService = App.Services.GetRequiredService<IUserService>();
+            _viewModel = App.Services.GetRequiredService<AppShellViewModel>();
             var navigationMenuService = App.Services.GetRequiredService<INavigationMenuService>();
             _sections = navigationMenuService.BuildMenu(_userService.CurrentUser, GetDefaultRoute());
+
+            _viewModel.ContextNavigationItems.CollectionChanged += OnContextNavigationItemsChanged;
+            Unloaded += OnUnloaded;
 
             BuildNavigationMenu();
         }
@@ -56,6 +65,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                 foreach (var item in section.Items)
                 {
+                    item.SectionTitle = section.Title;
                     var navigationItem = CreateNavigationItem(item);
 
                     if (section.IsSessionSection)
@@ -74,9 +84,33 @@ namespace CbsContractsDesktopClient.Views.Shell
                 }
             }
 
+            if (_viewModel.ContextNavigationItems.Count > 0)
+            {
+                SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
+                {
+                    Content = "Контекст"
+                });
+
+                foreach (var item in _viewModel.ContextNavigationItems)
+                {
+                    var contextItem = CreateNavigationItem(item);
+                    SidebarNavigationView.MenuItems.Add(contextItem);
+
+                    if (item.IsSelected)
+                    {
+                        selectedItem = contextItem;
+                    }
+                }
+            }
+
             if (selectedItem != null)
             {
                 SidebarNavigationView.SelectedItem = selectedItem;
+
+                if (selectedItem.DataContext is NavigationMenuItem selectedMenuItem)
+                {
+                    _viewModel.SetSelectedNavigationItem(selectedMenuItem);
+                }
             }
         }
 
@@ -102,6 +136,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             return new NavigationViewItem
             {
                 Content = item.Title,
+                DataContext = item,
                 Tag = item.Route,
                 SelectsOnInvoked = !item.IsAction,
                 Icon = new FontIcon
@@ -119,13 +154,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (string.Equals(route, "/logout", System.StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(route, "/logout", StringComparison.OrdinalIgnoreCase))
             {
                 LogoutRequested?.Invoke();
-                return;
             }
-
-            UpdateSelection(route);
         }
 
         private void SidebarNavigationView_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
@@ -135,20 +167,36 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (string.Equals(route, "/logout", System.StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(route, "/logout", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
 
             UpdateSelection(route);
+
+            if (item.DataContext is NavigationMenuItem selectedMenuItem)
+            {
+                _viewModel.SetSelectedNavigationItem(selectedMenuItem);
+            }
         }
 
         private void UpdateSelection(string route)
         {
-            foreach (var item in _sections.SelectMany(section => section.Items))
+            foreach (var item in _sections.SelectMany(section => section.Items).Concat(_viewModel.ContextNavigationItems))
             {
-                item.IsSelected = string.Equals(item.Route, route, System.StringComparison.OrdinalIgnoreCase);
+                item.IsSelected = string.Equals(item.Route, route, StringComparison.OrdinalIgnoreCase);
             }
+        }
+
+        private void OnContextNavigationItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            BuildNavigationMenu();
+        }
+
+        private void OnUnloaded(object sender, Microsoft.UI.Xaml.RoutedEventArgs e)
+        {
+            _viewModel.ContextNavigationItems.CollectionChanged -= OnContextNavigationItemsChanged;
+            Unloaded -= OnUnloaded;
         }
     }
 }

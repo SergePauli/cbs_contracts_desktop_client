@@ -19,13 +19,13 @@
                 Style="{StaticResource CaptionTextBlockStyle}"
                 VerticalAlignment="Center"
                 Foreground="{StaticResource ShellTertiaryTextBrush}"
-                Text="{x:Bind FooterSummary}" />
+                Text="{x:Bind ViewModel.FooterState.SummaryText, Mode=OneWay}" />
             <TextBlock
                 Grid.Column="1"
                 Style="{StaticResource CaptionTextBlockStyle}"
                 VerticalAlignment="Center"
                 Foreground="{StaticResource ShellCaptionTextBrush}"
-                Text="v1.0.0" />
+                Text="{x:Bind ViewModel.FooterState.VersionText, Mode=OneWay}" />
         </Grid>
     </Border>
 </UserControl>

@@ -1,22 +1,17 @@
-using Microsoft.Extensions.DependencyInjection;
+пїњusing Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
-using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.ViewModels.Shell;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
     public sealed partial class FooterBarView : UserControl
     {
+        public AppShellViewModel ViewModel { get; }
+
         public FooterBarView()
         {
+            ViewModel = App.Services.GetRequiredService<AppShellViewModel>();
             InitializeComponent();
-
-            var userService = App.Services.GetRequiredService<IUserService>();
-            var user = userService.CurrentUser;
-            var department = string.IsNullOrWhiteSpace(user?.DepartmentName) ? "ќтдел не определен" : user!.DepartmentName;
-            var role = string.IsNullOrWhiteSpace(user?.Role) ? "роль не определена" : $"роль: {user!.Role}";
-            FooterSummary = $"{department} Х {role}";
         }
-
-        public string FooterSummary { get; }
     }
 }
