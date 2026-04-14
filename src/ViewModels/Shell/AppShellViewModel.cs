@@ -27,10 +27,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public partial NavigationMenuItem? SelectedNavigationItem { get; set; }
 
         [ObservableProperty]
+        public partial string CurrentRoute { get; set; } = string.Empty;
+
+        [ObservableProperty]
         public partial FooterState FooterState { get; set; }
 
         [ObservableProperty]
         public partial AuditPanelState AuditPanelState { get; set; }
+
+        [ObservableProperty]
+        public partial string AuditPanelText { get; set; } = string.Empty;
 
         public ObservableCollection<object> BreadcrumbItems { get; } = [];
 
@@ -41,8 +47,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             IsSidebarVisible = true;
             IsAuditPanelOpen = false;
             SelectedNavigationItem = null;
+            CurrentRoute = string.Empty;
             FooterState = BuildFooterState();
             AuditPanelState = AuditPanelState.Empty;
+            AuditPanelText = string.Empty;
             BreadcrumbItems.Clear();
             ContextNavigationItems.Clear();
         }
@@ -60,6 +68,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public void SetSelectedNavigationItem(NavigationMenuItem item)
         {
             SelectedNavigationItem = item;
+            CurrentRoute = item.Route;
             BreadcrumbItems.Clear();
 
             if (!string.IsNullOrWhiteSpace(item.SectionTitle))
@@ -91,9 +100,15 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             AuditPanelState = state;
         }
 
+        public void SetAuditPanelText(string text)
+        {
+            AuditPanelText = text;
+        }
+
         public void ResetAuditPanelState()
         {
             AuditPanelState = AuditPanelState.Empty;
+            AuditPanelText = string.Empty;
         }
 
         private FooterState BuildFooterState()

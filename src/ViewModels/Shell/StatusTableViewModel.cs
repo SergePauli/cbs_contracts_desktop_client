@@ -1,22 +1,44 @@
-using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.ViewModels.Data;
 
 namespace CbsContractsDesktopClient.ViewModels.Shell
 {
     public partial class StatusTableViewModel : ObservableObject
     {
-        private readonly IDataQueryService _dataQueryService;
-        private bool _isLoaded;
+        private readonly LazyDataViewState<StatusItem> _state;
 
         public StatusTableViewModel(IDataQueryService dataQueryService)
         {
-            _dataQueryService = dataQueryService;
+            _state = new LazyDataViewState<StatusItem>(
+                dataQueryService,
+                model: "Status",
+                preset: "item",
+                pageSize: 3,
+                fieldMap: new Dictionary<string, string>
+                {
+                    ["id"] = "id",
+                    ["name"] = "name"
+                },
+                placeholderFactory: static () => new StatusItem(),
+                initialSorts:
+                [
+                    new DataSortCriterion
+                    {
+                        FieldKey = "id",
+                        Direction = DataSortDirection.Ascending
+                    }
+                ]);
+
+            ((INotifyPropertyChanged)_state.Items).PropertyChanged += OnItemsPropertyChanged;
         }
 
-        public ObservableCollection<StatusItem> Items { get; } = [];
+        public LazyDataViewState<StatusItem> State => _state;
+
+        public CbsContractsDesktopClient.Collections.LazyDataCollection<StatusItem> Items => _state.Items;
 
         [ObservableProperty]
         public partial bool IsLoading { get; set; }
@@ -24,53 +46,34 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         [ObservableProperty]
         public partial string ErrorMessage { get; set; } = string.Empty;
 
+        [ObservableProperty]
+        public partial int TotalCount { get; set; }
+
         public async Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
         {
-            if (_isLoaded || IsLoading)
-            {
-                return;
-            }
-
-            await ReloadAsync(cancellationToken);
+            await _state.InitializeAsync(cancellationToken);
         }
 
         public async Task ReloadAsync(CancellationToken cancellationToken = default)
         {
-            IsLoading = true;
-            ErrorMessage = string.Empty;
+            await _state.RefreshAsync(cancellationToken);
+        }
 
-            try
+        private void OnItemsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(CbsContractsDesktopClient.Collections.LazyDataCollection<StatusItem>.IsLoading))
             {
-                var data = await _dataQueryService.GetDataAsync<StatusItem>(
-                    new DataQueryRequest
-                    {
-                        Model = "Status",
-                        Preset = "item",
-                        Sorts = ["id asc"],
-                        Limit = 200,
-                        Offset = 0
-                    },
-                    cancellationToken);
-
-                Items.Clear();
-                foreach (var item in data)
-                {
-                    Items.Add(item);
-                }
-
-                _isLoaded = true;
+                IsLoading = _state.Items.IsLoading;
             }
-            catch (OperationCanceledException)
+            else if (e.PropertyName == nameof(CbsContractsDesktopClient.Collections.LazyDataCollection<StatusItem>.ErrorMessage))
             {
-                throw;
+                ErrorMessage = string.IsNullOrWhiteSpace(_state.Items.ErrorMessage)
+                    ? string.Empty
+                    : $"Не удалось загрузить справочник Status: {_state.Items.ErrorMessage}";
             }
-            catch (Exception ex)
+            else if (e.PropertyName == nameof(CbsContractsDesktopClient.Collections.LazyDataCollection<StatusItem>.TotalCount))
             {
-                ErrorMessage = $"Не удалось загрузить справочник Status: {ex.Message}";
-            }
-            finally
-            {
-                IsLoading = false;
+                TotalCount = _state.Items.TotalCount;
             }
         }
     }

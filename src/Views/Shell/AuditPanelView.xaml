@@ -32,38 +32,20 @@
                     TextWrapping="Wrap" />
             </StackPanel>
 
-            <ItemsControl
+            <TextBox
                 Grid.Row="1"
                 Margin="0,18,0,0"
-                ItemsSource="{x:Bind ViewModel.AuditPanelState.Entries, Mode=OneWay}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate x:DataType="shell:AuditEntry">
-                        <Border
-                            Padding="12"
-                            Margin="0,0,0,10"
-                            Background="{StaticResource ShellAccentPanelBackgroundBrush}"
-                            CornerRadius="{StaticResource ShellAuditItemCornerRadius}">
-                            <StackPanel Spacing="4">
-                                <TextBlock
-                                    Style="{StaticResource BodyStrongTextBlockStyle}"
-                                    FontSize="13"
-                                    Foreground="{StaticResource ShellPrimaryTextBrush}"
-                                    Text="{x:Bind Timestamp}" />
-                                <TextBlock
-                                    Style="{StaticResource BodyTextBlockStyle}"
-                                    FontSize="13"
-                                    Foreground="{StaticResource ShellPrimaryTextBrush}"
-                                    Text="{x:Bind Title}" />
-                                <TextBlock
-                                    Style="{StaticResource CaptionTextBlockStyle}"
-                                    Foreground="{StaticResource ShellSecondaryTextBrush}"
-                                    Text="{x:Bind Description}"
-                                    TextWrapping="Wrap" />
-                            </StackPanel>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
+                AcceptsReturn="True"
+                FontFamily="Cascadia Mono"
+                IsReadOnly="True"
+                IsSpellCheckEnabled="False"
+                MinHeight="240"
+                Padding="12"
+                ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                ScrollViewer.VerticalScrollBarVisibility="Auto"
+                SelectionHighlightColor="Green"
+                Text="{x:Bind ViewModel.AuditPanelText, Mode=OneWay}"
+                TextWrapping="NoWrap" />
         </Grid>
     </Border>
 </UserControl>

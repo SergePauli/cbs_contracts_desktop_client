@@ -3,7 +3,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <GridLength x:Key="ShellSidebarWidth">176</GridLength>
-    <GridLength x:Key="ShellAuditWidth">384</GridLength>
+    <GridLength x:Key="ShellAuditWidth">0.95*</GridLength>
     <GridLength x:Key="ShellTopBarHeight">56</GridLength>
     <GridLength x:Key="ShellFooterHeight">32</GridLength>
 

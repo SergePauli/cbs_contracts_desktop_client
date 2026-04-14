@@ -17,11 +17,35 @@
 
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
+    <Compile Remove="tempobj\**\*.cs" />
+    <Compile Remove="tmpbuild_*\**\*.cs" />
+    <Compile Remove="tmpverify\**\*.cs" />
+    <Compile Remove="obj_verify*\**\*.cs" />
     <EmbeddedResource Remove="tests\**\*" />
+    <EmbeddedResource Remove="tempobj\**\*" />
+    <EmbeddedResource Remove="tmpbuild_*\**\*" />
+    <EmbeddedResource Remove="tmpverify\**\*" />
+    <EmbeddedResource Remove="obj_verify*\**\*" />
     <None Remove="tests\**\*" />
+    <None Remove="tempobj\**\*" />
+    <None Remove="tmpbuild_*\**\*" />
+    <None Remove="tmpverify\**\*" />
+    <None Remove="obj_verify*\**\*" />
     <Page Remove="tests\**\*" />
+    <Page Remove="tempobj\**\*" />
+    <Page Remove="tmpbuild_*\**\*" />
+    <Page Remove="tmpverify\**\*" />
+    <Page Remove="obj_verify*\**\*" />
     <Content Remove="tests\**\*" />
+    <Content Remove="tempobj\**\*" />
+    <Content Remove="tmpbuild_*\**\*" />
+    <Content Remove="tmpverify\**\*" />
+    <Content Remove="obj_verify*\**\*" />
     <PRIResource Remove="tests\**\*" />
+    <PRIResource Remove="tempobj\**\*" />
+    <PRIResource Remove="tmpbuild_*\**\*" />
+    <PRIResource Remove="tmpverify\**\*" />
+    <PRIResource Remove="obj_verify*\**\*" />
   </ItemGroup>
 
   <ItemGroup>

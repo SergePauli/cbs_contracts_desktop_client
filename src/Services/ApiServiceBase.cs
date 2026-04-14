@@ -6,6 +6,10 @@ namespace CbsContractsDesktopClient.Services
 {
     public abstract class ApiServiceBase
     {
+        private const bool DiagnosticsEnabled = false;
+        public static event Action<string>? TraceEmitted;
+        private static readonly TimeSpan DiagnosticRequestTimeout = TimeSpan.FromSeconds(15);
+
         private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web)
         {
             PropertyNameCaseInsensitive = true
@@ -25,15 +29,46 @@ namespace CbsContractsDesktopClient.Services
         protected async Task<TResponse> PostAsync<TRequest, TResponse>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
             using var message = CreatePostRequest(requestUri, request);
-            using var response = await _httpClient.SendAsync(message, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(DiagnosticRequestTimeout);
+            EmitTrace($"STEP API 01 before-send uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
 
+            HttpResponseMessage response;
+            try
+            {
+                response = await _httpClient.SendAsync(
+                    message,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    timeoutCts.Token);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                EmitTrace($"STEP API 01 timeout uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
+                throw new TimeoutException(
+                    $"HTTP request '{requestUri}' timed out after {DiagnosticRequestTimeout.TotalSeconds:0} seconds.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                EmitTrace($"STEP API 01 error uri={requestUri} type={ex.GetType().Name} message={ex.Message}");
+                throw;
+            }
+
+            using var _ = response;
+            EmitTrace($"STEP API 02 after-headers uri={requestUri} status={(int)response.StatusCode}");
+            EmitTrace($"STEP API 03 before-ensure-success uri={requestUri}");
+            await EnsureSuccessAsync(response, cancellationToken);
+            EmitTrace($"STEP API 04 after-ensure-success uri={requestUri}");
+
+            EmitTrace($"STEP API 05 before-read-json uri={requestUri}");
             var result = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
+            EmitTrace($"STEP API 06 after-read-json uri={requestUri} isNull={(result is null ? "true" : "false")}");
             if (result is null)
             {
                 throw new InvalidOperationException($"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
             }
 
+            EmitTrace($"STEP API 07 return uri={requestUri}");
             return result;
         }
 
@@ -75,6 +110,16 @@ namespace CbsContractsDesktopClient.Services
                 $"HTTP {(int)response.StatusCode} ({response.StatusCode}). {body}".Trim(),
                 inner: null,
                 response.StatusCode);
+        }
+
+        private static void EmitTrace(string message)
+        {
+            if (!DiagnosticsEnabled)
+            {
+                return;
+            }
+
+            TraceEmitted?.Invoke(message);
         }
     }
 }
