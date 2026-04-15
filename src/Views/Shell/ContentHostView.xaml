@@ -141,6 +141,7 @@
                                 Margin="0"
                                 SupportsMultipleRowSelection="False"
                                 SupportsRowSelection="True"
+                                ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"
                                 SortRequested="ReferenceTableView_SortRequested"
                                 TotalCount="{Binding TotalCount}"
                                 TraceGenerated="ReferenceTableView_TraceGenerated"

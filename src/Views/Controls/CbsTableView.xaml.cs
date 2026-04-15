@@ -11,7 +11,9 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 
 namespace CbsContractsDesktopClient.Views.Controls
 {
@@ -128,6 +130,12 @@ namespace CbsContractsDesktopClient.Views.Controls
         private const int WindowBufferRows = 8;
         private const int WindowStepRows = 8;
         private const double HeaderSideBorderCompensation = 1d;
+        private const double MinimumColumnWidth = 48d;
+        private const double ResizeHandleWidth = 12d;
+        private const double HeaderAdornmentWidth = 18d;
+        private int _activeResizeColumnIndex = -1;
+        private double _activeResizeStartWidth;
+        private bool _suppressNextHeaderClick;
 
         public CbsTableView()
         {
@@ -143,6 +151,8 @@ namespace CbsContractsDesktopClient.Views.Controls
         public event EventHandler<CbsTableTraceEventArgs>? TraceGenerated;
 
         public event EventHandler<CbsTableViewportChangedEventArgs>? ViewportChanged;
+
+        public event EventHandler<CbsTableColumnWidthChangedEventArgs>? ColumnWidthChanged;
 
         public IReadOnlyList<CbsTableColumnDefinition> Columns
         {
@@ -309,39 +319,14 @@ namespace CbsContractsDesktopClient.Views.Controls
                 };
                 button.Click += OnHeaderButtonClick;
 
-                var headerText = Columns[index].Header;
-                if (Columns[index].IsSortable && string.Equals(CurrentSortField, Columns[index].FieldKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    headerText = CurrentSortDirection switch
-                    {
-                        DataSortDirection.Descending => $"{headerText} v",
-                        _ => $"{headerText} ^"
-                    };
-                }
-
-                button.Content = new TextBlock
-                {
-                    FontWeight = FontWeights.SemiBold,
-                    FontSize = GetHeaderFontSize(),
-                    Foreground = (Brush)Application.Current.Resources["ShellTableHeaderTextBrush"],
-                    Text = headerText,
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                };
+                button.Content = CreateHeaderContent(Columns[index]);
 
                 Grid.SetColumn(button, index);
                 HeaderGrid.Children.Add(button);
 
-                if (index < Columns.Count - 1)
-                {
-                    var splitter = new Border
-                    {
-                        Width = 1,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Background = (Brush)Application.Current.Resources["ShellTableGridLineBrush"]
-                    };
-                    Grid.SetColumn(splitter, index);
-                    HeaderGrid.Children.Add(splitter);
-                }
+                var splitter = CreateResizeHandle(index, index == Columns.Count - 1);
+                Grid.SetColumn(splitter, index);
+                HeaderGrid.Children.Add(splitter);
             }
 
             HeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -418,6 +403,12 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnHeaderButtonClick(object sender, RoutedEventArgs e)
         {
+            if (_suppressNextHeaderClick)
+            {
+                _suppressNextHeaderClick = false;
+                return;
+            }
+
             if (sender is not Button { Tag: CbsTableColumnDefinition column } || !column.IsSortable)
             {
                 return;
@@ -787,6 +778,183 @@ namespace CbsContractsDesktopClient.Views.Controls
             var compensation = RowsScrollViewer.ActualWidth - RowsScrollViewer.ViewportWidth;
             return Math.Max(0, Math.Ceiling(compensation));
         }
+
+        private void OnColumnResizeStarted(object sender, ManipulationStartedRoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement { Tag: int columnIndex })
+            {
+                return;
+            }
+
+            _activeResizeColumnIndex = columnIndex;
+            _activeResizeStartWidth = GetColumnPixelWidth(Columns[columnIndex]);
+            _suppressNextHeaderClick = false;
+        }
+
+        private void OnColumnResizeDelta(object sender, ManipulationDeltaRoutedEventArgs e)
+        {
+            if (_activeResizeColumnIndex < 0 || _activeResizeColumnIndex >= Columns.Count)
+            {
+                return;
+            }
+
+            var nextWidth = Math.Max(
+                MinimumColumnWidth,
+                _activeResizeStartWidth + e.Cumulative.Translation.X);
+
+            Columns[_activeResizeColumnIndex].Width = FormatPixelWidth(nextWidth);
+            ApplyColumnWidth(_activeResizeColumnIndex, nextWidth);
+            _suppressNextHeaderClick = true;
+        }
+
+        private void OnColumnResizeCompleted(object sender, ManipulationCompletedRoutedEventArgs e)
+        {
+            if (_activeResizeColumnIndex < 0 || _activeResizeColumnIndex >= Columns.Count)
+            {
+                return;
+            }
+
+            var column = Columns[_activeResizeColumnIndex];
+            var finalWidth = GetColumnPixelWidth(column);
+            ColumnWidthChanged?.Invoke(
+                this,
+                new CbsTableColumnWidthChangedEventArgs(
+                    column.FieldKey,
+                    column.Width,
+                    finalWidth));
+
+            _activeResizeColumnIndex = -1;
+            _activeResizeStartWidth = 0;
+            ProtectedCursor = null;
+        }
+
+        private void ApplyColumnWidth(int columnIndex, double width)
+        {
+            if (columnIndex < 0 || columnIndex >= Columns.Count)
+            {
+                return;
+            }
+
+            if (columnIndex < HeaderGrid.ColumnDefinitions.Count)
+            {
+                HeaderGrid.ColumnDefinitions[columnIndex].Width = new GridLength(width);
+            }
+
+            foreach (var rowView in _rowPool)
+            {
+                rowView.SetColumnWidth(columnIndex, width);
+            }
+        }
+
+        private static double GetColumnPixelWidth(CbsTableColumnDefinition column)
+        {
+            if (TryParseWidth(column.EffectiveWidth, out var width))
+            {
+                return width;
+            }
+
+            return 192d;
+        }
+
+        private static string FormatPixelWidth(double width)
+        {
+            return $"{Math.Round(width)}px";
+        }
+
+        private Border CreateResizeHandle(int columnIndex, bool isLastColumn)
+        {
+            var splitter = new Border
+            {
+                Width = ResizeHandleWidth,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                Tag = columnIndex
+            };
+
+            splitter.ManipulationMode = ManipulationModes.TranslateX;
+            splitter.ManipulationStarted += OnColumnResizeStarted;
+            splitter.ManipulationDelta += OnColumnResizeDelta;
+            splitter.ManipulationCompleted += OnColumnResizeCompleted;
+            splitter.PointerEntered += OnColumnResizePointerEntered;
+            splitter.PointerExited += OnColumnResizePointerExited;
+
+            var host = new Grid
+            {
+                IsHitTestVisible = false
+            };
+
+            if (!isLastColumn)
+            {
+                host.Children.Add(new Border
+                {
+                    Width = 1,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Background = (Brush)Application.Current.Resources["ShellTableGridLineBrush"]
+                });
+            }
+
+            splitter.Child = host;
+            return splitter;
+        }
+
+        private void OnColumnResizePointerEntered(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is Border)
+            {
+                ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast);
+            }
+        }
+
+        private void OnColumnResizePointerExited(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is Border && _activeResizeColumnIndex < 0)
+            {
+                ProtectedCursor = null;
+            }
+        }
+
+        private FrameworkElement CreateHeaderContent(CbsTableColumnDefinition column)
+        {
+            var contentGrid = new Grid();
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(HeaderAdornmentWidth) });
+
+            var titleText = new TextBlock
+            {
+                FontWeight = FontWeights.SemiBold,
+                FontSize = GetHeaderFontSize(),
+                Foreground = (Brush)Application.Current.Resources["ShellTableHeaderTextBrush"],
+                Text = column.Header,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(titleText, 0);
+            contentGrid.Children.Add(titleText);
+
+            var adornmentHost = new Grid
+            {
+                Width = HeaderAdornmentWidth,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (column.IsSortable && string.Equals(CurrentSortField, column.FieldKey, StringComparison.OrdinalIgnoreCase))
+            {
+                adornmentHost.Children.Add(new FontIcon
+                {
+                    Glyph = CurrentSortDirection == DataSortDirection.Descending ? "\uE70D" : "\uE70E",
+                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontSize = 10,
+                    Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                });
+            }
+
+            Grid.SetColumn(adornmentHost, 1);
+            contentGrid.Children.Add(adornmentHost);
+            return contentGrid;
+        }
     }
 
     public sealed class CbsTableLoadMoreRequestedEventArgs : EventArgs;
@@ -828,5 +996,21 @@ namespace CbsContractsDesktopClient.Views.Controls
         public int EndIndex { get; }
 
         public int RetainedBufferRows { get; }
+    }
+
+    public sealed class CbsTableColumnWidthChangedEventArgs : EventArgs
+    {
+        public CbsTableColumnWidthChangedEventArgs(string fieldKey, string? width, double widthPixels)
+        {
+            FieldKey = fieldKey;
+            Width = width;
+            WidthPixels = widthPixels;
+        }
+
+        public string FieldKey { get; }
+
+        public string? Width { get; }
+
+        public double WidthPixels { get; }
     }
 }

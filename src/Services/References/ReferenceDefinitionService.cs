@@ -1,14 +1,21 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Settings;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services.Settings;
+using System.Threading;
 
 namespace CbsContractsDesktopClient.Services.References
 {
     public class ReferenceDefinitionService : IReferenceDefinitionService
     {
         private readonly IReadOnlyDictionary<string, ReferenceDefinition> _definitions;
+        private readonly ILocalUserSettingsService _localUserSettingsService;
+        private readonly SemaphoreSlim _settingsGate = new(1, 1);
+        private LocalUserSettings? _cachedSettings;
 
-        public ReferenceDefinitionService()
+        public ReferenceDefinitionService(ILocalUserSettingsService localUserSettingsService)
         {
+            _localUserSettingsService = localUserSettingsService;
             _definitions = BuildDefinitions()
                 .ToDictionary(static item => item.Route, StringComparer.OrdinalIgnoreCase);
         }
@@ -18,11 +25,58 @@ namespace CbsContractsDesktopClient.Services.References
             if (!string.IsNullOrWhiteSpace(route) && _definitions.TryGetValue(route, out var storedDefinition))
             {
                 definition = storedDefinition.Clone();
+                ApplySavedWidths(definition);
                 return true;
             }
 
             definition = null!;
             return false;
+        }
+
+        public async Task SaveColumnWidthAsync(
+            ReferenceTableColumnWidthSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+
+            if (string.IsNullOrWhiteSpace(settings.Route) || string.IsNullOrWhiteSpace(settings.FieldKey))
+            {
+                return;
+            }
+
+            await _settingsGate.WaitAsync(cancellationToken);
+
+            try
+            {
+                var localSettings = await GetOrLoadSettingsAsync(cancellationToken);
+                if (!localSettings.Tables.TryGetValue(settings.Route, out var tableSettings))
+                {
+                    tableSettings = new LocalTableSettings();
+                    localSettings.Tables[settings.Route] = tableSettings;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.Width))
+                {
+                    tableSettings.Columns.Remove(settings.FieldKey);
+                    if (tableSettings.Columns.Count == 0)
+                    {
+                        localSettings.Tables.Remove(settings.Route);
+                    }
+                }
+                else
+                {
+                    tableSettings.Columns[settings.FieldKey] = new LocalTableColumnSettings
+                    {
+                        Width = settings.Width
+                    };
+                }
+
+                await _localUserSettingsService.SaveAsync(localSettings, cancellationToken);
+            }
+            finally
+            {
+                _settingsGate.Release();
+            }
         }
 
         private static IReadOnlyList<ReferenceDefinition> BuildDefinitions()
@@ -201,6 +255,49 @@ namespace CbsContractsDesktopClient.Services.References
                 "cost" => "7rem",
                 _ => "6rem"
             };
+        }
+
+        private void ApplySavedWidths(ReferenceDefinition definition)
+        {
+            var settings = GetOrLoadSettings();
+            if (!settings.Tables.TryGetValue(definition.Route, out var tableSettings))
+            {
+                return;
+            }
+
+            foreach (var column in definition.Columns)
+            {
+                if (tableSettings.Columns.TryGetValue(column.FieldKey, out var columnSettings)
+                    && !string.IsNullOrWhiteSpace(columnSettings.Width))
+                {
+                    column.Width = columnSettings.Width;
+                }
+            }
+        }
+
+        private LocalUserSettings GetOrLoadSettings()
+        {
+            if (_cachedSettings is not null)
+            {
+                return _cachedSettings;
+            }
+
+            _settingsGate.Wait();
+            try
+            {
+                _cachedSettings ??= _localUserSettingsService.Get();
+                return _cachedSettings;
+            }
+            finally
+            {
+                _settingsGate.Release();
+            }
+        }
+
+        private async Task<LocalUserSettings> GetOrLoadSettingsAsync(CancellationToken cancellationToken)
+        {
+            _cachedSettings ??= await _localUserSettingsService.GetAsync(cancellationToken);
+            return _cachedSettings;
         }
     }
 }

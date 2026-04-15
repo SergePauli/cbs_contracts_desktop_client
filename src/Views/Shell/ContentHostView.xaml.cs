@@ -87,6 +87,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             await _viewModel.LoadMoreAsync();
         }
 
+        private async void ReferenceTableView_ColumnWidthChanged(object sender, CbsTableColumnWidthChangedEventArgs e)
+        {
+            await _viewModel.SaveColumnWidthAsync(e.FieldKey, e.Width);
+        }
+
         private void ReferenceTableView_TraceGenerated(object sender, CbsTableTraceEventArgs e)
         {
             if (e is null)

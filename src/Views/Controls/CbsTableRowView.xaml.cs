@@ -357,6 +357,21 @@ namespace CbsContractsDesktopClient.Views.Controls
             return false;
         }
 
+        public void SetColumnWidth(int columnIndex, double width)
+        {
+            if (columnIndex < 0 || columnIndex >= Columns.Count)
+            {
+                return;
+            }
+
+            if (columnIndex >= RowGrid.ColumnDefinitions.Count)
+            {
+                return;
+            }
+
+            RowGrid.ColumnDefinitions[columnIndex].Width = new GridLength(width);
+        }
+
     }
 }
 

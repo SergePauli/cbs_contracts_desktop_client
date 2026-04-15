@@ -237,6 +237,31 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             return result;
         }
 
+        public async Task SaveColumnWidthAsync(string fieldKey, string? width, CancellationToken cancellationToken = default)
+        {
+            if (CurrentReference is null || string.IsNullOrWhiteSpace(fieldKey))
+            {
+                return;
+            }
+
+            var column = CurrentReference.Columns.FirstOrDefault(
+                column => string.Equals(column.FieldKey, fieldKey, StringComparison.OrdinalIgnoreCase));
+            if (column is null)
+            {
+                return;
+            }
+
+            column.Width = width;
+            await _referenceDefinitionService.SaveColumnWidthAsync(
+                new ReferenceTableColumnWidthSettings
+                {
+                    Route = CurrentReference.Route,
+                    FieldKey = fieldKey,
+                    Width = width
+                },
+                cancellationToken);
+        }
+
         public void UpdateViewportRetention(
             int visibleStart,
             int visibleEnd,

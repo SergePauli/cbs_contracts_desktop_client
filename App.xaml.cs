@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.ViewModels.Shell;
 
@@ -31,6 +32,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ICredentialManagerService, CredentialManagerService>();
             services.AddSingleton<IUserService, UserService>();
             services.AddSingleton<INavigationMenuService, NavigationMenuService>();
+            services.AddSingleton<ILocalUserSettingsService, LocalUserSettingsService>();
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<AppShellViewModel>();
             services.AddSingleton<ReferencesContentViewModel>();
