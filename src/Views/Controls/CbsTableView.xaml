@@ -14,15 +14,23 @@
         </Grid.RowDefinitions>
 
         <Border
-            Background="{StaticResource ShellPanelBackgroundBrush}"
-            BorderBrush="{StaticResource ShellPanelBorderBrush}"
+            x:Name="HeaderBorder"
+            Background="{StaticResource ShellTableHeaderBackgroundBrush}"
+            BorderBrush="{StaticResource ShellTableGridLineBrush}"
             BorderThickness="1,1,1,0">
-            <Grid x:Name="HeaderGrid" />
+            <Grid
+                x:Name="HeaderGrid"
+                Margin="-1,0,-1,0">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="HeaderGridTransform" />
+                </Grid.RenderTransform>
+            </Grid>
         </Border>
 
         <ScrollViewer
             x:Name="RowsScrollViewer"
             Grid.Row="1"
+            Background="{StaticResource ShellTableRowBackgroundBrush}"
             HorizontalScrollBarVisibility="Auto"
             HorizontalScrollMode="Enabled"
             VerticalScrollBarVisibility="Auto"

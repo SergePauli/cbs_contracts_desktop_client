@@ -34,7 +34,35 @@ namespace CbsContractsDesktopClient.Views.Controls
                 nameof(RowHeight),
                 typeof(double),
                 typeof(CbsTableRowView),
-                new PropertyMetadata(40d, OnStateChanged));
+                new PropertyMetadata(22d, OnStateChanged));
+
+        public static readonly DependencyProperty DensityProperty =
+            DependencyProperty.Register(
+                nameof(Density),
+                typeof(CbsTableDensity),
+                typeof(CbsTableRowView),
+                new PropertyMetadata(CbsTableDensity.Compact, OnStateChanged));
+
+        public static readonly DependencyProperty IsSelectedProperty =
+            DependencyProperty.Register(
+                nameof(IsSelected),
+                typeof(bool),
+                typeof(CbsTableRowView),
+                new PropertyMetadata(false, OnStateChanged));
+
+        public static readonly DependencyProperty IsHoveredProperty =
+            DependencyProperty.Register(
+                nameof(IsHovered),
+                typeof(bool),
+                typeof(CbsTableRowView),
+                new PropertyMetadata(false, OnStateChanged));
+
+        public static readonly DependencyProperty IsPressedProperty =
+            DependencyProperty.Register(
+                nameof(IsPressed),
+                typeof(bool),
+                typeof(CbsTableRowView),
+                new PropertyMetadata(false, OnStateChanged));
 
         public CbsTableRowView()
         {
@@ -59,11 +87,36 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(RowHeightProperty, value);
         }
 
+        public CbsTableDensity Density
+        {
+            get => (CbsTableDensity)GetValue(DensityProperty);
+            set => SetValue(DensityProperty, value);
+        }
+
+        public bool IsSelected
+        {
+            get => (bool)GetValue(IsSelectedProperty);
+            set => SetValue(IsSelectedProperty, value);
+        }
+
+        public bool IsHovered
+        {
+            get => (bool)GetValue(IsHoveredProperty);
+            set => SetValue(IsHoveredProperty, value);
+        }
+
+        public bool IsPressed
+        {
+            get => (bool)GetValue(IsPressedProperty);
+            set => SetValue(IsPressedProperty, value);
+        }
+
         public void Configure(ReferenceDataRow? row, IReadOnlyList<CbsTableColumnDefinition> columns, double rowHeight)
         {
             Row = row;
             Columns = columns;
             RowHeight = rowHeight;
+            Density = ResolveDensity(rowHeight);
             RefreshRow();
         }
 
@@ -82,7 +135,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             EnsureStructure();
+            ApplyDensity();
             UpdateCellContent();
+            UpdateVisualState();
         }
 
         private void EnsureStructure()
@@ -102,7 +157,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             for (var index = 0; index < Columns.Count; index++)
             {
-                RowGrid.ColumnDefinitions.Add(CreateColumnDefinition(Columns[index]));
+                RowGrid.ColumnDefinitions.Add(CreateDataColumnDefinition(Columns[index]));
 
                 var cellHost = new Grid();
                 var textCell = CreateTextCell();
@@ -123,12 +178,24 @@ namespace CbsContractsDesktopClient.Views.Controls
                     {
                         Width = 1,
                         HorizontalAlignment = HorizontalAlignment.Right,
-                        Background = (Brush)Application.Current.Resources["ShellPanelBorderBrush"]
+                        Background = (Brush)Application.Current.Resources["ShellTableGridLineBrush"]
                     };
                     Grid.SetColumn(splitter, index);
                     RowGrid.Children.Add(splitter);
                 }
             }
+
+            RowGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var fillerCell = new Border
+            {
+                Background = (Brush)Application.Current.Resources["ShellTableRowBackgroundBrush"],
+                BorderBrush = (Brush)Application.Current.Resources["ShellTableGridLineBrush"],
+                BorderThickness = new Thickness(1, 0, 0, 0)
+            };
+            Grid.SetColumn(fillerCell, Columns.Count);
+            RowGrid.Children.Add(fillerCell);
+
+            ApplyDensity();
         }
 
         private void UpdateCellContent()
@@ -147,12 +214,45 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
         }
 
+        private void UpdateVisualState()
+        {
+            if (RowBorder is null || SelectionAccent is null)
+            {
+                return;
+            }
+
+            var isPlaceholder = Row?.IsPlaceholder == true;
+            var backgroundKey = "ShellTableRowBackgroundBrush";
+
+            if (!isPlaceholder)
+            {
+                if (IsPressed)
+                {
+                    backgroundKey = "ShellTableRowPressedBackgroundBrush";
+                }
+                else if (IsSelected)
+                {
+                    backgroundKey = "ShellTableRowSelectedBackgroundBrush";
+                }
+                else if (IsHovered)
+                {
+                    backgroundKey = "ShellTableRowHoverBackgroundBrush";
+                }
+            }
+
+            RowBorder.Background = (Brush)Application.Current.Resources[backgroundKey];
+            RowBorder.BorderBrush = (Brush)Application.Current.Resources["ShellTableGridLineBrush"];
+            RowBorder.BorderThickness = new Thickness(0, 0, 0, 1);
+            SelectionAccent.Visibility = !isPlaceholder && IsSelected ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private static TextBlock CreateTextCell()
         {
             return new TextBlock
             {
-                Margin = new Thickness(8, 2, 8, 2),
+                Margin = new Thickness(6, 0, 6, 0),
                 Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
+                FontSize = 12,
                 Text = string.Empty,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center
@@ -163,31 +263,98 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             return new Border
             {
-                Margin = new Thickness(8, 7, 8, 7),
-                Height = 10,
+                Margin = new Thickness(6, 6, 6, 6),
+                Height = 8,
                 CornerRadius = new CornerRadius(2),
                 Background = new SolidColorBrush(Color.FromArgb(48, 92, 129, 173))
             };
         }
 
-        private static ColumnDefinition CreateColumnDefinition(CbsTableColumnDefinition column)
+        private static CbsTableDensity ResolveDensity(double rowHeight)
         {
-            if (double.TryParse(column.Width, out var fixedWidth))
+            if (rowHeight <= 22)
+            {
+                return CbsTableDensity.Compact;
+            }
+
+            if (rowHeight <= 28)
+            {
+                return CbsTableDensity.Standard;
+            }
+
+            return CbsTableDensity.Comfortable;
+        }
+
+        private void ApplyDensity()
+        {
+            var metrics = Density switch
+            {
+                CbsTableDensity.Comfortable => (FontSize: 14d, HorizontalPadding: 10d, SkeletonVerticalMargin: 9d, SkeletonHeight: 10d),
+                CbsTableDensity.Standard => (FontSize: 13d, HorizontalPadding: 8d, SkeletonVerticalMargin: 7d, SkeletonHeight: 9d),
+                _ => (FontSize: 12d, HorizontalPadding: 6d, SkeletonVerticalMargin: 6d, SkeletonHeight: 8d)
+            };
+
+            foreach (var textCell in _textCells)
+            {
+                textCell.FontSize = metrics.FontSize;
+                textCell.Margin = new Thickness(metrics.HorizontalPadding, 0, metrics.HorizontalPadding, 0);
+            }
+
+            foreach (var skeletonCell in _skeletonCells)
+            {
+                skeletonCell.Margin = new Thickness(
+                    metrics.HorizontalPadding,
+                    metrics.SkeletonVerticalMargin,
+                    metrics.HorizontalPadding,
+                    metrics.SkeletonVerticalMargin);
+                skeletonCell.Height = metrics.SkeletonHeight;
+            }
+        }
+
+        private static ColumnDefinition CreateDataColumnDefinition(CbsTableColumnDefinition column)
+        {
+            var width = column.EffectiveWidth;
+            if (TryParseWidth(width, out var fixedWidth))
             {
                 return new ColumnDefinition { Width = new GridLength(fixedWidth) };
             }
 
-            if (string.Equals(column.Width, "Auto", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(width, "Auto", StringComparison.OrdinalIgnoreCase))
             {
                 return new ColumnDefinition { Width = GridLength.Auto };
             }
 
-            if (string.Equals(column.FieldKey, "id", StringComparison.OrdinalIgnoreCase))
+            return new ColumnDefinition { Width = new GridLength(192) };
+        }
+
+        private static bool TryParseWidth(string? width, out double pixels)
+        {
+            pixels = 0;
+            if (string.IsNullOrWhiteSpace(width))
             {
-                return new ColumnDefinition { Width = new GridLength(88) };
+                return false;
             }
 
-            return new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) };
+            if (double.TryParse(width, out pixels))
+            {
+                return true;
+            }
+
+            if (width.EndsWith("rem", StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(width[..^3], out var rem))
+            {
+                pixels = rem * 16;
+                return true;
+            }
+
+            if (width.EndsWith("px", StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(width[..^2], out var px))
+            {
+                pixels = px;
+                return true;
+            }
+
+            return false;
         }
 
     }

@@ -10,6 +10,15 @@
     <SolidColorBrush x:Key="ShellAccentPanelBackgroundAltBrush" Color="#FFF7FBFF" />
 
     <SolidColorBrush x:Key="ShellPanelBorderBrush" Color="#66D4E5F5" />
+    <SolidColorBrush x:Key="ShellTableHeaderBackgroundBrush" Color="#FFF3F4F6" />
+    <SolidColorBrush x:Key="ShellTableHeaderPressedBackgroundBrush" Color="#FFE8EDF2" />
+    <SolidColorBrush x:Key="ShellTableRowBackgroundBrush" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="ShellTableGridLineBrush" Color="#FFD9DDE3" />
+    <SolidColorBrush x:Key="ShellTableHeaderTextBrush" Color="#FF3D4B5C" />
+    <SolidColorBrush x:Key="ShellTableRowHoverBackgroundBrush" Color="#FFF6F8FB" />
+    <SolidColorBrush x:Key="ShellTableRowPressedBackgroundBrush" Color="#FFECEFF3" />
+    <SolidColorBrush x:Key="ShellTableRowSelectedBackgroundBrush" Color="#FFEAF4EA" />
+    <SolidColorBrush x:Key="ShellTableRowSelectedBorderBrush" Color="#FF2E8B57" />
     <SolidColorBrush x:Key="ShellPrimaryTextBrush" Color="#FF1B3550" />
     <SolidColorBrush x:Key="ShellSecondaryTextBrush" Color="#FF5A7A98" />
     <SolidColorBrush x:Key="ShellTertiaryTextBrush" Color="#FF6F87A0" />

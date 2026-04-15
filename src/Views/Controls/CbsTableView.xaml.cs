@@ -10,6 +10,7 @@ using CbsContractsDesktopClient.Models.Table;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.Controls
@@ -77,7 +78,35 @@ namespace CbsContractsDesktopClient.Views.Controls
                 nameof(RowHeight),
                 typeof(double),
                 typeof(CbsTableView),
-                new PropertyMetadata(40d, OnRowHeightChanged));
+                new PropertyMetadata(22d, OnRowHeightChanged));
+
+        public static readonly DependencyProperty DensityProperty =
+            DependencyProperty.Register(
+                nameof(Density),
+                typeof(CbsTableDensity),
+                typeof(CbsTableView),
+                new PropertyMetadata(CbsTableDensity.Compact, OnDensityChanged));
+
+        public static readonly DependencyProperty SupportsRowSelectionProperty =
+            DependencyProperty.Register(
+                nameof(SupportsRowSelection),
+                typeof(bool),
+                typeof(CbsTableView),
+                new PropertyMetadata(false));
+
+        public static readonly DependencyProperty SupportsMultipleRowSelectionProperty =
+            DependencyProperty.Register(
+                nameof(SupportsMultipleRowSelection),
+                typeof(bool),
+                typeof(CbsTableView),
+                new PropertyMetadata(false));
+
+        public static readonly DependencyProperty SelectedItemProperty =
+            DependencyProperty.Register(
+                nameof(SelectedItem),
+                typeof(ReferenceDataRow),
+                typeof(CbsTableView),
+                new PropertyMetadata(null));
 
         public static readonly DependencyProperty RetainedBufferRowsProperty =
             DependencyProperty.Register(
@@ -95,8 +124,10 @@ namespace CbsContractsDesktopClient.Views.Controls
         private int _lastSourceCount = -1;
         private IEnumerable? _lastItemsSourceReference;
         private readonly List<CbsTableRowView> _rowPool = [];
+        private readonly HashSet<int> _selectedIndexes = [];
         private const int WindowBufferRows = 8;
         private const int WindowStepRows = 8;
+        private const double HeaderSideBorderCompensation = 1d;
 
         public CbsTableView()
         {
@@ -167,10 +198,34 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(RowHeightProperty, value);
         }
 
+        public CbsTableDensity Density
+        {
+            get => (CbsTableDensity)GetValue(DensityProperty);
+            set => SetValue(DensityProperty, value);
+        }
+
         public int RetainedBufferRows
         {
             get => (int)GetValue(RetainedBufferRowsProperty);
             set => SetValue(RetainedBufferRowsProperty, value);
+        }
+
+        public bool SupportsRowSelection
+        {
+            get => (bool)GetValue(SupportsRowSelectionProperty);
+            set => SetValue(SupportsRowSelectionProperty, value);
+        }
+
+        public bool SupportsMultipleRowSelection
+        {
+            get => (bool)GetValue(SupportsMultipleRowSelectionProperty);
+            set => SetValue(SupportsMultipleRowSelectionProperty, value);
+        }
+
+        public ReferenceDataRow? SelectedItem
+        {
+            get => (ReferenceDataRow?)GetValue(SelectedItemProperty);
+            set => SetValue(SelectedItemProperty, value);
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -178,6 +233,8 @@ namespace CbsContractsDesktopClient.Views.Controls
             RebuildHeader();
             RebuildRows();
             RowsScrollViewer.ViewChanged += OnScrollViewerViewChanged;
+            RowsScrollViewer.SizeChanged += OnRowsScrollViewerSizeChanged;
+            UpdateHeaderViewportCompensation();
             await Task.Yield();
             AppendTrace("Attached explicit table ScrollViewer.");
         }
@@ -185,10 +242,12 @@ namespace CbsContractsDesktopClient.Views.Controls
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
             RowsScrollViewer.ViewChanged -= OnScrollViewerViewChanged;
+            RowsScrollViewer.SizeChanged -= OnRowsScrollViewerSizeChanged;
         }
 
         private async void OnScrollViewerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
         {
+            UpdateHeaderViewportCompensation();
             RebuildRows();
 
             if (LoadedCount != _lastTriggeredLoadedCount)
@@ -231,20 +290,21 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (Columns.Count == 0)
             {
+                UpdateHeaderViewportCompensation();
                 return;
             }
 
             for (var index = 0; index < Columns.Count; index++)
             {
-                HeaderGrid.ColumnDefinitions.Add(CreateColumnDefinition(Columns[index]));
+                HeaderGrid.ColumnDefinitions.Add(CreateDataColumnDefinition(Columns[index]));
 
                 var button = new Button
                 {
                     HorizontalAlignment = HorizontalAlignment.Stretch,
                     HorizontalContentAlignment = HorizontalAlignment.Left,
-                    Padding = new Thickness(8, 4, 8, 4),
+                    Padding = GetHeaderPadding(),
                     BorderThickness = new Thickness(0),
-                    Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                    Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
                     Tag = Columns[index]
                 };
                 button.Click += OnHeaderButtonClick;
@@ -262,7 +322,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 button.Content = new TextBlock
                 {
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
+                    FontSize = GetHeaderFontSize(),
+                    Foreground = (Brush)Application.Current.Resources["ShellTableHeaderTextBrush"],
                     Text = headerText,
                     TextTrimming = TextTrimming.CharacterEllipsis
                 };
@@ -276,12 +337,32 @@ namespace CbsContractsDesktopClient.Views.Controls
                     {
                         Width = 1,
                         HorizontalAlignment = HorizontalAlignment.Right,
-                        Background = (Brush)Application.Current.Resources["ShellPanelBorderBrush"]
+                        Background = (Brush)Application.Current.Resources["ShellTableGridLineBrush"]
                     };
                     Grid.SetColumn(splitter, index);
                     HeaderGrid.Children.Add(splitter);
                 }
             }
+
+            HeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            var fillerHeader = new Border
+            {
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
+                BorderBrush = (Brush)Application.Current.Resources["ShellTableGridLineBrush"],
+                BorderThickness = new Thickness(1, 0, 0, 0)
+            };
+            Grid.SetColumn(fillerHeader, Columns.Count);
+            HeaderGrid.Children.Add(fillerHeader);
+
+            HeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
+            var scrollbarCompensationCell = new Border
+            {
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"]
+            };
+            Grid.SetColumn(scrollbarCompensationCell, Columns.Count + 1);
+            HeaderGrid.Children.Add(scrollbarCompensationCell);
+
+            UpdateHeaderViewportCompensation();
         }
 
         private void RebuildRows()
@@ -321,10 +402,13 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             for (var index = 0; index < rowCount; index++)
             {
+                var absoluteIndex = window.Start + index;
                 _rowPool[index].Configure(
-                    sourceRows[window.Start + index],
+                    sourceRows[absoluteIndex],
                     Columns,
                     RowHeight);
+                _rowPool[index].Tag = absoluteIndex;
+                ApplyRowSelectionState(_rowPool[index], absoluteIndex);
             }
 
             stopwatch.Stop();
@@ -381,27 +465,62 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             var control = (CbsTableView)d;
             control.InvalidateWindowCache();
+            control.RebuildHeader();
             control.RebuildRows();
         }
 
-        private static ColumnDefinition CreateColumnDefinition(CbsTableColumnDefinition column)
+        private static void OnDensityChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            if (double.TryParse(column.Width, out var fixedWidth))
+            var control = (CbsTableView)d;
+            control.RowHeight = control.GetRowHeightForDensity((CbsTableDensity)e.NewValue);
+            control.RebuildHeader();
+            control.RebuildRows();
+        }
+
+        private static ColumnDefinition CreateDataColumnDefinition(CbsTableColumnDefinition column)
+        {
+            var width = column.EffectiveWidth;
+            if (TryParseWidth(width, out var fixedWidth))
             {
                 return new ColumnDefinition { Width = new GridLength(fixedWidth) };
             }
 
-            if (string.Equals(column.Width, "Auto", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(width, "Auto", StringComparison.OrdinalIgnoreCase))
             {
                 return new ColumnDefinition { Width = GridLength.Auto };
             }
 
-            if (string.Equals(column.FieldKey, "id", StringComparison.OrdinalIgnoreCase))
+            return new ColumnDefinition { Width = new GridLength(192) };
+        }
+
+        private static bool TryParseWidth(string? width, out double pixels)
+        {
+            pixels = 0;
+            if (string.IsNullOrWhiteSpace(width))
             {
-                return new ColumnDefinition { Width = new GridLength(88) };
+                return false;
             }
 
-            return new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) };
+            if (double.TryParse(width, out pixels))
+            {
+                return true;
+            }
+
+            if (width.EndsWith("rem", StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(width[..^3], out var rem))
+            {
+                pixels = rem * 16;
+                return true;
+            }
+
+            if (width.EndsWith("px", StringComparison.OrdinalIgnoreCase)
+                && double.TryParse(width[..^2], out var px))
+            {
+                pixels = px;
+                return true;
+            }
+
+            return false;
         }
 
         private void AppendTrace(string message)
@@ -472,9 +591,100 @@ namespace CbsContractsDesktopClient.Views.Controls
             while (_rowPool.Count < rowCount)
             {
                 var rowView = new CbsTableRowView();
+                rowView.PointerEntered += OnRowPointerEntered;
+                rowView.PointerExited += OnRowPointerExited;
+                rowView.PointerPressed += OnRowPointerPressed;
+                rowView.PointerReleased += OnRowPointerReleased;
+                rowView.Tapped += OnRowTapped;
                 _rowPool.Add(rowView);
                 RowsHost.Children.Add(rowView);
             }
+        }
+
+        private void OnRowPointerEntered(object sender, PointerRoutedEventArgs e)
+        {
+            if (!SupportsRowSelection || sender is not CbsTableRowView rowView)
+            {
+                return;
+            }
+
+            rowView.IsHovered = true;
+        }
+
+        private void OnRowPointerExited(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is not CbsTableRowView rowView)
+            {
+                return;
+            }
+
+            rowView.IsHovered = false;
+            rowView.IsPressed = false;
+        }
+
+        private void OnRowPointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            if (!SupportsRowSelection || sender is not CbsTableRowView rowView)
+            {
+                return;
+            }
+
+            rowView.IsPressed = true;
+        }
+
+        private void OnRowPointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            if (sender is not CbsTableRowView rowView)
+            {
+                return;
+            }
+
+            rowView.IsPressed = false;
+        }
+
+        private void OnRowTapped(object sender, TappedRoutedEventArgs e)
+        {
+            if (!SupportsRowSelection || sender is not CbsTableRowView rowView || rowView.Tag is not int rowIndex)
+            {
+                return;
+            }
+
+            if (rowView.Row?.IsPlaceholder == true)
+            {
+                return;
+            }
+
+            if (SupportsMultipleRowSelection)
+            {
+                if (!_selectedIndexes.Add(rowIndex))
+                {
+                    _selectedIndexes.Remove(rowIndex);
+                }
+            }
+            else
+            {
+                _selectedIndexes.Clear();
+                _selectedIndexes.Add(rowIndex);
+                SelectedItem = rowView.Row;
+            }
+
+            UpdateVisibleRowSelectionStates();
+        }
+
+        private void UpdateVisibleRowSelectionStates()
+        {
+            foreach (var rowView in _rowPool)
+            {
+                if (rowView.Tag is int rowIndex)
+                {
+                    ApplyRowSelectionState(rowView, rowIndex);
+                }
+            }
+        }
+
+        private void ApplyRowSelectionState(CbsTableRowView rowView, int rowIndex)
+        {
+            rowView.IsSelected = _selectedIndexes.Contains(rowIndex);
         }
 
         private int GetEffectiveRetainedBufferRows(int currentWindowRows)
@@ -487,6 +697,36 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             var automaticBuffer = currentWindowRows + (int)Math.Ceiling(currentWindowRows * 0.5);
             return Math.Max(automaticBuffer, minimumBuffer);
+        }
+
+        private Thickness GetHeaderPadding()
+        {
+            return Density switch
+            {
+                CbsTableDensity.Comfortable => new Thickness(10, 6, 10, 6),
+                CbsTableDensity.Standard => new Thickness(8, 5, 8, 5),
+                _ => new Thickness(6, 4, 6, 4)
+            };
+        }
+
+        private double GetHeaderFontSize()
+        {
+            return Density switch
+            {
+                CbsTableDensity.Comfortable => 13,
+                CbsTableDensity.Standard => 12.5,
+                _ => 12
+            };
+        }
+
+        private double GetRowHeightForDensity(CbsTableDensity density)
+        {
+            return density switch
+            {
+                CbsTableDensity.Comfortable => 30,
+                CbsTableDensity.Standard => 26,
+                _ => 22
+            };
         }
 
         private void TrackLayoutCompletion(int sequence, int rowCount)
@@ -507,6 +747,45 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
 
             RowsHost.LayoutUpdated += handler;
+        }
+
+        private void OnRowsScrollViewerSizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateHeaderViewportCompensation();
+        }
+
+        private void UpdateHeaderViewportCompensation()
+        {
+            if (HeaderGridTransform is not null)
+            {
+                HeaderGridTransform.X = -RowsScrollViewer.HorizontalOffset;
+            }
+
+            if (HeaderGrid.ColumnDefinitions.Count == 0)
+            {
+                return;
+            }
+
+            var scrollbarWidth = GetVerticalScrollbarCompensationWidth();
+            HeaderGrid.Margin = new Thickness(
+                -HeaderSideBorderCompensation,
+                0,
+                -HeaderSideBorderCompensation,
+                0);
+
+            var scrollbarColumnIndex = HeaderGrid.ColumnDefinitions.Count - 1;
+            HeaderGrid.ColumnDefinitions[scrollbarColumnIndex].Width = new GridLength(scrollbarWidth);
+        }
+
+        private double GetVerticalScrollbarCompensationWidth()
+        {
+            if (RowsScrollViewer.ViewportWidth <= 0 || RowsScrollViewer.ActualWidth <= 0)
+            {
+                return 0;
+            }
+
+            var compensation = RowsScrollViewer.ActualWidth - RowsScrollViewer.ViewportWidth;
+            return Math.Max(0, Math.Ceiling(compensation));
         }
     }
 

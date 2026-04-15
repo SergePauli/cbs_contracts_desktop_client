@@ -7,9 +7,18 @@
     mc:Ignorable="d">
 
     <Border
-        Background="{StaticResource ShellPanelBackgroundBrush}"
-        BorderBrush="{StaticResource ShellPanelBorderBrush}"
+        x:Name="RowBorder"
+        Background="{StaticResource ShellTableRowBackgroundBrush}"
+        BorderBrush="{StaticResource ShellTableGridLineBrush}"
         BorderThickness="0,0,0,1">
-        <Grid x:Name="RowGrid" />
+        <Grid>
+            <Border
+                x:Name="SelectionAccent"
+                Width="2"
+                HorizontalAlignment="Left"
+                Background="{StaticResource ShellTableRowSelectedBorderBrush}"
+                Visibility="Collapsed" />
+            <Grid x:Name="RowGrid" />
+        </Grid>
     </Border>
 </UserControl>

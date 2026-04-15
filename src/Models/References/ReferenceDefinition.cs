@@ -23,5 +23,33 @@ namespace CbsContractsDesktopClient.Models.References
             Title = Title,
             Columns = Columns
         };
+
+        public ReferenceDefinition Clone()
+        {
+            return new ReferenceDefinition
+            {
+                Route = Route,
+                Model = Model,
+                Title = Title,
+                Preset = Preset,
+                Summary = Summary,
+                Columns = Columns.Select(static column => new CbsTableColumnDefinition
+                {
+                    FieldKey = column.FieldKey,
+                    Header = column.Header,
+                    ApiField = column.ApiField,
+                    DefaultWidth = column.DefaultWidth,
+                    Width = column.Width,
+                    IsSortable = column.IsSortable,
+                    Filter = new CbsTableColumnFilterDefinition
+                    {
+                        IsEnabled = column.Filter.IsEnabled,
+                        PlaceholderText = column.Filter.PlaceholderText
+                    },
+                    BodyMode = column.BodyMode,
+                    BodyTemplateKey = column.BodyTemplateKey
+                }).ToList()
+            };
+        }
     }
 }

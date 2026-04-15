@@ -8,7 +8,9 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public string? ApiField { get; init; }
 
-        public string? Width { get; init; }
+        public string DefaultWidth { get; init; } = "12rem";
+
+        public string? Width { get; set; }
 
         public bool IsSortable { get; init; } = true;
 
@@ -17,5 +19,9 @@ namespace CbsContractsDesktopClient.Models.Table
         public CbsTableBodyMode BodyMode { get; init; } = CbsTableBodyMode.Text;
 
         public string? BodyTemplateKey { get; init; }
+
+        public string EffectiveWidth => string.IsNullOrWhiteSpace(Width)
+            ? DefaultWidth
+            : Width!;
     }
 }
