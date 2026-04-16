@@ -80,10 +80,13 @@ namespace CbsContractsDesktopClient.ViewModels.Data
             object? value,
             CancellationToken cancellationToken = default)
         {
-            var existing = Filters.FirstOrDefault(x => x.FieldKey == fieldKey && x.MatchMode == matchMode);
-            if (existing is not null)
+            var existing = Filters
+                .Where(x => x.FieldKey == fieldKey)
+                .ToList();
+
+            foreach (var criterion in existing)
             {
-                Filters.Remove(existing);
+                Filters.Remove(criterion);
             }
 
             if (value is not null && !(value is string text && string.IsNullOrWhiteSpace(text)))

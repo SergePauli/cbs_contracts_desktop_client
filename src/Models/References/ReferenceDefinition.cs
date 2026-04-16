@@ -41,10 +41,12 @@ namespace CbsContractsDesktopClient.Models.References
                     DefaultWidth = column.DefaultWidth,
                     Width = column.Width,
                     IsSortable = column.IsSortable,
+                    IsFilterable = column.IsFilterable,
                     Filter = new CbsTableColumnFilterDefinition
                     {
                         IsEnabled = column.Filter.IsEnabled,
-                        PlaceholderText = column.Filter.PlaceholderText
+                        PlaceholderText = column.Filter.PlaceholderText,
+                        MatchMode = column.Filter.MatchMode
                     },
                     BodyMode = column.BodyMode,
                     BodyTemplateKey = column.BodyTemplateKey

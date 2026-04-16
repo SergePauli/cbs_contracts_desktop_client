@@ -14,6 +14,8 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public bool IsSortable { get; init; } = true;
 
+        public bool IsFilterable { get; init; }
+
         public CbsTableColumnFilterDefinition Filter { get; init; } = new();
 
         public CbsTableBodyMode BodyMode { get; init; } = CbsTableBodyMode.Text;

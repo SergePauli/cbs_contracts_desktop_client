@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Threading;
+using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.ViewModels.Shell;
@@ -43,27 +44,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
         }
 
-        private async void FilterTextBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            if (sender is not TextBox textBox || textBox.Tag is not string fieldKey)
-            {
-                return;
-            }
-
-            _filterDebounceCts?.Cancel();
-            var cancellationTokenSource = new CancellationTokenSource();
-            _filterDebounceCts = cancellationTokenSource;
-
-            try
-            {
-                await Task.Delay(350, cancellationTokenSource.Token);
-                await _viewModel.ApplyTextFilterAsync(fieldKey, textBox.Text, cancellationTokenSource.Token);
-            }
-            catch (OperationCanceledException)
-            {
-            }
-        }
-
         private async void ResetFiltersButton_Click(object sender, RoutedEventArgs e)
         {
             _filterDebounceCts?.Cancel();
@@ -85,6 +65,26 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void ReferenceTableView_LoadMoreRequested(object sender, CbsTableLoadMoreRequestedEventArgs e)
         {
             await _viewModel.LoadMoreAsync();
+        }
+
+        private async void ReferenceTableView_FilterRequested(object sender, CbsTableFilterRequestedEventArgs e)
+        {
+            _filterDebounceCts?.Cancel();
+            var cancellationTokenSource = new CancellationTokenSource();
+            _filterDebounceCts = cancellationTokenSource;
+
+            try
+            {
+                await Task.Delay(250, cancellationTokenSource.Token);
+                await _viewModel.ApplyFilterAsync(
+                    e.FieldKey,
+                    e.MatchMode,
+                    e.Value,
+                    cancellationTokenSource.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         private async void ReferenceTableView_ColumnWidthChanged(object sender, CbsTableColumnWidthChangedEventArgs e)

@@ -127,12 +127,18 @@ namespace CbsContractsDesktopClient.Views.Controls
         private IEnumerable? _lastItemsSourceReference;
         private readonly List<CbsTableRowView> _rowPool = [];
         private readonly HashSet<int> _selectedIndexes = [];
+        private readonly Dictionary<string, string> _filterTexts = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
         private const int WindowBufferRows = 8;
         private const int WindowStepRows = 8;
         private const double HeaderSideBorderCompensation = 1d;
         private const double MinimumColumnWidth = 48d;
         private const double ResizeHandleWidth = 12d;
         private const double HeaderAdornmentWidth = 18d;
+        private const double FilterModeButtonWidth = 22d;
+        private const double FilterTextBoxHeight = 22d;
         private int _activeResizeColumnIndex = -1;
         private double _activeResizeStartWidth;
         private bool _suppressNextHeaderClick;
@@ -153,6 +159,8 @@ namespace CbsContractsDesktopClient.Views.Controls
         public event EventHandler<CbsTableViewportChangedEventArgs>? ViewportChanged;
 
         public event EventHandler<CbsTableColumnWidthChangedEventArgs>? ColumnWidthChanged;
+
+        public event EventHandler<CbsTableFilterRequestedEventArgs>? FilterRequested;
 
         public IReadOnlyList<CbsTableColumnDefinition> Columns
         {
@@ -297,6 +305,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             HeaderGrid.Children.Clear();
             HeaderGrid.ColumnDefinitions.Clear();
+            HeaderGrid.RowDefinitions.Clear();
+            _filterTextBoxes.Clear();
+            _filterModeButtons.Clear();
 
             if (Columns.Count == 0)
             {
@@ -304,48 +315,52 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            HeaderGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            HeaderGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
             for (var index = 0; index < Columns.Count; index++)
             {
+                EnsureFilterState(Columns[index]);
                 HeaderGrid.ColumnDefinitions.Add(CreateDataColumnDefinition(Columns[index]));
+                var topCell = CreateHeaderTopCell(Columns[index]);
+                Grid.SetColumn(topCell, index);
+                Grid.SetRow(topCell, 0);
+                HeaderGrid.Children.Add(topCell);
 
-                var button = new Button
-                {
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    HorizontalContentAlignment = HorizontalAlignment.Left,
-                    Padding = GetHeaderPadding(),
-                    BorderThickness = new Thickness(0),
-                    Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
-                    Tag = Columns[index]
-                };
-                button.Click += OnHeaderButtonClick;
-
-                button.Content = CreateHeaderContent(Columns[index]);
-
-                Grid.SetColumn(button, index);
-                HeaderGrid.Children.Add(button);
+                var filterCell = CreateHeaderFilterCell(Columns[index]);
+                Grid.SetColumn(filterCell, index);
+                Grid.SetRow(filterCell, 1);
+                HeaderGrid.Children.Add(filterCell);
 
                 var splitter = CreateResizeHandle(index, index == Columns.Count - 1);
                 Grid.SetColumn(splitter, index);
+                Grid.SetRowSpan(splitter, 2);
                 HeaderGrid.Children.Add(splitter);
             }
 
             HeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            var fillerHeader = new Border
-            {
-                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
-                BorderBrush = (Brush)Application.Current.Resources["ShellTableGridLineBrush"],
-                BorderThickness = new Thickness(1, 0, 0, 0)
-            };
-            Grid.SetColumn(fillerHeader, Columns.Count);
-            HeaderGrid.Children.Add(fillerHeader);
+            var fillerTop = CreateHeaderBackgroundCell(hasBottomBorder: true);
+            fillerTop.BorderThickness = new Thickness(1, 0, 0, 1);
+            Grid.SetColumn(fillerTop, Columns.Count);
+            Grid.SetRow(fillerTop, 0);
+            HeaderGrid.Children.Add(fillerTop);
+
+            var fillerBottom = CreateHeaderBackgroundCell(hasBottomBorder: true);
+            fillerBottom.BorderThickness = new Thickness(1, 0, 0, 1);
+            Grid.SetColumn(fillerBottom, Columns.Count);
+            Grid.SetRow(fillerBottom, 1);
+            HeaderGrid.Children.Add(fillerBottom);
 
             HeaderGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
-            var scrollbarCompensationCell = new Border
-            {
-                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"]
-            };
-            Grid.SetColumn(scrollbarCompensationCell, Columns.Count + 1);
-            HeaderGrid.Children.Add(scrollbarCompensationCell);
+            var scrollbarTop = CreateHeaderBackgroundCell(hasBottomBorder: true);
+            Grid.SetColumn(scrollbarTop, Columns.Count + 1);
+            Grid.SetRow(scrollbarTop, 0);
+            HeaderGrid.Children.Add(scrollbarTop);
+
+            var scrollbarBottom = CreateHeaderBackgroundCell(hasBottomBorder: true);
+            Grid.SetColumn(scrollbarBottom, Columns.Count + 1);
+            Grid.SetRow(scrollbarBottom, 1);
+            HeaderGrid.Children.Add(scrollbarBottom);
 
             UpdateHeaderViewportCompensation();
         }
@@ -690,14 +705,18 @@ namespace CbsContractsDesktopClient.Views.Controls
             return Math.Max(automaticBuffer, minimumBuffer);
         }
 
-        private Thickness GetHeaderPadding()
+        private Thickness GetHeaderPadding(bool reserveFilterButton)
         {
-            return Density switch
+            var padding = Density switch
             {
                 CbsTableDensity.Comfortable => new Thickness(10, 6, 10, 6),
                 CbsTableDensity.Standard => new Thickness(8, 5, 8, 5),
                 _ => new Thickness(6, 4, 6, 4)
             };
+
+            return reserveFilterButton
+                ? new Thickness(padding.Left, padding.Top, Math.Max(2, padding.Right - 2), padding.Bottom)
+                : padding;
         }
 
         private double GetHeaderFontSize()
@@ -913,7 +932,101 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
         }
 
-        private FrameworkElement CreateHeaderContent(CbsTableColumnDefinition column)
+        private FrameworkElement CreateHeaderTopCell(CbsTableColumnDefinition column)
+        {
+            var contentGrid = new Grid
+            {
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"]
+            };
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            if (column.IsFilterable)
+            {
+                contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(FilterModeButtonWidth) });
+            }
+
+            var mainContent = CreateHeaderSortHost(column);
+            Grid.SetColumn(mainContent, 0);
+            contentGrid.Children.Add(mainContent);
+
+            if (column.IsFilterable)
+            {
+                var modeButton = CreateFilterModeButton(column);
+                Grid.SetColumn(modeButton, 1);
+                contentGrid.Children.Add(modeButton);
+                _filterModeButtons[column.FieldKey] = modeButton;
+            }
+
+            var border = CreateHeaderBackgroundCell(hasBottomBorder: true);
+            border.Child = contentGrid;
+            return border;
+        }
+
+        private FrameworkElement CreateHeaderFilterCell(CbsTableColumnDefinition column)
+        {
+            var border = CreateHeaderBackgroundCell(hasBottomBorder: true);
+            if (!column.IsFilterable)
+            {
+                return border;
+            }
+
+            var textBox = new TextBox
+            {
+                Tag = column,
+                Height = FilterTextBoxHeight,
+                MinHeight = FilterTextBoxHeight,
+                Margin = new Thickness(4, 1, 4, 1),
+                Padding = new Thickness(6, 2, 6, 0),
+                Text = GetFilterText(column),
+                PlaceholderText = column.Filter.PlaceholderText,
+                FontSize = Math.Max(11, GetHeaderFontSize() - 1),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                BorderThickness = new Thickness(1),
+                MinWidth = 24
+            };
+            textBox.TextChanged += OnFilterTextChanged;
+            border.Child = textBox;
+            _filterTextBoxes[column.FieldKey] = textBox;
+            return border;
+        }
+
+        private Border CreateHeaderBackgroundCell(bool hasBottomBorder)
+        {
+            return new Border
+            {
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
+                BorderBrush = (Brush)Application.Current.Resources["ShellTableGridLineBrush"],
+                BorderThickness = new Thickness(0, 0, 0, hasBottomBorder ? 1 : 0)
+            };
+        }
+
+        private FrameworkElement CreateHeaderSortHost(CbsTableColumnDefinition column)
+        {
+            if (!column.IsSortable)
+            {
+                return new Border
+                {
+                    Padding = GetHeaderPadding(column.IsFilterable),
+                    Child = CreateHeaderTitleContent(column)
+                };
+            }
+
+            var button = new Button
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Padding = GetHeaderPadding(column.IsFilterable),
+                BorderThickness = new Thickness(0),
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
+                Tag = column,
+                Content = CreateHeaderTitleContent(column)
+            };
+            button.Click += OnHeaderButtonClick;
+            return button;
+        }
+
+        private FrameworkElement CreateHeaderTitleContent(CbsTableColumnDefinition column)
         {
             var contentGrid = new Grid();
             contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -954,6 +1067,155 @@ namespace CbsContractsDesktopClient.Views.Controls
             Grid.SetColumn(adornmentHost, 1);
             contentGrid.Children.Add(adornmentHost);
             return contentGrid;
+        }
+
+        private Button CreateFilterModeButton(CbsTableColumnDefinition column)
+        {
+            var button = new Button
+            {
+                Width = FilterModeButtonWidth,
+                Height = 20,
+                Margin = new Thickness(0, 2, 2, 2),
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                BorderThickness = new Thickness(0),
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
+                Tag = column
+            };
+
+            UpdateFilterModeButtonContent(button, GetFilterMode(column));
+
+            var flyout = new MenuFlyout();
+            foreach (var mode in GetSupportedFilterModes())
+            {
+                var item = new MenuFlyoutItem
+                {
+                    Text = GetFilterModeLabel(mode),
+                    Tag = (column, mode)
+                };
+                item.Click += OnFilterModeMenuItemClick;
+                flyout.Items.Add(item);
+            }
+
+            button.Flyout = flyout;
+            return button;
+        }
+
+        private void OnFilterModeMenuItemClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is not MenuFlyoutItem { Tag: ValueTuple<CbsTableColumnDefinition, DataFilterMatchMode> payload })
+            {
+                return;
+            }
+
+            var (column, mode) = payload;
+            _filterModes[column.FieldKey] = mode;
+            column.Filter.MatchMode = mode;
+
+            if (_filterModeButtons.TryGetValue(column.FieldKey, out var button))
+            {
+                UpdateFilterModeButtonContent(button, mode);
+            }
+
+            FilterRequested?.Invoke(
+                this,
+                new CbsTableFilterRequestedEventArgs(
+                    column.FieldKey,
+                    mode,
+                    GetFilterText(column)));
+        }
+
+        private void OnFilterTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is not TextBox { Tag: CbsTableColumnDefinition column } textBox)
+            {
+                return;
+            }
+
+            _filterTexts[column.FieldKey] = textBox.Text;
+            FilterRequested?.Invoke(
+                this,
+                new CbsTableFilterRequestedEventArgs(
+                    column.FieldKey,
+                    GetFilterMode(column),
+                    textBox.Text));
+        }
+
+        private void EnsureFilterState(CbsTableColumnDefinition column)
+        {
+            if (!_filterModes.ContainsKey(column.FieldKey))
+            {
+                _filterModes[column.FieldKey] = column.Filter.MatchMode;
+            }
+
+            if (!_filterTexts.ContainsKey(column.FieldKey))
+            {
+                _filterTexts[column.FieldKey] = string.Empty;
+            }
+        }
+
+        private DataFilterMatchMode GetFilterMode(CbsTableColumnDefinition column)
+        {
+            return _filterModes.TryGetValue(column.FieldKey, out var mode)
+                ? mode
+                : column.Filter.MatchMode;
+        }
+
+        private string GetFilterText(CbsTableColumnDefinition column)
+        {
+            return _filterTexts.TryGetValue(column.FieldKey, out var text)
+                ? text
+                : string.Empty;
+        }
+
+        private void UpdateFilterModeButtonContent(Button button, DataFilterMatchMode mode)
+        {
+            button.Content = new TextBlock
+            {
+                Text = GetFilterModeShortLabel(mode),
+                FontSize = 10,
+                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = TextAlignment.Center
+            };
+        }
+
+        private static IReadOnlyList<DataFilterMatchMode> GetSupportedFilterModes()
+        {
+            return
+            [
+                DataFilterMatchMode.Contains,
+                DataFilterMatchMode.StartsWith,
+                DataFilterMatchMode.Equals,
+                DataFilterMatchMode.EndsWith,
+                DataFilterMatchMode.NotContains
+            ];
+        }
+
+        private static string GetFilterModeShortLabel(DataFilterMatchMode mode)
+        {
+            return mode switch
+            {
+                DataFilterMatchMode.StartsWith => "A*",
+                DataFilterMatchMode.Equals => "=",
+                DataFilterMatchMode.EndsWith => "*A",
+                DataFilterMatchMode.NotContains => "!=",
+                _ => "*A*"
+            };
+        }
+
+        private static string GetFilterModeLabel(DataFilterMatchMode mode)
+        {
+            return mode switch
+            {
+                DataFilterMatchMode.StartsWith => "Начинается с",
+                DataFilterMatchMode.Equals => "Равно",
+                DataFilterMatchMode.EndsWith => "Заканчивается на",
+                DataFilterMatchMode.NotContains => "Не содержит",
+                _ => "Содержит"
+            };
         }
     }
 
@@ -1012,5 +1274,21 @@ namespace CbsContractsDesktopClient.Views.Controls
         public string? Width { get; }
 
         public double WidthPixels { get; }
+    }
+
+    public sealed class CbsTableFilterRequestedEventArgs : EventArgs
+    {
+        public CbsTableFilterRequestedEventArgs(string fieldKey, DataFilterMatchMode matchMode, string? value)
+        {
+            FieldKey = fieldKey;
+            MatchMode = matchMode;
+            Value = value;
+        }
+
+        public string FieldKey { get; }
+
+        public DataFilterMatchMode MatchMode { get; }
+
+        public string? Value { get; }
     }
 }

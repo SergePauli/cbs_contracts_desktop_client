@@ -178,14 +178,25 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             await NavigateAsync(_shellViewModel.CurrentRoute, cancellationToken);
         }
 
-        public async Task ApplyTextFilterAsync(string fieldKey, string? value, CancellationToken cancellationToken = default)
+        public async Task ApplyFilterAsync(
+            string fieldKey,
+            DataFilterMatchMode matchMode,
+            string? value,
+            CancellationToken cancellationToken = default)
         {
             if (_state is null)
             {
                 return;
             }
 
-            await _state.SetFilterAsync(fieldKey, DataFilterMatchMode.Contains, value, cancellationToken);
+            var column = CurrentReference?.Columns.FirstOrDefault(
+                column => string.Equals(column.FieldKey, fieldKey, StringComparison.OrdinalIgnoreCase));
+            if (column is not null)
+            {
+                column.Filter.MatchMode = matchMode;
+            }
+
+            await _state.SetFilterAsync(fieldKey, matchMode, value, cancellationToken);
         }
 
         public async Task ResetFiltersAsync(CancellationToken cancellationToken = default)
@@ -491,7 +502,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         {
             FilterFields.Clear();
 
-            foreach (var column in definition.Columns.Where(static column => column.Filter.IsEnabled))
+            foreach (var column in definition.Columns.Where(static column => column.IsFilterable))
             {
                 FilterFields.Add(new ReferenceFilterField
                 {

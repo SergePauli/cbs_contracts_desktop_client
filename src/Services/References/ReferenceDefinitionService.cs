@@ -1,3 +1,4 @@
+using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Settings;
 using CbsContractsDesktopClient.Models.Table;
@@ -200,10 +201,12 @@ namespace CbsContractsDesktopClient.Services.References
                 Header = header,
                 ApiField = key,
                 DefaultWidth = width ?? GetDefaultTextWidth(key),
+                IsFilterable = true,
                 Filter = new CbsTableColumnFilterDefinition
                 {
                     IsEnabled = true,
-                    PlaceholderText = "Фильтр содержит..."
+                    MatchMode = DataFilterMatchMode.Contains,
+                    PlaceholderText = "⌕"
                 }
             };
         }

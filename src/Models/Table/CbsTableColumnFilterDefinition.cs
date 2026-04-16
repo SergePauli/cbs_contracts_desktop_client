@@ -8,6 +8,6 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public string PlaceholderText { get; init; } = string.Empty;
 
-        public DataFilterMatchMode MatchMode { get; init; } = DataFilterMatchMode.Contains;
+        public DataFilterMatchMode MatchMode { get; set; } = DataFilterMatchMode.Contains;
     }
 }
