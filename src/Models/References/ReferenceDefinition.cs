@@ -42,6 +42,7 @@ namespace CbsContractsDesktopClient.Models.References
                     Width = column.Width,
                     IsSortable = column.IsSortable,
                     IsFilterable = column.IsFilterable,
+                    Alignment = column.Alignment,
                     Filter = new CbsTableColumnFilterDefinition
                     {
                         IsEnabled = column.Filter.IsEnabled,

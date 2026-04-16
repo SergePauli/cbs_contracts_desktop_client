@@ -162,6 +162,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 var cellHost = new Grid();
                 var textCell = CreateTextCell();
                 var skeletonCell = CreateSkeletonCell();
+                ApplyColumnAlignment(textCell, Columns[index]);
 
                 _textCells.Add(textCell);
                 _skeletonCells.Add(skeletonCell);
@@ -255,7 +256,18 @@ namespace CbsContractsDesktopClient.Views.Controls
                 FontSize = 12,
                 Text = string.Empty,
                 TextTrimming = TextTrimming.CharacterEllipsis,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        private static void ApplyColumnAlignment(TextBlock textCell, CbsTableColumnDefinition column)
+        {
+            textCell.TextAlignment = column.Alignment switch
+            {
+                CbsTableColumnAlignment.Right => TextAlignment.Right,
+                CbsTableColumnAlignment.Center => TextAlignment.Center,
+                _ => TextAlignment.Left
             };
         }
 

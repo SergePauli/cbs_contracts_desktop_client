@@ -2,6 +2,8 @@ using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using System.Text.Json;
 using Xunit;
+using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Table;
 
 namespace CbsContractsDesktopClient.Tests;
 
@@ -93,6 +95,57 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal("24rem", definition.Columns.Single(static column => column.FieldKey == "name").Width);
         Assert.Equal("9rem", definition.Columns.Single(static column => column.FieldKey == "okopf").Width);
         Assert.Equal("5rem", definition.Columns.Single(static column => column.FieldKey == "id").EffectiveWidth);
+    }
+
+    [Fact]
+    public void TryGetByRoute_AppliesExpectedDefaultAlignments()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/references/Status", out var definition);
+
+        Assert.True(found);
+        Assert.Equal(CbsTableColumnAlignment.Right, definition.Columns.Single(static column => column.FieldKey == "id").Alignment);
+        Assert.Equal(CbsTableColumnAlignment.Left, definition.Columns.Single(static column => column.FieldKey == "name").Alignment);
+        Assert.Equal(CbsTableColumnAlignment.Right, definition.Columns.Single(static column => column.FieldKey == "order").Alignment);
+
+        var boolFound = service.TryGetByRoute("/references/IsecurityTool", out var boolDefinition);
+
+        Assert.True(boolFound);
+        Assert.Equal(CbsTableColumnAlignment.Center, boolDefinition.Columns.Single(static column => column.FieldKey == "used").Alignment);
+    }
+
+    [Fact]
+    public void ReferenceDefinition_Clone_PreservesColumnAlignment()
+    {
+        var definition = new ReferenceDefinition
+        {
+            Route = "/references/Test",
+            Model = "Test",
+            Title = "Test",
+            Columns =
+            [
+                new CbsTableColumnDefinition
+                {
+                    FieldKey = "amount",
+                    Header = "Amount",
+                    Alignment = CbsTableColumnAlignment.Right,
+                    Filter = new CbsTableColumnFilterDefinition()
+                },
+                new CbsTableColumnDefinition
+                {
+                    FieldKey = "flag",
+                    Header = "Flag",
+                    Alignment = CbsTableColumnAlignment.Center,
+                    Filter = new CbsTableColumnFilterDefinition()
+                }
+            ]
+        };
+
+        var clone = definition.Clone();
+
+        Assert.Equal(CbsTableColumnAlignment.Right, clone.Columns.Single(static column => column.FieldKey == "amount").Alignment);
+        Assert.Equal(CbsTableColumnAlignment.Center, clone.Columns.Single(static column => column.FieldKey == "flag").Alignment);
     }
 
     public void Dispose()

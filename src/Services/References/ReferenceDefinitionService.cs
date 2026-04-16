@@ -201,6 +201,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Header = header,
                 ApiField = key,
                 DefaultWidth = width ?? GetDefaultTextWidth(key),
+                Alignment = CbsTableColumnAlignment.Left,
                 IsFilterable = true,
                 Filter = new CbsTableColumnFilterDefinition
                 {
@@ -219,6 +220,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Header = header,
                 ApiField = key,
                 DefaultWidth = width ?? GetDefaultNumberWidth(key),
+                Alignment = CbsTableColumnAlignment.Right,
                 Filter = new CbsTableColumnFilterDefinition()
             };
         }
@@ -231,6 +233,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Header = header,
                 ApiField = key,
                 DefaultWidth = width ?? "3rem",
+                Alignment = CbsTableColumnAlignment.Center,
                 BodyMode = CbsTableBodyMode.BooleanIcon,
                 Filter = new CbsTableColumnFilterDefinition()
             };

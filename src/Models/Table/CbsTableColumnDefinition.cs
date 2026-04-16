@@ -18,6 +18,8 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public CbsTableColumnFilterDefinition Filter { get; init; } = new();
 
+        public CbsTableColumnAlignment Alignment { get; init; } = CbsTableColumnAlignment.Left;
+
         public CbsTableBodyMode BodyMode { get; init; } = CbsTableBodyMode.Text;
 
         public string? BodyTemplateKey { get; init; }
