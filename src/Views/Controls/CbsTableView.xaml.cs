@@ -1004,6 +1004,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                 BorderThickness = new Thickness(1),
                 MinWidth = 24
             };
+            if (column.Filter.Mode == DataFilterMode.Numeric)
+            {
+                textBox.BeforeTextChanging += OnNumericFilterTextBoxBeforeTextChanging;
+            }
+
             textBox.TextChanged += OnFilterTextChanged;
             border.Child = textBox;
             _filterTextBoxes[column.FieldKey] = textBox;
@@ -1106,7 +1111,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             UpdateFilterModeButtonContent(button, GetFilterMode(column));
 
             var flyout = new MenuFlyout();
-            foreach (var mode in GetSupportedFilterModes())
+            foreach (var mode in GetSupportedFilterModes(column))
             {
                 var item = new MenuFlyoutItem
                 {
@@ -1161,6 +1166,19 @@ namespace CbsContractsDesktopClient.Views.Controls
                     textBox.Text));
         }
 
+        private void OnNumericFilterTextBoxBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs args)
+        {
+            if (sender.Tag is not CbsTableColumnDefinition column || column.Filter.Mode != DataFilterMode.Numeric)
+            {
+                return;
+            }
+
+            if (!IsValidNumericFilterInput(args.NewText))
+            {
+                args.Cancel = true;
+            }
+        }
+
         private void EnsureFilterState(CbsTableColumnDefinition column)
         {
             var filterStateKey = GetFilterStateKey(column);
@@ -1208,8 +1226,24 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
         }
 
-        private static IReadOnlyList<DataFilterMatchMode> GetSupportedFilterModes()
+        private static IReadOnlyList<DataFilterMatchMode> GetSupportedFilterModes(CbsTableColumnDefinition column)
         {
+            if (column.Filter.Mode == DataFilterMode.Numeric)
+            {
+                return
+                [
+                    DataFilterMatchMode.Equals,
+                    DataFilterMatchMode.LessThan,
+                    DataFilterMatchMode.LessThanOrEqual,
+                    DataFilterMatchMode.GreaterThan,
+                    DataFilterMatchMode.GreaterThanOrEqual,
+                    DataFilterMatchMode.Contains,
+                    DataFilterMatchMode.StartsWith,
+                    DataFilterMatchMode.EndsWith,
+                    DataFilterMatchMode.NotContains
+                ];
+            }
+
             return
             [
                 DataFilterMatchMode.Contains,
@@ -1224,6 +1258,10 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             return mode switch
             {
+                DataFilterMatchMode.LessThan => "<",
+                DataFilterMatchMode.LessThanOrEqual => "≤",
+                DataFilterMatchMode.GreaterThan => ">",
+                DataFilterMatchMode.GreaterThanOrEqual => "≥",
                 DataFilterMatchMode.StartsWith => "A*",
                 DataFilterMatchMode.Equals => "=",
                 DataFilterMatchMode.EndsWith => "*A",
@@ -1236,12 +1274,56 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             return mode switch
             {
+                DataFilterMatchMode.LessThan => "Меньше",
+                DataFilterMatchMode.LessThanOrEqual => "Меньше или равно",
+                DataFilterMatchMode.GreaterThan => "Больше",
+                DataFilterMatchMode.GreaterThanOrEqual => "Больше или равно",
                 DataFilterMatchMode.StartsWith => "Начинается с",
                 DataFilterMatchMode.Equals => "Равно",
                 DataFilterMatchMode.EndsWith => "Заканчивается на",
                 DataFilterMatchMode.NotContains => "Не содержит",
                 _ => "Содержит"
             };
+        }
+
+        private static bool IsValidNumericFilterInput(string? text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return true;
+            }
+
+            var separatorCount = 0;
+
+            for (var index = 0; index < text.Length; index++)
+            {
+                var character = text[index];
+
+                if (char.IsDigit(character))
+                {
+                    continue;
+                }
+
+                if (character is '.' or ',')
+                {
+                    separatorCount++;
+                    if (separatorCount > 1)
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                if (character == '-' && index == 0)
+                {
+                    continue;
+                }
+
+                return false;
+            }
+
+            return true;
         }
     }
 

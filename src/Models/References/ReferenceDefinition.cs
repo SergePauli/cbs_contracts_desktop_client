@@ -47,6 +47,7 @@ namespace CbsContractsDesktopClient.Models.References
                     {
                         IsEnabled = column.Filter.IsEnabled,
                         PlaceholderText = column.Filter.PlaceholderText,
+                        Mode = column.Filter.Mode,
                         MatchMode = column.Filter.MatchMode
                     },
                     BodyMode = column.BodyMode,

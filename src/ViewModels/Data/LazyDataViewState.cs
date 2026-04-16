@@ -76,6 +76,7 @@ namespace CbsContractsDesktopClient.ViewModels.Data
 
         public async Task SetFilterAsync(
             string fieldKey,
+            DataFilterMode filterMode,
             DataFilterMatchMode matchMode,
             object? value,
             CancellationToken cancellationToken = default)
@@ -94,6 +95,7 @@ namespace CbsContractsDesktopClient.ViewModels.Data
                 Filters.Add(new DataFilterCriterion
                 {
                     FieldKey = fieldKey,
+                    FilterMode = filterMode,
                     MatchMode = matchMode,
                     Value = value
                 });

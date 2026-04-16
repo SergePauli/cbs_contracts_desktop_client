@@ -199,6 +199,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             await _state.SetFilterAsync(fieldKey, matchMode, value, cancellationToken);
+            await _state.SetFilterAsync(
+                fieldKey,
+                column?.Filter.Mode ?? DataFilterMode.Text,
+                matchMode,
+                value,
+                cancellationToken);
         }
 
         public async Task ResetFiltersAsync(CancellationToken cancellationToken = default)

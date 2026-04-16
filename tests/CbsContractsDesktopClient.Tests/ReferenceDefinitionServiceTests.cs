@@ -4,6 +4,7 @@ using System.Text.Json;
 using Xunit;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Models.Data;
 
 namespace CbsContractsDesktopClient.Tests;
 
@@ -108,11 +109,14 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal(CbsTableColumnAlignment.Right, definition.Columns.Single(static column => column.FieldKey == "id").Alignment);
         Assert.Equal(CbsTableColumnAlignment.Left, definition.Columns.Single(static column => column.FieldKey == "name").Alignment);
         Assert.Equal(CbsTableColumnAlignment.Right, definition.Columns.Single(static column => column.FieldKey == "order").Alignment);
+        Assert.Equal("⌕", definition.Columns.Single(static column => column.FieldKey == "order").Filter.PlaceholderText);
 
         var boolFound = service.TryGetByRoute("/references/IsecurityTool", out var boolDefinition);
 
         Assert.True(boolFound);
         Assert.Equal(CbsTableColumnAlignment.Center, boolDefinition.Columns.Single(static column => column.FieldKey == "used").Alignment);
+        Assert.Equal(DataFilterMode.Text, definition.Columns.Single(static column => column.FieldKey == "name").Filter.Mode);
+        Assert.Equal(DataFilterMode.Numeric, definition.Columns.Single(static column => column.FieldKey == "order").Filter.Mode);
     }
 
     [Fact]
@@ -130,14 +134,20 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
                     FieldKey = "amount",
                     Header = "Amount",
                     Alignment = CbsTableColumnAlignment.Right,
-                    Filter = new CbsTableColumnFilterDefinition()
+                    Filter = new CbsTableColumnFilterDefinition
+                    {
+                        Mode = DataFilterMode.Numeric
+                    }
                 },
                 new CbsTableColumnDefinition
                 {
                     FieldKey = "flag",
                     Header = "Flag",
                     Alignment = CbsTableColumnAlignment.Center,
-                    Filter = new CbsTableColumnFilterDefinition()
+                    Filter = new CbsTableColumnFilterDefinition
+                    {
+                        Mode = DataFilterMode.Text
+                    }
                 }
             ]
         };
@@ -146,6 +156,8 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
 
         Assert.Equal(CbsTableColumnAlignment.Right, clone.Columns.Single(static column => column.FieldKey == "amount").Alignment);
         Assert.Equal(CbsTableColumnAlignment.Center, clone.Columns.Single(static column => column.FieldKey == "flag").Alignment);
+        Assert.Equal(DataFilterMode.Numeric, clone.Columns.Single(static column => column.FieldKey == "amount").Filter.Mode);
+        Assert.Equal(DataFilterMode.Text, clone.Columns.Single(static column => column.FieldKey == "flag").Filter.Mode);
     }
 
     public void Dispose()

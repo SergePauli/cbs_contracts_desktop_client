@@ -22,11 +22,33 @@ public class LazyDataViewStateTests
             },
             placeholderFactory: static () => new TestItem());
 
-        await state.SetFilterAsync("name", DataFilterMatchMode.Contains, "проект");
+        await state.SetFilterAsync("name", DataFilterMode.Text, DataFilterMatchMode.Contains, "проект");
 
         Assert.NotNull(service.LastCountRequest);
         var filters = Assert.IsType<Dictionary<string, object?>>(service.LastCountRequest!.Filters);
         Assert.Equal("проект", filters["name__cnt"]);
+    }
+
+    [Fact]
+    public async Task SetFilterAsync_UsesNumericModeForNumericFilters()
+    {
+        var service = new RecordingDataQueryService();
+        var state = new LazyDataViewState<TestItem>(
+            service,
+            model: "Status",
+            preset: "item",
+            pageSize: 5,
+            fieldMap: new Dictionary<string, string>
+            {
+                ["id"] = "id"
+            },
+            placeholderFactory: static () => new TestItem());
+
+        await state.SetFilterAsync("id", DataFilterMode.Numeric, DataFilterMatchMode.GreaterThanOrEqual, "10");
+
+        Assert.NotNull(service.LastCountRequest);
+        var filters = Assert.IsType<Dictionary<string, object?>>(service.LastCountRequest!.Filters);
+        Assert.Equal(10m, filters["id__gte"]);
     }
 
     [Fact]

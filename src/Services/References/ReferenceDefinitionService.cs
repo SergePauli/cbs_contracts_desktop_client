@@ -206,6 +206,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Filter = new CbsTableColumnFilterDefinition
                 {
                     IsEnabled = true,
+                    Mode = DataFilterMode.Text,
                     MatchMode = DataFilterMatchMode.Contains,
                     PlaceholderText = "⌕"
                 }
@@ -221,7 +222,14 @@ namespace CbsContractsDesktopClient.Services.References
                 ApiField = key,
                 DefaultWidth = width ?? GetDefaultNumberWidth(key),
                 Alignment = CbsTableColumnAlignment.Right,
-                Filter = new CbsTableColumnFilterDefinition()
+                IsFilterable = true,
+                Filter = new CbsTableColumnFilterDefinition
+                {
+                    IsEnabled = true,
+                    Mode = DataFilterMode.Numeric,
+                    MatchMode = DataFilterMatchMode.Equals,
+                    PlaceholderText = "⌕"
+                }
             };
         }
 

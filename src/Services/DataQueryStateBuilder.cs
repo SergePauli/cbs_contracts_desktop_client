@@ -63,12 +63,12 @@ namespace CbsContractsDesktopClient.Services
 
             return filter.MatchMode switch
             {
-                DataFilterMatchMode.Equals => BuildSingle($"{apiField}__eq", value),
+                DataFilterMatchMode.Equals => BuildFilterValue(filter, $"{apiField}__eq", value),
                 DataFilterMatchMode.NotEquals => BuildSingle($"{apiField}__not_eq", value),
-                DataFilterMatchMode.LessThan => BuildSingle($"{apiField}__lt", value),
-                DataFilterMatchMode.LessThanOrEqual => BuildSingle($"{apiField}__lteq", value),
-                DataFilterMatchMode.GreaterThan => BuildSingle($"{apiField}__gt", value),
-                DataFilterMatchMode.GreaterThanOrEqual => BuildSingle($"{apiField}__gteq", value),
+                DataFilterMatchMode.LessThan => BuildFilterValue(filter, $"{apiField}__lt", value),
+                DataFilterMatchMode.LessThanOrEqual => BuildFilterValue(filter, $"{apiField}__lte", value),
+                DataFilterMatchMode.GreaterThan => BuildFilterValue(filter, $"{apiField}__gt", value),
+                DataFilterMatchMode.GreaterThanOrEqual => BuildFilterValue(filter, $"{apiField}__gte", value),
                 DataFilterMatchMode.StartsWith => BuildString($"{apiField}__start", value),
                 DataFilterMatchMode.Contains => BuildString($"{apiField}__cnt", value),
                 DataFilterMatchMode.EndsWith => BuildString($"{apiField}__end", value),
@@ -83,12 +83,63 @@ namespace CbsContractsDesktopClient.Services
             return new Dictionary<string, object?> { [key] = value };
         }
 
+        private static Dictionary<string, object?> BuildFilterValue(DataFilterCriterion filter, string key, object value)
+        {
+            if (filter.FilterMode == DataFilterMode.Numeric)
+            {
+                return BuildNumeric(key, value);
+            }
+
+            return BuildSingle(key, value);
+        }
+
         private static Dictionary<string, object?> BuildString(string key, object value)
         {
             var text = value.ToString();
             return string.IsNullOrWhiteSpace(text)
                 ? []
                 : new Dictionary<string, object?> { [key] = text };
+        }
+
+        private static Dictionary<string, object?> BuildNumeric(string key, object value)
+        {
+            if (TryConvertNumeric(value, out var numericValue))
+            {
+                return new Dictionary<string, object?> { [key] = numericValue };
+            }
+
+            return [];
+        }
+
+        private static bool TryConvertNumeric(object value, out object numericValue)
+        {
+            switch (value)
+            {
+                case byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
+                    numericValue = value;
+                    return true;
+                case string text when !string.IsNullOrWhiteSpace(text):
+                    if (decimal.TryParse(text, out var decimalValue))
+                    {
+                        numericValue = decimalValue;
+                        return true;
+                    }
+
+                    if (decimal.TryParse(
+                        text,
+                        System.Globalization.NumberStyles.Number,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out decimalValue))
+                    {
+                        numericValue = decimalValue;
+                        return true;
+                    }
+
+                    break;
+            }
+
+            numericValue = default!;
+            return false;
         }
 
         private static Dictionary<string, object?> BuildInFilter(string inKey, string nullKey, object value)

@@ -62,4 +62,37 @@ public class DataQueryStateBuilderTests
 
         Assert.Equal(["created_at desc"], payload);
     }
+
+    [Fact]
+    public void BuildFilters_MapsNumericCriteriaToApiPayload()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "cost",
+                FilterMode = DataFilterMode.Numeric,
+                MatchMode = DataFilterMatchMode.LessThanOrEqual,
+                Value = "125.50"
+            },
+            new DataFilterCriterion
+            {
+                FieldKey = "priority",
+                FilterMode = DataFilterMode.Numeric,
+                MatchMode = DataFilterMatchMode.GreaterThan,
+                Value = 2
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["cost"] = "cost",
+                ["priority"] = "priority"
+            }));
+
+        Assert.Equal(125.50m, payload["cost__lte"]);
+        Assert.Equal(2, payload["priority__gt"]);
+    }
 }
