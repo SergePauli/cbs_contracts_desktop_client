@@ -85,9 +85,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public ObservableCollection<ReferenceFilterField> FilterFields { get; }
 
+        public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentReference?.Columns ?? [];
 
         public string CurrentTableStateKey => CurrentReference?.Route ?? string.Empty;
-        public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentReference?.Columns ?? [];
 
         public bool HasFilters => FilterFields.Count > 0;
 
@@ -186,8 +186,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             string? value,
             CancellationToken cancellationToken = default)
         {
+            AppendUiTrace(
+                $"FILTER VM APPLY field={fieldKey} mode={matchMode} value={(string.IsNullOrWhiteSpace(value) ? "<empty>" : value)}");
             if (_state is null)
             {
+                AppendUiTrace("FILTER VM STATE NULL");
                 return;
             }
 
@@ -198,13 +201,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 column.Filter.MatchMode = matchMode;
             }
 
-            await _state.SetFilterAsync(fieldKey, matchMode, value, cancellationToken);
             await _state.SetFilterAsync(
                 fieldKey,
                 column?.Filter.Mode ?? DataFilterMode.Text,
                 matchMode,
                 value,
                 cancellationToken);
+            _lastViewportEnsureStart = -1;
+            _lastViewportEnsureEnd = -1;
+            AppendUiTrace(
+                $"FILTER VM APPLIED field={fieldKey} mode={matchMode} value={(string.IsNullOrWhiteSpace(value) ? "<empty>" : value)}");
         }
 
         public async Task ResetFiltersAsync(CancellationToken cancellationToken = default)
@@ -433,13 +439,13 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 AppendUiTrace($"NAVIGATE AFTER ATTACH model={definition.Model} {GetDebugStateSnapshot()}");
 
                 OnPropertyChanged(nameof(CurrentColumns));
+                OnPropertyChanged(nameof(CurrentTableStateKey));
                 OnPropertyChanged(nameof(HasFilters));
                 OnPropertyChanged(nameof(Items));
                 OnPropertyChanged(nameof(Rows));
                 OnPropertyChanged(nameof(UiTraceLog));
                 OnPropertyChanged(nameof(HasMoreItems));
                 OnPropertyChanged(nameof(LoadedCount));
-                OnPropertyChanged(nameof(CurrentTableStateKey));
                 OnPropertyChanged(nameof(ResidentCount));
                 OnPropertyChanged(nameof(LastCountRequestJson));
                 OnPropertyChanged(nameof(LastPageRequestJson));
@@ -494,13 +500,13 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _shellViewModel.ResetAuditPanelState();
 
             OnPropertyChanged(nameof(CurrentColumns));
+            OnPropertyChanged(nameof(CurrentTableStateKey));
             OnPropertyChanged(nameof(HasFilters));
             OnPropertyChanged(nameof(Items));
             OnPropertyChanged(nameof(Rows));
             OnPropertyChanged(nameof(HasMoreItems));
             OnPropertyChanged(nameof(LoadedCount));
             OnPropertyChanged(nameof(LastCountRequestJson));
-            OnPropertyChanged(nameof(CurrentTableStateKey));
             OnPropertyChanged(nameof(LastPageRequestJson));
             OnPropertyChanged(nameof(TraceLog));
             OnPropertyChanged(nameof(UiTraceLog));
@@ -643,6 +649,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             var auditText =
                 $"Loaded: {LoadedCount}/{TotalCount}{Environment.NewLine}" +
                 $"Resident: {ResidentCount}/{TotalCount}{Environment.NewLine}{Environment.NewLine}" +
+                $"Count payload:{Environment.NewLine}{LastCountRequestJson}{Environment.NewLine}{Environment.NewLine}" +
+                $"Page payload:{Environment.NewLine}{LastPageRequestJson}{Environment.NewLine}{Environment.NewLine}" +
                 $"Trace:{Environment.NewLine}{CombinedTraceLog}";
 
             if (!force && string.Equals(_lastAuditPanelText, auditText, StringComparison.Ordinal))
@@ -736,6 +744,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 || message.StartsWith("DETACH STATE", StringComparison.Ordinal)
                 || message.StartsWith("STEP API ", StringComparison.Ordinal)
                 || message.StartsWith("STEP VM ", StringComparison.Ordinal)
+                || message.StartsWith("FILTER ", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL LOAD STATE NULL", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL RETENTION STATE NULL", StringComparison.Ordinal);
         }

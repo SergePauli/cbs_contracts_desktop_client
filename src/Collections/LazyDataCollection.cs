@@ -169,6 +169,8 @@ namespace CbsContractsDesktopClient.Collections
                 return;
             }
 
+            CancelViewportLoads();
+
             IsLoading = true;
             ErrorMessage = string.Empty;
 
@@ -219,6 +221,7 @@ namespace CbsContractsDesktopClient.Collections
 
         public async Task ReplaceQueryAsync(LazyDataQuery query, CancellationToken cancellationToken = default)
         {
+            CancelViewportLoads();
             _query = query;
             _isInitialized = false;
             await RefreshAsync(cancellationToken);
@@ -474,6 +477,15 @@ namespace CbsContractsDesktopClient.Collections
             }
 
             return (value / pageSize) * pageSize;
+        }
+
+        private void CancelViewportLoads()
+        {
+            Interlocked.Increment(ref _viewportRequestVersion);
+            _viewportLoadCts?.Cancel();
+            _viewportLoadCts?.Dispose();
+            _viewportLoadCts = null;
+            AppendTrace("STEP ENSURE CANCEL active-viewport-loads");
         }
 
         private void AppendTrace(string message)

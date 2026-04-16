@@ -1,166 +1,166 @@
 ﻿# cbs_contracts_desktop_client
 
-Нативный Windows-клиент для системы «База контрактов и контрагентов», реализуемый на WinUI 3 и Windows App SDK с опорой на существующий web-клиент `cbs_contracts_webclient`.
+Нативный Windows-клиент системы «База контрактов и контрагентов» на `WinUI 3` и `.NET 8`, развиваемый параллельно с web-клиентом `cbs_contracts_webclient`.
 
 ## Текущий статус
 
-- Работает WinUI 3 desktop-приложение на .NET 8.
-- Подключены DI, `HttpClient` и базовые сервисы приложения.
-- Работает авторизация против внешнего API.
-- Реализовано сохранение учетных данных через Windows Credential Manager.
-- После успешного логина открывается полноценный `AppShell`, а не временный debug-экран.
-- Shell уже переведен на общий state через `AppShellViewModel`.
-- Типографика и четкость рендеринга приведены к уровню WinUI Gallery через `PerMonitorV2` DPI awareness и системные WinUI-стили.
+Проект уже находится на стадии рабочей платформы, а не только shell-каркаса.
+
+Сейчас уже реализовано:
+
+- рабочее WinUI 3 desktop-приложение на `.NET 8`
+- авторизация через API
+- сохранение учетных данных через Windows Credential Manager
+- полноценный `AppShell` после логина
+- общий shell-state через `AppShellViewModel`
+- рабочий экран справочников в центральной области shell
+- собственный `CbsTableView` с lazy loading, resize, selection, sorting и hot filters
+- локальное сохранение ширин колонок
+- unit-тесты на ключевую инфраструктуру и query/table-state
 
 ## Что уже сделано
 
 ### Инфраструктура
 
-- Создан WinUI 3 проект под .NET 8.
-- Подключены:
-  - `Microsoft.WindowsAppSDK`
-  - `CommunityToolkit.Mvvm`
-  - `Microsoft.Extensions.DependencyInjection`
-  - `Microsoft.Extensions.Http`
-- В `App.xaml.cs` настроен контейнер зависимостей.
-- В проект добавлен `app.manifest` с `PerMonitorV2` DPI awareness.
+- `Microsoft.WindowsAppSDK`
+- `CommunityToolkit.Mvvm`
+- `Microsoft.Extensions.DependencyInjection`
+- `Microsoft.Extensions.Http`
+- `app.manifest` с `PerMonitorV2` DPI awareness
+- композиция сервисов в `App.xaml.cs`
 
 ### Авторизация
 
-- Реализован `AuthService` для входа через API.
-- Базовый адрес API сейчас настроен на `http://serge-lenovo:5000`.
-- Вход выполняется через endpoint `POST auth/login`.
-- Ответ сервера преобразуется в локальную модель пользователя.
-- Текущий пользователь сохраняется в `UserService`.
-- Реализован logout с возвратом на `LoginPage`.
+- `AuthService`
+- `UserService`
+- `CredentialManagerService`
+- вход, logout и возврат на `LoginPage`
 
-### Экран логина
+### Shell
 
-- Собран экран авторизации на XAML.
-- Добавлены поля логина и пароля, индикатор загрузки, вывод ошибки входа и чекбокс `Запомнить меня`.
-- Правая колонка оформлена как информационная панель с логотипом и версией клиента.
-
-### Shell после логина
-
-- Добавлен `AppShellPage` как базовый каркас приложения.
-- Layout разделен на 5 регионов:
-  - левый sidebar
-  - верхний top bar
-  - центральная область контента
-  - правый audit panel
-  - нижний footer bar
-- Регионы вынесены в отдельные `UserControl`:
+- `AppShellPage` с layout на 5 регионов:
   - `NavigationSidebarView`
   - `TopBarView`
   - `ContentHostView`
   - `AuditPanelView`
   - `FooterBarView`
-- Sidebar построен на стандартном `NavigationView`.
-- Раздел `Справочники` сделан collapsible и по умолчанию свернут.
-- `TopBarView` использует `BreadcrumbBar`, кнопку сворачивания sidebar и `ToggleButton` audit panel.
-- Обычный текст переведен на общие типографические стили из `Typography.xaml`.
-- В `ContentHostView` начата интеграция табличного рабочего экрана на базе `WinUI.TableView`.
+- breadcrumbs, footer-state и audit panel state живут в `AppShellViewModel`
 
-### Общий shell-state
+### Экран справочников
 
-- Добавлен `AppShellViewModel` как единый state для shell.
-- В нем уже представлены:
-  - видимость sidebar
-  - открытие audit panel
-  - выбранный пункт меню
-  - breadcrumbs
-  - footer-state
-  - контекстные ссылки для sidebar
-  - состояние audit panel
-- `TopBarView`, `NavigationSidebarView`, `AuditPanelView` и `FooterBarView` работают через этот shared state.
+В shell уже встроен реальный универсальный workspace для справочников:
 
-### Footer и audit panel
+- route-driven открытие `/references/{Model}`
+- `ReferenceDefinitionService` с описанием поддержанных таблиц
+- `ReferencesContentViewModel` как orchestration-слой
+- lazy/virtual pipeline через:
+  - `LazyDataCollection<T>`
+  - `LazyDataViewState<T>`
+  - `CbsVirtualTableRows<T>`
 
-- `FooterBarView` получает данные через `FooterState`.
-- `AuditPanelView` получает данные через `AuditPanelState`.
-- Sidebar уже умеет показывать контекстный раздел `Контекст`, который позже будет заполняться из рабочих страниц.
+### Собственный `CbsTableView`
 
-## Структура проекта
+Сейчас reference screen опирается на собственный табличный контрол:
 
-- `src/Models/` — модели данных и shell-state
-- `src/Services/` — API, пользовательское состояние, навигационные сервисы
-- `src/ViewModels/` — MVVM-логика
-- `src/Views/` — XAML-страницы и `UserControl`
-- `Assets/` — используемые иконки и изображения
-- `docs/` — сопроводительная документация
+- компактная spreadsheet-like стилистика
+- двухрядная шапка
+- сортировка по колонкам
+- горячие фильтры в header
+- ручной resize колонок
+- сохранение пользовательских ширин
+- single-row selection
+- scope-safe состояние фильтров по `table route + fieldKey`
+- выравнивание колонок по типу:
+  - текст слева
+  - числа справа
+  - bool по центру
 
-## Что пока остается временным
+### Фильтрация
 
-- Центральная область `AppShell` пока показывает placeholder вместо реальной рабочей страницы.
-- Контекстные ссылки sidebar и audit panel пока подключены как механизм, но еще не заполняются живыми данными из рабочего экрана.
-- Ссылки `Регистрация` и `Не помню пароль` пока ведут на заглушки.
-- Версия в footer пока задана статично как `v1.0.0`.
+Поддержаны два режима фильтрации колонок:
 
-## Следующий шаг
+- `text`
+- `numeric`
 
-Следующий практический этап — подключить первую реальную рабочую страницу внутри shell и связать ее с общим shell-state.
+Для text:
 
-Минимальный полезный результат следующей итерации:
+- `Contains`
+- `StartsWith`
+- `Equals`
+- `EndsWith`
+- `NotContains`
 
-1. Пользователь входит в систему.
-2. Попадает в `AppShell`.
-3. В центральной области открывается первая рабочая страница.
-4. При выборе сущности на странице обновляются:
-   - breadcrumbs
-   - контекстный блок sidebar
-   - audit panel
+Для numeric:
 
-## Запуск в Visual Studio 2022
+- `Equals`
+- `LessThan`
+- `LessThanOrEqual`
+- `GreaterThan`
+- `GreaterThanOrEqual`
+- плюс строковые операции по цифрам при необходимости
 
-1. Открыть `CbsContractsDesktopClient.sln`.
-2. Выбрать конфигурацию `Debug | x64`.
-3. Убедиться, что установлены workload'ы для .NET desktop development и компоненты WinUI 3 / Windows App SDK.
-4. Запустить проект через `F5`.
+Для numeric textbox уже есть мягкая валидация заведомо нечислового ввода.
+
+## На каком этапе сейчас разработка
+
+Текущий этап:
+
+**Фаза платформы завершена.**
+
+Это означает, что уже готовы:
+
+- auth flow
+- shell
+- reference workspace
+- собственная table platform
+
+Текущая работа теперь смещается с «собрать основу приложения» на:
+
+- расширение сценариев поверх reference workspace
+- дальнейшую полировку UX таблицы
+- перенос следующих рабочих экранов из web-клиента
+
+## Ближайшие направления
+
+- date/time filters и специализированные типы колонок
+- row actions / editing scenarios
+- развитие audit/context state от реальных бизнес-сценариев
+- новые рабочие страницы внутри shell
+- возможная чистка диагностического слоя после завершения активной оптимизации
 
 ## Тесты
 
-- В solution добавлен тестовый проект `tests/CbsContractsDesktopClient.Tests`.
-- Базовый стек тестирования:
-  - `xUnit`
-  - `Microsoft.NET.Test.Sdk`
-  - `coverlet.collector`
-- Уже покрыты базовые сценарии для:
-  - `UserService`
-  - `AuthService`
-  - `LoginViewModel`
+В solution есть `tests/CbsContractsDesktopClient.Tests`.
 
-Запуск из консоли:
+Уже покрыты:
 
-1. `dotnet test`
+- `AuthService`
+- `UserService`
+- `LoginViewModel`
+- `DataQueryStateBuilder`
+- `LazyDataViewState`
+- `ReferenceDefinitionService`
+- локальные настройки ширин колонок
+- alignment и filter mode дефолты колонок
 
-Локальные integration smoke-тесты для внутренних API:
+Запуск:
 
-1. Поднять оба внутренних API локально или в доступной сети.
-2. Задать переменные окружения:
-   - `CBS_TEST_USERNAME`
-   - `CBS_TEST_PASSWORD`
-   - опционально `CBS_TEST_PRIMARY_API_URL`
-   - опционально `CBS_TEST_DATA_API_URL`
-3. Запустить `dotnet test`.
+```powershell
+dotnet test
+```
 
-По умолчанию локальные integration-тесты используют `admin / 1235`, если `CBS_TEST_USERNAME` и `CBS_TEST_PASSWORD` не заданы явно.
+## Структура проекта
 
-Хорошие следующие кандидаты на покрытие:
+- `src/Models/` — модели данных, shell-state, table definitions
+- `src/Services/` — API, auth, settings, navigation, reference definitions
+- `src/ViewModels/` — MVVM-логика
+- `src/Views/` — XAML и `UserControl`
+- `src/Collections/` — lazy/virtual data pipeline
+- `tests/` — unit и integration tests
+- `docs/` — технические заметки и backlog
 
-- `AppShellViewModel`
-- `NavigationMenuService`
-- будущий `INavigationService`
-- публикация shell-context из рабочих страниц
+## Документация
 
-## Ближайшие направления развития
-
-- первая реальная страница после логина
-- навигация между страницами внутри shell
-- контекстные данные для sidebar и audit panel
-- обработка `401` и истечения токена
-- формы регистрации и восстановления пароля
-- перенос следующих экранов из web-клиента
-
-## Исследование DataGrid для WinUI 3
-
-- Отдельная заметка по поиску open-source табличного контрола и принятому решению лежит в [docs/WinUI-Table-Control-Research.md](docs/WinUI-Table-Control-Research.md).
+- [docs/Project-Status.md](docs/Project-Status.md)
+- [docs/AppShell-Backlog.md](docs/AppShell-Backlog.md)
+- [docs/WinUI-Table-Control-Research.md](docs/WinUI-Table-Control-Research.md)

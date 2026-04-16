@@ -69,6 +69,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void ReferenceTableView_FilterRequested(object sender, CbsTableFilterRequestedEventArgs e)
         {
+            _viewModel.AppendUiTrace(
+                $"FILTER UI REQUEST field={e.FieldKey} mode={e.MatchMode} value={(string.IsNullOrWhiteSpace(e.Value) ? "<empty>" : e.Value)}");
             _filterDebounceCts?.Cancel();
             var cancellationTokenSource = new CancellationTokenSource();
             _filterDebounceCts = cancellationTokenSource;
@@ -76,6 +78,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 await Task.Delay(250, cancellationTokenSource.Token);
+                _viewModel.AppendUiTrace(
+                    $"FILTER UI DISPATCH field={e.FieldKey} mode={e.MatchMode} value={(string.IsNullOrWhiteSpace(e.Value) ? "<empty>" : e.Value)}");
                 await _viewModel.ApplyFilterAsync(
                     e.FieldKey,
                     e.MatchMode,
@@ -84,6 +88,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (OperationCanceledException)
             {
+                _viewModel.AppendUiTrace(
+                    $"FILTER UI CANCELED field={e.FieldKey} mode={e.MatchMode}");
             }
         }
 
