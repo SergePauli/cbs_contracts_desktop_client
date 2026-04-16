@@ -70,7 +70,7 @@ namespace CbsContractsDesktopClient.Services
                 DataFilterMatchMode.GreaterThan => BuildSingle($"{apiField}__gt", value),
                 DataFilterMatchMode.GreaterThanOrEqual => BuildSingle($"{apiField}__gteq", value),
                 DataFilterMatchMode.StartsWith => BuildString($"{apiField}__start", value),
-                DataFilterMatchMode.Contains => BuildString($"{apiField}__cont", value),
+                DataFilterMatchMode.Contains => BuildString($"{apiField}__cnt", value),
                 DataFilterMatchMode.EndsWith => BuildString($"{apiField}__end", value),
                 DataFilterMatchMode.NotContains => BuildString($"{apiField}__not_cont", value),
                 DataFilterMatchMode.In => BuildInFilter($"{apiField}__in", $"{apiField}__null", value),

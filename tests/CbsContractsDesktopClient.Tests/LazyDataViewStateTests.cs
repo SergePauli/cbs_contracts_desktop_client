@@ -26,7 +26,7 @@ public class LazyDataViewStateTests
 
         Assert.NotNull(service.LastCountRequest);
         var filters = Assert.IsType<Dictionary<string, object?>>(service.LastCountRequest!.Filters);
-        Assert.Equal("проект", filters["name__cont"]);
+        Assert.Equal("проект", filters["name__cnt"]);
     }
 
     [Fact]

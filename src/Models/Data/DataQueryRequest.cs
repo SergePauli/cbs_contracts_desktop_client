@@ -18,9 +18,11 @@ namespace CbsContractsDesktopClient.Models.Data
         public IReadOnlyList<string>? Sorts { get; init; }
 
         [JsonPropertyName("limit")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? Limit { get; init; }
 
         [JsonPropertyName("offset")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public int? Offset { get; init; }
     }
 }

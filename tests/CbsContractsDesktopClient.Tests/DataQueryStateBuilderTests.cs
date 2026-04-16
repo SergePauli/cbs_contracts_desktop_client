@@ -33,7 +33,7 @@ public class DataQueryStateBuilderTests
                 ["status"] = "status"
             }));
 
-        Assert.Equal("proj", payload["name__cont"]);
+        Assert.Equal("proj", payload["name__cnt"]);
         var groups = Assert.IsType<Dictionary<string, object?>[]>(payload["g"]);
         Assert.Single(groups);
         Assert.Equal("or", groups[0]["m"]);
