@@ -85,6 +85,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public ObservableCollection<ReferenceFilterField> FilterFields { get; }
 
+
+        public string CurrentTableStateKey => CurrentReference?.Route ?? string.Empty;
         public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentReference?.Columns ?? [];
 
         public bool HasFilters => FilterFields.Count > 0;
@@ -431,6 +433,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 OnPropertyChanged(nameof(UiTraceLog));
                 OnPropertyChanged(nameof(HasMoreItems));
                 OnPropertyChanged(nameof(LoadedCount));
+                OnPropertyChanged(nameof(CurrentTableStateKey));
                 OnPropertyChanged(nameof(ResidentCount));
                 OnPropertyChanged(nameof(LastCountRequestJson));
                 OnPropertyChanged(nameof(LastPageRequestJson));
@@ -491,6 +494,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(HasMoreItems));
             OnPropertyChanged(nameof(LoadedCount));
             OnPropertyChanged(nameof(LastCountRequestJson));
+            OnPropertyChanged(nameof(CurrentTableStateKey));
             OnPropertyChanged(nameof(LastPageRequestJson));
             OnPropertyChanged(nameof(TraceLog));
             OnPropertyChanged(nameof(UiTraceLog));

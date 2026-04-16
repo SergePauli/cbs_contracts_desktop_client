@@ -132,6 +132,7 @@
                                 Columns="{Binding CurrentColumns}"
                                 CurrentSortDirection="{Binding CurrentSortDirection}"
                                 CurrentSortField="{Binding CurrentSortField}"
+                                TableStateKey="{Binding CurrentTableStateKey}"
                                 Density="Compact"
                                 HasMoreItems="{Binding HasMoreItems}"
                                 IsLoading="{Binding IsLoading}"

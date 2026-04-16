@@ -47,6 +47,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableView),
                 new PropertyMetadata(null, OnSortStateChanged));
 
+        public static readonly DependencyProperty TableStateKeyProperty =
+            DependencyProperty.Register(
+                nameof(TableStateKey),
+                typeof(string),
+                typeof(CbsTableView),
+                new PropertyMetadata(string.Empty, OnTableStateKeyChanged));
+
         public static readonly DependencyProperty HasMoreItemsProperty =
             DependencyProperty.Register(
                 nameof(HasMoreItems),
@@ -184,6 +191,12 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             get => (DataSortDirection?)GetValue(CurrentSortDirectionProperty);
             set => SetValue(CurrentSortDirectionProperty, value);
+        }
+
+        public string TableStateKey
+        {
+            get => (string)GetValue(TableStateKeyProperty);
+            set => SetValue(TableStateKeyProperty, value);
         }
 
         public bool HasMoreItems
@@ -465,6 +478,12 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnSortStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((CbsTableView)d).RebuildHeader();
+        }
+
+        private static void OnTableStateKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var control = (CbsTableView)d;
+            control.RebuildHeader();
         }
 
         private static void OnRowHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -1110,7 +1129,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             var (column, mode) = payload;
-            _filterModes[column.FieldKey] = mode;
+            _filterModes[GetFilterStateKey(column)] = mode;
             column.Filter.MatchMode = mode;
 
             if (_filterModeButtons.TryGetValue(column.FieldKey, out var button))
@@ -1133,7 +1152,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
-            _filterTexts[column.FieldKey] = textBox.Text;
+            _filterTexts[GetFilterStateKey(column)] = textBox.Text;
             FilterRequested?.Invoke(
                 this,
                 new CbsTableFilterRequestedEventArgs(
@@ -1144,29 +1163,36 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void EnsureFilterState(CbsTableColumnDefinition column)
         {
-            if (!_filterModes.ContainsKey(column.FieldKey))
+            var filterStateKey = GetFilterStateKey(column);
+
+            if (!_filterModes.ContainsKey(filterStateKey))
             {
-                _filterModes[column.FieldKey] = column.Filter.MatchMode;
+                _filterModes[filterStateKey] = column.Filter.MatchMode;
             }
 
-            if (!_filterTexts.ContainsKey(column.FieldKey))
+            if (!_filterTexts.ContainsKey(filterStateKey))
             {
-                _filterTexts[column.FieldKey] = string.Empty;
+                _filterTexts[filterStateKey] = string.Empty;
             }
         }
 
         private DataFilterMatchMode GetFilterMode(CbsTableColumnDefinition column)
         {
-            return _filterModes.TryGetValue(column.FieldKey, out var mode)
+            return _filterModes.TryGetValue(GetFilterStateKey(column), out var mode)
                 ? mode
                 : column.Filter.MatchMode;
         }
 
         private string GetFilterText(CbsTableColumnDefinition column)
         {
-            return _filterTexts.TryGetValue(column.FieldKey, out var text)
+            return _filterTexts.TryGetValue(GetFilterStateKey(column), out var text)
                 ? text
                 : string.Empty;
+        }
+
+        private string GetFilterStateKey(CbsTableColumnDefinition column)
+        {
+            return $"{TableStateKey}|{column.FieldKey}";
         }
 
         private void UpdateFilterModeButtonContent(Button button, DataFilterMatchMode mode)
