@@ -8,39 +8,7 @@
     mc:Ignorable="d">
 
     <Grid Padding="0">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <Grid Padding="{StaticResource ShellContentHeaderPadding}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <TextBlock
-                Style="{StaticResource TitleTextBlockStyle}"
-                VerticalAlignment="Center"
-                FontSize="26"
-                Foreground="{StaticResource ShellPrimaryTextBrush}"
-                Text="{Binding SectionTitle}" />
-
-            <Button
-                Grid.Column="1"
-                Width="{StaticResource ShellActionButtonSize}"
-                Height="{StaticResource ShellActionButtonSize}"
-                Padding="0"
-                Background="Transparent"
-                BorderBrush="{x:Null}"
-                Content="&#xE713;"
-                FontFamily="Segoe Fluent Icons"
-                FontSize="14"
-                Foreground="{StaticResource ShellSecondaryTextBrush}" />
-        </Grid>
-
         <Border
-            Grid.Row="1"
             Margin="0"
             Background="{StaticResource ShellPanelBackgroundBrush}"
             BorderBrush="{StaticResource ShellPanelBorderBrush}"
@@ -48,147 +16,147 @@
             CornerRadius="0">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="{StaticResource ShellContentHeaderCardHeight}" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Border
-                    Background="{StaticResource ShellPanelBackgroundBrush}"
-                    CornerRadius="0">
-                    <Grid Margin="16,0,16,0">
+                <Grid
+                    Padding="10,8,8,8"
+                    Background="{StaticResource ShellPanelBackgroundBrush}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Grid
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
                         <TextBlock
-                            Style="{StaticResource SubtitleTextBlockStyle}"
+                            Style="{StaticResource BodyStrongTextBlockStyle}"
                             VerticalAlignment="Center"
-                            FontSize="22"
+                            FontSize="18"
                             Foreground="{StaticResource ShellPrimaryTextBrush}"
-                            Text="{Binding ContentTitle}" />
+                            Text="{Binding CompactHeaderText}"
+                            TextTrimming="CharacterEllipsis" />
 
                         <TextBlock
                             Grid.Column="1"
                             VerticalAlignment="Center"
+                            Margin="8,0,0,0"
                             Foreground="{StaticResource ShellSecondaryTextBrush}"
-                            Text="{Binding ContentDescription}" />
+                            Text="{Binding ContentDescription}"
+                            TextTrimming="CharacterEllipsis" />
                     </Grid>
-                </Border>
+
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Foreground="{StaticResource ShellSecondaryTextBrush}"
+                        Text="Выберите поддерживаемый справочник в меню, чтобы открыть таблицу."
+                        Visibility="{Binding ShowPlaceholder, Converter={StaticResource BoolVisibilityConverter}}" />
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center">
+                        <ProgressRing
+                            Width="16"
+                            Height="16"
+                            IsActive="{Binding IsLoading}" />
+
+                        <Button
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="ResetFiltersButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            ToolTipService.ToolTip="Сбросить фильтры"
+                            Visibility="{Binding HasFilters, Converter={StaticResource BoolVisibilityConverter}}"
+                            Content="&#xF50C;" />
+
+                        <Button
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Content="&#xE713;"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                    </StackPanel>
+                </Grid>
 
                 <Grid
                     Grid.Row="1"
+                    Padding="8,0,8,0"
+                    Background="{StaticResource ShellMutedPanelBackgroundBrush}"
+                    Visibility="{Binding HasError, Converter={StaticResource BoolVisibilityConverter}}">
+                    <InfoBar
+                        IsOpen="{Binding HasError}"
+                        Severity="Warning"
+                        Title="Справочник недоступен"
+                        Message="{Binding ErrorMessage}" />
+                </Grid>
+
+                <Grid
+                    Grid.Row="2"
                     Background="{StaticResource ShellMutedPanelBackgroundBrush}"
                     Padding="0">
-                    <Grid RowSpacing="0">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                        </Grid.RowDefinitions>
+                    <controls:CbsTableView
+                        x:Name="ReferenceTableView"
+                        Columns="{Binding CurrentColumns}"
+                        CurrentSortDirection="{Binding CurrentSortDirection}"
+                        CurrentSortField="{Binding CurrentSortField}"
+                        TableStateKey="{Binding CurrentTableStateKey}"
+                        Density="Compact"
+                        HasMoreItems="{Binding HasMoreItems}"
+                        IsLoading="{Binding IsLoading}"
+                        ItemsSource="{Binding Items}"
+                        LoadedCount="{Binding LoadedCount}"
+                        LoadMoreRequested="ReferenceTableView_LoadMoreRequested"
+                        Margin="0"
+                        SupportsMultipleRowSelection="False"
+                        SupportsRowSelection="True"
+                        ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"
+                        FilterRequested="ReferenceTableView_FilterRequested"
+                        SortRequested="ReferenceTableView_SortRequested"
+                        TotalCount="{Binding TotalCount}"
+                        TraceGenerated="ReferenceTableView_TraceGenerated"
+                        Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
 
-                        <Grid
-                            Padding="8,6,8,6"
-                            Background="{StaticResource ShellPanelBackgroundBrush}">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-
-                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                <ProgressRing
-                                    Width="16"
-                                    Height="16"
-                                    IsActive="{Binding IsLoading}" />
-
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    Foreground="{StaticResource ShellSecondaryTextBrush}"
-                                    Text="{Binding TotalCountText}"
-                                    Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
-
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    Foreground="{StaticResource ShellSecondaryTextBrush}"
-                                    Text="Выберите поддерживаемый справочник в меню, чтобы открыть таблицу."
-                                    Visibility="{Binding ShowPlaceholder, Converter={StaticResource BoolVisibilityConverter}}" />
-                            </StackPanel>
-
-                            <Button
-                                Grid.Column="1"
-                                Width="{StaticResource ShellActionButtonSize}"
-                                Height="{StaticResource ShellActionButtonSize}"
-                                Padding="0"
-                                Background="Transparent"
-                                BorderBrush="{x:Null}"
-                                Content="&#xE713;"
-                                FontFamily="Segoe Fluent Icons"
-                                FontSize="14"
-                                Foreground="{StaticResource ShellSecondaryTextBrush}" />
-                        </Grid>
-
-                        <Grid Grid.Row="1">
-                            <controls:CbsTableView
-                                x:Name="ReferenceTableView"
-                                Columns="{Binding CurrentColumns}"
-                                CurrentSortDirection="{Binding CurrentSortDirection}"
-                                CurrentSortField="{Binding CurrentSortField}"
-                                TableStateKey="{Binding CurrentTableStateKey}"
-                                Density="Compact"
-                                HasMoreItems="{Binding HasMoreItems}"
-                                IsLoading="{Binding IsLoading}"
-                                ItemsSource="{Binding Items}"
-                                LoadedCount="{Binding LoadedCount}"
-                                LoadMoreRequested="ReferenceTableView_LoadMoreRequested"
-                                Margin="0"
-                                SupportsMultipleRowSelection="False"
-                                SupportsRowSelection="True"
-                                ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"
-                                FilterRequested="ReferenceTableView_FilterRequested"
-                                SortRequested="ReferenceTableView_SortRequested"
-                                TotalCount="{Binding TotalCount}"
-                                TraceGenerated="ReferenceTableView_TraceGenerated"
-                                Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
-
-                            <Border
-                                Padding="24"
-                                Background="{StaticResource ShellPanelBackgroundBrush}"
-                                BorderBrush="{StaticResource ShellPanelBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="16"
-                                Visibility="{Binding ShowPlaceholder, Converter={StaticResource BoolVisibilityConverter}}">
-                                <StackPanel
-                                    MaxWidth="620"
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Top"
-                                    Spacing="10">
-                                    <TextBlock
-                                        Style="{StaticResource SubtitleTextBlockStyle}"
-                                        Foreground="{StaticResource ShellPrimaryTextBrush}"
-                                        Text="{Binding ContentTitle}" />
-                                    <TextBlock
-                                        Foreground="{StaticResource ShellSecondaryTextBrush}"
-                                        Text="{Binding PlaceholderMessage}"
-                                        TextWrapping="WrapWholeWords" />
-                                </StackPanel>
-                            </Border>
-
-                            <Border
-                                Padding="16"
-                                HorizontalAlignment="Left"
-                                VerticalAlignment="Top"
-                                Background="{StaticResource ShellPanelBackgroundBrush}"
-                                BorderBrush="{StaticResource ShellPanelBorderBrush}"
-                                BorderThickness="1"
-                                CornerRadius="12"
-                                Visibility="{Binding ErrorMessage, Converter={StaticResource StringVisibilityConverter}}">
-                                <TextBlock
-                                    MaxWidth="520"
-                                    Foreground="IndianRed"
-                                    Text="{Binding ErrorMessage}"
-                                    TextWrapping="WrapWholeWords" />
-                            </Border>
-                        </Grid>
-                    </Grid>
+                    <Border
+                        Padding="20,16,20,12"
+                        Background="{StaticResource ShellPanelBackgroundBrush}"
+                        BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Visibility="{Binding ShowPlaceholder, Converter={StaticResource BoolVisibilityConverter}}">
+                        <StackPanel
+                            MaxWidth="620"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Spacing="8">
+                            <TextBlock
+                                Style="{StaticResource SubtitleTextBlockStyle}"
+                                Foreground="{StaticResource ShellPrimaryTextBrush}"
+                                Text="{Binding ContentTitle}" />
+                            <TextBlock
+                                Foreground="{StaticResource ShellSecondaryTextBrush}"
+                                Text="{Binding PlaceholderMessage}"
+                                TextWrapping="WrapWholeWords" />
+                        </StackPanel>
+                    </Border>
                 </Grid>
             </Grid>
         </Border>

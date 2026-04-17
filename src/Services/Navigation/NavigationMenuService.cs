@@ -97,7 +97,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
             AddDistinct(referencesSection.Items, "Работы", "\uE90F", $"{ReferencesRoute}/TaskKind", route);
             AddDistinct(referencesSection.Items, "Должности", "\uE8EF", $"{ReferencesRoute}/Position", route);
 
-            if (isOzi)
+            if (isOzi || isAdmin)
             {
                 AddDistinct(referencesSection.Items, "СЗИ", "\uE72E", $"{ReferencesRoute}/IsecurityTool", route);
                 AddDistinct(referencesSection.Items, "Статусы доставки", "\uE806", $"{ReferencesRoute}/OrderStatus", route);

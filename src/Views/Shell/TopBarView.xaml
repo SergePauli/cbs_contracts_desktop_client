@@ -3,6 +3,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:shellModels="using:CbsContractsDesktopClient.Models.Shell"
     xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -44,7 +45,13 @@
                 Grid.Column="1"
                 VerticalAlignment="Center"
                 ItemsSource="{x:Bind ViewModel.BreadcrumbItems, Mode=OneWay}"
-                ItemClicked="TopBreadcrumbBar_ItemClicked" />
+                ItemClicked="TopBreadcrumbBar_ItemClicked">
+                <controls:BreadcrumbBar.ItemTemplate>
+                    <DataTemplate x:DataType="shellModels:BreadcrumbItemState">
+                        <TextBlock Text="{x:Bind Title}" />
+                    </DataTemplate>
+                </controls:BreadcrumbBar.ItemTemplate>
+            </controls:BreadcrumbBar>
 
             <ContentPresenter
                 x:Name="TopBarActionsHost"

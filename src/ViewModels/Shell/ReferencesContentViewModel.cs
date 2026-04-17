@@ -93,6 +93,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public bool ShowPlaceholder => !HasActiveReference;
 
+        public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
         public bool HasMoreItems => _rows?.HasMoreItems == true;
 
         public int LoadedCount => _rows?.LoadedCount ?? 0;
@@ -100,6 +102,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public int ResidentCount => _rows?.ResidentCount ?? 0;
 
         public string TotalCountText => $"Записей: {TotalCount}";
+
+        public string CompactHeaderText => HasActiveReference
+            ? $"{ContentTitle} - {TotalCount} записей"
+            : ContentTitle;
 
         public string LoadedCountText => $"Загружено: {LoadedCount} / {TotalCount} | В памяти: {ResidentCount}";
 
@@ -133,12 +139,24 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         partial void OnHasActiveReferenceChanged(bool value)
         {
             OnPropertyChanged(nameof(ShowPlaceholder));
+            OnPropertyChanged(nameof(CompactHeaderText));
+        }
+
+        partial void OnErrorMessageChanged(string value)
+        {
+            OnPropertyChanged(nameof(HasError));
         }
 
         partial void OnTotalCountChanged(int value)
         {
             OnPropertyChanged(nameof(TotalCountText));
             OnPropertyChanged(nameof(LoadedCountText));
+            OnPropertyChanged(nameof(CompactHeaderText));
+        }
+
+        partial void OnContentTitleChanged(string value)
+        {
+            OnPropertyChanged(nameof(CompactHeaderText));
         }
 
         public void AppendUiTrace(string message)

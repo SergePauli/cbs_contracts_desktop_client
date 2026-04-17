@@ -38,7 +38,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         [ObservableProperty]
         public partial string AuditPanelText { get; set; } = string.Empty;
 
-        public ObservableCollection<object> BreadcrumbItems { get; } = [];
+        public ObservableCollection<BreadcrumbItemState> BreadcrumbItems { get; } = [];
 
         public ObservableCollection<NavigationMenuItem> ContextNavigationItems { get; } = [];
 
@@ -73,10 +73,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             if (!string.IsNullOrWhiteSpace(item.SectionTitle))
             {
-                BreadcrumbItems.Add(item.SectionTitle);
+                BreadcrumbItems.Add(new BreadcrumbItemState(item.SectionTitle, string.Empty));
             }
 
-            BreadcrumbItems.Add(item.Title);
+            BreadcrumbItems.Add(new BreadcrumbItemState(item.Title, item.Route));
         }
 
         public void SetContextNavigationItems(IEnumerable<NavigationMenuItem> items)

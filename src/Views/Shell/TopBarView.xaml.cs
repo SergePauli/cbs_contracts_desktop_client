@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.ViewModels.Shell;
 
 namespace CbsContractsDesktopClient.Views.Shell
@@ -42,9 +43,9 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void TopBreadcrumbBar_ItemClicked(BreadcrumbBar sender, BreadcrumbBarItemClickedEventArgs args)
         {
-            if (args.Item is not null)
+            if (args.Item is BreadcrumbItemState breadcrumbItem && breadcrumbItem.IsNavigable)
             {
-                BreadcrumbItemInvoked?.Invoke(args.Item);
+                BreadcrumbItemInvoked?.Invoke(breadcrumbItem);
             }
         }
     }

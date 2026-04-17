@@ -125,6 +125,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             foreach (var item in section.Items)
             {
+                item.SectionTitle = section.Title;
                 sectionItem.MenuItems.Add(CreateNavigationItem(item));
             }
 
