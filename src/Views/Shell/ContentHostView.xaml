@@ -85,15 +85,31 @@
                             Content="&#xF50C;" />
 
                         <Button
+                            x:Name="HeaderSettingsButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"
                             Padding="0"
                             Background="Transparent"
                             BorderBrush="{x:Null}"
+                            ToolTipService.ToolTip="Настройки таблицы"
                             Content="&#xE713;"
                             FontFamily="Segoe Fluent Icons"
                             FontSize="14"
-                            Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                            Foreground="{StaticResource ShellSecondaryTextBrush}">
+                            <Button.Flyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem
+                                        Text="Сбросить ширину"
+                                        Click="ResetColumnWidthsMenuItem_Click" />
+                                    <MenuFlyoutItem
+                                        Text="Сбросить фильтры"
+                                        Click="ResetFiltersMenuItem_Click" />
+                                    <MenuFlyoutItem
+                                        Text="Сбросить сортировку"
+                                        Click="ResetSortingMenuItem_Click" />
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
                     </StackPanel>
                 </Grid>
 

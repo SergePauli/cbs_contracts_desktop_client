@@ -149,6 +149,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private int _activeResizeColumnIndex = -1;
         private double _activeResizeStartWidth;
         private bool _suppressNextHeaderClick;
+        private bool _suppressFilterNotifications;
 
         public CbsTableView()
         {
@@ -168,6 +169,31 @@ namespace CbsContractsDesktopClient.Views.Controls
         public event EventHandler<CbsTableColumnWidthChangedEventArgs>? ColumnWidthChanged;
 
         public event EventHandler<CbsTableFilterRequestedEventArgs>? FilterRequested;
+
+        public void ClearFilterInputs()
+        {
+            _suppressFilterNotifications = true;
+
+            try
+            {
+                foreach (var column in Columns.Where(static column => column.IsFilterable))
+                {
+                    _filterTexts[GetFilterStateKey(column)] = string.Empty;
+                }
+
+                foreach (var textBox in _filterTextBoxes.Values)
+                {
+                    if (!string.IsNullOrEmpty(textBox.Text))
+                    {
+                        textBox.Text = string.Empty;
+                    }
+                }
+            }
+            finally
+            {
+                _suppressFilterNotifications = false;
+            }
+        }
 
         public IReadOnlyList<CbsTableColumnDefinition> Columns
         {
@@ -1158,6 +1184,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             _filterTexts[GetFilterStateKey(column)] = textBox.Text;
+
+            if (_suppressFilterNotifications)
+            {
+                return;
+            }
+
             FilterRequested?.Invoke(
                 this,
                 new CbsTableFilterRequestedEventArgs(

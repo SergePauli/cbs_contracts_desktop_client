@@ -48,6 +48,24 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             _filterDebounceCts?.Cancel();
             await _viewModel.ResetFiltersAsync();
+            ReferenceTableView.ClearFilterInputs();
+        }
+
+        private async void ResetColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            await _viewModel.ResetColumnWidthsAsync();
+        }
+
+        private async void ResetFiltersMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            _filterDebounceCts?.Cancel();
+            await _viewModel.ResetFiltersAsync();
+            ReferenceTableView.ClearFilterInputs();
+        }
+
+        private async void ResetSortingMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            await _viewModel.ClearSortsAsync();
         }
 
         private async void ReferenceTableView_SortRequested(object sender, CbsTableSortRequestedEventArgs e)

@@ -305,6 +305,30 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 cancellationToken);
         }
 
+        public async Task ResetColumnWidthsAsync(CancellationToken cancellationToken = default)
+        {
+            if (CurrentReference is null || CurrentReference.Columns.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var column in CurrentReference.Columns)
+            {
+                column.Width = null;
+                await _referenceDefinitionService.SaveColumnWidthAsync(
+                    new ReferenceTableColumnWidthSettings
+                    {
+                        Route = CurrentReference.Route,
+                        FieldKey = column.FieldKey,
+                        Width = null
+                    },
+                    cancellationToken);
+            }
+
+            CurrentReference = CurrentReference.Clone();
+            OnPropertyChanged(nameof(CurrentColumns));
+        }
+
         public void UpdateViewportRetention(
             int visibleStart,
             int visibleEnd,
