@@ -7,6 +7,7 @@ using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
@@ -126,7 +127,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             foreach (var item in section.Items)
             {
                 item.SectionTitle = section.Title;
-                sectionItem.MenuItems.Add(CreateNavigationItem(item));
+                var childItem = CreateNavigationItem(item);
+                childItem.Margin = new Thickness(-14, 0, 2, 0);
+                sectionItem.MenuItems.Add(childItem);
             }
 
             return sectionItem;
@@ -134,17 +137,36 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private static NavigationViewItem CreateNavigationItem(NavigationMenuItem item)
         {
+            var icon = new FontIcon
+            {
+                Glyph = item.Glyph,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var label = new TextBlock
+            {
+                Text = item.Title,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4
+            };
+
+            content.Children.Add(icon);
+            content.Children.Add(label);
+
             return new NavigationViewItem
             {
-                Content = item.Title,
+                Content = content,
                 DataContext = item,
                 Tag = item.Route,
-                SelectsOnInvoked = !item.IsAction,
-                Icon = new FontIcon
-                {
-                    Glyph = item.Glyph,
-                    FontFamily = new FontFamily("Segoe Fluent Icons")
-                }
+                SelectsOnInvoked = !item.IsAction
             };
         }
 

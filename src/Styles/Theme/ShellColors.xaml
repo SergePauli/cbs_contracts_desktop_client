@@ -4,7 +4,10 @@
 
     <SolidColorBrush x:Key="ShellWindowBackgroundBrush" Color="#FFF5FAFF" />
     <SolidColorBrush x:Key="ShellPanelBackgroundBrush" Color="#FFFFFFFF" />
-    <SolidColorBrush x:Key="ShellSidebarBackgroundBrush" Color="#FFF5FAFF" />
+    <SolidColorBrush x:Key="ShellSidebarBackgroundBrush" Color="#FFD8E5F2" />
+    <SolidColorBrush x:Key="ShellSidebarGradientStartBrush" Color="#FFDCE8F4" />
+    <SolidColorBrush x:Key="ShellSidebarGradientEndBrush" Color="#FFC7D8EA" />
+    <SolidColorBrush x:Key="ShellSidebarBorderBrush" Color="#8890ABC6" />
     <SolidColorBrush x:Key="ShellMutedPanelBackgroundBrush" Color="#FFFBFDFF" />
     <SolidColorBrush x:Key="ShellAccentPanelBackgroundBrush" Color="#FFEFF7FF" />
     <SolidColorBrush x:Key="ShellAccentPanelBackgroundAltBrush" Color="#FFF7FBFF" />

@@ -6,17 +6,48 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <NavigationView
-        x:Name="SidebarNavigationView"
-        PaneDisplayMode="Left"
-        IsPaneOpen="True"
-        IsPaneToggleButtonVisible="False"
-        IsBackButtonVisible="Collapsed"
-        IsSettingsVisible="False"
-        AlwaysShowHeader="False"
-        CompactModeThresholdWidth="0"
-        ExpandedModeThresholdWidth="0"
-        PaneTitle=""
-        ItemInvoked="SidebarNavigationView_ItemInvoked"
-        SelectionChanged="SidebarNavigationView_SelectionChanged" />
+    <Border
+        Margin="{StaticResource ShellSidebarOuterPadding}"
+        BorderBrush="{StaticResource ShellSidebarBorderBrush}"
+        BorderThickness="1"
+        CornerRadius="6">
+        <Border.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Offset="0" Color="{Binding Color, Source={StaticResource ShellSidebarGradientStartBrush}}" />
+                <GradientStop Offset="1" Color="{Binding Color, Source={StaticResource ShellSidebarGradientEndBrush}}" />
+            </LinearGradientBrush>
+        </Border.Background>
+
+        <NavigationView
+            x:Name="SidebarNavigationView"
+            Padding="0"
+            Background="Transparent"
+            PaneDisplayMode="Left"
+            IsPaneOpen="True"
+            IsPaneToggleButtonVisible="False"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            AlwaysShowHeader="False"
+            CompactModeThresholdWidth="0"
+            ExpandedModeThresholdWidth="0"
+            PaneTitle=""
+            ItemInvoked="SidebarNavigationView_ItemInvoked"
+            SelectionChanged="SidebarNavigationView_SelectionChanged">
+            <NavigationView.Resources>
+                <Style TargetType="NavigationViewItem">
+                    <Setter Property="MinHeight" Value="{StaticResource ShellMenuItemMinHeight}" />
+                    <Setter Property="Padding" Value="3,1,2,1" />
+                    <Setter Property="Margin" Value="2,0,2,0" />
+                    <Setter Property="FontSize" Value="13" />
+                </Style>
+
+                <Style TargetType="NavigationViewItemHeader">
+                    <Setter Property="Margin" Value="6,4,6,1" />
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="FontSize" Value="11" />
+                    <Setter Property="Foreground" Value="{StaticResource ShellSecondaryTextBrush}" />
+                </Style>
+            </NavigationView.Resources>
+        </NavigationView>
+    </Border>
 </UserControl>
