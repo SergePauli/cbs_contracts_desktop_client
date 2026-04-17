@@ -38,6 +38,7 @@
 - плотная визуальная сетка
 - собственная логика viewport retention / lazy loading
 - локальное сохранение ширин колонок
+- меню быстрых table-actions в shell header
 - точный контроль над шапкой, строками и selection state
 
 Это оказалось проще и чище довести в собственном `CbsTableView`, чем пытаться адаптировать готовый универсальный control под все требования.
@@ -61,3 +62,4 @@
 - дальнейшая полировка UX и keyboard flow
 - row actions / editing scenarios
 - сохранение дополнительных table preferences в локальных настройках
+- более глубокие regression/UI-contract tests на shell/table integration

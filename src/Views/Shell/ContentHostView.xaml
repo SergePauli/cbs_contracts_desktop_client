@@ -25,43 +25,54 @@
                     Padding="10,8,8,8"
                     Background="{StaticResource ShellPanelBackgroundBrush}">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
-                    <Grid
-                        VerticalAlignment="Center"
-                        Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-
-                        <TextBlock
-                            Style="{StaticResource BodyStrongTextBlockStyle}"
-                            VerticalAlignment="Center"
-                            FontSize="18"
-                            Foreground="{StaticResource ShellPrimaryTextBrush}"
-                            Text="{Binding CompactHeaderText}"
-                            TextTrimming="CharacterEllipsis" />
-
-                        <TextBlock
-                            Grid.Column="1"
-                            VerticalAlignment="Center"
-                            Margin="8,0,0,0"
-                            Foreground="{StaticResource ShellSecondaryTextBrush}"
-                            Text="{Binding ContentDescription}"
-                            TextTrimming="CharacterEllipsis" />
-                    </Grid>
-
                     <TextBlock
                         VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        FontSize="18"
+                        Foreground="{StaticResource ShellPrimaryTextBrush}"
+                        Text="{Binding CompactHeaderText}"
+                        TextTrimming="CharacterEllipsis"
+                        Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
+
+                    <TextBlock
+                        Grid.Column="1"
+                        VerticalAlignment="Center"
+                        Margin="12,0,0,0"
                         Foreground="{StaticResource ShellSecondaryTextBrush}"
                         Text="Выберите поддерживаемый справочник в меню, чтобы открыть таблицу."
                         Visibility="{Binding ShowPlaceholder, Converter={StaticResource BoolVisibilityConverter}}" />
 
-                    <StackPanel
+                    <Grid
                         Grid.Column="1"
+                        Margin="12,0,12,0"
+                        VerticalAlignment="Center"
+                        Visibility="{Binding HasSelectedRow, Converter={StaticResource BoolVisibilityConverter}}">
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            VerticalAlignment="Center">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource ShellSecondaryTextBrush}"
+                                Text="Выбрана запись:" />
+
+                            <TextBlock
+                                MaxWidth="420"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource ShellPrimaryTextBrush}"
+                                Style="{StaticResource BodyTextBlockStyle}"
+                                Text="{Binding SelectedRowInfoMessage}"
+                                TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Grid>
+
+                    <StackPanel
+                        Grid.Column="2"
                         Orientation="Horizontal"
                         Spacing="6"
                         VerticalAlignment="Center">
@@ -69,6 +80,52 @@
                             Width="16"
                             Height="16"
                             IsActive="{Binding IsLoading}" />
+
+                        <Button
+                            x:Name="EditSelectedRowButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="EditSelectedRowButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            ToolTipService.ToolTip="Редактировать запись"
+                            Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}"
+                            Content="&#xE70F;" />
+
+                        <Button
+                            x:Name="DeleteSelectedRowButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="DeleteSelectedRowButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            ToolTipService.ToolTip="Удалить запись"
+                            Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}"
+                            Content="&#xE74D;" />
+
+                        <Button
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="CreateRowButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="ForestGreen"
+                            ToolTipService.ToolTip="Добавить запись"
+                            Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}"
+                            Content="&#xF8AA;" />
 
                         <Button
                             Width="{StaticResource ShellActionButtonSize}"
@@ -82,7 +139,7 @@
                             Foreground="{StaticResource ShellSecondaryTextBrush}"
                             ToolTipService.ToolTip="Сбросить фильтры"
                             Visibility="{Binding HasFilters, Converter={StaticResource BoolVisibilityConverter}}"
-                            Content="&#xF50C;" />
+                            Content="&#xe71c;" />
 
                         <Button
                             x:Name="HeaderSettingsButton"
@@ -142,6 +199,7 @@
                         LoadedCount="{Binding LoadedCount}"
                         LoadMoreRequested="ReferenceTableView_LoadMoreRequested"
                         Margin="0"
+                        SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
                         SupportsMultipleRowSelection="False"
                         SupportsRowSelection="True"
                         ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"

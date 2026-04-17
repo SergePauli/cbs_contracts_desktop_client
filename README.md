@@ -16,6 +16,7 @@
 - рабочий экран справочников в центральной области shell
 - собственный `CbsTableView` с lazy loading, resize, selection, sorting и hot filters
 - локальное сохранение ширин колонок
+- компактный `AppShell` с breadcrumbs, role-based sidebar и контекстным меню настроек таблицы
 - unit-тесты на ключевую инфраструктуру и query/table-state
 
 ## Что уже сделано
@@ -45,6 +46,9 @@
   - `AuditPanelView`
   - `FooterBarView`
 - breadcrumbs, footer-state и audit panel state живут в `AppShellViewModel`
+- `BreadcrumbBar` показывает иерархию `Справочники -> {Текущий справочник}`
+- `ContentHostView` больше не дублирует заголовок раздела, а использует компактный однострочный header
+- `NavigationSidebarView` стал компактнее и отделен от content-area отдельной более темной gradient-панелью
 
 ### Экран справочников
 
@@ -70,6 +74,10 @@
 - сохранение пользовательских ширин
 - single-row selection
 - scope-safe состояние фильтров по `table route + fieldKey`
+- кнопка "настройки таблицы" с действиями:
+  - сброс ширин
+  - сброс фильтров
+  - сброс сортировки
 - выравнивание колонок по типу:
   - текст слева
   - числа справа
@@ -142,6 +150,8 @@
 - `ReferenceDefinitionService`
 - локальные настройки ширин колонок
 - alignment и filter mode дефолты колонок
+- видимость `СЗИ` в меню для `admin` / `ОЗИ`
+- регрессия на меню настроек `ContentHostView`
 
 Запуск:
 

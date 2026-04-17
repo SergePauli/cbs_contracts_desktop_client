@@ -22,6 +22,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
             InitializeComponent();
             DataContext = _viewModel;
+            UpdateSelectionActionButtons();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -29,6 +30,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            UpdateSelectionActionButtons();
             EnsureViewportSubscription();
             await _viewModel.EnsureLoadedAsync();
         }
@@ -42,6 +44,12 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow)
+                || e.PropertyName == nameof(ReferencesContentViewModel.HasSelectedRow)
+                || e.PropertyName == nameof(ReferencesContentViewModel.HasActiveReference))
+            {
+                UpdateSelectionActionButtons();
+            }
         }
 
         private async void ResetFiltersButton_Click(object sender, RoutedEventArgs e)
@@ -49,6 +57,21 @@ namespace CbsContractsDesktopClient.Views.Shell
             _filterDebounceCts?.Cancel();
             await _viewModel.ResetFiltersAsync();
             ReferenceTableView.ClearFilterInputs();
+        }
+
+        private void CreateRowButton_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AppendUiTrace("REFERENCE CREATE ACTION requested");
+        }
+
+        private void EditSelectedRowButton_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AppendUiTrace("REFERENCE EDIT ACTION requested");
+        }
+
+        private void DeleteSelectedRowButton_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.AppendUiTrace("REFERENCE DELETE ACTION requested");
         }
 
         private async void ResetColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -170,6 +193,27 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             ReferenceTableView.ViewportChanged -= ReferenceTableView_ViewportChanged;
             _isViewportSubscribed = false;
+        }
+
+        private void UpdateSelectionActionButtons()
+        {
+            var hasSelectedRow = _viewModel.HasSelectedRow && _viewModel.HasActiveReference;
+
+            if (EditSelectedRowButton is not null)
+            {
+                EditSelectedRowButton.IsEnabled = hasSelectedRow;
+                EditSelectedRowButton.Foreground = hasSelectedRow
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.RoyalBlue)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (DeleteSelectedRowButton is not null)
+            {
+                DeleteSelectedRowButton.IsEnabled = hasSelectedRow;
+                DeleteSelectedRowButton.Foreground = hasSelectedRow
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Firebrick)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
         }
     }
 }

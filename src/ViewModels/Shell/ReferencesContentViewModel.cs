@@ -83,6 +83,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         [ObservableProperty]
         public partial DataSortDirection? CurrentSortDirection { get; set; }
 
+        [ObservableProperty]
+        public partial ReferenceDataRow? SelectedRow { get; set; }
+
         public ObservableCollection<ReferenceFilterField> FilterFields { get; }
 
         public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentReference?.Columns ?? [];
@@ -94,6 +97,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public bool ShowPlaceholder => !HasActiveReference;
 
         public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
+
+        public bool HasSelectedRow => SelectedRow is not null && !SelectedRow.IsPlaceholder;
+
+        public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
 
         public bool HasMoreItems => _rows?.HasMoreItems == true;
 
@@ -145,6 +152,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         partial void OnErrorMessageChanged(string value)
         {
             OnPropertyChanged(nameof(HasError));
+        }
+
+        partial void OnSelectedRowChanged(ReferenceDataRow? value)
+        {
+            OnPropertyChanged(nameof(HasSelectedRow));
+            OnPropertyChanged(nameof(SelectedRowInfoMessage));
         }
 
         partial void OnTotalCountChanged(int value)
@@ -451,6 +464,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 HasActiveReference = true;
                 CurrentSortField = "id";
                 CurrentSortDirection = DataSortDirection.Ascending;
+                SelectedRow = null;
                 UiTraceLog = string.Empty;
                 _lastAuditPanelText = string.Empty;
 
@@ -538,6 +552,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _lastAuditPanelText = string.Empty;
             CurrentSortField = null;
             CurrentSortDirection = null;
+            SelectedRow = null;
             FilterFields.Clear();
             _shellViewModel.ResetAuditPanelState();
 
@@ -789,6 +804,45 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 || message.StartsWith("FILTER ", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL LOAD STATE NULL", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL RETENTION STATE NULL", StringComparison.Ordinal);
+        }
+
+        private string BuildSelectedRowInfoMessage()
+        {
+            if (!HasSelectedRow || SelectedRow is null)
+            {
+                return string.Empty;
+            }
+
+            var id = SelectedRow.GetValue("id")?.ToString();
+            var primaryText =
+                SelectedRow.GetValue("name")?.ToString()
+                ?? SelectedRow.GetValue("full_name")?.ToString()
+                ?? SelectedRow.GetValue("description")?.ToString()
+                ?? ContentTitle;
+
+            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(primaryText))
+            {
+                return $"{TruncateSelectedRowText(primaryText, 30)} (ID: {id})";
+            }
+
+            if (!string.IsNullOrWhiteSpace(primaryText))
+            {
+                return TruncateSelectedRowText(primaryText, 30);
+            }
+
+            return !string.IsNullOrWhiteSpace(id)
+                ? $"ID: {id}"
+                : "Запись выбрана";
+        }
+
+        private static string TruncateSelectedRowText(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
+            {
+                return value;
+            }
+
+            return $"{value[..maxLength].TrimEnd()}...";
         }
     }
 }
