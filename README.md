@@ -14,6 +14,7 @@
 - полноценный `AppShell` после логина
 - общий shell-state через `AppShellViewModel`
 - рабочий экран справочников в центральной области shell
+- create / update / delete для поддержанных справочников
 - собственный `CbsTableView` с lazy loading, resize, selection, sorting и hot filters
 - локальное сохранение ширин колонок
 - компактный `AppShell` с breadcrumbs, role-based sidebar и контекстным меню настроек таблицы
@@ -56,7 +57,11 @@
 
 - route-driven открытие `/references/{Model}`
 - `ReferenceDefinitionService` с описанием поддержанных таблиц
+- `ReferenceFieldDefinition` и field metadata для CRUD-диалогов
 - `ReferencesContentViewModel` как orchestration-слой
+- `ReferenceEditViewModel` / `ReferenceEditDialog` для create и edit
+- `ReferenceEditPayloadBuilder` для create/update payload
+- `ReferenceCrudService` для `create/update/delete`
 - lazy/virtual pipeline через:
   - `LazyDataCollection<T>`
   - `LazyDataViewState<T>`
@@ -131,7 +136,7 @@
 ## Ближайшие направления
 
 - date/time filters и специализированные типы колонок
-- row actions / editing scenarios
+- details/read scenarios и доменные ограничения CRUD
 - развитие audit/context state от реальных бизнес-сценариев
 - новые рабочие страницы внутри shell
 - возможная чистка диагностического слоя после завершения активной оптимизации
@@ -148,10 +153,13 @@
 - `DataQueryStateBuilder`
 - `LazyDataViewState`
 - `ReferenceDefinitionService`
+- `ReferenceEditViewModel`
+- `ReferenceCrudService`
 - локальные настройки ширин колонок
 - alignment и filter mode дефолты колонок
 - видимость `СЗИ` в меню для `admin` / `ОЗИ`
 - регрессия на меню настроек `ContentHostView`
+- регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
 
 Запуск:
 

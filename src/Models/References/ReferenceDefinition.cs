@@ -16,6 +16,8 @@ namespace CbsContractsDesktopClient.Models.References
 
         public IReadOnlyList<CbsTableColumnDefinition> Columns { get; init; } = [];
 
+        public IReadOnlyList<ReferenceFieldDefinition> Fields { get; init; } = [];
+
         public string Description => $"model={Model}, preset={Preset}";
 
         public CbsTableDefinition Table => new()
@@ -33,6 +35,16 @@ namespace CbsContractsDesktopClient.Models.References
                 Title = Title,
                 Preset = Preset,
                 Summary = Summary,
+                Fields = Fields.Select(static field => new ReferenceFieldDefinition
+                {
+                    FieldKey = field.FieldKey,
+                    Label = field.Label,
+                    ApiField = field.ApiField,
+                    EditorType = field.EditorType,
+                    IsRequired = field.IsRequired,
+                    IsReadOnlyOnCreate = field.IsReadOnlyOnCreate,
+                    IsReadOnlyOnEdit = field.IsReadOnlyOnEdit
+                }).ToList(),
                 Columns = Columns.Select(static column => new CbsTableColumnDefinition
                 {
                     FieldKey = column.FieldKey,

@@ -26,6 +26,36 @@ namespace CbsContractsDesktopClient.Services
 
         protected JsonSerializerOptions SerializerOptions => JsonOptions;
 
+        protected async Task<TResponse> PutAsync<TRequest, TResponse>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
+        {
+            using var message = CreateJsonRequest(HttpMethod.Put, requestUri, request);
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var result = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
+            if (result is null)
+            {
+                throw new InvalidOperationException($"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
+            }
+
+            return result;
+        }
+
+        protected async Task<TResponse> DeleteAsync<TResponse>(string requestUri, CancellationToken cancellationToken = default)
+        {
+            using var message = CreateRequest(HttpMethod.Delete, requestUri);
+            using var response = await _httpClient.SendAsync(message, cancellationToken);
+            await EnsureSuccessAsync(response, cancellationToken);
+
+            var result = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
+            if (result is null)
+            {
+                throw new InvalidOperationException($"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
+            }
+
+            return result;
+        }
+
         protected async Task<TResponse> PostAsync<TRequest, TResponse>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
             using var message = CreatePostRequest(requestUri, request);
@@ -84,9 +114,20 @@ namespace CbsContractsDesktopClient.Services
 
         private HttpRequestMessage CreatePostRequest<TRequest>(string requestUri, TRequest request)
         {
-            var message = new HttpRequestMessage(HttpMethod.Post, requestUri)
+            return CreateJsonRequest(HttpMethod.Post, requestUri, request);
+        }
+
+        private HttpRequestMessage CreateJsonRequest<TRequest>(HttpMethod method, string requestUri, TRequest request)
+        {
+            var message = CreateRequest(method, requestUri);
+            message.Content = JsonContent.Create(request, options: JsonOptions);
+            return message;
+        }
+
+        private HttpRequestMessage CreateRequest(HttpMethod method, string requestUri)
+        {
+            var message = new HttpRequestMessage(method, requestUri)
             {
-                Content = JsonContent.Create(request, options: JsonOptions)
             };
 
             var token = _userService.CurrentUser?.Token;

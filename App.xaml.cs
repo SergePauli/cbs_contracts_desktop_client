@@ -37,6 +37,12 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<AppShellViewModel>();
             services.AddSingleton<ReferencesContentViewModel>();
             services.AddSingleton<StatusTableViewModel>();
+            services.AddHttpClient<IReferenceCrudService, ReferenceCrudService>(client =>
+            {
+                client.BaseAddress = PrimaryApiUri;
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            });
             services.AddHttpClient<IDataQueryService, DataQueryService>(client =>
             {
                 client.BaseAddress = DataQueryApiUri;

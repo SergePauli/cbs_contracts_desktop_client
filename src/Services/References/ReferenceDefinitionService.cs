@@ -1,9 +1,9 @@
+﻿using System.Threading;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Settings;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services.Settings;
-using System.Threading;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -84,60 +84,82 @@ namespace CbsContractsDesktopClient.Services.References
         {
             return
             [
-                new ReferenceDefinition
-                {
-                    Route = "/references/Area",
-                    Model = "Area",
-                    Title = "Регионы",
-                    Columns =
+                CreateReferenceDefinition(
+                    route: "/references/Area",
+                    model: "Area",
+                    title: "Регионы",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true)
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/Position",
-                    Model = "Position",
-                    Title = "Должности",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/Position",
+                    model: "Position",
+                    title: "Должности",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true)
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/Ownership",
-                    Model = "Ownership",
-                    Title = "Формы орг.",
-                    Preset = "card",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/Ownership",
+                    model: "Ownership",
+                    title: "Формы орг.",
+                    preset: "card",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true),
+                        CreateTextField("okopf", "ОКОПФ"),
+                        CreateTextField("full_name", "Полное наименование")
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование"),
                         CreateTextColumn("okopf", "ОКОПФ"),
                         CreateTextColumn("full_name", "Полное наименование")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/Department",
-                    Model = "Department",
-                    Title = "Отделы",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/Department",
+                    model: "Department",
+                    title: "Отделы",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true)
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/TaskKind",
-                    Model = "TaskKind",
-                    Title = "Работы",
-                    Preset = "card",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/TaskKind",
+                    model: "TaskKind",
+                    title: "Работы",
+                    preset: "card",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateNumberField("code", "Код", isRequired: true),
+                        CreateTextField("name", "Наименование", isRequired: true),
+                        CreateTextField("description", "Описание"),
+                        CreateNumberField("cost", "Сумма"),
+                        CreateTextField("duration", "Срок")
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateNumberColumn("code", "Код"),
@@ -145,52 +167,86 @@ namespace CbsContractsDesktopClient.Services.References
                         CreateTextColumn("description", "Описание"),
                         CreateNumberColumn("cost", "Сумма"),
                         CreateTextColumn("duration", "Срок")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/Status",
-                    Model = "Status",
-                    Title = "Статусы",
-                    Preset = "card",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/Status",
+                    model: "Status",
+                    title: "Статусы",
+                    preset: "card",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true),
+                        CreateNumberField("order", "Порядок", isRequired: true),
+                        CreateTextField("description", "Описание")
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование"),
                         CreateNumberColumn("order", "Порядок"),
                         CreateTextColumn("description", "Описание")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/OrderStatus",
-                    Model = "OrderStatus",
-                    Title = "Статусы доставки",
-                    Preset = "edit",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/OrderStatus",
+                    model: "OrderStatus",
+                    title: "Статусы доставки",
+                    preset: "edit",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true),
+                        CreateNumberField("order", "Порядок", isRequired: true),
+                        CreateTextField("description", "Описание")
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование"),
                         CreateNumberColumn("order", "Порядок"),
                         CreateTextColumn("description", "Описание")
-                    ]
-                },
-                new ReferenceDefinition
-                {
-                    Route = "/references/IsecurityTool",
-                    Model = "IsecurityTool",
-                    Title = "СЗИ",
-                    Preset = "edit",
-                    Columns =
+                    ]),
+                CreateReferenceDefinition(
+                    route: "/references/IsecurityTool",
+                    model: "IsecurityTool",
+                    title: "СЗИ",
+                    preset: "edit",
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateTextField("name", "Наименование", isRequired: true),
+                        CreateTextField("unit", "Ед."),
+                        CreateNumberField("priority", "Приоритет"),
+                        CreateBooleanField("used", "Исп.")
+                    ],
+                    columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование"),
                         CreateTextColumn("unit", "Ед."),
                         CreateNumberColumn("priority", "Приоритет"),
                         CreateBooleanColumn("used", "Исп.")
-                    ]
-                }
+                    ])
             ];
+        }
+
+        private static ReferenceDefinition CreateReferenceDefinition(
+            string route,
+            string model,
+            string title,
+            IReadOnlyList<ReferenceFieldDefinition> fields,
+            IReadOnlyList<CbsTableColumnDefinition> columns,
+            string preset = "item")
+        {
+            return new ReferenceDefinition
+            {
+                Route = route,
+                Model = model,
+                Title = title,
+                Preset = preset,
+                Fields = fields,
+                Columns = columns
+            };
         }
 
         private static CbsTableColumnDefinition CreateTextColumn(string key, string header, string? width = null)
@@ -208,8 +264,27 @@ namespace CbsContractsDesktopClient.Services.References
                     IsEnabled = true,
                     Mode = DataFilterMode.Text,
                     MatchMode = DataFilterMatchMode.Contains,
-                    PlaceholderText = "⌕"
+                    PlaceholderText = "\u2315"
                 }
+            };
+        }
+
+        private static ReferenceFieldDefinition CreateTextField(
+            string key,
+            string label,
+            bool isRequired = false,
+            bool isReadOnlyOnCreate = false,
+            bool isReadOnlyOnEdit = false)
+        {
+            return new ReferenceFieldDefinition
+            {
+                FieldKey = key,
+                Label = label,
+                ApiField = key,
+                EditorType = ReferenceFieldEditorType.Text,
+                IsRequired = isRequired,
+                IsReadOnlyOnCreate = isReadOnlyOnCreate,
+                IsReadOnlyOnEdit = isReadOnlyOnEdit
             };
         }
 
@@ -228,8 +303,27 @@ namespace CbsContractsDesktopClient.Services.References
                     IsEnabled = true,
                     Mode = DataFilterMode.Numeric,
                     MatchMode = DataFilterMatchMode.Equals,
-                    PlaceholderText = "⌕"
+                    PlaceholderText = "\u2315"
                 }
+            };
+        }
+
+        private static ReferenceFieldDefinition CreateNumberField(
+            string key,
+            string label,
+            bool isRequired = false,
+            bool isReadOnlyOnCreate = false,
+            bool isReadOnlyOnEdit = false)
+        {
+            return new ReferenceFieldDefinition
+            {
+                FieldKey = key,
+                Label = label,
+                ApiField = key,
+                EditorType = ReferenceFieldEditorType.Number,
+                IsRequired = isRequired,
+                IsReadOnlyOnCreate = isReadOnlyOnCreate,
+                IsReadOnlyOnEdit = isReadOnlyOnEdit
             };
         }
 
@@ -244,6 +338,25 @@ namespace CbsContractsDesktopClient.Services.References
                 Alignment = CbsTableColumnAlignment.Center,
                 BodyMode = CbsTableBodyMode.BooleanIcon,
                 Filter = new CbsTableColumnFilterDefinition()
+            };
+        }
+
+        private static ReferenceFieldDefinition CreateBooleanField(
+            string key,
+            string label,
+            bool isRequired = false,
+            bool isReadOnlyOnCreate = false,
+            bool isReadOnlyOnEdit = false)
+        {
+            return new ReferenceFieldDefinition
+            {
+                FieldKey = key,
+                Label = label,
+                ApiField = key,
+                EditorType = ReferenceFieldEditorType.Boolean,
+                IsRequired = isRequired,
+                IsReadOnlyOnCreate = isReadOnlyOnCreate,
+                IsReadOnlyOnEdit = isReadOnlyOnEdit
             };
         }
 

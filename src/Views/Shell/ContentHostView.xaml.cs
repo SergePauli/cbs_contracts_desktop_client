@@ -2,7 +2,11 @@ using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
+using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.Views.Controls;
+using CbsContractsDesktopClient.Views.References;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -13,6 +17,7 @@ namespace CbsContractsDesktopClient.Views.Shell
     public sealed partial class ContentHostView : UserControl
     {
         private readonly ReferencesContentViewModel _viewModel;
+        private readonly IReferenceCrudService _referenceCrudService;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private bool _isViewportSubscribed;
@@ -20,6 +25,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         public ContentHostView()
         {
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
+            _referenceCrudService = App.Services.GetRequiredService<IReferenceCrudService>();
             InitializeComponent();
             DataContext = _viewModel;
             UpdateSelectionActionButtons();
@@ -59,19 +65,19 @@ namespace CbsContractsDesktopClient.Views.Shell
             ReferenceTableView.ClearFilterInputs();
         }
 
-        private void CreateRowButton_Click(object sender, RoutedEventArgs e)
+        private async void CreateRowButton_Click(object sender, RoutedEventArgs e)
         {
-            _viewModel.AppendUiTrace("REFERENCE CREATE ACTION requested");
+            await ShowReferenceEditDialogAsync(isCreateMode: true);
         }
 
-        private void EditSelectedRowButton_Click(object sender, RoutedEventArgs e)
+        private async void EditSelectedRowButton_Click(object sender, RoutedEventArgs e)
         {
-            _viewModel.AppendUiTrace("REFERENCE EDIT ACTION requested");
+            await ShowReferenceEditDialogAsync(isCreateMode: false);
         }
 
-        private void DeleteSelectedRowButton_Click(object sender, RoutedEventArgs e)
+        private async void DeleteSelectedRowButton_Click(object sender, RoutedEventArgs e)
         {
-            _viewModel.AppendUiTrace("REFERENCE DELETE ACTION requested");
+            await DeleteSelectedRowAsync();
         }
 
         private async void ResetColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -214,6 +220,131 @@ namespace CbsContractsDesktopClient.Views.Shell
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Firebrick)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
+        }
+
+        private async Task ShowReferenceEditDialogAsync(bool isCreateMode)
+        {
+            if (_viewModel.CurrentReference is null)
+            {
+                return;
+            }
+
+            if (!isCreateMode && _viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            var dialogViewModel = isCreateMode
+                ? ReferenceEditViewModel.CreateForCreate(_viewModel.CurrentReference)
+                : ReferenceEditViewModel.CreateForEdit(_viewModel.CurrentReference, _viewModel.SelectedRow!);
+
+            var dialog = new ReferenceEditDialog(dialogViewModel)
+            {
+                XamlRoot = XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            var values = isCreateMode
+                ? ReferenceEditPayloadBuilder.BuildForCreate(dialogViewModel)
+                : ReferenceEditPayloadBuilder.BuildForUpdate(dialogViewModel);
+
+            var action = isCreateMode ? "CREATE" : "EDIT";
+            var keys = values.Count == 0
+                ? "<empty>"
+                : string.Join(", ", values.Keys);
+            _viewModel.AppendUiTrace($"REFERENCE {action} DIALOG CONFIRMED keys={keys}");
+
+            try
+            {
+                if (isCreateMode)
+                {
+                    await _referenceCrudService.CreateAsync(_viewModel.CurrentReference, values);
+                }
+                else
+                {
+                    await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference, values);
+                }
+
+                await _viewModel.ReloadCurrentReferenceAsync();
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync(
+                    isCreateMode ? "Не удалось создать запись." : "Не удалось сохранить изменения.",
+                    ex.Message);
+            }
+        }
+
+        private async Task DeleteSelectedRowAsync()
+        {
+            if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            var id = TryGetSelectedRowId(_viewModel.SelectedRow);
+            if (id is null)
+            {
+                await ShowErrorDialogAsync("Не удалось удалить запись.", "У выбранной записи отсутствует корректный ID.");
+                return;
+            }
+
+            var confirmDialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "Удаление записи",
+                PrimaryButtonText = "Удалить",
+                CloseButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Close,
+                Content = "Удалить выбранную запись?"
+            };
+
+            if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            try
+            {
+                await _referenceCrudService.DeleteAsync(_viewModel.CurrentReference, id.Value);
+                await _viewModel.ReloadCurrentReferenceAsync();
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось удалить запись.", ex.Message);
+            }
+        }
+
+        private async Task ShowErrorDialogAsync(string title, string message)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = title,
+                CloseButtonText = "Закрыть",
+                DefaultButton = ContentDialogButton.Close,
+                Content = message
+            };
+
+            await dialog.ShowAsync();
+        }
+
+        private static long? TryGetSelectedRowId(ReferenceDataRow row)
+        {
+            var rawId = row.GetValue("id");
+            return rawId switch
+            {
+                long int64Value => int64Value,
+                int int32Value => int32Value,
+                decimal decimalValue => (long)decimalValue,
+                string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
+                _ => null
+            };
         }
     }
 }

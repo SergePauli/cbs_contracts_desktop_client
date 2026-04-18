@@ -30,6 +30,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal("Status", definition.Model);
         Assert.Equal("card", definition.Preset);
         Assert.Equal(["id", "name", "order", "description"], definition.Columns.Select(static column => column.FieldKey));
+        Assert.Equal(["id", "name", "order", "description"], definition.Fields.Select(static field => field.FieldKey));
     }
 
     [Fact]
@@ -120,13 +121,52 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
-    public void ReferenceDefinition_Clone_PreservesColumnAlignment()
+    public void TryGetByRoute_ReturnsExpectedFieldDefinitions()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/references/IsecurityTool", out var definition);
+
+        Assert.True(found);
+
+        var idField = definition.Fields.Single(static field => field.FieldKey == "id");
+        Assert.Equal(ReferenceFieldEditorType.Number, idField.EditorType);
+        Assert.True(idField.IsRequired);
+        Assert.True(idField.IsReadOnlyOnCreate);
+        Assert.True(idField.IsReadOnlyOnEdit);
+
+        var nameField = definition.Fields.Single(static field => field.FieldKey == "name");
+        Assert.Equal(ReferenceFieldEditorType.Text, nameField.EditorType);
+        Assert.True(nameField.IsRequired);
+        Assert.False(nameField.IsReadOnlyOnCreate);
+        Assert.False(nameField.IsReadOnlyOnEdit);
+
+        var usedField = definition.Fields.Single(static field => field.FieldKey == "used");
+        Assert.Equal(ReferenceFieldEditorType.Boolean, usedField.EditorType);
+        Assert.False(usedField.IsRequired);
+        Assert.False(usedField.IsReadOnlyOnCreate);
+        Assert.False(usedField.IsReadOnlyOnEdit);
+    }
+
+    [Fact]
+    public void ReferenceDefinition_Clone_PreservesColumnAlignmentAndFields()
     {
         var definition = new ReferenceDefinition
         {
             Route = "/references/Test",
             Model = "Test",
             Title = "Test",
+            Fields =
+            [
+                new ReferenceFieldDefinition
+                {
+                    FieldKey = "amount",
+                    Label = "Amount",
+                    EditorType = ReferenceFieldEditorType.Number,
+                    IsRequired = true,
+                    IsReadOnlyOnEdit = true
+                }
+            ],
             Columns =
             [
                 new CbsTableColumnDefinition
@@ -158,6 +198,9 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal(CbsTableColumnAlignment.Center, clone.Columns.Single(static column => column.FieldKey == "flag").Alignment);
         Assert.Equal(DataFilterMode.Numeric, clone.Columns.Single(static column => column.FieldKey == "amount").Filter.Mode);
         Assert.Equal(DataFilterMode.Text, clone.Columns.Single(static column => column.FieldKey == "flag").Filter.Mode);
+        Assert.Equal(ReferenceFieldEditorType.Number, clone.Fields.Single(static field => field.FieldKey == "amount").EditorType);
+        Assert.True(clone.Fields.Single(static field => field.FieldKey == "amount").IsRequired);
+        Assert.True(clone.Fields.Single(static field => field.FieldKey == "amount").IsReadOnlyOnEdit);
     }
 
     public void Dispose()

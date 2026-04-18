@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContentHostViewTests
 {
     private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
 
     private static readonly string ContentHostViewXamlPath = Path.Combine(
         ProjectRoot,

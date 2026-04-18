@@ -38,6 +38,13 @@
 - `ReferenceDefinitionService`
 - lazy loading и viewport-based подгрузка
 - custom `CbsTableView`
+- базовый CRUD flow для справочников:
+  - create
+  - update
+  - delete
+- `ReferenceEditDialog` и `ReferenceEditViewModel`
+- отдельный `ReferenceEditPayloadBuilder`
+- reload списка после успешных CRUD-операций
 
 ### 4. Табличная платформа
 
@@ -62,10 +69,13 @@
 - query builder
 - lazy data view state
 - reference definitions
+- reference edit view models
+- reference CRUD service
 - settings persistence
 - auth/user/login базовые сценарии
 - navigation menu rules
 - ContentHostView settings-menu regression checks
+- регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
 
 ## Что сейчас в разработке по смыслу
 
@@ -77,24 +87,22 @@
 
 Отдельно важно:
 
-- диагностический код lazy/table/API-пайплайна сохранен в репозитории, но штатно выключен через флаги
-- это позволяет возвращаться к детальной диагностике без повторного внедрения trace-кода
+- общий диагностический слой lazy/table/API-пайплайна сохранен и штатно выключен
+- временная диагностика `ReferenceEditDialog` снята после фикса регрессии с `PrimaryButton`
 
 ## Что еще не является завершенным
 
 - date/time filters и специальные типы фильтров
 - доменные действия над строками
 - полноценный CRUD справочников:
-  - create
   - read/details
-  - update
-  - delete/archive
+  - delete/archive с учетом бизнес-правил
 - дополнительные рабочие экраны внутри shell
-- финальная чистка и упрощение диагностического слоя после завершения активной оптимизации
+- дальнейшая чистка и упрощение диагностического слоя по мере стабилизации интеграций
 
 ## Что логично делать дальше
 
-1. Сделать оставшийся CRUD для справочников следующим прикладным этапом
+1. Довести CRUD справочников до details/archive и backend-aware ограничений
 2. Переносить следующие экраны из web-клиента
 3. Добавлять специализированные типы колонок и фильтров
 4. Расширять доменный контекст в audit/context panel

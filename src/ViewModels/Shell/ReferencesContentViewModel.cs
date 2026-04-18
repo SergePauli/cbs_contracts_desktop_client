@@ -211,6 +211,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             await NavigateAsync(_shellViewModel.CurrentRoute, cancellationToken);
         }
 
+        public async Task ReloadCurrentReferenceAsync(CancellationToken cancellationToken = default)
+        {
+            if (CurrentReference is null)
+            {
+                return;
+            }
+
+            await NavigateAsync(CurrentReference.Route, cancellationToken);
+        }
+
         public async Task ApplyFilterAsync(
             string fieldKey,
             DataFilterMatchMode matchMode,
