@@ -68,7 +68,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 baseSection.Items.Add(CreateItem("Контракт", "\uE8A5", ContractRoute, route));
             }
 
-            baseSection.Items.Add(CreateItem("Контракты", "\uE8D2", ContractsRoute, route));
+            baseSection.Items.Add(CreateItem("Контракты", "\uE762", ContractsRoute, route));
             baseSection.Items.Add(CreateItem("Этапы", "\uE7C1", StagesRoute, route));
             baseSection.Items.Add(CreateItem("ДС-ки", "\uE8A7", RevisionsRoute, route));
 
@@ -81,7 +81,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
             };
 
             AddDistinct(referencesSection.Items, "Сотрудники", "\uE716", EmployeesRoute, route);
-            AddDistinct(referencesSection.Items, "Контрагенты", "\uE821", ContragentsRoute, route);
+            AddDistinct(referencesSection.Items, "Контрагенты", "\uE825", ContragentsRoute, route);
 
             if (isAdmin)
             {
@@ -90,12 +90,12 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 AddDistinct(referencesSection.Items, "Формы орг.", "\uE8D1", $"{ReferencesRoute}/Ownership", route);
                 AddDistinct(referencesSection.Items, "Пользователи", "\uE77B", UsersRoute, route);
                 AddDistinct(referencesSection.Items, "Отделы", "\uE902", $"{ReferencesRoute}/Department", route);
-                AddDistinct(referencesSection.Items, "Статусы", "\uE8D2", $"{ReferencesRoute}/Status", route);
+                AddDistinct(referencesSection.Items, "Статусы", "\uE781", $"{ReferencesRoute}/Status", route);
                 AddDistinct(referencesSection.Items, "Доставка", "\uE806", $"{ReferencesRoute}/OrderStatus", route);
             }
 
             AddDistinct(referencesSection.Items, "Работы", "\uE90F", $"{ReferencesRoute}/TaskKind", route);
-            AddDistinct(referencesSection.Items, "Должности", "\uE8EF", $"{ReferencesRoute}/Position", route);
+            AddDistinct(referencesSection.Items, "Должности", "\uE821", $"{ReferencesRoute}/Position", route);
 
             if (isOzi || isAdmin)
             {
@@ -132,7 +132,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 IsSessionSection = true,
                 Items =
                 [
-                    CreateItem("Выход", "\uE8AC", "/logout", currentRoute, isAction: true)
+                    CreateItem("Выход", "\uEC19", "/logout", currentRoute, isAction: true)
                 ]
             };
         }

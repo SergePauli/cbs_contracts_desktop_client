@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Data;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,6 +11,10 @@ namespace CbsContractsDesktopClient.Services.References
 
         Task SaveColumnWidthAsync(
             ReferenceTableColumnWidthSettings settings,
+            CancellationToken cancellationToken = default);
+
+        Task SaveSortAsync(
+            ReferenceTableSortSettings settings,
             CancellationToken cancellationToken = default);
     }
 }

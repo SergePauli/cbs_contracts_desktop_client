@@ -70,12 +70,12 @@
                 BorderBrush="{x:Null}"
                 Click="AuditPanelToggleButton_Click"
                 IsChecked="{x:Bind ViewModel.IsAuditPanelOpen, Mode=OneWay}"
-                ToolTipService.ToolTip="Показать или скрыть аудит">
+                ToolTipService.ToolTip="{x:Bind AuditPanelToolTip, Mode=OneWay}">
                 <FontIcon
-                    Glyph="&#xE7C1;"
+                    Glyph="{x:Bind AuditPanelGlyph, Mode=OneWay}"
                     FontFamily="Segoe Fluent Icons"
                     FontSize="14"
-                    Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                    Foreground="{x:Bind AuditPanelIconBrush, Mode=OneWay}" />
             </primitives:ToggleButton>
         </Grid>
     </Border>

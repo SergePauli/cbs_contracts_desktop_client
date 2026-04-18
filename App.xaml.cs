@@ -1,6 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Windows.AppNotifications;
 using Microsoft.UI.Xaml;
 using System;
+using System.Runtime.InteropServices;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using CbsContractsDesktopClient.Services;
@@ -63,8 +65,23 @@ namespace CbsContractsDesktopClient
 
         protected override void OnLaunched(LaunchActivatedEventArgs args)
         {
+            TryRegisterAppNotifications();
             var window = Services.GetRequiredService<MainWindow>();
             window.Activate();
+        }
+
+        private static void TryRegisterAppNotifications()
+        {
+            try
+            {
+                AppNotificationManager.Default.Register();
+            }
+            catch (COMException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
     }
 }

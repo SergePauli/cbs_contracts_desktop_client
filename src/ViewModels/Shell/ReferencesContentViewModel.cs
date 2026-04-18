@@ -269,24 +269,40 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public async Task ApplySortAsync(string fieldKey, DataSortDirection direction, CancellationToken cancellationToken = default)
         {
-            if (_state is null)
+            if (_state is null || CurrentReference is null)
             {
                 return;
             }
 
             await _state.SetSortAsync(fieldKey, direction, cancellationToken);
+            await _referenceDefinitionService.SaveSortAsync(
+                new ReferenceTableSortSettings
+                {
+                    Route = CurrentReference.Route,
+                    FieldKey = fieldKey,
+                    Direction = direction
+                },
+                cancellationToken);
             CurrentSortField = fieldKey;
             CurrentSortDirection = direction;
         }
 
         public async Task ClearSortsAsync(CancellationToken cancellationToken = default)
         {
-            if (_state is null)
+            if (_state is null || CurrentReference is null)
             {
                 return;
             }
 
             await _state.ClearSortsAsync(cancellationToken);
+            await _referenceDefinitionService.SaveSortAsync(
+                new ReferenceTableSortSettings
+                {
+                    Route = CurrentReference.Route,
+                    FieldKey = null,
+                    Direction = null
+                },
+                cancellationToken);
             CurrentSortField = null;
             CurrentSortDirection = null;
         }
@@ -472,11 +488,22 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 PlaceholderMessage = string.Empty;
                 CurrentReference = definition;
                 HasActiveReference = true;
-                CurrentSortField = "id";
-                CurrentSortDirection = DataSortDirection.Ascending;
+                CurrentSortField = definition.InitialSortField ?? "id";
+                CurrentSortDirection = definition.InitialSortDirection ?? DataSortDirection.Ascending;
                 SelectedRow = null;
                 UiTraceLog = string.Empty;
                 _lastAuditPanelText = string.Empty;
+
+                var initialSorts = CurrentSortField is not null && CurrentSortDirection is DataSortDirection initialDirection
+                    ? new[]
+                    {
+                        new DataSortCriterion
+                        {
+                            FieldKey = CurrentSortField,
+                            Direction = initialDirection
+                        }
+                    }
+                    : Array.Empty<DataSortCriterion>();
 
                 BuildFilters(definition);
 
@@ -490,14 +517,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                         static column => column.ApiField ?? column.FieldKey),
                     placeholderFactory: ReferenceDataRow.CreatePlaceholder,
                     isPlaceholder: static row => row.IsPlaceholder,
-                    initialSorts:
-                    [
-                        new DataSortCriterion
-                        {
-                            FieldKey = "id",
-                            Direction = DataSortDirection.Ascending
-                        }
-                    ]);
+                    initialSorts: initialSorts);
 
                 AppendUiTrace($"STATE CREATED model={definition.Model} {GetDebugStateSnapshot()}");
 

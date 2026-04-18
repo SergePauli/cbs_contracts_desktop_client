@@ -1,14 +1,17 @@
 using System.ComponentModel;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
-using CbsContractsDesktopClient.ViewModels.Shell;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Windows.AppNotifications;
+using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -261,16 +264,20 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             try
             {
+                ReferenceDataRow savedRow;
                 if (isCreateMode)
                 {
-                    await _referenceCrudService.CreateAsync(_viewModel.CurrentReference, values);
+                    savedRow = await _referenceCrudService.CreateAsync(_viewModel.CurrentReference, values);
                 }
                 else
                 {
-                    await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference, values);
+                    savedRow = await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference, values);
                 }
 
                 await _viewModel.ReloadCurrentReferenceAsync();
+                ShowSuccessNotification(
+                    isCreateMode ? "Запись создана" : "Изменения сохранены",
+                    BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
             }
             catch (Exception ex)
             {
@@ -313,6 +320,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _referenceCrudService.DeleteAsync(_viewModel.CurrentReference, id.Value);
                 await _viewModel.ReloadCurrentReferenceAsync();
+                ShowSuccessNotification(
+                    "Запись удалена",
+                    BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, id.Value));
             }
             catch (Exception ex)
             {
@@ -332,6 +342,32 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             await dialog.ShowAsync();
+        }
+
+        private static string BuildReferenceNotificationMessage(string referenceTitle, long? id)
+        {
+            return id is long value
+                ? $"{referenceTitle}, id:{value}"
+                : referenceTitle;
+        }
+
+        private static void ShowSuccessNotification(string title, string message)
+        {
+            try
+            {
+                var notification = new AppNotificationBuilder()
+                    .AddText(title)
+                    .AddText(message)
+                    .BuildNotification();
+
+                AppNotificationManager.Default.Show(notification);
+            }
+            catch (COMException)
+            {
+            }
+            catch (InvalidOperationException)
+            {
+            }
         }
 
         private static long? TryGetSelectedRowId(ReferenceDataRow row)

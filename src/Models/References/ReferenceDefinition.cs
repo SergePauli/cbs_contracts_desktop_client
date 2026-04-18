@@ -18,6 +18,10 @@ namespace CbsContractsDesktopClient.Models.References
 
         public IReadOnlyList<ReferenceFieldDefinition> Fields { get; init; } = [];
 
+        public string? InitialSortField { get; init; }
+
+        public CbsContractsDesktopClient.Models.Data.DataSortDirection? InitialSortDirection { get; init; }
+
         public string Description => $"model={Model}, preset={Preset}";
 
         public CbsTableDefinition Table => new()
@@ -35,6 +39,8 @@ namespace CbsContractsDesktopClient.Models.References
                 Title = Title,
                 Preset = Preset,
                 Summary = Summary,
+                InitialSortField = InitialSortField,
+                InitialSortDirection = InitialSortDirection,
                 Fields = Fields.Select(static field => new ReferenceFieldDefinition
                 {
                     FieldKey = field.FieldKey,

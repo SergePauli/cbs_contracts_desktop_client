@@ -25,8 +25,7 @@ namespace CbsContractsDesktopClient.Services.References
         {
             if (!string.IsNullOrWhiteSpace(route) && _definitions.TryGetValue(route, out var storedDefinition))
             {
-                definition = storedDefinition.Clone();
-                ApplySavedWidths(definition);
+                definition = ApplySavedSettings(storedDefinition.Clone());
                 return true;
             }
 
@@ -59,10 +58,6 @@ namespace CbsContractsDesktopClient.Services.References
                 if (string.IsNullOrWhiteSpace(settings.Width))
                 {
                     tableSettings.Columns.Remove(settings.FieldKey);
-                    if (tableSettings.Columns.Count == 0)
-                    {
-                        localSettings.Tables.Remove(settings.Route);
-                    }
                 }
                 else
                 {
@@ -71,6 +66,53 @@ namespace CbsContractsDesktopClient.Services.References
                         Width = settings.Width
                     };
                 }
+
+                RemoveTableIfEmpty(localSettings, settings.Route, tableSettings);
+
+                await _localUserSettingsService.SaveAsync(localSettings, cancellationToken);
+            }
+            finally
+            {
+                _settingsGate.Release();
+            }
+        }
+
+        public async Task SaveSortAsync(
+            ReferenceTableSortSettings settings,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(settings);
+
+            if (string.IsNullOrWhiteSpace(settings.Route))
+            {
+                return;
+            }
+
+            await _settingsGate.WaitAsync(cancellationToken);
+
+            try
+            {
+                var localSettings = await GetOrLoadSettingsAsync(cancellationToken);
+                if (!localSettings.Tables.TryGetValue(settings.Route, out var tableSettings))
+                {
+                    tableSettings = new LocalTableSettings();
+                    localSettings.Tables[settings.Route] = tableSettings;
+                }
+
+                if (string.IsNullOrWhiteSpace(settings.FieldKey) || settings.Direction is null)
+                {
+                    tableSettings.Sort = null;
+                }
+                else
+                {
+                    tableSettings.Sort = new LocalTableSortSettings
+                    {
+                        FieldKey = settings.FieldKey,
+                        Direction = settings.Direction.ToString()
+                    };
+                }
+
+                RemoveTableIfEmpty(localSettings, settings.Route, tableSettings);
 
                 await _localUserSettingsService.SaveAsync(localSettings, cancellationToken);
             }
@@ -384,12 +426,12 @@ namespace CbsContractsDesktopClient.Services.References
             };
         }
 
-        private void ApplySavedWidths(ReferenceDefinition definition)
+        private ReferenceDefinition ApplySavedSettings(ReferenceDefinition definition)
         {
             var settings = GetOrLoadSettings();
             if (!settings.Tables.TryGetValue(definition.Route, out var tableSettings))
             {
-                return;
+                return definition;
             }
 
             foreach (var column in definition.Columns)
@@ -399,6 +441,44 @@ namespace CbsContractsDesktopClient.Services.References
                 {
                     column.Width = columnSettings.Width;
                 }
+            }
+
+            if (!string.IsNullOrWhiteSpace(tableSettings.Sort?.FieldKey)
+                && Enum.TryParse<DataSortDirection>(tableSettings.Sort.Direction, ignoreCase: true, out var direction))
+            {
+                return ApplySavedSort(definition, tableSettings.Sort.FieldKey, direction);
+            }
+
+            return definition;
+        }
+
+        private static ReferenceDefinition ApplySavedSort(
+            ReferenceDefinition definition,
+            string fieldKey,
+            DataSortDirection direction)
+        {
+            return new ReferenceDefinition
+            {
+                Route = definition.Route,
+                Model = definition.Model,
+                Title = definition.Title,
+                Preset = definition.Preset,
+                Summary = definition.Summary,
+                InitialSortField = fieldKey,
+                InitialSortDirection = direction,
+                Fields = definition.Fields,
+                Columns = definition.Columns
+            };
+        }
+
+        private static void RemoveTableIfEmpty(
+            LocalUserSettings localSettings,
+            string route,
+            LocalTableSettings tableSettings)
+        {
+            if (tableSettings.Columns.Count == 0 && tableSettings.Sort is null)
+            {
+                localSettings.Tables.Remove(route);
             }
         }
 

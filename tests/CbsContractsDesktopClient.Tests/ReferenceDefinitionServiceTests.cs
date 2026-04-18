@@ -100,6 +100,59 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task SaveSortAsync_PersistsSortForSpecificTable()
+    {
+        var service = CreateService();
+
+        await service.SaveSortAsync(new ReferenceTableSortSettings
+        {
+            Route = "/references/Ownership",
+            FieldKey = "name",
+            Direction = DataSortDirection.Descending
+        });
+
+        Assert.True(File.Exists(_settingsFilePath));
+
+        var json = await File.ReadAllTextAsync(_settingsFilePath);
+        using var document = JsonDocument.Parse(json);
+        var sort = document.RootElement
+            .GetProperty("tables")
+            .GetProperty("/references/Ownership")
+            .GetProperty("sort");
+
+        Assert.Equal("name", sort.GetProperty("fieldKey").GetString());
+        Assert.Equal("Descending", sort.GetProperty("direction").GetString());
+    }
+
+    [Fact]
+    public async Task TryGetByRoute_AppliesSavedSortFromSettingsFile()
+    {
+        var settingsService = CreateSettingsService();
+        await settingsService.SaveAsync(new()
+        {
+            Tables =
+            {
+                ["/references/Status"] = new()
+                {
+                    Sort = new()
+                    {
+                        FieldKey = "order",
+                        Direction = "Descending"
+                    }
+                }
+            }
+        });
+
+        var service = new ReferenceDefinitionService(settingsService);
+
+        var found = service.TryGetByRoute("/references/Status", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("order", definition.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+    }
+
+    [Fact]
     public void TryGetByRoute_AppliesExpectedDefaultAlignments()
     {
         var service = CreateService();
@@ -156,6 +209,8 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
             Route = "/references/Test",
             Model = "Test",
             Title = "Test",
+            InitialSortField = "amount",
+            InitialSortDirection = DataSortDirection.Descending,
             Fields =
             [
                 new ReferenceFieldDefinition
@@ -198,6 +253,8 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal(CbsTableColumnAlignment.Center, clone.Columns.Single(static column => column.FieldKey == "flag").Alignment);
         Assert.Equal(DataFilterMode.Numeric, clone.Columns.Single(static column => column.FieldKey == "amount").Filter.Mode);
         Assert.Equal(DataFilterMode.Text, clone.Columns.Single(static column => column.FieldKey == "flag").Filter.Mode);
+        Assert.Equal("amount", clone.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, clone.InitialSortDirection);
         Assert.Equal(ReferenceFieldEditorType.Number, clone.Fields.Single(static field => field.FieldKey == "amount").EditorType);
         Assert.True(clone.Fields.Single(static field => field.FieldKey == "amount").IsRequired);
         Assert.True(clone.Fields.Single(static field => field.FieldKey == "amount").IsReadOnlyOnEdit);
