@@ -191,6 +191,7 @@
                         Columns="{Binding CurrentColumns}"
                         CurrentSortDirection="{Binding CurrentSortDirection}"
                         CurrentSortField="{Binding CurrentSortField}"
+                        MultiSelectOptionsSources="{Binding CurrentFilterOptionsSources}"
                         TableStateKey="{Binding CurrentTableStateKey}"
                         Density="Compact"
                         HasMoreItems="{Binding HasMoreItems}"

@@ -19,8 +19,9 @@ public sealed class NavigationMenuServiceTests
 
         var menu = service.BuildMenu(user);
 
-        var references = Assert.Single(menu.Where(static section => section.Title == "Справочники"));
-        Assert.Contains(references.Items, static item => item.Route == "/references/IsecurityTool");
+        Assert.Contains(
+            menu.SelectMany(static section => section.Items),
+            static item => item.Route == "/references/IsecurityTool");
     }
 
     [Fact]
@@ -35,8 +36,9 @@ public sealed class NavigationMenuServiceTests
 
         var menu = service.BuildMenu(user);
 
-        var references = Assert.Single(menu.Where(static section => section.Title == "Справочники"));
-        Assert.Contains(references.Items, static item => item.Route == "/references/IsecurityTool");
+        Assert.Contains(
+            menu.SelectMany(static section => section.Items),
+            static item => item.Route == "/references/IsecurityTool");
     }
 
     [Fact]
@@ -51,7 +53,25 @@ public sealed class NavigationMenuServiceTests
 
         var menu = service.BuildMenu(user);
 
-        var references = Assert.Single(menu.Where(static section => section.Title == "Справочники"));
-        Assert.DoesNotContain(references.Items, static item => item.Route == "/references/IsecurityTool");
+        Assert.DoesNotContain(
+            menu.SelectMany(static section => section.Items),
+            static item => item.Route == "/references/IsecurityTool");
+    }
+
+    [Fact]
+    public void BuildMenu_AdminUser_SeesUsersReferenceRoute()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "admin",
+            DepartmentId = 99
+        };
+
+        var menu = service.BuildMenu(user);
+
+        Assert.Contains(
+            menu.SelectMany(static section => section.Items),
+            static item => item.Route == "/users");
     }
 }

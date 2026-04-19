@@ -16,10 +16,11 @@ public class LazyDataViewStateTests
             model: "Status",
             preset: "item",
             pageSize: 5,
-            fieldMap: new Dictionary<string, string>
+            filterFieldMap: new Dictionary<string, string>
             {
                 ["name"] = "name"
             },
+            sortFieldMap: null,
             placeholderFactory: static () => new TestItem());
 
         await state.SetFilterAsync("name", DataFilterMode.Text, DataFilterMatchMode.Contains, "проект");
@@ -38,10 +39,11 @@ public class LazyDataViewStateTests
             model: "Status",
             preset: "item",
             pageSize: 5,
-            fieldMap: new Dictionary<string, string>
+            filterFieldMap: new Dictionary<string, string>
             {
                 ["id"] = "id"
             },
+            sortFieldMap: null,
             placeholderFactory: static () => new TestItem());
 
         await state.SetFilterAsync("id", DataFilterMode.Numeric, DataFilterMatchMode.GreaterThanOrEqual, "10");
@@ -60,16 +62,69 @@ public class LazyDataViewStateTests
             model: "Status",
             preset: "item",
             pageSize: 5,
-            fieldMap: new Dictionary<string, string>
+            filterFieldMap: new Dictionary<string, string>
             {
                 ["id"] = "id"
             },
+            sortFieldMap: null,
             placeholderFactory: static () => new TestItem());
 
         await state.SetSortAsync("id", DataSortDirection.Ascending);
 
         Assert.NotNull(service.LastDataRequest);
         Assert.Equal(["id asc"], service.LastDataRequest!.Sorts);
+    }
+
+    [Fact]
+    public async Task SetSortAsync_UsesDedicatedSortFieldMap()
+    {
+        var service = new RecordingDataQueryService(totalCount: 1);
+        var state = new LazyDataViewState<TestItem>(
+            service,
+            model: "Profile",
+            preset: "edit",
+            pageSize: 5,
+            filterFieldMap: new Dictionary<string, string>
+            {
+                ["department"] = "department_id"
+            },
+            sortFieldMap: new Dictionary<string, string>
+            {
+                ["department"] = "department"
+            },
+            placeholderFactory: static () => new TestItem());
+
+        await state.SetSortAsync("department", DataSortDirection.Descending);
+
+        Assert.NotNull(service.LastDataRequest);
+        Assert.Equal(["department desc"], service.LastDataRequest!.Sorts);
+    }
+
+    [Fact]
+    public async Task SetFilterAsync_UsesDedicatedFilterFieldMapForDepartmentInPayload()
+    {
+        var service = new RecordingDataQueryService();
+        var state = new LazyDataViewState<TestItem>(
+            service,
+            model: "Profile",
+            preset: "edit",
+            pageSize: 5,
+            filterFieldMap: new Dictionary<string, string>
+            {
+                ["department"] = "department_id"
+            },
+            sortFieldMap: null,
+            placeholderFactory: static () => new TestItem());
+
+        await state.SetFilterAsync(
+            "department",
+            DataFilterMode.Text,
+            DataFilterMatchMode.In,
+            new List<int> { 2, 5, 7 });
+
+        Assert.NotNull(service.LastCountRequest);
+        var filters = Assert.IsType<Dictionary<string, object?>>(service.LastCountRequest!.Filters);
+        Assert.Equal(new object?[] { 2, 5, 7 }, filters["department_id__in"]);
     }
 
     private sealed class RecordingDataQueryService : IDataQueryService

@@ -14,6 +14,7 @@ namespace CbsContractsDesktopClient.Services
         {
             ArgumentNullException.ThrowIfNull(request);
 
+            EmitTrace($"Page payload:{Environment.NewLine}{SerializeForTrace(request)}");
             var items = await PostAsync<DataQueryRequest, List<TItem>>("api/index", request, cancellationToken);
             return items;
         }
@@ -22,7 +23,9 @@ namespace CbsContractsDesktopClient.Services
         {
             ArgumentNullException.ThrowIfNull(request);
 
-            var payload = await PostForJsonAsync("api/count", request, cancellationToken);
+            var countRequest = BuildCountRequest(request);
+            EmitTrace($"Count payload:{Environment.NewLine}{SerializeForTrace(countRequest)}");
+            var payload = await PostForJsonAsync("api/count", countRequest, cancellationToken);
             return NormalizeCount(payload);
         }
 
@@ -51,6 +54,21 @@ namespace CbsContractsDesktopClient.Services
                 JsonValueKind.Object when value.TryGetProperty("count", out var nestedCount) => NormalizeCount(nestedCount),
                 _ => 0
             };
+        }
+
+        private static DataQueryRequest BuildCountRequest(DataQueryRequest request)
+        {
+            return new DataQueryRequest
+            {
+                Model = request.Model,
+                Preset = request.Preset,
+                Filters = request.Filters
+            };
+        }
+
+        private string SerializeForTrace(DataQueryRequest request)
+        {
+            return JsonSerializer.Serialize(request, SerializerOptions);
         }
     }
 }

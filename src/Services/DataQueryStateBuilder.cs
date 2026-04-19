@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Linq;
 using CbsContractsDesktopClient.Models.Data;
 
 namespace CbsContractsDesktopClient.Services
@@ -144,12 +146,12 @@ namespace CbsContractsDesktopClient.Services
 
         private static Dictionary<string, object?> BuildInFilter(string inKey, string nullKey, object value)
         {
-            if (value is not IEnumerable<object?> values)
+            if (value is string || value is not IEnumerable values)
             {
                 return [];
             }
 
-            var list = values.ToList();
+            var list = values.Cast<object?>().ToList();
             if (list.Count == 0)
             {
                 return [];

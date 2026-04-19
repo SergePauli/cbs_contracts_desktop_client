@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CbsContractsDesktopClient.Models.Table;
 
 namespace CbsContractsDesktopClient.Models.References
 {
@@ -8,7 +9,15 @@ namespace CbsContractsDesktopClient.Models.References
 
         public required string Header { get; init; }
 
+        public CbsTableFilterEditorKind EditorKind { get; init; } = CbsTableFilterEditorKind.Text;
+
+        public string? OptionsSourceKey { get; init; }
+
+        public IReadOnlyList<CbsTableFilterOptionDefinition> Options { get; init; } = [];
+
+        public string EmptySelectionText { get; init; } = "\u0412\u0441\u0435";
+
         [ObservableProperty]
-        public partial string Value { get; set; } = string.Empty;
+        public partial object? Value { get; set; }
     }
 }

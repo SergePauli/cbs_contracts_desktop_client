@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Services;
 using Xunit;
@@ -61,6 +62,29 @@ public class DataQueryStateBuilderTests
             });
 
         Assert.Equal(["created_at desc"], payload);
+    }
+
+    [Fact]
+    public void BuildFilters_AcceptsTypedEnumerableForInCriteria()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "department",
+                MatchMode = DataFilterMatchMode.In,
+                Value = new List<int> { 2, 5, 7 }
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["department"] = "department_id"
+            }));
+
+        Assert.Equal(new object?[] { 2, 5, 7 }, payload["department_id__in"]);
     }
 
     [Fact]

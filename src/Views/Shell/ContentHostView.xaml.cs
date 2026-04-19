@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -120,7 +121,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void ReferenceTableView_FilterRequested(object sender, CbsTableFilterRequestedEventArgs e)
         {
             _viewModel.AppendUiTrace(
-                $"FILTER UI REQUEST field={e.FieldKey} mode={e.MatchMode} value={(string.IsNullOrWhiteSpace(e.Value) ? "<empty>" : e.Value)}");
+                $"FILTER UI REQUEST field={e.FieldKey} mode={e.MatchMode} value={DescribeFilterValue(e.Value)}");
             _filterDebounceCts?.Cancel();
             var cancellationTokenSource = new CancellationTokenSource();
             _filterDebounceCts = cancellationTokenSource;
@@ -129,7 +130,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await Task.Delay(250, cancellationTokenSource.Token);
                 _viewModel.AppendUiTrace(
-                    $"FILTER UI DISPATCH field={e.FieldKey} mode={e.MatchMode} value={(string.IsNullOrWhiteSpace(e.Value) ? "<empty>" : e.Value)}");
+                    $"FILTER UI DISPATCH field={e.FieldKey} mode={e.MatchMode} value={DescribeFilterValue(e.Value)}");
                 await _viewModel.ApplyFilterAsync(
                     e.FieldKey,
                     e.MatchMode,
@@ -141,6 +142,29 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _viewModel.AppendUiTrace(
                     $"FILTER UI CANCELED field={e.FieldKey} mode={e.MatchMode}");
             }
+        }
+
+        private static string DescribeFilterValue(object? value)
+        {
+            if (value is null)
+            {
+                return "<empty>";
+            }
+
+            if (value is string text)
+            {
+                return string.IsNullOrWhiteSpace(text) ? "<empty>" : text;
+            }
+
+            if (value is System.Collections.IEnumerable sequence)
+            {
+                var items = sequence.Cast<object?>().ToArray();
+                return items.Length == 0
+                    ? "<empty>"
+                    : $"[{string.Join(", ", items.Select(static item => item?.ToString() ?? "null"))}]";
+            }
+
+            return value.ToString() ?? "<empty>";
         }
 
         private async void ReferenceTableView_ColumnWidthChanged(object sender, CbsTableColumnWidthChangedEventArgs e)

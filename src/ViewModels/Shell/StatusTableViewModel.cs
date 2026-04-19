@@ -18,7 +18,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 model: "Status",
                 preset: "item",
                 pageSize: 3,
-                fieldMap: new Dictionary<string, string>
+                filterFieldMap: new Dictionary<string, string>
+                {
+                    ["id"] = "id",
+                    ["name"] = "name"
+                },
+                sortFieldMap: new Dictionary<string, string>
                 {
                     ["id"] = "id",
                     ["name"] = "name"

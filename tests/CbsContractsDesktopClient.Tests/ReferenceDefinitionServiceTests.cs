@@ -34,6 +34,39 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsProfileDefinition()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/users", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("Profile", definition.Model);
+        Assert.Equal("edit", definition.Preset);
+        Assert.Equal(
+            ["id", "name", "email", "person", "role", "position", "department", "last_login", "used"],
+            definition.Columns.Select(static column => column.FieldKey));
+        Assert.Equal("user.name", definition.Columns.Single(static column => column.FieldKey == "name").DisplayField);
+        var emailColumn = definition.Columns.Single(static column => column.FieldKey == "email");
+        Assert.Equal("user.email.name", emailColumn.DisplayField);
+        Assert.Equal("user.person.person_contacts.contact.value", emailColumn.FilterField);
+        Assert.Equal("user.person.person_contacts.contact.value", emailColumn.SortField);
+        var personColumn = definition.Columns.Single(static column => column.FieldKey == "person");
+        Assert.Equal("user.person.full_name", personColumn.DisplayField);
+        Assert.Equal("user.person.person_name.naming.fio", personColumn.FilterField);
+        Assert.Equal("user.person.person_name.naming.surname", personColumn.SortField);
+        var departmentColumn = definition.Columns.Single(static column => column.FieldKey == "department");
+        Assert.Equal("department.name", departmentColumn.DisplayField);
+        Assert.Equal("department_id", departmentColumn.FilterField);
+        Assert.Equal("department", departmentColumn.SortField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, departmentColumn.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, departmentColumn.Filter.MatchMode);
+        Assert.Equal("Department", departmentColumn.Filter.OptionsSourceKey);
+        Assert.Equal("Все", departmentColumn.Filter.EmptySelectionText);
+        Assert.Equal("user.activated", definition.Columns.Single(static column => column.FieldKey == "used").DisplayField);
+    }
+
+    [Fact]
     public void TryGetByRoute_ReturnsFalseForUnsupportedRoute()
     {
         var service = CreateService();
@@ -100,6 +133,36 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task TryGetByRoute_AppliesSavedWidthForProfileNestedColumns()
+    {
+        var settingsService = CreateSettingsService();
+        await settingsService.SaveAsync(new()
+        {
+            Tables =
+            {
+                ["/users"] = new()
+                {
+                    Columns =
+                    {
+                        ["department"] = new() { Width = "18rem" },
+                        ["person"] = new() { Width = "20rem" }
+                    }
+                }
+            }
+        });
+
+        var service = new ReferenceDefinitionService(settingsService);
+
+        var found = service.TryGetByRoute("/users", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("18rem", definition.Columns.Single(static column => column.FieldKey == "department").Width);
+        Assert.Equal("20rem", definition.Columns.Single(static column => column.FieldKey == "person").Width);
+        Assert.Equal("department.name", definition.Columns.Single(static column => column.FieldKey == "department").DisplayField);
+        Assert.Equal("user.person.person_name.naming.fio", definition.Columns.Single(static column => column.FieldKey == "person").DisplayField);
+    }
+
+    [Fact]
     public async Task SaveSortAsync_PersistsSortForSpecificTable()
     {
         var service = CreateService();
@@ -150,6 +213,35 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.True(found);
         Assert.Equal("order", definition.InitialSortField);
         Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+    }
+
+    [Fact]
+    public async Task TryGetByRoute_AppliesSavedSortForProfileNestedColumns()
+    {
+        var settingsService = CreateSettingsService();
+        await settingsService.SaveAsync(new()
+        {
+            Tables =
+            {
+                ["/users"] = new()
+                {
+                    Sort = new()
+                    {
+                        FieldKey = "department",
+                        Direction = "Descending"
+                    }
+                }
+            }
+        });
+
+        var service = new ReferenceDefinitionService(settingsService);
+
+        var found = service.TryGetByRoute("/users", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("department", definition.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+        Assert.Equal("department.name", definition.Columns.Single(static column => column.FieldKey == "department").SortField);
     }
 
     [Fact]
@@ -228,6 +320,9 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
                 {
                     FieldKey = "amount",
                     Header = "Amount",
+                    DisplayField = "amount.display",
+                    FilterField = "amount_id",
+                    SortField = "amount_sort",
                     Alignment = CbsTableColumnAlignment.Right,
                     Filter = new CbsTableColumnFilterDefinition
                     {
@@ -241,18 +336,40 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
                     Alignment = CbsTableColumnAlignment.Center,
                     Filter = new CbsTableColumnFilterDefinition
                     {
-                        Mode = DataFilterMode.Text
+                        Mode = DataFilterMode.Text,
+                        EditorKind = CbsTableFilterEditorKind.MultiSelect,
+                        MatchMode = DataFilterMatchMode.In,
+                        OptionsSourceKey = "Department",
+                        EmptySelectionText = "Все",
+                        StaticOptions =
+                        [
+                            new CbsTableFilterOptionDefinition
+                            {
+                                Value = 1,
+                                Label = "Отдел продаж"
+                            }
+                        ]
                     }
                 }
             ]
         };
 
         var clone = definition.Clone();
+        var amountColumn = clone.Columns.Single(static column => column.FieldKey == "amount");
+        var flagColumn = clone.Columns.Single(static column => column.FieldKey == "flag");
 
-        Assert.Equal(CbsTableColumnAlignment.Right, clone.Columns.Single(static column => column.FieldKey == "amount").Alignment);
-        Assert.Equal(CbsTableColumnAlignment.Center, clone.Columns.Single(static column => column.FieldKey == "flag").Alignment);
-        Assert.Equal(DataFilterMode.Numeric, clone.Columns.Single(static column => column.FieldKey == "amount").Filter.Mode);
-        Assert.Equal(DataFilterMode.Text, clone.Columns.Single(static column => column.FieldKey == "flag").Filter.Mode);
+        Assert.Equal(CbsTableColumnAlignment.Right, amountColumn.Alignment);
+        Assert.Equal(CbsTableColumnAlignment.Center, flagColumn.Alignment);
+        Assert.Equal("amount.display", amountColumn.DisplayField);
+        Assert.Equal("amount_id", amountColumn.FilterField);
+        Assert.Equal("amount_sort", amountColumn.SortField);
+        Assert.Equal(DataFilterMode.Numeric, amountColumn.Filter.Mode);
+        Assert.Equal(DataFilterMode.Text, flagColumn.Filter.Mode);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, flagColumn.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, flagColumn.Filter.MatchMode);
+        Assert.Equal("Department", flagColumn.Filter.OptionsSourceKey);
+        Assert.Equal("Все", flagColumn.Filter.EmptySelectionText);
+        Assert.Equal("Отдел продаж", flagColumn.Filter.StaticOptions.Single().Label);
         Assert.Equal("amount", clone.InitialSortField);
         Assert.Equal(DataSortDirection.Descending, clone.InitialSortDirection);
         Assert.Equal(ReferenceFieldEditorType.Number, clone.Fields.Single(static field => field.FieldKey == "amount").EditorType);

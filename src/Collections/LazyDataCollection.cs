@@ -394,7 +394,20 @@ namespace CbsContractsDesktopClient.Collections
         private void ReplaceRange(int startIndex, IReadOnlyList<TItem> items)
         {
             AppendTrace($"STEP REPLACE 01 enter start={startIndex} count={items.Count}");
-            for (var index = 0; index < items.Count; index++)
+            if (startIndex < 0 || startIndex >= Count)
+            {
+                AppendTrace($"STEP REPLACE 01a skip-out-of-range start={startIndex} collectionCount={Count}");
+                return;
+            }
+
+            var safeCount = Math.Min(items.Count, Count - startIndex);
+            if (safeCount != items.Count)
+            {
+                AppendTrace(
+                    $"STEP REPLACE 01b trim-range start={startIndex} requested={items.Count} applied={safeCount} collectionCount={Count}");
+            }
+
+            for (var index = 0; index < safeCount; index++)
             {
                 var targetIndex = startIndex + index;
                 AppendTrace($"STEP REPLACE 02 before-set target={targetIndex}");
@@ -404,8 +417,8 @@ namespace CbsContractsDesktopClient.Collections
                 AppendTrace($"STEP REPLACE 04 after-resident-add target={targetIndex} resident={ResidentCount}");
             }
 
-            AppendTrace($"STEP REPLACE 05 before-loadedcount start={startIndex} count={items.Count} currentLoaded={LoadedCount}");
-            LoadedCount = Math.Max(LoadedCount, startIndex + items.Count);
+            AppendTrace($"STEP REPLACE 05 before-loadedcount start={startIndex} count={safeCount} currentLoaded={LoadedCount}");
+            LoadedCount = Math.Max(LoadedCount, startIndex + safeCount);
             AppendTrace($"STEP REPLACE 06 after-loadedcount loaded={LoadedCount}");
             OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
             AppendTrace($"STEP REPLACE 07 exit resident={ResidentCount}");

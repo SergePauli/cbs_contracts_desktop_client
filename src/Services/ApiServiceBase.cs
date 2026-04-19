@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Services
 {
     public abstract class ApiServiceBase
     {
-        private const bool DiagnosticsEnabled = false;
+        private static readonly bool DiagnosticsEnabled = true;
         public static event Action<string>? TraceEmitted;
         private static readonly TimeSpan DiagnosticRequestTimeout = TimeSpan.FromSeconds(15);
 
@@ -28,11 +28,14 @@ namespace CbsContractsDesktopClient.Services
 
         protected async Task<TResponse> PutAsync<TRequest, TResponse>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
+            EmitTrace(FormatRequestTrace("HTTP PUT", requestUri, request));
             using var message = CreateJsonRequest(HttpMethod.Put, requestUri, request);
             using var response = await _httpClient.SendAsync(message, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
 
-            var result = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            EmitTrace($"HTTP RESPONSE uri={requestUri} body={TruncateForTrace(body)}");
+            var result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
             if (result is null)
             {
                 throw new InvalidOperationException($"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
@@ -43,11 +46,14 @@ namespace CbsContractsDesktopClient.Services
 
         protected async Task<TResponse> DeleteAsync<TResponse>(string requestUri, CancellationToken cancellationToken = default)
         {
+            EmitTrace($"HTTP DELETE uri={requestUri}");
             using var message = CreateRequest(HttpMethod.Delete, requestUri);
             using var response = await _httpClient.SendAsync(message, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
 
-            var result = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            EmitTrace($"HTTP RESPONSE uri={requestUri} body={TruncateForTrace(body)}");
+            var result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
             if (result is null)
             {
                 throw new InvalidOperationException($"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
@@ -61,6 +67,7 @@ namespace CbsContractsDesktopClient.Services
             using var message = CreatePostRequest(requestUri, request);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(DiagnosticRequestTimeout);
+            EmitTrace(FormatRequestTrace("HTTP POST", requestUri, request));
             EmitTrace($"STEP API 01 before-send uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
 
             HttpResponseMessage response;
@@ -91,7 +98,9 @@ namespace CbsContractsDesktopClient.Services
             EmitTrace($"STEP API 04 after-ensure-success uri={requestUri}");
 
             EmitTrace($"STEP API 05 before-read-json uri={requestUri}");
-            var result = await response.Content.ReadFromJsonAsync<TResponse>(JsonOptions, cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            EmitTrace($"HTTP RESPONSE uri={requestUri} body={TruncateForTrace(body)}");
+            var result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
             EmitTrace($"STEP API 06 after-read-json uri={requestUri} isNull={(result is null ? "true" : "false")}");
             if (result is null)
             {
@@ -104,11 +113,14 @@ namespace CbsContractsDesktopClient.Services
 
         protected async Task<JsonElement> PostForJsonAsync<TRequest>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
+            EmitTrace(FormatRequestTrace("HTTP POST JSON", requestUri, request));
             using var message = CreatePostRequest(requestUri, request);
             using var response = await _httpClient.SendAsync(message, cancellationToken);
             await EnsureSuccessAsync(response, cancellationToken);
 
-            var document = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken);
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            EmitTrace($"HTTP RESPONSE uri={requestUri} body={TruncateForTrace(body)}");
+            var document = JsonDocument.Parse(body);
             return document.RootElement.Clone();
         }
 
@@ -153,7 +165,7 @@ namespace CbsContractsDesktopClient.Services
                 response.StatusCode);
         }
 
-        private static void EmitTrace(string message)
+        protected static void EmitTrace(string message)
         {
             if (!DiagnosticsEnabled)
             {
@@ -161,6 +173,42 @@ namespace CbsContractsDesktopClient.Services
             }
 
             TraceEmitted?.Invoke(message);
+        }
+
+        private static string SerializeForTrace<TRequest>(TRequest request)
+        {
+            try
+            {
+                return JsonSerializer.Serialize(request, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                return $"<serialization failed: {ex.GetType().Name}: {ex.Message}>";
+            }
+        }
+
+        private static string FormatRequestTrace<TRequest>(string verb, string requestUri, TRequest request)
+        {
+            return ShouldSuppressRequestPayload(requestUri)
+                ? $"{verb} uri={requestUri}"
+                : $"{verb} uri={requestUri} payload={SerializeForTrace(request)}";
+        }
+
+        private static bool ShouldSuppressRequestPayload(string requestUri)
+        {
+            return string.Equals(requestUri, "api/index", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(requestUri, "api/count", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string TruncateForTrace(string body)
+        {
+            const int maxLength = 4000;
+            if (string.IsNullOrEmpty(body) || body.Length <= maxLength)
+            {
+                return body;
+            }
+
+            return $"{body[..maxLength]}... <truncated>";
         }
     }
 }

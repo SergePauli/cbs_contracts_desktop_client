@@ -15,14 +15,16 @@ namespace CbsContractsDesktopClient.ViewModels.Data
         private readonly string _model;
         private readonly string? _preset;
         private readonly int _pageSize;
-        private readonly IReadOnlyDictionary<string, string> _fieldMap;
+        private readonly IReadOnlyDictionary<string, string> _filterFieldMap;
+        private readonly IReadOnlyDictionary<string, string> _sortFieldMap;
 
         public LazyDataViewState(
             IDataQueryService dataQueryService,
             string model,
             string? preset,
             int pageSize,
-            IReadOnlyDictionary<string, string> fieldMap,
+            IReadOnlyDictionary<string, string> filterFieldMap,
+            IReadOnlyDictionary<string, string>? sortFieldMap,
             Func<TItem> placeholderFactory,
             Func<TItem, bool>? isPlaceholder = null,
             IEnumerable<DataFilterCriterion>? initialFilters = null,
@@ -34,7 +36,8 @@ namespace CbsContractsDesktopClient.ViewModels.Data
             _model = model;
             _preset = preset;
             _pageSize = pageSize;
-            _fieldMap = fieldMap;
+            _filterFieldMap = filterFieldMap;
+            _sortFieldMap = sortFieldMap ?? filterFieldMap;
 
             Filters = [];
             Sorts = [];
@@ -138,8 +141,8 @@ namespace CbsContractsDesktopClient.ViewModels.Data
                 Model = _model,
                 Preset = _preset,
                 PageSize = _pageSize,
-                Filters = DataQueryStateBuilder.BuildFilters(Filters, _fieldMap),
-                Sorts = DataQueryStateBuilder.BuildSorts(Sorts, _fieldMap)
+                Filters = DataQueryStateBuilder.BuildFilters(Filters, _filterFieldMap),
+                Sorts = DataQueryStateBuilder.BuildSorts(Sorts, _sortFieldMap)
             };
         }
     }

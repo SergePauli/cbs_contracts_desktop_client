@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Json;
 using System.Text;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Data;
@@ -82,6 +83,7 @@ public class DataQueryServiceTests
     public async Task GetCountAsync_NormalizesObjectCountResponse_AndSendsBearerToken()
     {
         HttpRequestMessage? capturedRequest = null;
+        DataQueryRequest? capturedPayload = null;
         var userService = new StubUserService
         {
             CurrentUser = new User
@@ -95,6 +97,9 @@ public class DataQueryServiceTests
             new StubHttpMessageHandler(request =>
             {
                 capturedRequest = request;
+                capturedPayload = request.Content is null
+                    ? null
+                    : request.Content.ReadFromJsonAsync<DataQueryRequest>().GetAwaiter().GetResult();
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent("""{ "count": "17" }""", Encoding.UTF8, "application/json")
@@ -103,14 +108,26 @@ public class DataQueryServiceTests
 
         var count = await service.GetCountAsync(new DataQueryRequest
         {
-            Model = "Contract"
+            Model = "Contract",
+            Preset = "edit",
+            Filters = new { used__eq = true },
+            Sorts = ["name asc"],
+            Limit = 50,
+            Offset = 0
         });
 
         Assert.Equal(17, count);
         Assert.NotNull(capturedRequest);
+        Assert.NotNull(capturedPayload);
         Assert.Equal("Bearer", capturedRequest!.Headers.Authorization?.Scheme);
         Assert.Equal("desktop-token", capturedRequest.Headers.Authorization?.Parameter);
         Assert.Equal("http://localhost/api/count", capturedRequest.RequestUri!.ToString());
+        Assert.Equal("Contract", capturedPayload!.Model);
+        Assert.Equal("edit", capturedPayload.Preset);
+        Assert.NotNull(capturedPayload.Filters);
+        Assert.Null(capturedPayload.Sorts);
+        Assert.Null(capturedPayload.Limit);
+        Assert.Null(capturedPayload.Offset);
     }
 
     private static DataQueryService CreateService(IUserService userService, HttpMessageHandler handler)

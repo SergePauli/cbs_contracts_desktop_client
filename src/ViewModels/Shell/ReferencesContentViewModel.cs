@@ -19,7 +19,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 {
     public partial class ReferencesContentViewModel : ObservableObject
     {
-        private const bool DiagnosticsEnabled = false;
+        private static readonly bool DiagnosticsEnabled = true;
         private const int MaxUiTraceLines = 80;
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
@@ -87,6 +87,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public partial ReferenceDataRow? SelectedRow { get; set; }
 
         public ObservableCollection<ReferenceFilterField> FilterFields { get; }
+
+        public IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> CurrentFilterOptionsSources { get; private set; }
+            = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
         public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentReference?.Columns ?? [];
 
@@ -224,11 +227,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public async Task ApplyFilterAsync(
             string fieldKey,
             DataFilterMatchMode matchMode,
-            string? value,
+            object? value,
             CancellationToken cancellationToken = default)
         {
             AppendUiTrace(
-                $"FILTER VM APPLY field={fieldKey} mode={matchMode} value={(string.IsNullOrWhiteSpace(value) ? "<empty>" : value)}");
+                $"FILTER VM APPLY field={fieldKey} mode={matchMode} value={DescribeFilterValue(value)}");
             if (_state is null)
             {
                 AppendUiTrace("FILTER VM STATE NULL");
@@ -242,23 +245,27 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 column.Filter.MatchMode = matchMode;
             }
 
+            var normalizedValue = value is CbsTableMultiSelectFilterValue multiSelectValue
+                ? (object?)multiSelectValue.SelectedValues
+                : value;
+
             await _state.SetFilterAsync(
                 fieldKey,
                 column?.Filter.Mode ?? DataFilterMode.Text,
                 matchMode,
-                value,
+                normalizedValue,
                 cancellationToken);
             _lastViewportEnsureStart = -1;
             _lastViewportEnsureEnd = -1;
             AppendUiTrace(
-                $"FILTER VM APPLIED field={fieldKey} mode={matchMode} value={(string.IsNullOrWhiteSpace(value) ? "<empty>" : value)}");
+                $"FILTER VM APPLIED field={fieldKey} mode={matchMode} value={DescribeFilterValue(normalizedValue)}");
         }
 
         public async Task ResetFiltersAsync(CancellationToken cancellationToken = default)
         {
             foreach (var filterField in FilterFields)
             {
-                filterField.Value = string.Empty;
+                filterField.Value = null;
             }
 
             if (_state is not null)
@@ -506,15 +513,19 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                     : Array.Empty<DataSortCriterion>();
 
                 BuildFilters(definition);
+                CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
                 _state = new LazyDataViewState<ReferenceDataRow>(
                     _dataQueryService,
                     model: definition.Model,
                     preset: definition.Preset,
                     pageSize: 50,
-                    fieldMap: definition.Columns.ToDictionary(
+                    filterFieldMap: definition.Columns.ToDictionary(
                         static column => column.FieldKey,
-                        static column => column.ApiField ?? column.FieldKey),
+                        static column => column.FilterField ?? column.ApiField ?? column.FieldKey),
+                    sortFieldMap: definition.Columns.ToDictionary(
+                        static column => column.FieldKey,
+                        static column => column.SortField ?? column.FilterField ?? column.ApiField ?? column.FieldKey),
                     placeholderFactory: ReferenceDataRow.CreatePlaceholder,
                     isPlaceholder: static row => row.IsPlaceholder,
                     initialSorts: initialSorts);
@@ -526,6 +537,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
                 OnPropertyChanged(nameof(CurrentColumns));
                 OnPropertyChanged(nameof(CurrentTableStateKey));
+                OnPropertyChanged(nameof(CurrentFilterOptionsSources));
                 OnPropertyChanged(nameof(HasFilters));
                 OnPropertyChanged(nameof(Items));
                 OnPropertyChanged(nameof(Rows));
@@ -540,6 +552,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
                 await _rows!.InitializeAsync(cancellationToken);
                 AppendUiTrace($"NAVIGATE AFTER INITIALIZE model={definition.Model} {GetDebugStateSnapshot()}");
+                await TryLoadFilterOptionSourcesAsync(definition, cancellationToken);
                 UpdateStateProperties();
             }
             finally
@@ -584,10 +597,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             CurrentSortDirection = null;
             SelectedRow = null;
             FilterFields.Clear();
+            CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
             _shellViewModel.ResetAuditPanelState();
 
             OnPropertyChanged(nameof(CurrentColumns));
             OnPropertyChanged(nameof(CurrentTableStateKey));
+            OnPropertyChanged(nameof(CurrentFilterOptionsSources));
             OnPropertyChanged(nameof(HasFilters));
             OnPropertyChanged(nameof(Items));
             OnPropertyChanged(nameof(Rows));
@@ -610,9 +625,130 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 FilterFields.Add(new ReferenceFilterField
                 {
                     FieldKey = column.FieldKey,
-                    Header = column.Header
+                    Header = column.Header,
+                    EditorKind = column.Filter.EditorKind,
+                    OptionsSourceKey = column.Filter.OptionsSourceKey,
+                    Options = column.Filter.StaticOptions
+                        .Select(static option => new CbsTableFilterOptionDefinition
+                        {
+                            Value = option.Value,
+                            Label = option.Label
+                        })
+                        .ToList(),
+                    EmptySelectionText = column.Filter.EmptySelectionText,
+                    Value = column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
+                        ? CbsTableMultiSelectFilterValue.Create(column.Filter.StaticOptions, Array.Empty<object?>())
+                        : null
                 });
             }
+        }
+
+        private async Task TryLoadFilterOptionSourcesAsync(ReferenceDefinition definition, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await LoadFilterOptionSourcesAsync(definition, cancellationToken);
+                OnPropertyChanged(nameof(CurrentFilterOptionsSources));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                AppendUiTrace($"FILTER OPTIONS LOAD FAILED model={definition.Model} error={ex.Message}");
+                CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+                OnPropertyChanged(nameof(CurrentFilterOptionsSources));
+            }
+        }
+
+        private async Task LoadFilterOptionSourcesAsync(ReferenceDefinition definition, CancellationToken cancellationToken)
+        {
+            var sourceKeys = definition.Columns
+                .Where(static column =>
+                    column.IsFilterable
+                    && column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
+                    && !string.IsNullOrWhiteSpace(column.Filter.OptionsSourceKey))
+                .Select(static column => column.Filter.OptionsSourceKey!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (sourceKeys.Length == 0)
+            {
+                CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+                return;
+            }
+
+            AppendUiTrace($"FILTER OPTIONS LOAD START model={definition.Model} sources=[{string.Join(", ", sourceKeys)}]");
+            var sources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var sourceKey in sourceKeys)
+            {
+                sources[sourceKey] = await LoadLookupOptionsAsync(sourceKey, cancellationToken);
+            }
+
+            CurrentFilterOptionsSources = sources;
+            AppendUiTrace($"FILTER OPTIONS LOAD DONE model={definition.Model} count={sources.Sum(static pair => pair.Value.Count)}");
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadLookupOptionsAsync(
+            string sourceKey,
+            CancellationToken cancellationToken)
+        {
+            if (!string.Equals(sourceKey, "Department", StringComparison.OrdinalIgnoreCase))
+            {
+                return [];
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "Department",
+                    Preset = "item",
+                    Sorts = ["name asc"],
+                    Limit = 500
+                },
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(static row => new CbsTableFilterOptionDefinition
+                {
+                    Value = row.GetValue("id"),
+                    Label = row.GetValue("name")?.ToString() ?? string.Empty
+                })
+                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
+                .ToList();
+        }
+
+        private static string DescribeFilterValue(object? value)
+        {
+            if (value is null)
+            {
+                return "<empty>";
+            }
+
+            if (value is string text)
+            {
+                return string.IsNullOrWhiteSpace(text) ? "<empty>" : text;
+            }
+
+            if (value is System.Collections.IEnumerable sequence)
+            {
+                var items = sequence.Cast<object?>().ToArray();
+                return items.Length == 0
+                    ? "<empty>"
+                    : $"[{string.Join(", ", items.Select(static item => item?.ToString() ?? "null"))}]";
+            }
+
+            if (value is CbsTableMultiSelectFilterValue multiSelectValue)
+            {
+                return multiSelectValue.SelectedValues.Count == 0
+                    ? "<empty>"
+                    : $"[{string.Join(", ", multiSelectValue.SelectedValues.Select(static item => item?.ToString() ?? "null"))}]";
+            }
+
+            return value.ToString() ?? "<empty>";
         }
 
         private void AttachRows(
@@ -829,6 +965,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 || message.StartsWith("PLACEHOLDER APPLY", StringComparison.Ordinal)
                 || message.StartsWith("ATTACH ROWS", StringComparison.Ordinal)
                 || message.StartsWith("DETACH STATE", StringComparison.Ordinal)
+                || message.StartsWith("HTTP ", StringComparison.Ordinal)
                 || message.StartsWith("STEP API ", StringComparison.Ordinal)
                 || message.StartsWith("STEP VM ", StringComparison.Ordinal)
                 || message.StartsWith("FILTER ", StringComparison.Ordinal)

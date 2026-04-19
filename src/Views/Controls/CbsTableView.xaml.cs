@@ -10,6 +10,7 @@ using CbsContractsDesktopClient.Models.Table;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
@@ -53,6 +54,15 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(string),
                 typeof(CbsTableView),
                 new PropertyMetadata(string.Empty, OnTableStateKeyChanged));
+
+        public static readonly DependencyProperty MultiSelectOptionsSourcesProperty =
+            DependencyProperty.Register(
+                nameof(MultiSelectOptionsSources),
+                typeof(IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>),
+                typeof(CbsTableView),
+                new PropertyMetadata(
+                    new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase),
+                    OnMultiSelectOptionsSourcesChanged));
 
         public static readonly DependencyProperty HasMoreItemsProperty =
             DependencyProperty.Register(
@@ -138,6 +148,8 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Button> _filterMultiSelectButtons = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, MultiSelectFilterUiState> _filterMultiSelectStates = new(StringComparer.OrdinalIgnoreCase);
         private const int WindowBufferRows = 8;
         private const int WindowStepRows = 8;
         private const double HeaderSideBorderCompensation = 1d;
@@ -146,6 +158,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         private const double HeaderAdornmentWidth = 18d;
         private const double FilterModeButtonWidth = 22d;
         private const double FilterTextBoxHeight = 22d;
+        private const double MultiSelectFilterButtonHeight = 22d;
+        private const double MultiSelectFilterFlyoutWidth = 260d;
+        private const double MultiSelectFilterFlyoutMaxHeight = 180d;
         private int _activeResizeColumnIndex = -1;
         private double _activeResizeStartWidth;
         private bool _suppressNextHeaderClick;
@@ -178,7 +193,22 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 foreach (var column in Columns.Where(static column => column.IsFilterable))
                 {
-                    _filterTexts[GetFilterStateKey(column)] = string.Empty;
+                    if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+                    {
+                        if (_filterMultiSelectStates.TryGetValue(column.FieldKey, out var state))
+                        {
+                            state.SelectedValues = Array.Empty<object?>();
+                            state.SelectedOptions = [];
+                            state.SearchText = string.Empty;
+                            state.AvailableOptions = GetMultiSelectOptions(column).ToList();
+                            UpdateMultiSelectFilterButtonContent(state.Button, column);
+                            RebuildMultiSelectOptionItems(state);
+                        }
+                    }
+                    else
+                    {
+                        _filterTexts[GetFilterStateKey(column)] = string.Empty;
+                    }
                 }
 
                 foreach (var textBox in _filterTextBoxes.Values)
@@ -223,6 +253,12 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             get => (string)GetValue(TableStateKeyProperty);
             set => SetValue(TableStateKeyProperty, value);
+        }
+
+        public IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> MultiSelectOptionsSources
+        {
+            get => (IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>)GetValue(MultiSelectOptionsSourcesProperty);
+            set => SetValue(MultiSelectOptionsSourcesProperty, value);
         }
 
         public bool HasMoreItems
@@ -347,6 +383,8 @@ namespace CbsContractsDesktopClient.Views.Controls
             HeaderGrid.RowDefinitions.Clear();
             _filterTextBoxes.Clear();
             _filterModeButtons.Clear();
+            _filterMultiSelectButtons.Clear();
+            _filterMultiSelectStates.Clear();
 
             if (Columns.Count == 0)
             {
@@ -509,6 +547,13 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnTableStateKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var control = (CbsTableView)d;
+            control.RebuildHeader();
+        }
+
+        private static void OnMultiSelectOptionsSourcesChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var control = (CbsTableView)d;
+            control.RefreshMultiSelectFilterStates();
             control.RebuildHeader();
         }
 
@@ -984,7 +1029,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"]
             };
             contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            if (column.IsFilterable)
+            if (SupportsFilterModeButton(column))
             {
                 contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(FilterModeButtonWidth) });
             }
@@ -993,7 +1038,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             Grid.SetColumn(mainContent, 0);
             contentGrid.Children.Add(mainContent);
 
-            if (column.IsFilterable)
+            if (SupportsFilterModeButton(column))
             {
                 var modeButton = CreateFilterModeButton(column);
                 Grid.SetColumn(modeButton, 1);
@@ -1014,6 +1059,20 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return border;
             }
 
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+            {
+                border.Child = CreateMultiSelectFilterButton(column);
+                return border;
+            }
+
+            var textBox = CreateTextFilterTextBox(column);
+            border.Child = textBox;
+            _filterTextBoxes[column.FieldKey] = textBox;
+            return border;
+        }
+
+        private TextBox CreateTextFilterTextBox(CbsTableColumnDefinition column)
+        {
             var textBox = new TextBox
             {
                 Tag = column,
@@ -1036,9 +1095,85 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             textBox.TextChanged += OnFilterTextChanged;
-            border.Child = textBox;
-            _filterTextBoxes[column.FieldKey] = textBox;
-            return border;
+            return textBox;
+        }
+
+        private Button CreateMultiSelectFilterButton(CbsTableColumnDefinition column)
+        {
+            var button = new Button
+            {
+                Tag = column,
+                Height = MultiSelectFilterButtonHeight,
+                MinHeight = MultiSelectFilterButtonHeight,
+                Margin = new Thickness(4, 1, 4, 1),
+                Padding = new Thickness(8, 1, 8, 1),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                BorderThickness = new Thickness(1),
+                MinWidth = 24
+            };
+
+            var searchTextBox = new TextBox
+            {
+                PlaceholderText = "Поиск",
+                Margin = new Thickness(0, 0, 0, 8)
+            };
+
+            var optionsHost = new StackPanel
+            {
+                Spacing = 2
+            };
+
+            var scrollViewer = new ScrollViewer
+            {
+                MaxHeight = MultiSelectFilterFlyoutMaxHeight,
+                VerticalScrollMode = ScrollMode.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollMode = ScrollMode.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = optionsHost
+            };
+
+            var flyoutContent = new StackPanel
+            {
+                Width = MultiSelectFilterFlyoutWidth,
+                Spacing = 0,
+                Children =
+                {
+                    searchTextBox,
+                    scrollViewer
+                }
+            };
+
+            var flyout = new Flyout
+            {
+                Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft,
+                Content = flyoutContent
+            };
+
+            var state = new MultiSelectFilterUiState
+            {
+                Column = column,
+                Button = button,
+                SearchTextBox = searchTextBox,
+                OptionsHost = optionsHost,
+                AvailableOptions = GetMultiSelectOptions(column).ToList(),
+                SelectedOptions = [],
+                SelectedValues = Array.Empty<object?>(),
+                SearchText = string.Empty
+            };
+
+            searchTextBox.Tag = state;
+            searchTextBox.TextChanged += OnMultiSelectSearchTextChanged;
+            flyout.Opened += OnMultiSelectFlyoutOpened;
+
+            button.Flyout = flyout;
+            _filterMultiSelectButtons[column.FieldKey] = button;
+            _filterMultiSelectStates[column.FieldKey] = state;
+            UpdateMultiSelectFilterButtonContent(button, column);
+            RebuildMultiSelectOptionItems(state);
+            return button;
         }
 
         private Border CreateHeaderBackgroundCell(bool hasBottomBorder)
@@ -1057,7 +1192,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 return new Border
                 {
-                    Padding = GetHeaderPadding(column.IsFilterable),
+                    Padding = GetHeaderPadding(SupportsFilterModeButton(column)),
                     Child = CreateHeaderTitleContent(column)
                 };
             }
@@ -1066,7 +1201,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
-                Padding = GetHeaderPadding(column.IsFilterable),
+                Padding = GetHeaderPadding(SupportsFilterModeButton(column)),
                 BorderThickness = new Thickness(0),
                 Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],
                 Tag = column,
@@ -1198,6 +1333,76 @@ namespace CbsContractsDesktopClient.Views.Controls
                     textBox.Text));
         }
 
+        private void OnMultiSelectFlyoutOpened(object? sender, object e)
+        {
+            if (sender is not Flyout { Content: StackPanel { Children.Count: > 0 } content }
+                || content.Children[0] is not TextBox searchTextBox
+                || searchTextBox.Tag is not MultiSelectFilterUiState state)
+            {
+                return;
+            }
+
+            state.SearchText = string.Empty;
+            searchTextBox.Text = string.Empty;
+            RebuildMultiSelectOptionItems(state);
+        }
+
+        private void OnMultiSelectSearchTextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (sender is not TextBox { Tag: MultiSelectFilterUiState state })
+            {
+                return;
+            }
+
+            state.SearchText = state.SearchTextBox.Text ?? string.Empty;
+            RebuildMultiSelectOptionItems(state);
+        }
+
+        private void OnMultiSelectOptionChanged(object sender, RoutedEventArgs e)
+        {
+            if (sender is not CheckBox
+                {
+                    Tag: ValueTuple<MultiSelectFilterUiState, CbsTableFilterOptionDefinition> payload,
+                    IsChecked: bool isChecked
+                })
+            {
+                return;
+            }
+
+            var (state, option) = payload;
+            var selectedValues = state.SelectedValues.ToList();
+
+            if (isChecked)
+            {
+                if (!selectedValues.Any(value => Equals(value, option.Value)))
+                {
+                    selectedValues.Add(option.Value);
+                }
+            }
+            else
+            {
+                selectedValues.RemoveAll(value => Equals(value, option.Value));
+            }
+
+            state.SelectedValues = selectedValues;
+            state.SelectedOptions = GetMultiSelectOptions(state.Column)
+                .Where(optionItem => state.SelectedValues.Any(value => Equals(value, optionItem.Value)))
+                .ToList();
+            UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
+
+            if (_suppressFilterNotifications)
+            {
+                return;
+            }
+
+            FilterRequested?.Invoke(
+                this,
+                new CbsTableFilterRequestedEventArgs(
+                    state.Column.FieldKey,
+                    GetFilterMode(state.Column),
+                    CbsTableMultiSelectFilterValue.Create(GetMultiSelectOptions(state.Column), state.SelectedValues)));
+        }
+
         private void OnNumericFilterTextBoxBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs args)
         {
             if (sender.Tag is not CbsTableColumnDefinition column || column.Filter.Mode != DataFilterMode.Numeric)
@@ -1220,7 +1425,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                 _filterModes[filterStateKey] = column.Filter.MatchMode;
             }
 
-            if (!_filterTexts.ContainsKey(filterStateKey))
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+            {
+                return;
+            }
+            else if (!_filterTexts.ContainsKey(filterStateKey))
             {
                 _filterTexts[filterStateKey] = string.Empty;
             }
@@ -1243,6 +1452,138 @@ namespace CbsContractsDesktopClient.Views.Controls
         private string GetFilterStateKey(CbsTableColumnDefinition column)
         {
             return $"{TableStateKey}|{column.FieldKey}";
+        }
+
+        private IReadOnlyList<CbsTableFilterOptionDefinition> GetMultiSelectOptions(CbsTableColumnDefinition column)
+        {
+            if (!string.IsNullOrWhiteSpace(column.Filter.OptionsSourceKey)
+                && MultiSelectOptionsSources.TryGetValue(column.Filter.OptionsSourceKey, out var options))
+            {
+                return options;
+            }
+
+            return column.Filter.StaticOptions;
+        }
+
+        private void RefreshMultiSelectFilterStates()
+        {
+            foreach (var state in _filterMultiSelectStates.Values)
+            {
+                var allOptions = GetMultiSelectOptions(state.Column);
+                state.AvailableOptions = allOptions.ToList();
+                state.SelectedValues = state.SelectedValues
+                    .Where(value => allOptions.Any(option => Equals(option.Value, value)))
+                    .ToList();
+                state.SelectedOptions = allOptions
+                    .Where(option => state.SelectedValues.Any(value => Equals(value, option.Value)))
+                    .ToList();
+                UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
+                RebuildMultiSelectOptionItems(state);
+            }
+        }
+
+        private void RebuildMultiSelectOptionItems(MultiSelectFilterUiState state)
+        {
+            state.OptionsHost.Children.Clear();
+
+            state.SearchText = state.SearchTextBox.Text ?? string.Empty;
+            var searchText = state.SearchText.Trim();
+            var allOptions = GetMultiSelectOptions(state.Column);
+            state.AvailableOptions = allOptions
+                .Where(option => string.IsNullOrWhiteSpace(searchText)
+                    || option.Label.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (state.AvailableOptions.Count == 0)
+            {
+                state.SelectedOptions = allOptions
+                    .Where(option => state.SelectedValues.Any(value => Equals(value, option.Value)))
+                    .ToList();
+                state.OptionsHost.Children.Add(new TextBlock
+                {
+                    Text = allOptions.Count == 0 ? "Нет доступных опций" : "Ничего не найдено",
+                    Margin = new Thickness(4, 2, 4, 2),
+                    Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
+                    FontSize = Math.Max(11, GetHeaderFontSize() - 1),
+                    TextWrapping = TextWrapping.Wrap
+                });
+                return;
+            }
+
+            state.SelectedOptions = allOptions
+                .Where(option => state.SelectedValues.Any(value => Equals(value, option.Value)))
+                .ToList();
+
+            foreach (var option in state.AvailableOptions)
+            {
+                var checkBox = new CheckBox
+                {
+                    Tag = (state, option),
+                    IsChecked = state.SelectedValues.Any(value => Equals(value, option.Value)),
+                    MinHeight = 20,
+                    Padding = new Thickness(0),
+                    Margin = new Thickness(4, 1, 4, 1)
+                };
+                checkBox.Content = new TextBlock
+                {
+                    Text = option.Label,
+                    Margin = new Thickness(2, 0, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                };
+                checkBox.Checked += OnMultiSelectOptionChanged;
+                checkBox.Unchecked += OnMultiSelectOptionChanged;
+                state.OptionsHost.Children.Add(checkBox);
+            }
+        }
+
+        private void UpdateMultiSelectFilterButtonContent(Button button, CbsTableColumnDefinition column)
+        {
+            if (!_filterMultiSelectStates.TryGetValue(column.FieldKey, out var state))
+            {
+                return;
+            }
+
+            var selectedCount = state.SelectedOptions.Count;
+            var text = selectedCount == 0
+                ? column.Filter.EmptySelectionText
+                : $"Выбрано: {selectedCount}";
+
+            var contentGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var textBlock = new TextBlock
+            {
+                Text = text,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                FontSize = Math.Max(11, GetHeaderFontSize() - 1),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(textBlock, 0);
+            contentGrid.Children.Add(textBlock);
+
+            var icon = new FontIcon
+            {
+                Glyph = "\uE70D",
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 10,
+                Margin = new Thickness(6, 0, 0, 0),
+                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(icon, 1);
+            contentGrid.Children.Add(icon);
+
+            button.Content = contentGrid;
+        }
+
+        private static bool SupportsFilterModeButton(CbsTableColumnDefinition column)
+        {
+            return column.IsFilterable && column.Filter.EditorKind != CbsTableFilterEditorKind.MultiSelect;
         }
 
         private void UpdateFilterModeButtonContent(Button button, DataFilterMatchMode mode)
@@ -1359,6 +1700,25 @@ namespace CbsContractsDesktopClient.Views.Controls
         }
     }
 
+    internal sealed class MultiSelectFilterUiState
+    {
+        public required CbsTableColumnDefinition Column { get; init; }
+
+        public required Button Button { get; init; }
+
+        public required TextBox SearchTextBox { get; init; }
+
+        public required StackPanel OptionsHost { get; init; }
+
+        public required IReadOnlyList<CbsTableFilterOptionDefinition> AvailableOptions { get; set; }
+
+        public required IReadOnlyList<CbsTableFilterOptionDefinition> SelectedOptions { get; set; }
+
+        public required IReadOnlyList<object?> SelectedValues { get; set; }
+
+        public required string SearchText { get; set; }
+    }
+
     public sealed class CbsTableLoadMoreRequestedEventArgs : EventArgs;
 
     public sealed class CbsTableSortRequestedEventArgs : EventArgs
@@ -1418,7 +1778,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
     public sealed class CbsTableFilterRequestedEventArgs : EventArgs
     {
-        public CbsTableFilterRequestedEventArgs(string fieldKey, DataFilterMatchMode matchMode, string? value)
+        public CbsTableFilterRequestedEventArgs(string fieldKey, DataFilterMatchMode matchMode, object? value)
         {
             FieldKey = fieldKey;
             MatchMode = matchMode;
@@ -1429,6 +1789,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         public DataFilterMatchMode MatchMode { get; }
 
-        public string? Value { get; }
+        public object? Value { get; }
     }
 }

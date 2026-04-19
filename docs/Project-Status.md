@@ -45,6 +45,11 @@
 - `ReferenceEditDialog` и `ReferenceEditViewModel`
 - отдельный `ReferenceEditPayloadBuilder`
 - reload списка после успешных CRUD-операций
+- первый complex reference screen:
+  - `/users`
+  - модель `Profile`
+  - nested columns для `email`, `ФИО`, `department`, `position`, `last_login`
+  - route открывается в том же `ContentHostView`, без отдельного shell-path
 
 ### 4. Табличная платформа
 
@@ -56,6 +61,16 @@
 - sorting
 - header hot filters
 - text/numeric filter modes
+- nested-value display/read path для вложенных API-объектов
+- раздельные metadata поля:
+  - `DisplayField`
+  - `FilterField`
+  - `SortField`
+- `MultiSelect` filter для lookup-колонок:
+  - `Button + Flyout + CheckBox list`
+  - lookup options source
+  - локальный поиск
+  - compact summary `Все` / `Выбрано: N`
 - table settings menu:
   - reset column widths
   - reset filters
@@ -76,6 +91,9 @@
 - navigation menu rules
 - ContentHostView settings-menu regression checks
 - регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
+- `ReferenceDataRow` nested-path resolution
+- `CbsTableRowView` formatting для date/time и boolean icon rendering
+- `CbsTableView` multiselect filter UI и options-source wiring
 
 ## Что сейчас в разработке по смыслу
 
@@ -97,6 +115,9 @@
 - полноценный CRUD справочников:
   - read/details
   - delete/archive с учетом бизнес-правил
+- specialized editor для complex references:
+  - `ProfileEditDialog`
+  - lookup editors для связанных сущностей
 - дополнительные рабочие экраны внутри shell
 - дальнейшая чистка и упрощение диагностического слоя по мере стабилизации интеграций
 

@@ -56,6 +56,9 @@ namespace CbsContractsDesktopClient.Models.References
                     FieldKey = column.FieldKey,
                     Header = column.Header,
                     ApiField = column.ApiField,
+                    DisplayField = column.DisplayField,
+                    FilterField = column.FilterField,
+                    SortField = column.SortField,
                     DefaultWidth = column.DefaultWidth,
                     Width = column.Width,
                     IsSortable = column.IsSortable,
@@ -65,8 +68,18 @@ namespace CbsContractsDesktopClient.Models.References
                     {
                         IsEnabled = column.Filter.IsEnabled,
                         PlaceholderText = column.Filter.PlaceholderText,
+                        EditorKind = column.Filter.EditorKind,
                         Mode = column.Filter.Mode,
-                        MatchMode = column.Filter.MatchMode
+                        MatchMode = column.Filter.MatchMode,
+                        OptionsSourceKey = column.Filter.OptionsSourceKey,
+                        StaticOptions = column.Filter.StaticOptions
+                            .Select(static option => new CbsTableFilterOptionDefinition
+                            {
+                                Value = option.Value,
+                                Label = option.Label
+                            })
+                            .ToList(),
+                        EmptySelectionText = column.Filter.EmptySelectionText
                     },
                     BodyMode = column.BodyMode,
                     BodyTemplateKey = column.BodyTemplateKey

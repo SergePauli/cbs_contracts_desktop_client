@@ -8,6 +8,12 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public string? ApiField { get; init; }
 
+        public string? DisplayField { get; init; }
+
+        public string? FilterField { get; init; }
+
+        public string? SortField { get; init; }
+
         public string DefaultWidth { get; init; } = "12rem";
 
         public string? Width { get; set; }

@@ -34,6 +34,14 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContentHostView_BindsMultiSelectOptionsSourcesIntoReferenceTable()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+
+        Assert.Contains("MultiSelectOptionsSources=\"{Binding CurrentFilterOptionsSources}\"", xaml);
+    }
+
+    [Fact]
     public void ContentHostView_SettingsMenu_DefinesThreeResetCommands()
     {
         var xaml = File.ReadAllText(ContentHostViewXamlPath);

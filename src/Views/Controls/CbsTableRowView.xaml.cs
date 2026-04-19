@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using Windows.UI;
@@ -210,9 +211,94 @@ namespace CbsContractsDesktopClient.Views.Controls
 
                 if (!isPlaceholder)
                 {
-                    _textCells[index].Text = Row?.GetValue(Columns[index].FieldKey)?.ToString() ?? string.Empty;
+                    var valueKey = Columns[index].DisplayField ?? Columns[index].ApiField ?? Columns[index].FieldKey;
+                    var value = Row?.GetValue(valueKey);
+                    ApplyBodyContent(_textCells[index], Columns[index], value);
                 }
             }
+        }
+
+        private static void ApplyBodyContent(TextBlock textCell, CbsTableColumnDefinition column, object? value)
+        {
+            if (column.BodyMode == CbsTableBodyMode.BooleanIcon)
+            {
+                var (text, foregroundKey) = value switch
+                {
+                    true => ("\u2713", "SystemFillColorSuccessBrush"),
+                    false => (string.Empty, "ShellPrimaryTextBrush"),
+                    null => ("?", "ShellSecondaryTextBrush"),
+                    string textValue when bool.TryParse(textValue, out var parsedBoolean)
+                        => parsedBoolean ? ("\u2713", "SystemFillColorSuccessBrush") : (string.Empty, "ShellPrimaryTextBrush"),
+                    _ => ("?", "ShellSecondaryTextBrush")
+                };
+
+                textCell.Text = text;
+                textCell.Foreground = ResolveBrush(foregroundKey, "ShellPrimaryTextBrush");
+                return;
+            }
+
+            textCell.Text = FormatCellValue(value);
+            textCell.Foreground = ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
+        }
+
+        private static string FormatCellValue(object? value)
+        {
+            return value switch
+            {
+                null => string.Empty,
+                DateTime dateTime => dateTime.ToLocalTime().ToString(CultureInfo.CurrentCulture),
+                DateTimeOffset dateTimeOffset => dateTimeOffset.LocalDateTime.ToString(CultureInfo.CurrentCulture),
+                string text when TryFormatDateTimeText(text, out var formattedDateTime) => formattedDateTime,
+                _ => value.ToString() ?? string.Empty
+            };
+        }
+
+        private static bool TryFormatDateTimeText(string text, out string formattedValue)
+        {
+            formattedValue = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            if (!text.Contains('-') || (!text.Contains('T') && !text.Contains(':')))
+            {
+                return false;
+            }
+
+            if (DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AllowWhiteSpaces,
+                out var dateTimeOffset))
+            {
+                formattedValue = dateTimeOffset.LocalDateTime.ToString(CultureInfo.CurrentCulture);
+                return true;
+            }
+
+            if (DateTime.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces,
+                out var dateTime))
+            {
+                formattedValue = dateTime.ToString(CultureInfo.CurrentCulture);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static Brush ResolveBrush(string resourceKey, string fallbackResourceKey)
+        {
+            if (Application.Current.Resources.TryGetValue(resourceKey, out var resource)
+                && resource is Brush brush)
+            {
+                return brush;
+            }
+
+            return (Brush)Application.Current.Resources[fallbackResourceKey];
         }
 
         private void UpdateVisualState()
