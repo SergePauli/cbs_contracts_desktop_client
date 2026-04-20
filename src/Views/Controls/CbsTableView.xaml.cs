@@ -147,6 +147,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly Dictionary<string, string> _filterTexts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, CheckBox> _filterBooleanCheckBoxes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterMultiSelectButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MultiSelectFilterUiState> _filterMultiSelectStates = new(StringComparer.OrdinalIgnoreCase);
@@ -205,6 +206,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                             RebuildMultiSelectOptionItems(state);
                         }
                     }
+                    else if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
+                    {
+                        _filterTexts.Remove(GetFilterStateKey(column));
+                    }
                     else
                     {
                         _filterTexts[GetFilterStateKey(column)] = string.Empty;
@@ -217,6 +222,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                     {
                         textBox.Text = string.Empty;
                     }
+                }
+
+                foreach (var checkBox in _filterBooleanCheckBoxes.Values)
+                {
+                    checkBox.IsChecked = null;
                 }
             }
             finally
@@ -382,6 +392,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             HeaderGrid.ColumnDefinitions.Clear();
             HeaderGrid.RowDefinitions.Clear();
             _filterTextBoxes.Clear();
+            _filterBooleanCheckBoxes.Clear();
             _filterModeButtons.Clear();
             _filterMultiSelectButtons.Clear();
             _filterMultiSelectStates.Clear();
@@ -1065,10 +1076,41 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return border;
             }
 
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
+            {
+                var checkBox = CreateBooleanFilterCheckBox(column);
+                border.Child = checkBox;
+                _filterBooleanCheckBoxes[column.FieldKey] = checkBox;
+                return border;
+            }
+
             var textBox = CreateTextFilterTextBox(column);
             border.Child = textBox;
             _filterTextBoxes[column.FieldKey] = textBox;
             return border;
+        }
+
+        private CheckBox CreateBooleanFilterCheckBox(CbsTableColumnDefinition column)
+        {
+            var checkBox = new CheckBox
+            {
+                Tag = column,
+                IsThreeState = true,
+                IsChecked = null,
+                MinWidth = 24,
+                MaxHeight = 24,     
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0),
+                Foreground = (Brush)Application.Current.Resources["ShellPanelBackgroundBrush"],
+                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],                
+            };
+            ToolTipService.SetToolTip(checkBox, "Фильтр: все / да / нет");
+            checkBox.Checked += OnBooleanFilterCheckBoxChanged;
+            checkBox.Unchecked += OnBooleanFilterCheckBoxChanged;
+            checkBox.Indeterminate += OnBooleanFilterCheckBoxChanged;
+            return checkBox;
         }
 
         private TextBox CreateTextFilterTextBox(CbsTableColumnDefinition column)
@@ -1333,6 +1375,26 @@ namespace CbsContractsDesktopClient.Views.Controls
                     textBox.Text));
         }
 
+        private void OnBooleanFilterCheckBoxChanged(object sender, RoutedEventArgs e)
+        {
+            if (sender is not CheckBox { Tag: CbsTableColumnDefinition column } checkBox)
+            {
+                return;
+            }
+
+            if (_suppressFilterNotifications)
+            {
+                return;
+            }
+
+            FilterRequested?.Invoke(
+                this,
+                new CbsTableFilterRequestedEventArgs(
+                    column.FieldKey,
+                    DataFilterMatchMode.Equals,
+                    checkBox.IsChecked));
+        }
+
         private void OnMultiSelectFlyoutOpened(object? sender, object e)
         {
             if (sender is not Flyout { Content: StackPanel { Children.Count: > 0 } content }
@@ -1425,7 +1487,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 _filterModes[filterStateKey] = column.Filter.MatchMode;
             }
 
-            if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
+                || column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
             {
                 return;
             }
@@ -1583,7 +1646,9 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private static bool SupportsFilterModeButton(CbsTableColumnDefinition column)
         {
-            return column.IsFilterable && column.Filter.EditorKind != CbsTableFilterEditorKind.MultiSelect;
+            return column.IsFilterable
+                && column.Filter.EditorKind != CbsTableFilterEditorKind.MultiSelect
+                && column.Filter.EditorKind != CbsTableFilterEditorKind.Boolean;
         }
 
         private void UpdateFilterModeButtonContent(Button button, DataFilterMatchMode mode)

@@ -386,7 +386,7 @@ namespace CbsContractsDesktopClient.Services.References
                         new CbsTableColumnDefinition
                         {
                             FieldKey = "used",
-                            Header = "А",
+                            Header = "Акт-ан",
                             DisplayField = "user.activated",
                             FilterField = "user.activated",
                             SortField = "used",
@@ -397,6 +397,7 @@ namespace CbsContractsDesktopClient.Services.References
                             Filter = new CbsTableColumnFilterDefinition
                             {
                                 IsEnabled = true,
+                                EditorKind = CbsTableFilterEditorKind.Boolean,
                                 Mode = DataFilterMode.Text,
                                 MatchMode = DataFilterMatchMode.Equals
                             }
@@ -612,7 +613,8 @@ namespace CbsContractsDesktopClient.Services.References
                 BodyMode = CbsTableBodyMode.BooleanIcon,
                 Filter = new CbsTableColumnFilterDefinition
                 {
-                    EditorKind = CbsTableFilterEditorKind.Boolean
+                    EditorKind = CbsTableFilterEditorKind.Boolean,
+                    MatchMode = DataFilterMatchMode.Equals
                 }
             };
         }

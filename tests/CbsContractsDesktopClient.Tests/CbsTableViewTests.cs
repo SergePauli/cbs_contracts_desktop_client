@@ -72,4 +72,20 @@ public sealed class CbsTableViewTests
         Assert.Contains("HorizontalContentAlignment = HorizontalAlignment.Stretch", code);
         Assert.DoesNotContain("selectedOptions[0]", code);
     }
+
+    [Fact]
+    public void CbsTableView_BuildsTriStateBooleanFilterCheckBox()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("CreateBooleanFilterCheckBox", code);
+        Assert.Contains("IsThreeState = true", code);
+        Assert.Contains("OnBooleanFilterCheckBoxChanged", code);
+        Assert.Contains("checkBox.IsChecked", code);
+        Assert.Contains("DataFilterMatchMode.Equals", code);
+        Assert.Contains("CbsTableFilterEditorKind.Boolean", code);
+        Assert.Contains("Width = 18", code);
+        Assert.Contains("BorderThickness = new Thickness(1)", code);
+        Assert.Contains("ToolTipService.SetToolTip(checkBox, \"Фильтр: все / да / нет\")", code);
+    }
 }
