@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Linq;
+using System.Globalization;
 using CbsContractsDesktopClient.Models.Data;
 
 namespace CbsContractsDesktopClient.Services
@@ -92,6 +93,11 @@ namespace CbsContractsDesktopClient.Services
                 return BuildNumeric(key, value);
             }
 
+            if (filter.FilterMode == DataFilterMode.DateTime)
+            {
+                return BuildDateTime(key, value);
+            }
+
             return BuildSingle(key, value);
         }
 
@@ -108,6 +114,16 @@ namespace CbsContractsDesktopClient.Services
             if (TryConvertNumeric(value, out var numericValue))
             {
                 return new Dictionary<string, object?> { [key] = numericValue };
+            }
+
+            return [];
+        }
+
+        private static Dictionary<string, object?> BuildDateTime(string key, object value)
+        {
+            if (TryConvertDateTime(value, out var dateTimeValue))
+            {
+                return new Dictionary<string, object?> { [key] = dateTimeValue };
             }
 
             return [];
@@ -141,6 +157,64 @@ namespace CbsContractsDesktopClient.Services
             }
 
             numericValue = default!;
+            return false;
+        }
+
+        private static bool TryConvertDateTime(object value, out string dateTimeValue)
+        {
+            switch (value)
+            {
+                case DateTimeOffset dateTimeOffset:
+                    dateTimeValue = dateTimeOffset.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+                    return true;
+                case DateTime dateTime:
+                    dateTimeValue = dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+                    return true;
+                case string text when !string.IsNullOrWhiteSpace(text):
+                    if (DateTimeOffset.TryParse(
+                        text,
+                        CultureInfo.CurrentCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                        out var parsedOffset))
+                    {
+                        dateTimeValue = parsedOffset.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    if (DateTime.TryParse(
+                        text,
+                        CultureInfo.CurrentCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                        out var parsedDateTime))
+                    {
+                        dateTimeValue = parsedDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    if (DateTimeOffset.TryParse(
+                        text,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                        out parsedOffset))
+                    {
+                        dateTimeValue = parsedOffset.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    if (DateTime.TryParse(
+                        text,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                        out parsedDateTime))
+                    {
+                        dateTimeValue = parsedDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    break;
+            }
+
+            dateTimeValue = string.Empty;
             return false;
         }
 

@@ -58,11 +58,15 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         var departmentColumn = definition.Columns.Single(static column => column.FieldKey == "department");
         Assert.Equal("department.name", departmentColumn.DisplayField);
         Assert.Equal("department_id", departmentColumn.FilterField);
-        Assert.Equal("department", departmentColumn.SortField);
+        Assert.Equal("department.name", departmentColumn.SortField);
         Assert.Equal(CbsTableFilterEditorKind.MultiSelect, departmentColumn.Filter.EditorKind);
         Assert.Equal(DataFilterMatchMode.In, departmentColumn.Filter.MatchMode);
         Assert.Equal("Department", departmentColumn.Filter.OptionsSourceKey);
         Assert.Equal("Все", departmentColumn.Filter.EmptySelectionText);
+        var lastLoginColumn = definition.Columns.Single(static column => column.FieldKey == "last_login");
+        Assert.True(lastLoginColumn.IsFilterable);
+        Assert.Equal(DataFilterMode.DateTime, lastLoginColumn.Filter.Mode);
+        Assert.Equal(DataFilterMatchMode.GreaterThanOrEqual, lastLoginColumn.Filter.MatchMode);
         Assert.Equal("user.activated", definition.Columns.Single(static column => column.FieldKey == "used").DisplayField);
     }
 

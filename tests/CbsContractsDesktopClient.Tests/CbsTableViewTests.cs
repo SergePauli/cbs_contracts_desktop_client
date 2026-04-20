@@ -84,8 +84,58 @@ public sealed class CbsTableViewTests
         Assert.Contains("checkBox.IsChecked", code);
         Assert.Contains("DataFilterMatchMode.Equals", code);
         Assert.Contains("CbsTableFilterEditorKind.Boolean", code);
-        Assert.Contains("Width = 18", code);
-        Assert.Contains("BorderThickness = new Thickness(1)", code);
+        Assert.Contains("MinWidth = 24", code);
         Assert.Contains("ToolTipService.SetToolTip(checkBox, \"Фильтр: все / да / нет\")", code);
+    }
+
+    [Fact]
+    public void CbsTableView_UsesExtendedFilterModesForDateTimeColumns()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("column.Filter.Mode == DataFilterMode.DateTime", code);
+        Assert.Contains("DataFilterMatchMode.GreaterThanOrEqual", code);
+        Assert.Contains("DataFilterMatchMode.LessThanOrEqual", code);
+        Assert.Contains("DataFilterMatchMode.Contains", code);
+        Assert.Contains("\"Позже чем\"", code);
+        Assert.Contains("\"Не ранее чем\"", code);
+        Assert.Contains("\"Ранее чем\"", code);
+        Assert.Contains("\"Не позже чем\"", code);
+    }
+
+    [Fact]
+    public void CbsTableView_UsesIsoDateTimeTextFilter()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("GetDateTimePlaceholder(column)", code);
+        Assert.Contains("BuildIsoDateTimePlaceholderPattern()", code);
+        Assert.Contains("\"ГГГГ-ММ-ДД ЧЧ:ММ:СС\"", code);
+        Assert.Contains("OnDateTimeFilterTextBoxBeforeTextChanging", code);
+        Assert.Contains("IsMaskedDateTimeMode(column)", code);
+        Assert.Contains("NormalizeDateTimeFilterValue", code);
+        Assert.Contains("NormalizeIsoDateTimeTextFragment", code);
+        Assert.Contains("TryExtractCompleteDateTimeValue", code);
+    }
+
+    [Fact]
+    public void CbsTableView_UsesDatePickerForComparativeDateTimeModes()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("CreateDateTimeFilterHost", code);
+        Assert.Contains("new CalendarDatePicker", code);
+        Assert.Contains("CreateDateTimeFilterClearButton", code);
+        Assert.Contains("DateChanged += OnDateTimeFilterDateChanged", code);
+        Assert.Contains("OnDateTimeFilterClearButtonClick", code);
+        Assert.Contains("Glyph = \"\\uE711\"", code);
+        Assert.Contains("ToolTipService.SetToolTip(button, \"РћС‡РёСЃС‚РёС‚СЊ С„РёР»СЊС‚СЂ РґР°С‚С‹\")", code);
+        Assert.Contains("PlaceholderText = string.Empty", code);
+        Assert.Contains("state.ClearButton.Visibility = state.DatePicker.Date.HasValue", code);
+        Assert.Contains("state.TextBox.Visibility = Visibility.Visible", code);
+        Assert.Contains("state.DatePicker.Visibility = Visibility.Collapsed", code);
+        Assert.Contains("state.TextBox.Visibility = Visibility.Collapsed", code);
+        Assert.Contains("state.DatePicker.Visibility = Visibility.Visible", code);
+        Assert.Contains("return dateTimeState.DatePicker.Date;", code);
     }
 }

@@ -147,6 +147,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly Dictionary<string, string> _filterTexts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DateTimeFilterUiState> _filterDateTimeStates = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, CheckBox> _filterBooleanCheckBoxes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterMultiSelectButtons = new(StringComparer.OrdinalIgnoreCase);
@@ -159,6 +160,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private const double HeaderAdornmentWidth = 18d;
         private const double FilterModeButtonWidth = 22d;
         private const double FilterTextBoxHeight = 22d;
+        private const double FilterDatePickerHeight = 22d;
         private const double MultiSelectFilterButtonHeight = 22d;
         private const double MultiSelectFilterFlyoutWidth = 260d;
         private const double MultiSelectFilterFlyoutMaxHeight = 180d;
@@ -210,6 +212,14 @@ namespace CbsContractsDesktopClient.Views.Controls
                     {
                         _filterTexts.Remove(GetFilterStateKey(column));
                     }
+                    else if (column.Filter.Mode == DataFilterMode.DateTime)
+                    {
+                        _filterTexts[GetFilterStateKey(column)] = string.Empty;
+                        if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
+                        {
+                            dateTimeState.DatePicker.Date = null;
+                        }
+                    }
                     else
                     {
                         _filterTexts[GetFilterStateKey(column)] = string.Empty;
@@ -218,7 +228,11 @@ namespace CbsContractsDesktopClient.Views.Controls
 
                 foreach (var textBox in _filterTextBoxes.Values)
                 {
-                    if (!string.IsNullOrEmpty(textBox.Text))
+                    if (textBox.Tag is CbsTableColumnDefinition column && column.Filter.Mode == DataFilterMode.DateTime)
+                    {
+                        textBox.Text = string.Empty;
+                    }
+                    else if (!string.IsNullOrEmpty(textBox.Text))
                     {
                         textBox.Text = string.Empty;
                     }
@@ -1084,6 +1098,12 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return border;
             }
 
+            if (column.Filter.Mode == DataFilterMode.DateTime)
+            {
+                border.Child = CreateDateTimeFilterHost(column);
+                return border;
+            }
+
             var textBox = CreateTextFilterTextBox(column);
             border.Child = textBox;
             _filterTextBoxes[column.FieldKey] = textBox;
@@ -1123,7 +1143,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Margin = new Thickness(4, 1, 4, 1),
                 Padding = new Thickness(6, 2, 6, 0),
                 Text = GetFilterText(column),
-                PlaceholderText = column.Filter.PlaceholderText,
+                PlaceholderText = column.Filter.Mode == DataFilterMode.DateTime
+                    ? GetDateTimePlaceholder(column)
+                    : column.Filter.PlaceholderText,
                 FontSize = Math.Max(11, GetHeaderFontSize() - 1),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -1135,9 +1157,82 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 textBox.BeforeTextChanging += OnNumericFilterTextBoxBeforeTextChanging;
             }
+            else if (column.Filter.Mode == DataFilterMode.DateTime)
+            {
+                textBox.BeforeTextChanging += OnDateTimeFilterTextBoxBeforeTextChanging;
+            }
 
             textBox.TextChanged += OnFilterTextChanged;
             return textBox;
+        }
+
+        private FrameworkElement CreateDateTimeFilterHost(CbsTableColumnDefinition column)
+        {
+            var textBox = CreateTextFilterTextBox(column);
+            var datePicker = CreateDateTimeFilterDatePicker(column);
+            var clearButton = CreateDateTimeFilterClearButton(column);
+
+            var host = new Grid();
+            host.Children.Add(textBox);
+            host.Children.Add(datePicker);
+            host.Children.Add(clearButton);
+
+            _filterTextBoxes[column.FieldKey] = textBox;
+            _filterDateTimeStates[column.FieldKey] = new DateTimeFilterUiState
+            {
+                Column = column,
+                TextBox = textBox,
+                DatePicker = datePicker,
+                ClearButton = clearButton
+            };
+
+            RefreshDateTimeFilterTextBox(column);
+            return host;
+        }
+
+        private CalendarDatePicker CreateDateTimeFilterDatePicker(CbsTableColumnDefinition column)
+        {
+            var datePicker = new CalendarDatePicker
+            {
+                Tag = column,
+                Height = FilterDatePickerHeight,
+                MinHeight = FilterDatePickerHeight,
+                Margin = new Thickness(4, 1, 4, 1),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Center,
+                MinWidth = 24,
+                Date = null,
+                PlaceholderText = string.Empty,
+                Padding = new Thickness(0, 0, 24, 0)
+            };
+
+            datePicker.DateChanged += OnDateTimeFilterDateChanged;
+            return datePicker;
+        }
+
+        private Button CreateDateTimeFilterClearButton(CbsTableColumnDefinition column)
+        {
+            var button = new Button
+            {
+                Tag = column,
+                Width = 20,
+                Height = 20,
+                MinWidth = 20,
+                MinHeight = 20,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 0, 8, 0),
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
+                Content = new FontIcon
+                {
+                    Glyph = "\uE711"
+                }
+            };
+
+            ToolTipService.SetToolTip(button, "Очистить фильтр даты");
+            button.Click += OnDateTimeFilterClearButtonClick;
+            return button;
         }
 
         private Button CreateMultiSelectFilterButton(CbsTableColumnDefinition column)
@@ -1318,7 +1413,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 var item = new MenuFlyoutItem
                 {
-                    Text = GetFilterModeLabel(mode),
+                    Text = GetFilterModeLabel(column, mode),
                     Tag = (column, mode)
                 };
                 item.Click += OnFilterModeMenuItemClick;
@@ -1345,12 +1440,14 @@ namespace CbsContractsDesktopClient.Views.Controls
                 UpdateFilterModeButtonContent(button, mode);
             }
 
+            RefreshDateTimeFilterTextBox(column);
+
             FilterRequested?.Invoke(
                 this,
                 new CbsTableFilterRequestedEventArgs(
                     column.FieldKey,
                     mode,
-                    GetFilterText(column)));
+                    GetFilterValue(column)));
         }
 
         private void OnFilterTextChanged(object sender, TextChangedEventArgs e)
@@ -1372,7 +1469,75 @@ namespace CbsContractsDesktopClient.Views.Controls
                 new CbsTableFilterRequestedEventArgs(
                     column.FieldKey,
                     GetFilterMode(column),
-                    textBox.Text));
+                    GetFilterValue(column)));
+        }
+
+        private void OnDateTimeFilterTextBoxBeforeTextChanging(TextBox sender, TextBoxBeforeTextChangingEventArgs args)
+        {
+            if (sender.Tag is not CbsTableColumnDefinition column
+                || !IsMaskedDateTimeMode(column))
+            {
+                return;
+            }
+        }
+
+        private void RefreshDateTimeFilterTextBox(CbsTableColumnDefinition column)
+        {
+            if (column.Filter.Mode != DataFilterMode.DateTime
+                || !_filterDateTimeStates.TryGetValue(column.FieldKey, out var state))
+            {
+                return;
+            }
+
+            if (IsMaskedDateTimeMode(column))
+            {
+                state.TextBox.Visibility = Visibility.Visible;
+                state.DatePicker.Visibility = Visibility.Collapsed;
+                state.ClearButton.Visibility = Visibility.Collapsed;
+                state.TextBox.PlaceholderText = GetDateTimePlaceholder(column);
+                return;
+            }
+
+            state.TextBox.Visibility = Visibility.Collapsed;
+            state.DatePicker.Visibility = Visibility.Visible;
+            state.DatePicker.PlaceholderText = string.Empty;
+            state.ClearButton.Visibility = state.DatePicker.Date.HasValue
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private void OnDateTimeFilterDateChanged(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
+        {
+            if (sender.Tag is not CbsTableColumnDefinition column)
+            {
+                return;
+            }
+
+            RefreshDateTimeFilterTextBox(column);
+
+            if (_suppressFilterNotifications)
+            {
+                return;
+            }
+
+            FilterRequested?.Invoke(
+                this,
+                new CbsTableFilterRequestedEventArgs(
+                    column.FieldKey,
+                    GetFilterMode(column),
+                    GetFilterValue(column)));
+        }
+
+        private void OnDateTimeFilterClearButtonClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: CbsTableColumnDefinition column }
+                || !_filterDateTimeStates.TryGetValue(column.FieldKey, out var state))
+            {
+                return;
+            }
+
+            state.DatePicker.Date = null;
+            RefreshDateTimeFilterTextBox(column);
         }
 
         private void OnBooleanFilterCheckBoxChanged(object sender, RoutedEventArgs e)
@@ -1510,6 +1675,26 @@ namespace CbsContractsDesktopClient.Views.Controls
             return _filterTexts.TryGetValue(GetFilterStateKey(column), out var text)
                 ? text
                 : string.Empty;
+        }
+
+        private object? GetFilterValue(CbsTableColumnDefinition column)
+        {
+            if (column.Filter.Mode == DataFilterMode.DateTime)
+            {
+                if (!IsMaskedDateTimeMode(column)
+                    && _filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
+                {
+                    return dateTimeState.DatePicker.Date;
+                }
+
+                var dateTimeText = _filterTextBoxes.TryGetValue(column.FieldKey, out var textBox)
+                    ? NormalizeDateTimeFilterValue(column, textBox.Text)
+                    : GetFilterText(column);
+                return string.IsNullOrWhiteSpace(dateTimeText) ? null : dateTimeText;
+            }
+
+            var text = GetFilterText(column);
+            return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
         private string GetFilterStateKey(CbsTableColumnDefinition column)
@@ -1682,6 +1867,22 @@ namespace CbsContractsDesktopClient.Views.Controls
                 ];
             }
 
+            if (column.Filter.Mode == DataFilterMode.DateTime)
+            {
+                return
+                [
+                    DataFilterMatchMode.GreaterThanOrEqual,
+                    DataFilterMatchMode.LessThanOrEqual,
+                    DataFilterMatchMode.GreaterThan,
+                    DataFilterMatchMode.LessThan,
+                    DataFilterMatchMode.Equals,
+                    DataFilterMatchMode.Contains,
+                    DataFilterMatchMode.StartsWith,
+                    DataFilterMatchMode.EndsWith,
+                    DataFilterMatchMode.NotContains
+                ];
+            }
+
             return
             [
                 DataFilterMatchMode.Contains,
@@ -1708,8 +1909,24 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
         }
 
-        private static string GetFilterModeLabel(DataFilterMatchMode mode)
+        private static string GetFilterModeLabel(CbsTableColumnDefinition column, DataFilterMatchMode mode)
         {
+            if (column.Filter.Mode == DataFilterMode.DateTime)
+            {
+                return mode switch
+                {
+                    DataFilterMatchMode.LessThan => "Ранее чем",
+                    DataFilterMatchMode.LessThanOrEqual => "Не позже чем",
+                    DataFilterMatchMode.GreaterThan => "Позже чем",
+                    DataFilterMatchMode.GreaterThanOrEqual => "Не ранее чем",
+                    DataFilterMatchMode.Equals => "Точно в",
+                    DataFilterMatchMode.StartsWith => "Начинается с",
+                    DataFilterMatchMode.EndsWith => "Заканчивается на",
+                    DataFilterMatchMode.NotContains => "Не содержит",
+                    _ => "Содержит"
+                };
+            }
+
             return mode switch
             {
                 DataFilterMatchMode.LessThan => "Меньше",
@@ -1763,6 +1980,74 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             return true;
         }
+
+        private string GetDateTimePlaceholder(CbsTableColumnDefinition column)
+        {
+            return IsMaskedDateTimeMode(column)
+                ? BuildIsoDateTimePlaceholderPattern()
+                : column.Filter.PlaceholderText;
+        }
+
+        private bool IsMaskedDateTimeMode(CbsTableColumnDefinition column)
+        {
+            if (column.Filter.Mode != DataFilterMode.DateTime)
+            {
+                return false;
+            }
+
+            return GetFilterMode(column) is DataFilterMatchMode.Contains
+                or DataFilterMatchMode.StartsWith
+                or DataFilterMatchMode.EndsWith
+                or DataFilterMatchMode.NotContains;
+        }
+
+        private string NormalizeDateTimeFilterValue(CbsTableColumnDefinition column, string? maskedText)
+        {
+            if (string.IsNullOrWhiteSpace(maskedText))
+            {
+                return string.Empty;
+            }
+
+            var text = maskedText.Trim();
+            if (!text.Any(char.IsDigit))
+            {
+                return string.Empty;
+            }
+
+            return GetFilterMode(column) switch
+            {
+                DataFilterMatchMode.Contains or DataFilterMatchMode.StartsWith or DataFilterMatchMode.EndsWith or DataFilterMatchMode.NotContains
+                    => NormalizeIsoDateTimeTextFragment(text),
+                _ => TryExtractCompleteDateTimeValue(text, out var completeValue)
+                    ? completeValue
+                    : string.Empty
+            };
+        }
+
+        private static bool TryExtractCompleteDateTimeValue(string maskedText, out string value)
+        {
+            value = string.Empty;
+            return DateTime.TryParse(
+                    maskedText,
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    System.Globalization.DateTimeStyles.AllowWhiteSpaces | System.Globalization.DateTimeStyles.AssumeLocal,
+                    out var dateTime)
+                && (value = dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)) is not null;
+        }
+
+        private static string NormalizeIsoDateTimeTextFragment(string text)
+        {
+            var allowed = text.Where(static character =>
+                char.IsDigit(character)
+                || character is '-' or ':' or ' ' or 'T').ToArray();
+            return new string(allowed);
+        }
+
+        private static string BuildIsoDateTimePlaceholderPattern()
+        {
+            return "ГГГГ-ММ-ДД ЧЧ:ММ:СС";
+        }
+
     }
 
     internal sealed class MultiSelectFilterUiState
@@ -1782,6 +2067,17 @@ namespace CbsContractsDesktopClient.Views.Controls
         public required IReadOnlyList<object?> SelectedValues { get; set; }
 
         public required string SearchText { get; set; }
+    }
+
+    internal sealed class DateTimeFilterUiState
+    {
+        public required CbsTableColumnDefinition Column { get; init; }
+
+        public required TextBox TextBox { get; init; }
+
+        public required CalendarDatePicker DatePicker { get; init; }
+
+        public required Button ClearButton { get; init; }
     }
 
     public sealed class CbsTableLoadMoreRequestedEventArgs : EventArgs;

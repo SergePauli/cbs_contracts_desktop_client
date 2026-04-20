@@ -381,7 +381,16 @@ namespace CbsContractsDesktopClient.Services.References
                             FilterField = "user.last_login",
                             SortField = "last_login",
                             DefaultWidth = "10rem",
-                            Alignment = CbsTableColumnAlignment.Left
+                            Alignment = CbsTableColumnAlignment.Left,
+                            IsFilterable = true,
+                            Filter = new CbsTableColumnFilterDefinition
+                            {
+                                IsEnabled = true,
+                                EditorKind = CbsTableFilterEditorKind.Text,
+                                Mode = DataFilterMode.DateTime,
+                                MatchMode = DataFilterMatchMode.GreaterThanOrEqual,
+                                PlaceholderText = "\u2315"
+                            }
                         },
                         new CbsTableColumnDefinition
                         {

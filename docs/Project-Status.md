@@ -60,12 +60,16 @@
 - row selection
 - sorting
 - header hot filters
-- text/numeric filter modes
+- text/numeric/date-time filter modes
 - nested-value display/read path для вложенных API-объектов
 - раздельные metadata поля:
   - `DisplayField`
   - `FilterField`
   - `SortField`
+- `DateTime` filter для datetime-колонок:
+  - сравнительные режимы через `CalendarDatePicker`
+  - текстовые режимы через ISO-like masked input
+  - нормализация значения в API payload формата `yyyy-MM-ddTHH:mm:ss`
 - `MultiSelect` filter для lookup-колонок:
   - `Button + Flyout + CheckBox list`
   - lookup options source
@@ -94,6 +98,9 @@
 - `ReferenceDataRow` nested-path resolution
 - `CbsTableRowView` formatting для date/time и boolean icon rendering
 - `CbsTableView` multiselect filter UI и options-source wiring
+- `CbsTableView` date/time filter modes, masked input и `CalendarDatePicker` switch
+- `DataQueryStateBuilder` mapping date/time criteria в API payload
+- `ReferenceDefinitionService` metadata для `last_login` filter в `/users`
 
 ## Что сейчас в разработке по смыслу
 
@@ -110,7 +117,6 @@
 
 ## Что еще не является завершенным
 
-- date/time filters и специальные типы фильтров
 - доменные действия над строками
 - полноценный CRUD справочников:
   - read/details
@@ -125,6 +131,6 @@
 
 1. Довести CRUD справочников до details/archive и backend-aware ограничений
 2. Переносить следующие экраны из web-клиента
-3. Добавлять специализированные типы колонок и фильтров
+3. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect
 4. Расширять доменный контекст в audit/context panel
 5. Укреплять тестовое покрытие вокруг новых shell/table сценариев

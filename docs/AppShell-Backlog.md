@@ -194,6 +194,14 @@ Shell уже больше не является только каркасом п
 
 - edit-profile реализован без перегрузки generic dialog
 
+Ближайшая следующая задача:
+
+- кастомизация и UX-polish диалога редактирования пользователей как первого specialized editor scenario
+- привести `ProfileEditDialog` к более прикладному виду вместо generic form-feel
+- уплотнить layout, подписи, группировку полей и визуальные состояния для `role`, `department`, `position`, `activated / used`
+- проверить, какие поля должны остаться read-only на первом этапе, а какие уже можно сделать управляемыми
+- подготовить диалог к дальнейшему подключению lookup/selectors без повторного broad redesign
+
 ### Phase 4. Добавить lookup infrastructure для связанных сущностей
 
 Цель:
@@ -447,3 +455,30 @@ Shell уже больше не является только каркасом п
 Результат:
 
 - reusable multiselect-filter закрыт регрессией до подключения новых сложных таблиц
+
+## Production Update: DateTime Filter for `last_login`
+
+Контекст:
+
+- по backlog `date/time filters` оставались следующим шагом для table-platform
+- в последних незакоммиченных изменениях это направление уже частично закрыто на реальном сценарии users/profile table
+
+Что сделано:
+
+- добавлен `DataFilterMode.DateTime`
+- `DataQueryStateBuilder` теперь маппит date/time значения в API payload формата `yyyy-MM-ddTHH:mm:ss`
+- для колонки `last_login` в `Profile` / `/users` definition включен filter metadata c default mode `GreaterThanOrEqual`
+- `CbsTableView` поддерживает два UX-режима для date/time:
+  - `CalendarDatePicker` для сравнительных операторов
+  - masked text input для `Contains` / `StartsWith` / `EndsWith` / `NotContains`
+- reset filter state очищает и текстовое поле, и `DatePicker`
+
+Статус:
+
+- выполнено для первого production scenario
+- закрыт базовый reusable date/time filter path в table-platform
+
+Что еще остается по этой теме:
+
+- при необходимости добавить date/time filter в другие reference definitions
+- при необходимости расширить mask/validation UX под более строгие пользовательские сценарии

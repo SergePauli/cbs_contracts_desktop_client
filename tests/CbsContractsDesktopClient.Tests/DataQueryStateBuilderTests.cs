@@ -119,4 +119,28 @@ public class DataQueryStateBuilderTests
         Assert.Equal(125.50m, payload["cost__lte"]);
         Assert.Equal(2, payload["priority__gt"]);
     }
+
+    [Fact]
+    public void BuildFilters_MapsDateTimeCriteriaToApiPayload()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "lastLogin",
+                FilterMode = DataFilterMode.DateTime,
+                MatchMode = DataFilterMatchMode.GreaterThanOrEqual,
+                Value = "20.04.2026 14:30"
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["lastLogin"] = "user.last_login"
+            }));
+
+        Assert.Equal("2026-04-20T14:30:00", payload["user.last_login__gte"]);
+    }
 }

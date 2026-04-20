@@ -12,7 +12,7 @@ namespace CbsContractsDesktopClient.Collections
     public class LazyDataCollection<TItem> : ObservableCollection<TItem> , ISupportIncrementalLoading
         where TItem : class
     {
-        private const bool DiagnosticsEnabled = false;
+        private static readonly bool DiagnosticsEnabled = false;
         private const int MaxTraceLines = 120;
         private readonly IDataQueryService _dataQueryService;
         private readonly Func<TItem> _placeholderFactory;
