@@ -202,6 +202,13 @@ Shell уже больше не является только каркасом п
 - проверить, какие поля должны остаться read-only на первом этапе, а какие уже можно сделать управляемыми
 - подготовить диалог к дальнейшему подключению lookup/selectors без повторного broad redesign
 
+Статус на текущий момент:
+
+- выполнено: `ProfileEditDialog` переведен на `AutoSuggestBox` для поля `position`
+- выполнено: загрузка lookup-опций `Position/item` по `name__cnt` и алфавитная сортировка
+- выполнено: устранена проблема обновления suggestions через уведомление `PositionSuggestionLabels`
+- выполнено: глобально уплотнен `DefaultAutoSuggestBoxStyle` через `App.xaml`
+
 ### Phase 4. Добавить lookup infrastructure для связанных сущностей
 
 Цель:

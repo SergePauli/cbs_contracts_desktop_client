@@ -14,6 +14,23 @@
                 <ResourceDictionary Source="src/Styles/Theme/Typography.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- Global AutoSuggestBox compact suggestions -->
+            <Thickness x:Key="AutoSuggestListMargin">0,1,0,1</Thickness>
+            <Thickness x:Key="AutoSuggestListPadding">0</Thickness>
+            <Thickness x:Key="AutoSuggestListViewItemMargin">8,3,0,3</Thickness>
+            <x:Double x:Key="AutoSuggestListMaxHeight">280</x:Double>
+            <Style x:Key="CompactAutoSuggestListViewItemStyle"
+                   TargetType="ListViewItem"
+                   BasedOn="{StaticResource DefaultListViewItemStyle}">
+                <Setter Property="MinHeight" Value="28" />
+                <Setter Property="Padding" Value="8,2,8,2" />
+            </Style>
+            <Style TargetType="AutoSuggestBox"
+                   BasedOn="{StaticResource DefaultAutoSuggestBoxStyle}">
+                <Setter Property="ItemContainerStyle"
+                        Value="{StaticResource CompactAutoSuggestListViewItemStyle}" />
+            </Style>
+
             <helpers:BoolNegationConverter x:Key="BoolNegationConverter" />
             <helpers:BoolVisibilityConverter x:Key="BoolVisibilityConverter" />
             <helpers:StringVisibilityConverter x:Key="StringVisibilityConverter" />

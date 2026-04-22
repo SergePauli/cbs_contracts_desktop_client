@@ -65,4 +65,24 @@ public sealed class ContentHostViewTests
         Assert.Contains("private async void ResetFiltersMenuItem_Click", codeBehind);
         Assert.Contains("private async void ResetSortingMenuItem_Click", codeBehind);
     }
+
+    [Fact]
+    public void ContentHostView_PreparesProfileEditStateScaffold()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: true);", codeBehind);
+        Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
+        Assert.Contains("if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Profile)", codeBehind);
+        Assert.Contains("await ShowProfileEditDialogAsync(isCreateMode);", codeBehind);
+        Assert.Contains("var viewModel = new ProfileEditViewModel(state, LoadPositionOptionsAsync);", codeBehind);
+        Assert.Contains("var dialog = new ProfileEditDialog(viewModel)", codeBehind);
+        Assert.Contains("CreateProfileEditDialogState", codeBehind);
+        Assert.Contains("ProfileEditStateFactory.Create(", codeBehind);
+        Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(", codeBehind);
+        Assert.Contains("Model = \"Position\"", codeBehind);
+        Assert.Contains("Preset = \"item\"", codeBehind);
+        Assert.Contains("[\"name__cnt\"] = normalizedSearchText", codeBehind);
+        Assert.Contains(".OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)", codeBehind);
+    }
 }

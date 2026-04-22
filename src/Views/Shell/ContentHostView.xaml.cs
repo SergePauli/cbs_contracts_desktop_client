@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.ViewModels.Shell;
@@ -22,6 +24,7 @@ namespace CbsContractsDesktopClient.Views.Shell
     {
         private readonly ReferencesContentViewModel _viewModel;
         private readonly IReferenceCrudService _referenceCrudService;
+        private readonly IDataQueryService _dataQueryService;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private bool _isViewportSubscribed;
@@ -30,6 +33,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
             _referenceCrudService = App.Services.GetRequiredService<IReferenceCrudService>();
+            _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             InitializeComponent();
             DataContext = _viewModel;
             UpdateSelectionActionButtons();
@@ -261,6 +265,12 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Profile)
+            {
+                await ShowProfileEditDialogAsync(isCreateMode);
+                return;
+            }
+
             var dialogViewModel = isCreateMode
                 ? ReferenceEditViewModel.CreateForCreate(_viewModel.CurrentReference)
                 : ReferenceEditViewModel.CreateForEdit(_viewModel.CurrentReference, _viewModel.SelectedRow!);
@@ -366,6 +376,68 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             await dialog.ShowAsync();
+        }
+
+        private ProfileEditDialogState CreateProfileEditDialogState(bool isCreateMode)
+        {
+            var departmentOptions = _viewModel.CurrentFilterOptionsSources.TryGetValue("Department", out var options)
+                ? options
+                : [];
+
+            return ProfileEditStateFactory.Create(
+                _viewModel.CurrentReference!,
+                isCreateMode,
+                isCreateMode ? null : _viewModel.SelectedRow,
+                departmentOptions);
+        }
+
+        private async Task ShowProfileEditDialogAsync(bool isCreateMode)
+        {
+            var state = CreateProfileEditDialogState(isCreateMode);
+            var viewModel = new ProfileEditViewModel(state, LoadPositionOptionsAsync);
+            var dialog = new ProfileEditDialog(viewModel)
+            {
+                XamlRoot = XamlRoot
+            };
+
+            await dialog.ShowAsync();
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(
+            string searchText,
+            CancellationToken cancellationToken)
+        {
+            var normalizedSearchText = searchText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalizedSearchText))
+            {
+                return [];
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "Position",
+                    Preset = "item",
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["name__cnt"] = normalizedSearchText
+                    },
+                    Sorts = ["name asc"],
+                    Limit = 25
+                },
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(static row => new CbsTableFilterOptionDefinition
+                {
+                    Value = row.GetValue("id"),
+                    Label = row.GetValue("name")?.ToString() ?? string.Empty
+                })
+                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
+                .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
         }
 
         private static string BuildReferenceNotificationMessage(string referenceTitle, long? id)

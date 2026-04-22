@@ -679,7 +679,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 return;
             }
 
-            AppendUiTrace($"FILTER OPTIONS LOAD START model={definition.Model} sources=[{string.Join(", ", sourceKeys)}]");
             var sources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var sourceKey in sourceKeys)
@@ -688,7 +687,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             CurrentFilterOptionsSources = sources;
-            AppendUiTrace($"FILTER OPTIONS LOAD DONE model={definition.Model} count={sources.Sum(static pair => pair.Value.Count)}");
         }
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadLookupOptionsAsync(
@@ -961,6 +959,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private static bool ShouldKeepUiTrace(string message)
         {
             return message.StartsWith("NAVIGATE ", StringComparison.Ordinal)
+                || message.StartsWith("REFERENCE EDIT ", StringComparison.Ordinal)
                 || message.StartsWith("STATE CREATED", StringComparison.Ordinal)
                 || message.StartsWith("PLACEHOLDER APPLY", StringComparison.Ordinal)
                 || message.StartsWith("ATTACH ROWS", StringComparison.Ordinal)

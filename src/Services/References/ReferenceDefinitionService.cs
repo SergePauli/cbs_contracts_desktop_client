@@ -178,6 +178,7 @@ namespace CbsContractsDesktopClient.Services.References
                     model: "Profile",
                     title: "Пользователи",
                     preset: "edit",
+                    editorKind: ReferenceEditorKind.Profile,
                     fields:
                     [
                         new ReferenceFieldDefinition
@@ -517,7 +518,8 @@ namespace CbsContractsDesktopClient.Services.References
             string title,
             IReadOnlyList<ReferenceFieldDefinition> fields,
             IReadOnlyList<CbsTableColumnDefinition> columns,
-            string preset = "item")
+            string preset = "item",
+            ReferenceEditorKind editorKind = ReferenceEditorKind.Generic)
         {
             return new ReferenceDefinition
             {
@@ -525,6 +527,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Model = model,
                 Title = title,
                 Preset = preset,
+                EditorKind = editorKind,
                 Fields = fields,
                 Columns = columns
             };
@@ -709,6 +712,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Title = definition.Title,
                 Preset = definition.Preset,
                 Summary = definition.Summary,
+                EditorKind = definition.EditorKind,
                 InitialSortField = fieldKey,
                 InitialSortDirection = direction,
                 Fields = definition.Fields,

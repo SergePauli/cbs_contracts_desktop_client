@@ -43,6 +43,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.True(found);
         Assert.Equal("Profile", definition.Model);
         Assert.Equal("edit", definition.Preset);
+        Assert.Equal(ReferenceEditorKind.Profile, definition.EditorKind);
         Assert.Equal(
             ["id", "name", "email", "person", "role", "position", "department", "last_login", "used"],
             definition.Columns.Select(static column => column.FieldKey));
@@ -243,6 +244,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         var found = service.TryGetByRoute("/users", out var definition);
 
         Assert.True(found);
+        Assert.Equal(ReferenceEditorKind.Profile, definition.EditorKind);
         Assert.Equal("department", definition.InitialSortField);
         Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
         Assert.Equal("department.name", definition.Columns.Single(static column => column.FieldKey == "department").SortField);
@@ -379,6 +381,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal(ReferenceFieldEditorType.Number, clone.Fields.Single(static field => field.FieldKey == "amount").EditorType);
         Assert.True(clone.Fields.Single(static field => field.FieldKey == "amount").IsRequired);
         Assert.True(clone.Fields.Single(static field => field.FieldKey == "amount").IsReadOnlyOnEdit);
+        Assert.Equal(ReferenceEditorKind.Generic, clone.EditorKind);
     }
 
     public void Dispose()

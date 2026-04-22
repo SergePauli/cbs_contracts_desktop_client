@@ -14,6 +14,8 @@ namespace CbsContractsDesktopClient.Models.References
 
         public string? Summary { get; init; }
 
+        public ReferenceEditorKind EditorKind { get; init; } = ReferenceEditorKind.Generic;
+
         public IReadOnlyList<CbsTableColumnDefinition> Columns { get; init; } = [];
 
         public IReadOnlyList<ReferenceFieldDefinition> Fields { get; init; } = [];
@@ -39,6 +41,7 @@ namespace CbsContractsDesktopClient.Models.References
                 Title = Title,
                 Preset = Preset,
                 Summary = Summary,
+                EditorKind = EditorKind,
                 InitialSortField = InitialSortField,
                 InitialSortDirection = InitialSortDirection,
                 Fields = Fields.Select(static field => new ReferenceFieldDefinition
