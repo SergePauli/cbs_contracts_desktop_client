@@ -248,6 +248,26 @@ Shell уже больше не является только каркасом п
 
 - complex edit сохраняется предсказуемо и независимо от generic editor path
 
+Статус:
+
+- выполнено
+- добавлен `ProfileEditPayloadBuilder` для `create/update` с отдельным контрактом сложной модели
+- `ProfileEditDialog` подключен к реальному submit-flow:
+  - `create` -> `CreateAsync`
+  - `update` -> `UpdateAsync`
+- обязательные поля вынесены в явную валидацию перед отправкой:
+  - `роли`, `логин`, `ФИО`, `email`, `должность`, `отдел`
+  - для `create` дополнительно `пароль`
+- ошибки валидации и API показываются через встроенный `InfoBar` в диалоге
+- добавлен `list_key`:
+  - всегда для `create`
+  - для `update` при включенном аудите модели (`IsAuditEnabled`)
+- добавлены тесты payload-contract и submit-пути
+
+Итог по диалогу:
+
+- задача по `ProfileEditDialog` (верстка + submit + валидация + payload + create/update + reload + notifications) закрыта
+
 ### Phase 6. Ограничить scope первой поставки
 
 Первую поставку complex reference лучше делать не как full CRUD, а как:

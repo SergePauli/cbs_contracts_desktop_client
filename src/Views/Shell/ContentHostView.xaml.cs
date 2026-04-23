@@ -400,7 +400,51 @@ namespace CbsContractsDesktopClient.Views.Shell
                 XamlRoot = XamlRoot
             };
 
-            await dialog.ShowAsync();
+            ReferenceDataRow? savedRow = null;
+
+            dialog.PrimaryButtonClick += async (_, args) =>
+            {
+                var deferral = args.GetDeferral();
+                try
+                {
+                    viewModel.ClearErrorInfo();
+
+                    var payload = isCreateMode
+                        ? ProfileEditPayloadBuilder.BuildForCreate(viewModel)
+                        : ProfileEditPayloadBuilder.BuildForUpdate(viewModel);
+
+                    if (!isCreateMode && payload.Count <= 1)
+                    {
+                        viewModel.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    savedRow = isCreateMode
+                        ? await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)
+                        : await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload);
+                }
+                catch (Exception ex)
+                {
+                    viewModel.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+                finally
+                {
+                    deferral.Complete();
+                }
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary || savedRow is null || _viewModel.CurrentReference is null)
+            {
+                return;
+            }
+
+            await _viewModel.ReloadCurrentReferenceAsync();
+            ShowSuccessNotification(
+                isCreateMode ? "Запись создана" : "Изменения сохранены",
+                BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
         }
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(

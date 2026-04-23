@@ -10,6 +10,10 @@ namespace CbsContractsDesktopClient.Models.References
 
         public long? Id { get; init; }
 
+        public long? UserId { get; init; }
+
+        public long? PersonId { get; init; }
+
         public string Login { get; init; } = string.Empty;
 
         public string Email { get; init; } = string.Empty;

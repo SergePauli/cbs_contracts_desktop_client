@@ -519,7 +519,8 @@ namespace CbsContractsDesktopClient.Services.References
             IReadOnlyList<ReferenceFieldDefinition> fields,
             IReadOnlyList<CbsTableColumnDefinition> columns,
             string preset = "item",
-            ReferenceEditorKind editorKind = ReferenceEditorKind.Generic)
+            ReferenceEditorKind editorKind = ReferenceEditorKind.Generic,
+            bool isAuditEnabled = false)
         {
             return new ReferenceDefinition
             {
@@ -528,6 +529,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Title = title,
                 Preset = preset,
                 EditorKind = editorKind,
+                IsAuditEnabled = isAuditEnabled,
                 Fields = fields,
                 Columns = columns
             };
@@ -713,6 +715,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Preset = definition.Preset,
                 Summary = definition.Summary,
                 EditorKind = definition.EditorKind,
+                IsAuditEnabled = definition.IsAuditEnabled,
                 InitialSortField = fieldKey,
                 InitialSortDirection = direction,
                 Fields = definition.Fields,

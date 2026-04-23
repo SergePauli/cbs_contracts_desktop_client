@@ -19,6 +19,8 @@ namespace CbsContractsDesktopClient.Services.References
                 Definition = definition,
                 IsCreateMode = isCreateMode,
                 Id = TryGetInt64(sourceRow?.GetValue("id")),
+                UserId = TryGetInt64(sourceRow?.GetValue("user.id")),
+                PersonId = TryGetInt64(sourceRow?.GetValue("user.person.id")),
                 Login = sourceRow?.GetValue("user.name")?.ToString() ?? string.Empty,
                 Email = GetFirstTextValue(
                     sourceRow,

@@ -18,7 +18,10 @@ namespace CbsContractsDesktopClient.Views.References
             PrimaryButtonText = viewModel.PrimaryButtonText;
             CloseButtonText = "Закрыть";
             DefaultButton = ContentDialogButton.Close;
-            IsPrimaryButtonEnabled = viewModel.CanSubmit;
+            SetBinding(IsPrimaryButtonEnabledProperty, new Binding
+            {
+                Path = new PropertyPath(nameof(ProfileEditViewModel.CanSubmit))
+            });
             Content = BuildContent();
         }
 
@@ -71,9 +74,9 @@ namespace CbsContractsDesktopClient.Views.References
                 AddRow(grid, "ID", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Id)));
             }
 
-            AddRow(grid, "Логин", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Login)));
-            AddRow(grid, "Email", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Email)));
-            AddRow(grid, "ФИО", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.PersonName)));
+            AddRow(grid, "Логин", BuildTextBoxEditor(nameof(ProfileEditViewModel.Login)));
+            AddRow(grid, "Email", BuildTextBoxEditor(nameof(ProfileEditViewModel.Email)));
+            AddRow(grid, "ФИО", BuildTextBoxEditor(nameof(ProfileEditViewModel.PersonName)));
             AddRow(grid, "Роль", BuildRoleEditor());
             AddRow(grid, "Должность", BuildPositionEditor());
             AddRow(grid, "Отдел", BuildDepartmentEditor());
@@ -144,6 +147,22 @@ namespace CbsContractsDesktopClient.Views.References
             };
             textBox.SetBinding(TextBox.TextProperty, new Binding
             {
+                Path = new PropertyPath(bindingPath)
+            });
+            return textBox;
+        }
+
+        private static TextBox BuildTextBoxEditor(string bindingPath)
+        {
+            var textBox = new TextBox
+            {
+                MinWidth = 280,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            textBox.SetBinding(TextBox.TextProperty, new Binding
+            {
+                Mode = BindingMode.TwoWay,
+                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
                 Path = new PropertyPath(bindingPath)
             });
             return textBox;

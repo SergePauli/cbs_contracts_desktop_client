@@ -180,11 +180,65 @@ public sealed class ProfileEditViewModelTests
         Assert.Equal(2, viewModel.PositionOptions.Count);
     }
 
+    [Fact]
+    public void CanSubmit_BecomesTrue_ForValidChangedLogin()
+    {
+        var viewModel = CreateViewModel(
+            positionName: "Manager",
+            role: "user",
+            personName: "Ivanov Ivan",
+            departmentId: 1);
+        viewModel.Login = "new_login";
+        viewModel.Email = "user@example.com";
+
+        Assert.True(viewModel.CanSubmit);
+    }
+
+    [Fact]
+    public void CanSubmit_IsTrue_ForInvalidEmail_WhenThereAreChanges()
+    {
+        var viewModel = CreateViewModel(
+            positionName: "Manager",
+            role: "user",
+            personName: "Ivanov Ivan",
+            departmentId: 1);
+        viewModel.Login = "new_login";
+        viewModel.Email = "invalid-email";
+
+        Assert.True(viewModel.CanSubmit);
+    }
+
+    [Fact]
+    public void CanSubmit_IsTrue_WhenRoleIsEmpty_ButThereAreChanges()
+    {
+        var viewModel = CreateViewModel(
+            positionName: "Manager",
+            personName: "Ivanov Ivan",
+            departmentId: 1);
+        viewModel.Login = "new_login";
+
+        Assert.True(viewModel.CanSubmit);
+    }
+
+    [Fact]
+    public void CanSubmit_IsTrue_ForCreate_WhenPasswordIsEmpty()
+    {
+        var viewModel = CreateViewModel(
+            isCreateMode: true,
+            positionName: "Manager",
+            role: "user",
+            personName: "Ivanov Ivan",
+            departmentId: 1);
+
+        Assert.True(viewModel.CanSubmit);
+    }
+
     private static ProfileEditViewModel CreateViewModel(
         Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>>? loader = null,
         string positionName = "",
         string role = "",
         string personName = "",
+        long? departmentId = null,
         bool isCreateMode = false)
     {
         return new ProfileEditViewModel(
@@ -198,9 +252,12 @@ public sealed class ProfileEditViewModelTests
                     EditorKind = ReferenceEditorKind.Profile
                 },
                 IsCreateMode = isCreateMode,
+                Login = "user",
+                Email = "user@example.com",
                 PositionName = positionName,
                 Role = role,
-                PersonName = personName
+                PersonName = personName,
+                DepartmentId = departmentId
             },
             loader);
     }

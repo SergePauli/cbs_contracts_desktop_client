@@ -77,6 +77,10 @@ public sealed class ContentHostViewTests
         Assert.Contains("await ShowProfileEditDialogAsync(isCreateMode);", codeBehind);
         Assert.Contains("var viewModel = new ProfileEditViewModel(state, LoadPositionOptionsAsync);", codeBehind);
         Assert.Contains("var dialog = new ProfileEditDialog(viewModel)", codeBehind);
+        Assert.Contains("ProfileEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
+        Assert.Contains("ProfileEditPayloadBuilder.BuildForUpdate(viewModel)", codeBehind);
+        Assert.Contains("await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)", codeBehind);
+        Assert.Contains("await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload)", codeBehind);
         Assert.Contains("CreateProfileEditDialogState", codeBehind);
         Assert.Contains("ProfileEditStateFactory.Create(", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(", codeBehind);

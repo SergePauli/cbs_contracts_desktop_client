@@ -23,6 +23,8 @@ public sealed class ProfileEditStateFactoryTests
             Values =
             {
                 ["id"] = JsonValue(15),
+                ["user.id"] = JsonValue(29),
+                ["user.person.id"] = JsonValue(45),
                 ["user.name"] = JsonValue("asmith"),
                 ["user.person.person_contacts.contact.value"] = JsonValue("asmith@example.com"),
                 ["user.person.person_name.naming.fio"] = JsonValue("РРІР°РЅРѕРІ РРІР°РЅ"),
@@ -51,6 +53,8 @@ public sealed class ProfileEditStateFactoryTests
         Assert.Equal(definition, state.Definition);
         Assert.False(state.IsCreateMode);
         Assert.Equal(15L, state.Id);
+        Assert.Equal(29L, state.UserId);
+        Assert.Equal(45L, state.PersonId);
         Assert.Equal("asmith", state.Login);
         Assert.Equal("asmith@example.com", state.Email);
         Assert.Equal("РРІР°РЅРѕРІ РРІР°РЅ", state.PersonName);

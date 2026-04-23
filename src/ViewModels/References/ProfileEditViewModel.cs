@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CbsContractsDesktopClient.Models.References;
@@ -21,6 +22,9 @@ namespace CbsContractsDesktopClient.ViewModels.References
             State = state;
             _loadPositionOptionsAsync = loadPositionOptionsAsync ?? LoadEmptyPositionOptionsAsync;
 
+            Login = state.Login;
+            Email = state.Email;
+            PersonName = state.PersonName;
             PositionInput = state.PositionName;
             SelectedDepartmentId = state.DepartmentId;
             Password = state.Password;
@@ -36,15 +40,11 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         public string PrimaryButtonText => "Сохранить";
 
-        public bool CanSubmit => false;
+        public bool CanSubmit => State.IsCreateMode
+            ? true
+            : HasChanges();
 
         public long? Id => State.Id;
-
-        public string Login => State.Login;
-
-        public string Email => State.Email;
-
-        public string PersonName => State.PersonName;
 
         public string Role => RoleApiValue;
 
@@ -84,22 +84,40 @@ namespace CbsContractsDesktopClient.ViewModels.References
             .Where(static label => !string.IsNullOrWhiteSpace(label))
             .ToList();
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
+        [ObservableProperty]
+        public partial string Login { get; set; } = string.Empty;
+
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
+        [ObservableProperty]
+        public partial string Email { get; set; } = string.Empty;
+
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
+        [ObservableProperty]
+        public partial string PersonName { get; set; } = string.Empty;
+
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [ObservableProperty]
         public partial string PositionInput { get; set; } = string.Empty;
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [NotifyPropertyChangedFor(nameof(PositionSuggestionLabels))]
         [ObservableProperty]
         public partial IReadOnlyList<CbsTableFilterOptionDefinition> PositionOptions { get; set; } = [];
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [ObservableProperty]
         public partial CbsTableFilterOptionDefinition? SelectedPositionOption { get; set; }
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [ObservableProperty]
         public partial long? SelectedDepartmentId { get; set; }
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [ObservableProperty]
         public partial string Password { get; set; } = string.Empty;
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [ObservableProperty]
         public partial bool IsActivated { get; set; }
 
@@ -109,24 +127,28 @@ namespace CbsContractsDesktopClient.ViewModels.References
         [ObservableProperty]
         public partial bool IsErrorInfoVisible { get; set; }
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
         [NotifyPropertyChangedFor(nameof(RoleApiValue))]
         [NotifyPropertyChangedFor(nameof(Role))]
         [ObservableProperty]
         public partial bool IsRoleUserSelected { get; set; }
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
         [NotifyPropertyChangedFor(nameof(RoleApiValue))]
         [NotifyPropertyChangedFor(nameof(Role))]
         [ObservableProperty]
         public partial bool IsRoleAdminSelected { get; set; }
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
         [NotifyPropertyChangedFor(nameof(RoleApiValue))]
         [NotifyPropertyChangedFor(nameof(Role))]
         [ObservableProperty]
         public partial bool IsRoleExcelSelected { get; set; }
 
+        [NotifyPropertyChangedFor(nameof(CanSubmit))]
         [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
         [NotifyPropertyChangedFor(nameof(RoleApiValue))]
         [NotifyPropertyChangedFor(nameof(Role))]
@@ -147,7 +169,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
             {
                 PositionOptions = [];
                 SelectedPositionOption = null;
-                OnPropertyChanged(nameof(PositionName));
+                NotifyPositionStateChanged();
                 return;
             }
 
@@ -155,7 +177,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
             {
                 PositionOptions = [];
                 SelectedPositionOption = null;
-                OnPropertyChanged(nameof(PositionName));
+                NotifyPositionStateChanged();
                 return;
             }
 
@@ -178,14 +200,14 @@ namespace CbsContractsDesktopClient.ViewModels.References
             {
             }
 
-            OnPropertyChanged(nameof(PositionName));
+            NotifyPositionStateChanged();
         }
 
         public void SelectPositionOption(CbsTableFilterOptionDefinition? option)
         {
             SelectedPositionOption = option;
             PositionInput = option?.Label ?? string.Empty;
-            OnPropertyChanged(nameof(PositionName));
+            NotifyPositionStateChanged();
         }
 
         public CbsTableFilterOptionDefinition? FindPositionOption(string? label)
@@ -207,7 +229,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
             {
                 PositionInput = string.Empty;
                 SelectedPositionOption = null;
-                OnPropertyChanged(nameof(PositionName));
+                NotifyPositionStateChanged();
                 return;
             }
 
@@ -223,13 +245,13 @@ namespace CbsContractsDesktopClient.ViewModels.References
                 }
 
                 PositionInput = trimmedInput;
-                OnPropertyChanged(nameof(PositionName));
+                NotifyPositionStateChanged();
                 return;
             }
 
             PositionInput = CapitalizeFirst(trimmedInput);
             SelectedPositionOption = null;
-            OnPropertyChanged(nameof(PositionName));
+            NotifyPositionStateChanged();
         }
 
         public void ShowErrorInfo(string? message)
@@ -358,6 +380,77 @@ namespace CbsContractsDesktopClient.ViewModels.References
                     _ => false
                 })
                 .ToList();
+        }
+
+        private void NotifyPositionStateChanged()
+        {
+            OnPropertyChanged(nameof(PositionName));
+            OnPropertyChanged(nameof(CanSubmit));
+        }
+
+        private bool HasChanges()
+        {
+            return !string.Equals(Login.Trim(), State.Login.Trim(), StringComparison.CurrentCulture)
+                || !string.Equals(Email.Trim(), State.Email.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                || !string.Equals(PersonName.Trim(), State.PersonName.Trim(), StringComparison.CurrentCulture)
+                || !string.Equals(RoleApiValue, NormalizeRoleCsv(State.Role), StringComparison.OrdinalIgnoreCase)
+                || !string.Equals(PositionName.Trim(), State.PositionName.Trim(), StringComparison.CurrentCultureIgnoreCase)
+                || SelectedDepartmentId != State.DepartmentId
+                || !string.Equals(Password, State.Password, StringComparison.Ordinal)
+                || IsActivated != State.IsActive;
+        }
+
+        private bool HasValidationErrors()
+        {
+            var login = Login.Trim();
+            if (login.Length < 2)
+            {
+                return true;
+            }
+
+            var email = Email.Trim();
+            if (!Regex.IsMatch(email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+            {
+                return true;
+            }
+
+            var personParts = PersonName
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (personParts.Length < 2)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(RoleApiValue))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(PositionName.Trim()))
+            {
+                return true;
+            }
+
+            if (!SelectedDepartmentId.HasValue)
+            {
+                return true;
+            }
+
+            if (State.IsCreateMode && string.IsNullOrWhiteSpace(Password))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string NormalizeRoleCsv(string rawRoleCsv)
+        {
+            return string.Join(
+                ",",
+                rawRoleCsv
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(static role => role.ToLowerInvariant()));
         }
     }
 }
