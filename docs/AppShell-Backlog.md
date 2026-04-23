@@ -196,11 +196,13 @@ Shell уже больше не является только каркасом п
 
 Ближайшая следующая задача:
 
-- кастомизация и UX-polish диалога редактирования пользователей как первого specialized editor scenario
-- привести `ProfileEditDialog` к более прикладному виду вместо generic form-feel
-- уплотнить layout, подписи, группировку полей и визуальные состояния для `role`, `department`, `position`, `activated / used`
-- проверить, какие поля должны остаться read-only на первом этапе, а какие уже можно сделать управляемыми
-- подготовить диалог к дальнейшему подключению lookup/selectors без повторного broad redesign
+- перейти от этапа верстки `ProfileEditDialog` к этапу обработки изменений и сохранения
+- подключить submit-flow в этом же диалоге:
+  - локальная валидация полей перед отправкой
+  - построение payload для `create/update` c учетом `role`, `position`, `department`, `password`, `activated`
+  - вызов API через `ReferenceCrudService`/специализированный builder
+  - обработка ошибок API и валидации через встроенный `InfoBar`
+  - закрытие диалога только при успешном сохранении + последующий reload списка
 
 Статус на текущий момент:
 
@@ -208,6 +210,9 @@ Shell уже больше не является только каркасом п
 - выполнено: загрузка lookup-опций `Position/item` по `name__cnt` и алфавитная сортировка
 - выполнено: устранена проблема обновления suggestions через уведомление `PositionSuggestionLabels`
 - выполнено: глобально уплотнен `DefaultAutoSuggestBoxStyle` через `App.xaml`
+- выполнено: поле `role` в `ProfileEditDialog` переведено на multi-select (`user`, `admin`, `excel`, `intern`) с правилом взаимного исключения `intern` vs `admin/excel`
+- выполнено: добавлен API-ready контракт роли `RoleApiValue` в формате CSV (`user,admin,excel`)
+- выполнено: завершен этап верстки `ProfileEditDialog` (компактный layout, стили меток, поведение select-полей, служебный `InfoBar` для ошибок)
 
 ### Phase 4. Добавить lookup infrastructure для связанных сущностей
 

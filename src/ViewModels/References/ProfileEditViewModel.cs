@@ -9,8 +9,10 @@ namespace CbsContractsDesktopClient.ViewModels.References
 {
     public partial class ProfileEditViewModel : ObservableObject
     {
+        private static readonly string[] OrderedRoles = ["user", "admin", "excel", "intern"];
         private readonly Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> _loadPositionOptionsAsync;
         private CancellationTokenSource? _positionLookupCts;
+        private bool _isAdjustingRoleSelection;
 
         public ProfileEditViewModel(
             ProfileEditDialogState state,
@@ -23,15 +25,14 @@ namespace CbsContractsDesktopClient.ViewModels.References
             SelectedDepartmentId = state.DepartmentId;
             Password = state.Password;
             IsActivated = state.IsActive;
+            ApplyRoleCsv(state.Role);
         }
 
         public ProfileEditDialogState State { get; }
 
         public string DialogTitle => State.IsCreateMode
-            ? $"{State.Definition.Title}: новый профиль"
-            : $"{State.Definition.Title}: профиль пользователя";
-
-        public string DescriptionText => "Специализированный диалог редактирования пользователей.";
+            ? "Создание профиля пользователя"
+            : "Редактирование профиля пользователя";
 
         public string PrimaryButtonText => "Сохранить";
 
@@ -45,7 +46,22 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         public string PersonName => State.PersonName;
 
-        public string Role => State.Role;
+        public string Role => RoleApiValue;
+
+        public IReadOnlyList<string> AvailableRoles => OrderedRoles;
+
+        public string RoleSummaryText
+        {
+            get
+            {
+                var selectedRoles = GetSelectedRoles();
+                return selectedRoles.Count == 0
+                    ? "Выбрать роли"
+                    : string.Join(", ", selectedRoles);
+            }
+        }
+
+        public string RoleApiValue => string.Join(",", GetSelectedRoles());
 
         public string PositionName => ResolvePositionName();
 
@@ -86,6 +102,36 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         [ObservableProperty]
         public partial bool IsActivated { get; set; }
+
+        [ObservableProperty]
+        public partial string ErrorInfoMessage { get; set; } = string.Empty;
+
+        [ObservableProperty]
+        public partial bool IsErrorInfoVisible { get; set; }
+
+        [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
+        [NotifyPropertyChangedFor(nameof(RoleApiValue))]
+        [NotifyPropertyChangedFor(nameof(Role))]
+        [ObservableProperty]
+        public partial bool IsRoleUserSelected { get; set; }
+
+        [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
+        [NotifyPropertyChangedFor(nameof(RoleApiValue))]
+        [NotifyPropertyChangedFor(nameof(Role))]
+        [ObservableProperty]
+        public partial bool IsRoleAdminSelected { get; set; }
+
+        [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
+        [NotifyPropertyChangedFor(nameof(RoleApiValue))]
+        [NotifyPropertyChangedFor(nameof(Role))]
+        [ObservableProperty]
+        public partial bool IsRoleExcelSelected { get; set; }
+
+        [NotifyPropertyChangedFor(nameof(RoleSummaryText))]
+        [NotifyPropertyChangedFor(nameof(RoleApiValue))]
+        [NotifyPropertyChangedFor(nameof(Role))]
+        [ObservableProperty]
+        public partial bool IsRoleInternSelected { get; set; }
 
         public async Task UpdatePositionOptionsAsync(string rawInput)
         {
@@ -186,6 +232,18 @@ namespace CbsContractsDesktopClient.ViewModels.References
             OnPropertyChanged(nameof(PositionName));
         }
 
+        public void ShowErrorInfo(string? message)
+        {
+            ErrorInfoMessage = message?.Trim() ?? string.Empty;
+            IsErrorInfoVisible = !string.IsNullOrWhiteSpace(ErrorInfoMessage);
+        }
+
+        public void ClearErrorInfo()
+        {
+            ErrorInfoMessage = string.Empty;
+            IsErrorInfoVisible = false;
+        }
+
         private string ResolvePositionName()
         {
             if (SelectedPositionOption is not null)
@@ -228,6 +286,78 @@ namespace CbsContractsDesktopClient.ViewModels.References
             CancellationToken __)
         {
             return Task.FromResult<IReadOnlyList<CbsTableFilterOptionDefinition>>([]);
+        }
+
+        partial void OnIsRoleAdminSelectedChanged(bool value)
+        {
+            if (!value || _isAdjustingRoleSelection || !IsRoleInternSelected)
+            {
+                return;
+            }
+
+            _isAdjustingRoleSelection = true;
+            IsRoleInternSelected = false;
+            _isAdjustingRoleSelection = false;
+        }
+
+        partial void OnIsRoleExcelSelectedChanged(bool value)
+        {
+            if (!value || _isAdjustingRoleSelection || !IsRoleInternSelected)
+            {
+                return;
+            }
+
+            _isAdjustingRoleSelection = true;
+            IsRoleInternSelected = false;
+            _isAdjustingRoleSelection = false;
+        }
+
+        partial void OnIsRoleInternSelectedChanged(bool value)
+        {
+            if (!value || _isAdjustingRoleSelection)
+            {
+                return;
+            }
+
+            _isAdjustingRoleSelection = true;
+            IsRoleAdminSelected = false;
+            IsRoleExcelSelected = false;
+            _isAdjustingRoleSelection = false;
+        }
+
+        private void ApplyRoleCsv(string rawRoleCsv)
+        {
+            var roleSet = rawRoleCsv
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(static role => role.ToLowerInvariant())
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            _isAdjustingRoleSelection = true;
+            IsRoleUserSelected = roleSet.Contains("user");
+            IsRoleAdminSelected = roleSet.Contains("admin");
+            IsRoleExcelSelected = roleSet.Contains("excel");
+            IsRoleInternSelected = roleSet.Contains("intern");
+            _isAdjustingRoleSelection = false;
+
+            if (IsRoleInternSelected)
+            {
+                IsRoleAdminSelected = false;
+                IsRoleExcelSelected = false;
+            }
+        }
+
+        private IReadOnlyList<string> GetSelectedRoles()
+        {
+            return OrderedRoles
+                .Where(role => role switch
+                {
+                    "user" => IsRoleUserSelected,
+                    "admin" => IsRoleAdminSelected,
+                    "excel" => IsRoleExcelSelected,
+                    "intern" => IsRoleInternSelected,
+                    _ => false
+                })
+                .ToList();
         }
     }
 }

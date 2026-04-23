@@ -9,6 +9,72 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ProfileEditViewModelTests
 {
     [Fact]
+    public void DialogTitle_ReflectsCreateOrEditMode()
+    {
+        var createVm = CreateViewModel(isCreateMode: true);
+        var editVm = CreateViewModel(isCreateMode: false);
+
+        Assert.Equal("Создание профиля пользователя", createVm.DialogTitle);
+        Assert.Equal("Редактирование профиля пользователя", editVm.DialogTitle);
+    }
+
+    [Fact]
+    public void ErrorInfoState_CanBeShownAndCleared()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.ShowErrorInfo("Ошибка валидации");
+
+        Assert.Equal("Ошибка валидации", viewModel.ErrorInfoMessage);
+        Assert.True(viewModel.IsErrorInfoVisible);
+
+        viewModel.ClearErrorInfo();
+
+        Assert.Equal(string.Empty, viewModel.ErrorInfoMessage);
+        Assert.False(viewModel.IsErrorInfoVisible);
+    }
+
+    [Fact]
+    public void RoleApiValue_UsesOrderedCsvFromStaticOptions()
+    {
+        var viewModel = CreateViewModel();
+
+        viewModel.IsRoleExcelSelected = true;
+        viewModel.IsRoleUserSelected = true;
+        viewModel.IsRoleAdminSelected = true;
+
+        Assert.Equal("user,admin,excel", viewModel.RoleApiValue);
+    }
+
+    [Fact]
+    public void RoleSelection_InternExcludesAdminAndExcel()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsRoleAdminSelected = true;
+        viewModel.IsRoleExcelSelected = true;
+
+        viewModel.IsRoleInternSelected = true;
+
+        Assert.True(viewModel.IsRoleInternSelected);
+        Assert.False(viewModel.IsRoleAdminSelected);
+        Assert.False(viewModel.IsRoleExcelSelected);
+        Assert.Equal("intern", viewModel.RoleApiValue);
+    }
+
+    [Fact]
+    public void RoleSelection_AdminOrExcelClearsIntern()
+    {
+        var viewModel = CreateViewModel();
+        viewModel.IsRoleInternSelected = true;
+
+        viewModel.IsRoleAdminSelected = true;
+
+        Assert.True(viewModel.IsRoleAdminSelected);
+        Assert.False(viewModel.IsRoleInternSelected);
+        Assert.Equal("admin", viewModel.RoleApiValue);
+    }
+
+    [Fact]
     public void CommitPositionInput_CapitalizesManualValue_WhenOptionsAreMissing()
     {
         var viewModel = CreateViewModel();
@@ -116,7 +182,10 @@ public sealed class ProfileEditViewModelTests
 
     private static ProfileEditViewModel CreateViewModel(
         Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>>? loader = null,
-        string positionName = "")
+        string positionName = "",
+        string role = "",
+        string personName = "",
+        bool isCreateMode = false)
     {
         return new ProfileEditViewModel(
             new ProfileEditDialogState
@@ -128,7 +197,10 @@ public sealed class ProfileEditViewModelTests
                     Title = "Users",
                     EditorKind = ReferenceEditorKind.Profile
                 },
-                PositionName = positionName
+                IsCreateMode = isCreateMode,
+                PositionName = positionName,
+                Role = role,
+                PersonName = personName
             },
             loader);
     }

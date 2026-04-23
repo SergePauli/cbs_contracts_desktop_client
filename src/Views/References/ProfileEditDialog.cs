@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Markup;
+using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.References
 {
@@ -36,16 +37,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Spacing = 16
             };
 
-            var description = new TextBlock
-            {
-                TextWrapping = TextWrapping.Wrap
-            };
-            description.SetBinding(TextBlock.TextProperty, new Binding
-            {
-                Path = new PropertyPath(nameof(ProfileEditViewModel.DescriptionText))
-            });
-            stack.Children.Add(description);
-
+            stack.Children.Add(BuildValidationInfoBar());
             stack.Children.Add(BuildFieldsGrid());
 
             root.Children.Add(new ScrollViewer
@@ -82,13 +74,34 @@ namespace CbsContractsDesktopClient.Views.References
             AddRow(grid, "Логин", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Login)));
             AddRow(grid, "Email", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Email)));
             AddRow(grid, "ФИО", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.PersonName)));
-            AddRow(grid, "Роль", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Role)));
+            AddRow(grid, "Роль", BuildRoleEditor());
             AddRow(grid, "Должность", BuildPositionEditor());
             AddRow(grid, "Отдел", BuildDepartmentEditor());
             AddRow(grid, "Пароль", BuildPasswordEditor());
             AddRow(grid, "Активирован", BuildActivatedEditor());
 
             return grid;
+        }
+
+        private InfoBar BuildValidationInfoBar()
+        {
+            var infoBar = new InfoBar
+            {
+                Severity = InfoBarSeverity.Error,
+                IsClosable = true,
+                IsOpen = false,
+                Margin = new Thickness(0, 0, 0, 4)
+            };
+            infoBar.SetBinding(InfoBar.MessageProperty, new Binding
+            {
+                Path = new PropertyPath(nameof(ProfileEditViewModel.ErrorInfoMessage))
+            });
+            infoBar.SetBinding(InfoBar.IsOpenProperty, new Binding
+            {
+                Mode = BindingMode.TwoWay,
+                Path = new PropertyPath(nameof(ProfileEditViewModel.IsErrorInfoVisible))
+            });
+            return infoBar;
         }
 
         private static void AddRow(Grid grid, string labelText, FrameworkElement editor)
@@ -104,7 +117,9 @@ namespace CbsContractsDesktopClient.Views.References
                 Text = labelText,
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Right
+                TextAlignment = TextAlignment.Right,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
             };
             Grid.SetRow(label, rowIndex);
             Grid.SetColumn(label, 0);
@@ -132,6 +147,91 @@ namespace CbsContractsDesktopClient.Views.References
                 Path = new PropertyPath(bindingPath)
             });
             return textBox;
+        }
+
+        private FrameworkElement BuildRoleEditor()
+        {
+            var button = new Button
+            {
+                MinWidth = 280,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch
+            };
+
+            var contentGrid = new Grid
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var textBlock = new TextBlock
+            {
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            textBlock.SetBinding(TextBlock.TextProperty, new Binding
+            {
+                Path = new PropertyPath(nameof(ProfileEditViewModel.RoleSummaryText))
+            });
+            Grid.SetColumn(textBlock, 0);
+            contentGrid.Children.Add(textBlock);
+
+            var icon = new FontIcon
+            {
+                Glyph = "\uE70D",
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 10,
+                Margin = new Thickness(6, 0, 0, 0),
+                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(icon, 1);
+            contentGrid.Children.Add(icon);
+
+            button.Content = contentGrid;
+
+            var flyoutPanel = new StackPanel
+            {
+                Spacing = 2,
+                MinWidth = 220
+            };
+            flyoutPanel.Children.Add(BuildRoleCheckBox("user", nameof(ProfileEditViewModel.IsRoleUserSelected)));
+            flyoutPanel.Children.Add(BuildRoleCheckBox("admin", nameof(ProfileEditViewModel.IsRoleAdminSelected)));
+            flyoutPanel.Children.Add(BuildRoleCheckBox("excel", nameof(ProfileEditViewModel.IsRoleExcelSelected)));
+            flyoutPanel.Children.Add(BuildRoleCheckBox("intern", nameof(ProfileEditViewModel.IsRoleInternSelected)));
+
+            button.Flyout = new Flyout
+            {
+                Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft,
+                Content = flyoutPanel
+            };
+
+            return button;
+        }
+
+        private static CheckBox BuildRoleCheckBox(string caption, string bindingPath)
+        {
+            var checkBox = new CheckBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                MinHeight = 20,
+                Padding = new Thickness(0),
+                Margin = new Thickness(4, 1, 4, 1)
+            };
+            checkBox.Content = new TextBlock
+            {
+                Text = caption,
+                Margin = new Thickness(2, 0, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+            checkBox.SetBinding(ToggleButton.IsCheckedProperty, new Binding
+            {
+                Mode = BindingMode.TwoWay,
+                Path = new PropertyPath(bindingPath)
+            });
+            return checkBox;
         }
 
         private FrameworkElement BuildPositionEditor()

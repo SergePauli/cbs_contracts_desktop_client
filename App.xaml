@@ -31,6 +31,19 @@
                         Value="{StaticResource CompactAutoSuggestListViewItemStyle}" />
             </Style>
 
+            <!-- Global ComboBox compact dropdown -->
+            <Style x:Key="CompactComboBoxItemStyle"
+                   TargetType="ComboBoxItem"
+                   BasedOn="{StaticResource DefaultComboBoxItemStyle}">
+                <Setter Property="MinHeight" Value="28" />
+                <Setter Property="Padding" Value="8,2,8,2" />
+            </Style>
+            <Style TargetType="ComboBox"
+                   BasedOn="{StaticResource DefaultComboBoxStyle}">
+                <Setter Property="ItemContainerStyle"
+                        Value="{StaticResource CompactComboBoxItemStyle}" />
+            </Style>
+
             <helpers:BoolNegationConverter x:Key="BoolNegationConverter" />
             <helpers:BoolVisibilityConverter x:Key="BoolVisibilityConverter" />
             <helpers:StringVisibilityConverter x:Key="StringVisibilityConverter" />
