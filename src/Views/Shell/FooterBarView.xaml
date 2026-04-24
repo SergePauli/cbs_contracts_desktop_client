@@ -15,11 +15,41 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <TextBlock
-                Style="{StaticResource CaptionTextBlockStyle}"
-                VerticalAlignment="Center"
-                Foreground="{StaticResource ShellTertiaryTextBrush}"
-                Text="{x:Bind ViewModel.FooterState.SummaryText, Mode=OneWay}" />
+            <StackPanel
+                Orientation="Horizontal"
+                Spacing="0"
+                VerticalAlignment="Center">
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Записей:" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Margin="6,0,0,0"
+                    VerticalAlignment="Center"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    Text="{x:Bind ViewModel.FooterState.TotalCountValue, Mode=OneWay}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Margin="6,0,6,0"
+                    Text="{x:Bind ViewModel.FooterState.SelectedRecordSeparator, Mode=OneWay}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="{x:Bind ViewModel.FooterState.SelectedRecordCaption, Mode=OneWay}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource ShellTableRowSelectedBorderBrush}"
+                    Text="{x:Bind ViewModel.FooterState.SelectedRecordText, Mode=OneWay}" />
+            </StackPanel>
             <TextBlock
                 Grid.Column="1"
                 Style="{StaticResource CaptionTextBlockStyle}"

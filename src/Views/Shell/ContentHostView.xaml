@@ -13,7 +13,7 @@
             Background="{StaticResource ShellPanelBackgroundBrush}"
             BorderBrush="{StaticResource ShellPanelBorderBrush}"
             BorderThickness="1"
-            CornerRadius="0">
+            CornerRadius="6">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -33,7 +33,6 @@
                     <TextBlock
                         VerticalAlignment="Center"
                         Style="{StaticResource BodyStrongTextBlockStyle}"
-                        FontSize="18"
                         Foreground="{StaticResource ShellPrimaryTextBrush}"
                         Text="{Binding CompactHeaderText}"
                         TextTrimming="CharacterEllipsis"
@@ -50,6 +49,7 @@
                     <Grid
                         Grid.Column="1"
                         Margin="12,0,12,0"
+                        Padding="0"
                         VerticalAlignment="Center"
                         Visibility="{Binding HasSelectedRow, Converter={StaticResource BoolVisibilityConverter}}">
                         <StackPanel
@@ -207,6 +207,7 @@
                         FilterRequested="ReferenceTableView_FilterRequested"
                         SortRequested="ReferenceTableView_SortRequested"
                         TotalCount="{Binding TotalCount}"
+                        RowDoubleTapped="ReferenceTableView_RowDoubleTapped"
                         TraceGenerated="ReferenceTableView_TraceGenerated"
                         Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
 

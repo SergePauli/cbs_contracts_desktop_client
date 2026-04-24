@@ -6,6 +6,8 @@ namespace CbsContractsDesktopClient.Models.Shell
         {
             DepartmentOrRole = "Отдел не определен",
             UserName = "Пользователь не определен",
+            TotalCountValue = string.Empty,
+            SelectedRecordText = string.Empty,
             VersionText = "v1.0.0"
         };
 
@@ -13,11 +15,20 @@ namespace CbsContractsDesktopClient.Models.Shell
 
         public string UserName { get; init; } = string.Empty;
 
+        public string TotalCountValue { get; init; } = string.Empty;
+
+        public string SelectedRecordText { get; init; } = string.Empty;
+
         public string VersionText { get; init; } = string.Empty;
 
-        public string SummaryText =>
-            string.IsNullOrWhiteSpace(UserName)
-                ? DepartmentOrRole
-                : $"{DepartmentOrRole}: {UserName}";
+        public string SelectedRecordSeparator =>
+            string.IsNullOrWhiteSpace(SelectedRecordText)
+                ? string.Empty
+                : "|";
+
+        public string SelectedRecordCaption =>
+            string.IsNullOrWhiteSpace(SelectedRecordText)
+                ? string.Empty
+                : "Выбрана:";
     }
 }

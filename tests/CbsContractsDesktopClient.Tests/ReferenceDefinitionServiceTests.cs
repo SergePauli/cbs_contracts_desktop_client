@@ -43,6 +43,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.True(found);
         Assert.Equal("Profile", definition.Model);
         Assert.Equal("edit", definition.Preset);
+        Assert.Equal("Профили пользователей", definition.EffectiveNavigationDescription);
         Assert.Equal(ReferenceEditorKind.Profile, definition.EditorKind);
         Assert.Equal(
             ["id", "name", "email", "person", "role", "position", "department", "last_login", "used"],

@@ -3,11 +3,14 @@ using System.Collections.Generic;
 using System.Linq;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Navigation;
+using CbsContractsDesktopClient.Services.References;
 
 namespace CbsContractsDesktopClient.Services.Navigation
 {
     public class NavigationMenuService : INavigationMenuService
     {
+        private readonly IReferenceDefinitionService? _referenceDefinitionService;
+
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
         private const int FinDepartmentId = 3;
@@ -23,6 +26,11 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private const string HolidaysRoute = "/holidays";
         private const string UsersRoute = "/users";
         private const string ReportRoute = "/report";
+
+        public NavigationMenuService(IReferenceDefinitionService? referenceDefinitionService = null)
+        {
+            _referenceDefinitionService = referenceDefinitionService;
+        }
 
         public IReadOnlyList<NavigationMenuSection> BuildMenu(User? user, string? currentRoute = null)
         {
@@ -41,7 +49,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                         Title = "База",
                         Items =
                         [
-                            CreateItem("Этапы", "\uE7C1", StagesRoute, internRoute)
+                            CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, internRoute)
                         ]
                     },
                     BuildSessionSection(internRoute)
@@ -65,12 +73,12 @@ namespace CbsContractsDesktopClient.Services.Navigation
 
             if (isAdmin || isCommer)
             {
-                baseSection.Items.Add(CreateItem("Контракт", "\uE8A5", ContractRoute, route));
+                baseSection.Items.Add(CreateItem(ResolveMenuTitle(ContractRoute, "Контракт"), "\uE8A5", ContractRoute, route));
             }
 
-            baseSection.Items.Add(CreateItem("Контракты", "\uE762", ContractsRoute, route));
-            baseSection.Items.Add(CreateItem("Этапы", "\uE7C1", StagesRoute, route));
-            baseSection.Items.Add(CreateItem("ДС-ки", "\uE8A7", RevisionsRoute, route));
+            baseSection.Items.Add(CreateItem(ResolveMenuTitle(ContractsRoute, "Контракты"), "\uE762", ContractsRoute, route));
+            baseSection.Items.Add(CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, route));
+            baseSection.Items.Add(CreateItem(ResolveMenuTitle(RevisionsRoute, "ДС-ки"), "\uE8A7", RevisionsRoute, route));
 
             var referencesSection = new NavigationMenuSection
             {
@@ -80,32 +88,32 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 IsExpanded = false
             };
 
-            AddDistinct(referencesSection.Items, "Сотрудники", "\uE716", EmployeesRoute, route);
-            AddDistinct(referencesSection.Items, "Контрагенты", "\uE825", ContragentsRoute, route);
+            AddDistinct(referencesSection.Items, ResolveMenuTitle(EmployeesRoute, "Сотрудники"), "\uE716", EmployeesRoute, route);
+            AddDistinct(referencesSection.Items, ResolveMenuTitle(ContragentsRoute, "Контрагенты"), "\uE825", ContragentsRoute, route);
 
             if (isAdmin)
             {
-                AddDistinct(referencesSection.Items, "Регионы", "\uE707", $"{ReferencesRoute}/Area", route);
-                AddDistinct(referencesSection.Items, "Календарь", "\uE787", HolidaysRoute, route);
-                AddDistinct(referencesSection.Items, "Формы орг.", "\uE8D1", $"{ReferencesRoute}/Ownership", route);
-                AddDistinct(referencesSection.Items, "Пользователи", "\uE77B", UsersRoute, route);
-                AddDistinct(referencesSection.Items, "Отделы", "\uE902", $"{ReferencesRoute}/Department", route);
-                AddDistinct(referencesSection.Items, "Статусы", "\uE781", $"{ReferencesRoute}/Status", route);
-                AddDistinct(referencesSection.Items, "Доставка", "\uE806", $"{ReferencesRoute}/OrderStatus", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Area", "Регионы"), "\uE707", $"{ReferencesRoute}/Area", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle(HolidaysRoute, "Календарь"), "\uE787", HolidaysRoute, route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Ownership", "Формы орг."), "\uE8D1", $"{ReferencesRoute}/Ownership", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle(UsersRoute, "Пользователи"), "\uE77B", UsersRoute, route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Department", "Отделы"), "\uE902", $"{ReferencesRoute}/Department", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Status", "Статусы"), "\uE781", $"{ReferencesRoute}/Status", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/OrderStatus", "Доставка"), "\uE806", $"{ReferencesRoute}/OrderStatus", route);
             }
 
-            AddDistinct(referencesSection.Items, "Работы", "\uE90F", $"{ReferencesRoute}/TaskKind", route);
-            AddDistinct(referencesSection.Items, "Должности", "\uE821", $"{ReferencesRoute}/Position", route);
+            AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/TaskKind", "Работы"), "\uE90F", $"{ReferencesRoute}/TaskKind", route);
+            AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Position", "Должности"), "\uE821", $"{ReferencesRoute}/Position", route);
 
             if (isOzi || isAdmin)
             {
-                AddDistinct(referencesSection.Items, "СЗИ", "\uE72E", $"{ReferencesRoute}/IsecurityTool", route);
-                AddDistinct(referencesSection.Items, "Статусы доставки", "\uE806", $"{ReferencesRoute}/OrderStatus", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/IsecurityTool", "СЗИ"), "\uE72E", $"{ReferencesRoute}/IsecurityTool", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/OrderStatus", "Статусы доставки"), "\uE806", $"{ReferencesRoute}/OrderStatus", route);
             }
 
             if (isFin)
             {
-                AddDistinct(referencesSection.Items, "Формы орг.", "\uE8D1", $"{ReferencesRoute}/Ownership", route);
+                AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Ownership", "Формы орг."), "\uE8D1", $"{ReferencesRoute}/Ownership", route);
             }
 
             return
@@ -167,6 +175,17 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private static bool HasRole(User user, string role)
         {
             return user.Role?.Contains(role, StringComparison.OrdinalIgnoreCase) == true;
+        }
+
+        private string ResolveMenuTitle(string route, string fallbackTitle)
+        {
+            if (_referenceDefinitionService is not null
+                && _referenceDefinitionService.TryGetByRoute(route, out var definition))
+            {
+                return definition.Title;
+            }
+
+            return fallbackTitle;
         }
     }
 }

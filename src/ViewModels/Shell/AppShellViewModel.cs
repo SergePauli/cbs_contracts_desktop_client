@@ -48,7 +48,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             IsAuditPanelOpen = false;
             SelectedNavigationItem = null;
             CurrentRoute = string.Empty;
-            FooterState = BuildFooterState();
+            FooterState = BuildFooterState(string.Empty);
             AuditPanelState = AuditPanelState.Empty;
             AuditPanelText = string.Empty;
             BreadcrumbItems.Clear();
@@ -105,13 +105,20 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             AuditPanelText = text;
         }
 
+        public void SetFooterTableStats(string totalCountValue, string selectedRecordText = "")
+        {
+            FooterState = BuildFooterState(totalCountValue, selectedRecordText);
+        }
+
         public void ResetAuditPanelState()
         {
             AuditPanelState = AuditPanelState.Empty;
             AuditPanelText = string.Empty;
         }
 
-        private FooterState BuildFooterState()
+        private FooterState BuildFooterState(
+            string totalCountValue = "",
+            string selectedRecordText = "")
         {
             var user = _userService.CurrentUser;
 
@@ -136,6 +143,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 DepartmentOrRole = departmentOrRole,
                 UserName = userName,
+                TotalCountValue = totalCountValue,
+                SelectedRecordText = selectedRecordText,
                 VersionText = "v1.0.0"
             };
         }

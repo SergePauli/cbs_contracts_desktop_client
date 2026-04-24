@@ -113,9 +113,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public string TotalCountText => $"Записей: {TotalCount}";
 
-        public string CompactHeaderText => HasActiveReference
-            ? $"{ContentTitle} - {TotalCount} записей"
-            : ContentTitle;
+        public string CompactHeaderText => ContentTitle;
 
         public string LoadedCountText => $"Загружено: {LoadedCount} / {TotalCount} | В памяти: {ResidentCount}";
 
@@ -161,6 +159,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         {
             OnPropertyChanged(nameof(HasSelectedRow));
             OnPropertyChanged(nameof(SelectedRowInfoMessage));
+            _shellViewModel.SetFooterTableStats(
+                BuildFooterTotalCountValue(),
+                BuildFooterSelectedRecordText());
         }
 
         partial void OnTotalCountChanged(int value)
@@ -490,7 +491,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 }
 
                 SectionTitle = "Справочники";
-                ContentTitle = definition.Title;
+                ContentTitle = definition.EffectiveNavigationDescription;
                 ContentDescription = definition.Description;
                 PlaceholderMessage = string.Empty;
                 CurrentReference = definition;
@@ -500,6 +501,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 SelectedRow = null;
                 UiTraceLog = string.Empty;
                 _lastAuditPanelText = string.Empty;
+                _shellViewModel.SetFooterTableStats(string.Empty);
 
                 var initialSorts = CurrentSortField is not null && CurrentSortDirection is DataSortDirection initialDirection
                     ? new[]
@@ -613,6 +615,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(TraceLog));
             OnPropertyChanged(nameof(UiTraceLog));
             OnPropertyChanged(nameof(CombinedTraceLog));
+            _shellViewModel.SetFooterTableStats(string.Empty);
             AppendUiTrace($"PLACEHOLDER APPLY EXIT route={route} {GetDebugStateSnapshot()}");
         }
 
@@ -833,7 +836,69 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(LastPageRequestJson));
             OnPropertyChanged(nameof(TraceLog));
             OnPropertyChanged(nameof(CombinedTraceLog));
+            _shellViewModel.SetFooterTableStats(
+                BuildFooterTotalCountValue(),
+                BuildFooterSelectedRecordText());
             UpdateAuditPanelText();
+        }
+
+        private string BuildFooterTotalCountValue()
+        {
+            if (!HasActiveReference)
+            {
+                return string.Empty;
+            }
+
+            return TotalCount.ToString();
+        }
+
+        private string BuildFooterSelectedRecordText()
+        {
+            if (!HasSelectedRow || SelectedRow is null)
+            {
+                return string.Empty;
+            }
+
+            var name = SelectedRow.GetValue("name")?.ToString();
+            var id = SelectedRow.GetValue("id")?.ToString();
+
+            if (string.Equals(CurrentReference?.Model, "Profile", StringComparison.OrdinalIgnoreCase))
+            {
+                var login =
+                    SelectedRow.GetValue("user.name")?.ToString()
+                    ?? name;
+                var fio =
+                    SelectedRow.GetValue("user.person.full_name")?.ToString()
+                    ?? SelectedRow.GetValue("user.person.person_name.naming.fio")?.ToString()
+                    ?? SelectedRow.GetValue("full_name")?.ToString()
+                    ?? SelectedRow.GetValue("person")?.ToString();
+
+                if (!string.IsNullOrWhiteSpace(login) && !string.IsNullOrWhiteSpace(fio))
+                {
+                    return $"{login} - {fio}";
+                }
+
+                if (!string.IsNullOrWhiteSpace(login))
+                {
+                    return login;
+                }
+
+                return fio ?? string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(id))
+            {
+                return $"{name} (ID: {id})";
+            }
+
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            return string.IsNullOrWhiteSpace(id)
+                ? string.Empty
+                : $"ID: {id}";
         }
 
         private void UpdateAuditPanelText(bool force = false)

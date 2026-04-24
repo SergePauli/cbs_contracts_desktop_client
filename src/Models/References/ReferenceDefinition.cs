@@ -10,6 +10,8 @@ namespace CbsContractsDesktopClient.Models.References
 
         public required string Title { get; init; }
 
+        public string? NavigationDescription { get; init; }
+
         public string Preset { get; init; } = "item";
 
         public string? Summary { get; init; }
@@ -28,6 +30,11 @@ namespace CbsContractsDesktopClient.Models.References
 
         public string Description => $"model={Model}, preset={Preset}";
 
+        public string EffectiveNavigationDescription =>
+            string.IsNullOrWhiteSpace(NavigationDescription)
+                ? Title
+                : NavigationDescription;
+
         public CbsTableDefinition Table => new()
         {
             Title = Title,
@@ -41,6 +48,7 @@ namespace CbsContractsDesktopClient.Models.References
                 Route = Route,
                 Model = Model,
                 Title = Title,
+                NavigationDescription = NavigationDescription,
                 Preset = Preset,
                 Summary = Summary,
                 EditorKind = EditorKind,

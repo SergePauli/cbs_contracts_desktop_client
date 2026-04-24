@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -25,6 +26,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ReferencesContentViewModel _viewModel;
         private readonly IReferenceCrudService _referenceCrudService;
         private readonly IDataQueryService _dataQueryService;
+        private readonly IUserService _userService;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private bool _isViewportSubscribed;
@@ -34,6 +36,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
             _referenceCrudService = App.Services.GetRequiredService<IReferenceCrudService>();
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
+            _userService = App.Services.GetRequiredService<IUserService>();
             InitializeComponent();
             DataContext = _viewModel;
             UpdateSelectionActionButtons();
@@ -120,6 +123,18 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void ReferenceTableView_LoadMoreRequested(object sender, CbsTableLoadMoreRequestedEventArgs e)
         {
             await _viewModel.LoadMoreAsync();
+        }
+
+        private async void ReferenceTableView_RowDoubleTapped(object sender, CbsTableRowDoubleTappedEventArgs e)
+        {
+            _viewModel.SelectedRow = e.Row;
+
+            if (IsInternEditBlocked())
+            {
+                return;
+            }
+
+            await ShowReferenceEditDialogAsync(isCreateMode: false);
         }
 
         private async void ReferenceTableView_FilterRequested(object sender, CbsTableFilterRequestedEventArgs e)
@@ -521,6 +536,19 @@ namespace CbsContractsDesktopClient.Views.Shell
                 string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
                 _ => null
             };
+        }
+
+        private bool IsInternEditBlocked()
+        {
+            var roleText = _userService.CurrentUser?.Role;
+            if (string.IsNullOrWhiteSpace(roleText))
+            {
+                return false;
+            }
+
+            return roleText
+                .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(static role => string.Equals(role, "intern", System.StringComparison.OrdinalIgnoreCase));
         }
     }
 }

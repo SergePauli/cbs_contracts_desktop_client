@@ -177,6 +177,7 @@ namespace CbsContractsDesktopClient.Services.References
                     route: "/users",
                     model: "Profile",
                     title: "Пользователи",
+                    navigationDescription: "Профили пользователей",
                     preset: "edit",
                     editorKind: ReferenceEditorKind.Profile,
                     fields:
@@ -519,6 +520,7 @@ namespace CbsContractsDesktopClient.Services.References
             IReadOnlyList<ReferenceFieldDefinition> fields,
             IReadOnlyList<CbsTableColumnDefinition> columns,
             string preset = "item",
+            string? navigationDescription = null,
             ReferenceEditorKind editorKind = ReferenceEditorKind.Generic,
             bool isAuditEnabled = false)
         {
@@ -527,6 +529,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Route = route,
                 Model = model,
                 Title = title,
+                NavigationDescription = navigationDescription,
                 Preset = preset,
                 EditorKind = editorKind,
                 IsAuditEnabled = isAuditEnabled,
@@ -712,6 +715,7 @@ namespace CbsContractsDesktopClient.Services.References
                 Route = definition.Route,
                 Model = definition.Model,
                 Title = definition.Title,
+                NavigationDescription = definition.NavigationDescription,
                 Preset = definition.Preset,
                 Summary = definition.Summary,
                 EditorKind = definition.EditorKind,

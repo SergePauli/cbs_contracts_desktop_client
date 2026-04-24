@@ -138,4 +138,17 @@ public sealed class CbsTableViewTests
         Assert.Contains("state.DatePicker.Visibility = Visibility.Visible", code);
         Assert.Contains("return dateTimeState.DatePicker.Date;", code);
     }
+
+    [Fact]
+    public void CbsTableView_EmitsRowDoubleTappedEventAndKeepsSelectionInSync()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("public event EventHandler<CbsTableRowDoubleTappedEventArgs>? RowDoubleTapped;", code);
+        Assert.Contains("rowView.DoubleTapped += OnRowDoubleTapped;", code);
+        Assert.Contains("private void OnRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)", code);
+        Assert.Contains("SelectedItem = rowView.Row;", code);
+        Assert.Contains("RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));", code);
+        Assert.Contains("public sealed class CbsTableRowDoubleTappedEventArgs : EventArgs", code);
+    }
 }

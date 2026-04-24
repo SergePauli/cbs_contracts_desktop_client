@@ -188,6 +188,8 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         public event EventHandler<CbsTableFilterRequestedEventArgs>? FilterRequested;
 
+        public event EventHandler<CbsTableRowDoubleTappedEventArgs>? RowDoubleTapped;
+
         public void ClearFilterInputs()
         {
             _suppressFilterNotifications = true;
@@ -717,6 +719,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 rowView.PointerPressed += OnRowPointerPressed;
                 rowView.PointerReleased += OnRowPointerReleased;
                 rowView.Tapped += OnRowTapped;
+                rowView.DoubleTapped += OnRowDoubleTapped;
                 _rowPool.Add(rowView);
                 RowsHost.Children.Add(rowView);
             }
@@ -792,6 +795,26 @@ namespace CbsContractsDesktopClient.Views.Controls
             UpdateVisibleRowSelectionStates();
         }
 
+        private void OnRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            if (!SupportsRowSelection || sender is not CbsTableRowView rowView || rowView.Tag is not int rowIndex)
+            {
+                return;
+            }
+
+            if (rowView.Row?.IsPlaceholder == true)
+            {
+                return;
+            }
+
+            _selectedIndexes.Clear();
+            _selectedIndexes.Add(rowIndex);
+            SelectedItem = rowView.Row;
+            UpdateVisibleRowSelectionStates();
+
+            RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));
+        }
+
         private void UpdateVisibleRowSelectionStates()
         {
             foreach (var rowView in _rowPool)
@@ -824,9 +847,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             var padding = Density switch
             {
-                CbsTableDensity.Comfortable => new Thickness(10, 6, 10, 6),
-                CbsTableDensity.Standard => new Thickness(8, 5, 8, 5),
-                _ => new Thickness(6, 4, 6, 4)
+                CbsTableDensity.Comfortable => new Thickness(8, 4, 8, 4),
+                CbsTableDensity.Standard => new Thickness(6, 3, 6, 3),
+                _ => new Thickness(4, 2, 4, 2)
             };
 
             return reserveFilterButton
@@ -1397,7 +1420,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 Width = FilterModeButtonWidth,
                 Height = 20,
-                Margin = new Thickness(0, 2, 2, 2),
+                Margin = new Thickness(0, 0, 2, 0),
                 Padding = new Thickness(0),
                 HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -2151,5 +2174,18 @@ namespace CbsContractsDesktopClient.Views.Controls
         public DataFilterMatchMode MatchMode { get; }
 
         public object? Value { get; }
+    }
+
+    public sealed class CbsTableRowDoubleTappedEventArgs : EventArgs
+    {
+        public CbsTableRowDoubleTappedEventArgs(ReferenceDataRow row, int rowIndex)
+        {
+            Row = row;
+            RowIndex = rowIndex;
+        }
+
+        public ReferenceDataRow Row { get; }
+
+        public int RowIndex { get; }
     }
 }

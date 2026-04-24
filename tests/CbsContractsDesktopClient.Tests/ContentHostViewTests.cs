@@ -39,6 +39,7 @@ public sealed class ContentHostViewTests
         var xaml = File.ReadAllText(ContentHostViewXamlPath);
 
         Assert.Contains("MultiSelectOptionsSources=\"{Binding CurrentFilterOptionsSources}\"", xaml);
+        Assert.Contains("RowDoubleTapped=\"ReferenceTableView_RowDoubleTapped\"", xaml);
     }
 
     [Fact]
@@ -88,5 +89,18 @@ public sealed class ContentHostViewTests
         Assert.Contains("Preset = \"item\"", codeBehind);
         Assert.Contains("[\"name__cnt\"] = normalizedSearchText", codeBehind);
         Assert.Contains(".OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_OpensEditOnRowDoubleClick_ExceptInternRole()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("private async void ReferenceTableView_RowDoubleTapped(object sender, CbsTableRowDoubleTappedEventArgs e)", codeBehind);
+        Assert.Contains("_viewModel.SelectedRow = e.Row;", codeBehind);
+        Assert.Contains("if (IsInternEditBlocked())", codeBehind);
+        Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
+        Assert.Contains("private bool IsInternEditBlocked()", codeBehind);
+        Assert.Contains("string.Equals(role, \"intern\", System.StringComparison.OrdinalIgnoreCase)", codeBehind);
     }
 }
