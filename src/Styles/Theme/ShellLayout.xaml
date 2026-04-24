@@ -4,16 +4,16 @@
 
     <GridLength x:Key="ShellSidebarWidth">176</GridLength>
     <GridLength x:Key="ShellAuditWidth">0.95*</GridLength>
-    <GridLength x:Key="ShellTopBarHeight">56</GridLength>
+    <GridLength x:Key="ShellTopBarHeight">32</GridLength>
     <GridLength x:Key="ShellFooterHeight">32</GridLength>
 
     <Thickness x:Key="ShellContentRegionMargin">0,0,12,0</Thickness>
-    <Thickness x:Key="ShellContentHostMargin">0</Thickness>
+    <Thickness x:Key="ShellContentHostMargin">0,4,0,2</Thickness>
     <Thickness x:Key="ShellAuditMargin">0,12,12,12</Thickness>
 
     <Thickness x:Key="ShellSidebarOuterPadding">2,4,2,4</Thickness>
     <Thickness x:Key="ShellSidebarScrollPadding">0,0,4,0</Thickness>
-    <Thickness x:Key="ShellTopBarPadding">16,8,8,8</Thickness>
+    <Thickness x:Key="ShellTopBarPadding">8,2,4,2</Thickness>
     <Thickness x:Key="ShellTopBarSearchPadding">14,0,14,0</Thickness>
     <Thickness x:Key="ShellContentHeaderPadding">12,12,12,10</Thickness>
     <Thickness x:Key="ShellContentBodyPadding">24,20,24,24</Thickness>
@@ -27,9 +27,9 @@
     <CornerRadius x:Key="ShellSearchCornerRadius">14</CornerRadius>
     <CornerRadius x:Key="ShellAuditItemCornerRadius">14</CornerRadius>
 
-    <x:Double x:Key="ShellMenuItemMinHeight">28</x:Double>
+    <x:Double x:Key="ShellMenuItemMinHeight">24</x:Double>
     <x:Double x:Key="ShellSearchHeight">40</x:Double>
     <x:Double x:Key="ShellBackButtonSize">32</x:Double>
-    <x:Double x:Key="ShellActionButtonSize">36</x:Double>
+    <x:Double x:Key="ShellActionButtonSize">28</x:Double>
     <GridLength x:Key="ShellContentHeaderCardHeight">72</GridLength>
 </ResourceDictionary>

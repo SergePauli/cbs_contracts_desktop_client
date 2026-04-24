@@ -35,7 +35,7 @@
             SelectionChanged="SidebarNavigationView_SelectionChanged">
             <NavigationView.Resources>
                 <Style TargetType="NavigationViewItem">
-                    <Setter Property="MinHeight" Value="{StaticResource ShellMenuItemMinHeight}" />
+                    <Setter Property="MinHeight" Value="{StaticResource ShellMenuItemMinHeight}" />                    
                     <Setter Property="Padding" Value="3,1,2,1" />
                     <Setter Property="Margin" Value="2,0,2,0" />
                     <Setter Property="FontSize" Value="13" />
