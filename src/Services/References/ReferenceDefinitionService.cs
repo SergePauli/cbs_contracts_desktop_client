@@ -174,6 +174,43 @@ namespace CbsContractsDesktopClient.Services.References
                         CreateTextColumn("full_name", "Полное наименование")
                     ]),
                 CreateReferenceDefinition(
+                    route: "/holidays",
+                    model: "Holiday",
+                    title: "Календарь",
+                    navigationDescription: "Календарь выходных",
+                    preset: "card",
+                    initialSortField: "begin_at",
+                    initialSortDirection: DataSortDirection.Descending,
+                    fields:
+                    [
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateDateField("begin_at", "Начало", isRequired: true),
+                        CreateDateField("end_at", "Окончание"),
+                        CreateTextField("name", "Описание", isRequired: true),
+                        CreateBooleanField("work", "Рабочий день")
+                    ],
+                    columns:
+                    [
+                        CreateNumberColumn("id", "ID", width: "5rem"),
+                        CreateDateColumn("begin_at", "Начало", width: "10rem", matchMode: DataFilterMatchMode.GreaterThanOrEqual),
+                        new CbsTableColumnDefinition
+                        {
+                            FieldKey = "end_at",
+                            Header = "Окончание",
+                            ApiField = "end_at",
+                            SortField = "end_at",
+                            DefaultWidth = "10rem",
+                            Alignment = CbsTableColumnAlignment.Left,
+                            Filter = new CbsTableColumnFilterDefinition
+                            {
+                                Mode = DataFilterMode.Date
+                            }
+                        },
+                        CreateTextColumn("name", "Описание"),
+                        CreateBooleanColumn("work", "Рабочий", width: "4rem")
+                    ],
+                    isAuditEnabled: true),
+                CreateReferenceDefinition(
                     route: "/users",
                     model: "Profile",
                     title: "Пользователи",
@@ -474,7 +511,7 @@ namespace CbsContractsDesktopClient.Services.References
                     route: "/references/OrderStatus",
                     model: "OrderStatus",
                     title: "Статусы доставки",
-                    preset: "edit",
+                    preset: "card",
                     fields:
                     [
                         CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
@@ -493,7 +530,7 @@ namespace CbsContractsDesktopClient.Services.References
                     route: "/references/IsecurityTool",
                     model: "IsecurityTool",
                     title: "СЗИ",
-                    preset: "edit",
+                    preset: "card",
                     fields:
                     [
                         CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
@@ -521,6 +558,8 @@ namespace CbsContractsDesktopClient.Services.References
             IReadOnlyList<CbsTableColumnDefinition> columns,
             string preset = "item",
             string? navigationDescription = null,
+            string? initialSortField = null,
+            DataSortDirection? initialSortDirection = null,
             ReferenceEditorKind editorKind = ReferenceEditorKind.Generic,
             bool isAuditEnabled = false)
         {
@@ -531,6 +570,8 @@ namespace CbsContractsDesktopClient.Services.References
                 Title = title,
                 NavigationDescription = navigationDescription,
                 Preset = preset,
+                InitialSortField = initialSortField,
+                InitialSortDirection = initialSortDirection,
                 EditorKind = editorKind,
                 IsAuditEnabled = isAuditEnabled,
                 Fields = fields,
@@ -612,6 +653,51 @@ namespace CbsContractsDesktopClient.Services.References
                 Label = label,
                 ApiField = key,
                 EditorType = ReferenceFieldEditorType.Number,
+                IsRequired = isRequired,
+                IsReadOnlyOnCreate = isReadOnlyOnCreate,
+                IsReadOnlyOnEdit = isReadOnlyOnEdit
+            };
+        }
+
+        private static CbsTableColumnDefinition CreateDateColumn(
+            string key,
+            string header,
+            string? width = null,
+            DataFilterMatchMode matchMode = DataFilterMatchMode.GreaterThanOrEqual)
+        {
+            return new CbsTableColumnDefinition
+            {
+                FieldKey = key,
+                Header = header,
+                ApiField = key,
+                SortField = key,
+                DefaultWidth = width ?? "10rem",
+                Alignment = CbsTableColumnAlignment.Left,
+                IsFilterable = true,
+                Filter = new CbsTableColumnFilterDefinition
+                {
+                    IsEnabled = true,
+                    EditorKind = CbsTableFilterEditorKind.Text,
+                    Mode = DataFilterMode.Date,
+                    MatchMode = matchMode,
+                    PlaceholderText = "\u2315"
+                }
+            };
+        }
+
+        private static ReferenceFieldDefinition CreateDateField(
+            string key,
+            string label,
+            bool isRequired = false,
+            bool isReadOnlyOnCreate = false,
+            bool isReadOnlyOnEdit = false)
+        {
+            return new ReferenceFieldDefinition
+            {
+                FieldKey = key,
+                Label = label,
+                ApiField = key,
+                EditorType = ReferenceFieldEditorType.Date,
                 IsRequired = isRequired,
                 IsReadOnlyOnCreate = isReadOnlyOnCreate,
                 IsReadOnlyOnEdit = isReadOnlyOnEdit

@@ -27,6 +27,8 @@ namespace CbsContractsDesktopClient.ViewModels.References
             {
                 item.PropertyChanged += OnFieldPropertyChanged;
             }
+
+            ValidateCrossFieldRules();
         }
 
         public ReferenceDefinition Definition { get; }
@@ -79,12 +81,36 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         private void OnFieldPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
+            ValidateCrossFieldRules();
             OnPropertyChanged(nameof(EditableFields));
             OnPropertyChanged(nameof(DirtyFields));
             OnPropertyChanged(nameof(HasChanges));
             OnPropertyChanged(nameof(HasValidationErrors));
             OnPropertyChanged(nameof(RequiredFieldsSatisfied));
             OnPropertyChanged(nameof(CanSubmit));
+        }
+
+        private void ValidateCrossFieldRules()
+        {
+            var beginAtField = Fields.FirstOrDefault(static item =>
+                string.Equals(item.FieldKey, "begin_at", StringComparison.OrdinalIgnoreCase));
+            var endAtField = Fields.FirstOrDefault(static item =>
+                string.Equals(item.FieldKey, "end_at", StringComparison.OrdinalIgnoreCase));
+
+            if (beginAtField is null || endAtField is null)
+            {
+                return;
+            }
+
+            if (beginAtField.DateValue is DateTimeOffset beginAt
+                && endAtField.DateValue is DateTimeOffset endAt
+                && beginAt.Date > endAt.Date)
+            {
+                endAtField.SetExternalValidationMessage("Поле <окончание> должно быть не раньше начала.");
+                return;
+            }
+
+            endAtField.SetExternalValidationMessage(null);
         }
     }
 }

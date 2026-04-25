@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -25,16 +27,26 @@ namespace CbsContractsDesktopClient.Views.Shell
     {
         private readonly ReferencesContentViewModel _viewModel;
         private readonly IReferenceCrudService _referenceCrudService;
+        private readonly IHolidayRecalculationService _holidayRecalculationService;
         private readonly IDataQueryService _dataQueryService;
         private readonly IUserService _userService;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private bool _isViewportSubscribed;
+        private bool _isHolidayRecalcInProgress;
+        private static readonly ReferenceDefinition StageEditDefinition = new()
+        {
+            Route = "/internal/Stage",
+            Model = "Stage",
+            Title = "Stage",
+            Preset = "edit"
+        };
 
         public ContentHostView()
         {
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
             _referenceCrudService = App.Services.GetRequiredService<IReferenceCrudService>();
+            _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _userService = App.Services.GetRequiredService<IUserService>();
             InitializeComponent();
@@ -89,6 +101,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void DeleteSelectedRowButton_Click(object sender, RoutedEventArgs e)
         {
             await DeleteSelectedRowAsync();
+        }
+
+        private async void HolidayRecalcButton_Click(object sender, RoutedEventArgs e)
+        {
+            await RecalculateHolidayStagesAsync();
         }
 
         private async void ResetColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -250,6 +267,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void UpdateSelectionActionButtons()
         {
             var hasSelectedRow = _viewModel.HasSelectedRow && _viewModel.HasActiveReference;
+            var isHolidayReference = string.Equals(_viewModel.CurrentReference?.Route, "/holidays", StringComparison.OrdinalIgnoreCase);
+            var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
 
             if (EditSelectedRowButton is not null)
             {
@@ -264,6 +283,15 @@ namespace CbsContractsDesktopClient.Views.Shell
                 DeleteSelectedRowButton.IsEnabled = hasSelectedRow;
                 DeleteSelectedRowButton.Foreground = hasSelectedRow
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Firebrick)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (HolidayRecalcButton is not null)
+            {
+                HolidayRecalcButton.Visibility = isHolidayReference ? Visibility.Visible : Visibility.Collapsed;
+                HolidayRecalcButton.IsEnabled = canRecalculateHoliday;
+                HolidayRecalcButton.Foreground = canRecalculateHoliday
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.SteelBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
         }
@@ -391,6 +419,414 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             await dialog.ShowAsync();
+        }
+
+        private async Task RecalculateHolidayStagesAsync()
+        {
+            if (_viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            var holiday = TryCreateHolidayInterval(_viewModel.SelectedRow);
+            if (holiday is null)
+            {
+                await ShowErrorDialogAsync("Не удалось пересчитать сроки.", "Не удалось определить период выбранного календарного дня.");
+                return;
+            }
+
+            _isHolidayRecalcInProgress = true;
+            UpdateSelectionActionButtons();
+
+            try
+            {
+                var affectedStages = await LoadAffectedStagesAsync(holiday);
+                if (affectedStages.Count == 0)
+                {
+                    await ShowErrorDialogAsync("Пересчёт не требуется", "Этапы в выбранном интервале не найдены.");
+                    return;
+                }
+
+                var uniqueContracts = affectedStages
+                    .Select(static stage => stage.ContractId)
+                    .Where(static contractId => contractId is not null)
+                    .Distinct()
+                    .Count();
+
+                var confirmDialog = new ContentDialog
+                {
+                    XamlRoot = XamlRoot,
+                    Title = "Пересчитать сроки",
+                    PrimaryButtonText = "Пересчитать",
+                    CloseButtonText = "Отмена",
+                    DefaultButton = ContentDialogButton.Primary,
+                    Content = $"Будут затронуты {affectedStages.Count} этапа(ов) в {uniqueContracts} контракте(ах). Продолжить?"
+                };
+
+                if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+
+                var holidays = await LoadHolidayCalendarAsync();
+                var processedCount = 0;
+                var updatedCount = 0;
+                var errors = new List<string>();
+                var touchedContracts = new HashSet<long>();
+
+                foreach (var stage in affectedStages)
+                {
+                    processedCount++;
+
+                    try
+                    {
+                        var patch = BuildStagePatch(stage, holiday, holidays, errors);
+                        if (patch is null)
+                        {
+                            continue;
+                        }
+
+                        await _referenceCrudService.UpdateAsync(StageEditDefinition, patch);
+                        updatedCount++;
+                        if (stage.ContractId is long contractId)
+                        {
+                            touchedContracts.Add(contractId);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add($"Этап #{stage.Id}: ошибка обновления - {ex.Message}");
+                    }
+                }
+
+                await _viewModel.ReloadCurrentReferenceAsync();
+
+                if (errors.Count > 0)
+                {
+                    await ShowErrorDialogAsync(
+                        "Пересчёт завершён с ошибками",
+                        $"Обработано: {processedCount}. Изменено: {updatedCount}. Контрактов затронуто: {touchedContracts.Count}.{Environment.NewLine}{Environment.NewLine}{string.Join(Environment.NewLine, errors.Take(10))}");
+                }
+                else
+                {
+                    ShowSuccessNotification(
+                        "Пересчёт завершён",
+                        $"Этапов обработано: {processedCount}, изменено: {updatedCount}, контрактов затронуто: {touchedContracts.Count}");
+                }
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось пересчитать сроки.", ex.Message);
+            }
+            finally
+            {
+                _isHolidayRecalcInProgress = false;
+                UpdateSelectionActionButtons();
+            }
+        }
+
+        private async Task<IReadOnlyList<HolidayCalendarDay>> LoadHolidayCalendarAsync(CancellationToken cancellationToken = default)
+        {
+            var rows = await _holidayRecalculationService.GetHolidayCalendarAsync(cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(TryCreateHolidayCalendarDay)
+                .Where(static item => item is not null)
+                .Cast<HolidayCalendarDay>()
+                .ToList();
+        }
+
+        private async Task<IReadOnlyList<StageRecalcCandidate>> LoadAffectedStagesAsync(
+            HolidayInterval holiday,
+            CancellationToken cancellationToken = default)
+        {
+            var rows = await _holidayRecalculationService.GetAffectedStagesAsync(
+                holiday.IntervalStart,
+                holiday.IntervalEnd,
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(TryCreateStageCandidate)
+                .Where(static item => item is not null)
+                .Cast<StageRecalcCandidate>()
+                .ToList();
+        }
+
+        private static HolidayInterval? TryCreateHolidayInterval(ReferenceDataRow row)
+        {
+            var beginAt = TryParseDate(row.GetValue("begin_at"));
+            if (beginAt is null)
+            {
+                return null;
+            }
+
+            var endAt = TryParseDate(row.GetValue("end_at")) ?? beginAt.Value.Date.AddDays(1).AddTicks(-1);
+
+            return new HolidayInterval(
+                IntervalStart: FormatRailsDate(beginAt.Value),
+                IntervalEnd: FormatRailsDate(endAt),
+                StartDate: beginAt.Value,
+                EndDate: endAt);
+        }
+
+        private static HolidayCalendarDay? TryCreateHolidayCalendarDay(ReferenceDataRow row)
+        {
+            var beginAt = TryParseDate(row.GetValue("begin_at"));
+            if (beginAt is null)
+            {
+                return null;
+            }
+
+            var endAt = TryParseDate(row.GetValue("end_at"));
+            return new HolidayCalendarDay(
+                BeginAt: FormatRailsDate(beginAt.Value),
+                BeginDate: beginAt.Value.Date,
+                EndAt: endAt is null ? null : FormatRailsDate(endAt.Value),
+                EndDate: endAt?.Date,
+                IsWorkingDay: TryGetBool(row.GetValue("work")) ?? false);
+        }
+
+        private static StageRecalcCandidate? TryCreateStageCandidate(ReferenceDataRow row)
+        {
+            var id = TryGetLong(row.GetValue("id"));
+            if (id is null)
+            {
+                return null;
+            }
+
+            return new StageRecalcCandidate(
+                Id: id.Value,
+                ListKey: row.GetValue("list_key")?.ToString(),
+                Head: row.GetValue("head")?.ToString(),
+                Name: row.GetValue("name")?.ToString(),
+                DeadlineKind: row.GetValue("deadline_kind")?.ToString(),
+                PaymentDeadlineKind: row.GetValue("payment_deadline_kind")?.ToString(),
+                Duration: TryGetInt(row.GetValue("duration")),
+                PaymentDuration: TryGetInt(row.GetValue("payment_duration")),
+                StartAt: row.GetValue("start_at")?.ToString(),
+                DeadlineAt: row.GetValue("deadline_at")?.ToString(),
+                PaymentAt: row.GetValue("payment_at")?.ToString(),
+                PrepaymentAt: row.GetValue("prepayment_at")?.ToString(),
+                FundedAt: row.GetValue("funded_at")?.ToString(),
+                PaymentDeadlineAt: row.GetValue("payment_deadline_at")?.ToString(),
+                ContractId: TryGetLong(row.GetValue("contract.id")));
+        }
+
+        private static Dictionary<string, object?>? BuildStagePatch(
+            StageRecalcCandidate stage,
+            HolidayInterval holiday,
+            IReadOnlyList<HolidayCalendarDay> holidays,
+            List<string> errors)
+        {
+            var execAffected = IsExecWorkingKind(stage.DeadlineKind)
+                && IntersectsRange(stage.StartAt, stage.DeadlineAt, holiday.StartDate, holiday.EndDate);
+
+            var payAffected = IsPaymentWorkingKind(stage.PaymentDeadlineKind)
+                && IntersectsRange(stage.FundedAt, stage.PaymentDeadlineAt, holiday.StartDate, holiday.EndDate);
+
+            var patch = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["id"] = stage.Id
+            };
+
+            if (!string.IsNullOrWhiteSpace(stage.ListKey))
+            {
+                patch["list_key"] = stage.ListKey;
+            }
+
+            if (execAffected)
+            {
+                var proposedExec = NextDeadlineFor(stage, holidays, errors);
+                if (!string.IsNullOrWhiteSpace(proposedExec)
+                    && !string.Equals(stage.DeadlineAt, proposedExec, StringComparison.Ordinal))
+                {
+                    patch["deadline_at"] = proposedExec;
+                }
+            }
+
+            if (payAffected)
+            {
+                var proposedPay = NextPaymentDeadlineFor(stage, holidays, errors);
+                if (!string.IsNullOrWhiteSpace(proposedPay)
+                    && !string.Equals(stage.PaymentDeadlineAt, proposedPay, StringComparison.Ordinal))
+                {
+                    patch["payment_deadline_at"] = proposedPay;
+                }
+            }
+
+            return patch.Count > 1 ? patch : null;
+        }
+
+        private static string? NextDeadlineFor(
+            StageRecalcCandidate stage,
+            IReadOnlyList<HolidayCalendarDay> holidays,
+            List<string> errors)
+        {
+            if (stage.Duration is null)
+            {
+                errors.Add($"Этап #{stage.Id}: пропущен - нет длительности исполнения.");
+                return null;
+            }
+
+            DateTime? baseDate = stage.DeadlineKind switch
+            {
+                "working_prepayment" => TryParseDate(stage.PrepaymentAt) ?? TryParseDate(stage.PaymentAt),
+                "working_days" => TryParseDate(stage.StartAt),
+                _ => null
+            };
+
+            if (baseDate is null)
+            {
+                errors.Add($"Этап #{stage.Id}: пропущен - нет базовой даты для срока исполнения.");
+                return null;
+            }
+
+            return FormatRailsDate(AddWorkingDaysToDate(baseDate.Value, stage.Duration.Value, holidays));
+        }
+
+        private static string? NextPaymentDeadlineFor(
+            StageRecalcCandidate stage,
+            IReadOnlyList<HolidayCalendarDay> holidays,
+            List<string> errors)
+        {
+            if (stage.PaymentDuration is null)
+            {
+                errors.Add($"Этап #{stage.Id}: пропущен - нет длительности оплаты.");
+                return null;
+            }
+
+            if (!IsPaymentWorkingKind(stage.PaymentDeadlineKind))
+            {
+                return null;
+            }
+
+            var baseDate = TryParseDate(stage.FundedAt);
+            if (baseDate is null)
+            {
+                errors.Add($"Этап #{stage.Id}: пропущен - нет базовой даты для срока оплаты.");
+                return null;
+            }
+
+            return FormatRailsDate(AddWorkingDaysToDate(baseDate.Value, stage.PaymentDuration.Value, holidays));
+        }
+
+        private static DateTime AddWorkingDaysToDate(
+            DateTime current,
+            int days,
+            IReadOnlyList<HolidayCalendarDay> holidays)
+        {
+            var result = current.Date.AddDays(-1);
+            var daysCount = 0;
+
+            while (daysCount < days)
+            {
+                result = result.AddDays(1);
+                var calendarDay = holidays.FirstOrDefault(day =>
+                    day.BeginAt == FormatRailsDate(result)
+                    || day.EndAt == FormatRailsDate(result)
+                    || (day.EndDate is DateTime endDate && endDate > result && day.BeginDate < result));
+
+                var dayOfWeek = result.DayOfWeek;
+                var isWeekend = dayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+                var isWorkingDay = (!isWeekend || calendarDay?.IsWorkingDay == true)
+                    && (calendarDay is null || calendarDay.IsWorkingDay);
+
+                if (isWorkingDay)
+                {
+                    daysCount++;
+                }
+            }
+
+            return result;
+        }
+
+        private static bool IntersectsRange(string? itemStart, string? itemEnd, DateTime? intervalStart, DateTime? intervalEnd)
+        {
+            var start = TryParseDate(itemStart);
+            var end = TryParseDate(itemEnd);
+            if (start is null || end is null || intervalStart is null || intervalEnd is null)
+            {
+                return false;
+            }
+
+            return start.Value < intervalEnd.Value && end.Value > intervalStart.Value;
+        }
+
+        private static bool IsExecWorkingKind(string? kind)
+        {
+            return string.Equals(kind, "working_days", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(kind, "working_prepayment", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPaymentWorkingKind(string? kind)
+        {
+            return string.Equals(kind, "w_days", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static DateTime? TryParseDate(object? value)
+        {
+            if (value is null)
+            {
+                return null;
+            }
+
+            return value switch
+            {
+                DateTime dateTime => dateTime,
+                DateTimeOffset dateTimeOffset => dateTimeOffset.LocalDateTime,
+                string text when DateTime.TryParse(
+                    text,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                    out var parsedDateTime) => parsedDateTime,
+                string text when DateTime.TryParse(
+                    text,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                    out var parsedCurrentCultureDateTime) => parsedCurrentCultureDateTime,
+                _ => null
+            };
+        }
+
+        private static string FormatRailsDate(DateTime value)
+        {
+            return value.ToString("ddd MMM dd yyyy", CultureInfo.InvariantCulture);
+        }
+
+        private static long? TryGetLong(object? value)
+        {
+            return value switch
+            {
+                long int64Value => int64Value,
+                int int32Value => int32Value,
+                decimal decimalValue => (long)decimalValue,
+                string text when long.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
+        }
+
+        private static int? TryGetInt(object? value)
+        {
+            return value switch
+            {
+                int int32Value => int32Value,
+                long int64Value => (int)int64Value,
+                decimal decimalValue => (int)decimalValue,
+                string text when int.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
+        }
+
+        private static bool? TryGetBool(object? value)
+        {
+            return value switch
+            {
+                bool boolValue => boolValue,
+                string text when bool.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
         }
 
         private ProfileEditDialogState CreateProfileEditDialogState(bool isCreateMode)
@@ -550,5 +986,31 @@ namespace CbsContractsDesktopClient.Views.Shell
                 .Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Any(static role => string.Equals(role, "intern", System.StringComparison.OrdinalIgnoreCase));
         }
+
+        private sealed record HolidayInterval(string IntervalStart, string IntervalEnd, DateTime StartDate, DateTime EndDate);
+
+        private sealed record HolidayCalendarDay(
+            string BeginAt,
+            DateTime BeginDate,
+            string? EndAt,
+            DateTime? EndDate,
+            bool IsWorkingDay);
+
+        private sealed record StageRecalcCandidate(
+            long Id,
+            string? ListKey,
+            string? Head,
+            string? Name,
+            string? DeadlineKind,
+            string? PaymentDeadlineKind,
+            int? Duration,
+            int? PaymentDuration,
+            string? StartAt,
+            string? DeadlineAt,
+            string? PaymentAt,
+            string? PrepaymentAt,
+            string? FundedAt,
+            string? PaymentDeadlineAt,
+            long? ContractId);
     }
 }

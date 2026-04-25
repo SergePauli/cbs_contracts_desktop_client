@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class CbsTableViewTests
 {
     private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     private static readonly string CbsTableViewPath = Path.Combine(
         ProjectRoot,
@@ -58,7 +58,7 @@ public sealed class CbsTableViewTests
         Assert.Contains("column.Filter.OptionsSourceKey", code);
         Assert.Contains("MultiSelectOptionsSources.TryGetValue", code);
         Assert.Contains("RefreshMultiSelectFilterStates", code);
-        Assert.Contains("state.SelectedOptions = GetMultiSelectOptions(state.Column)", code);
+        Assert.Contains("state.SelectedOptions = allOptions", code);
     }
 
     [Fact]
@@ -93,7 +93,8 @@ public sealed class CbsTableViewTests
     {
         var code = File.ReadAllText(CbsTableViewPath);
 
-        Assert.Contains("column.Filter.Mode == DataFilterMode.DateTime", code);
+        Assert.Contains("IsDateFilterMode(column.Filter.Mode)", code);
+        Assert.Contains("return mode is DataFilterMode.Date or DataFilterMode.DateTime;", code);
         Assert.Contains("DataFilterMatchMode.GreaterThanOrEqual", code);
         Assert.Contains("DataFilterMatchMode.LessThanOrEqual", code);
         Assert.Contains("DataFilterMatchMode.Contains", code);
@@ -109,13 +110,15 @@ public sealed class CbsTableViewTests
         var code = File.ReadAllText(CbsTableViewPath);
 
         Assert.Contains("GetDateTimePlaceholder(column)", code);
+        Assert.Contains("BuildIsoDatePlaceholderPattern()", code);
         Assert.Contains("BuildIsoDateTimePlaceholderPattern()", code);
+        Assert.Contains("\"ГГГГ-ММ-ДД\"", code);
         Assert.Contains("\"ГГГГ-ММ-ДД ЧЧ:ММ:СС\"", code);
         Assert.Contains("OnDateTimeFilterTextBoxBeforeTextChanging", code);
         Assert.Contains("IsMaskedDateTimeMode(column)", code);
         Assert.Contains("NormalizeDateTimeFilterValue", code);
-        Assert.Contains("NormalizeIsoDateTimeTextFragment", code);
-        Assert.Contains("TryExtractCompleteDateTimeValue", code);
+        Assert.Contains("NormalizeIsoDateTimeTextFragment(column.Filter.Mode, text)", code);
+        Assert.Contains("TryExtractCompleteDateTimeValue(column.Filter.Mode, text, out var completeValue)", code);
     }
 
     [Fact]
@@ -129,7 +132,7 @@ public sealed class CbsTableViewTests
         Assert.Contains("DateChanged += OnDateTimeFilterDateChanged", code);
         Assert.Contains("OnDateTimeFilterClearButtonClick", code);
         Assert.Contains("Glyph = \"\\uE711\"", code);
-        Assert.Contains("ToolTipService.SetToolTip(button, \"РћС‡РёСЃС‚РёС‚СЊ С„РёР»СЊС‚СЂ РґР°С‚С‹\")", code);
+        Assert.Contains("ToolTipService.SetToolTip(button, \"Очистить фильтр даты\")", code);
         Assert.Contains("PlaceholderText = string.Empty", code);
         Assert.Contains("state.ClearButton.Visibility = state.DatePicker.Date.HasValue", code);
         Assert.Contains("state.TextBox.Visibility = Visibility.Visible", code);

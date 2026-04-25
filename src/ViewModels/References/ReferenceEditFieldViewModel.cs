@@ -7,6 +7,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
     public partial class ReferenceEditFieldViewModel : ObservableObject
     {
         private readonly object? _originalValue;
+        private string _externalValidationMessage = string.Empty;
 
         public ReferenceEditFieldViewModel(
             ReferenceFieldDefinition definition,
@@ -20,6 +21,12 @@ namespace CbsContractsDesktopClient.ViewModels.References
             if (IsBooleanEditor)
             {
                 BoolValue = _originalValue as bool? ?? false;
+            }
+            else if (IsDateEditor)
+            {
+                DateValue = ParseDateValue(_originalValue)
+                    ?? (IsCreateMode ? DateTimeOffset.Now.Date : null);
+                TextValue = FormatInitialValue(_originalValue);
             }
             else
             {
@@ -47,7 +54,9 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         public bool IsBooleanEditor => EditorType == ReferenceFieldEditorType.Boolean;
 
-        public bool IsTextEditor => !IsBooleanEditor;
+        public bool IsDateEditor => EditorType == ReferenceFieldEditorType.Date;
+
+        public bool IsTextEditor => !IsBooleanEditor && !IsDateEditor;
 
         public bool IsReadOnly => IsCreateMode
             ? Definition.IsReadOnlyOnCreate
@@ -70,6 +79,9 @@ namespace CbsContractsDesktopClient.ViewModels.References
         public partial bool BoolValue { get; set; }
 
         [ObservableProperty]
+        public partial DateTimeOffset? DateValue { get; set; }
+
+        [ObservableProperty]
         public partial string ValidationMessage { get; set; } = string.Empty;
 
         partial void OnTextValueChanged(string value)
@@ -78,6 +90,11 @@ namespace CbsContractsDesktopClient.ViewModels.References
         }
 
         partial void OnBoolValueChanged(bool value)
+        {
+            RefreshState();
+        }
+
+        partial void OnDateValueChanged(DateTimeOffset? value)
         {
             RefreshState();
         }
@@ -98,6 +115,13 @@ namespace CbsContractsDesktopClient.ViewModels.References
                 return string.Empty;
             }
 
+            if (EditorType == ReferenceFieldEditorType.Date
+                && DateValue is null
+                && !string.IsNullOrWhiteSpace(TextValue))
+            {
+                return "Введите корректное значение даты.";
+            }
+
             if (EditorType == ReferenceFieldEditorType.Number)
             {
                 if (!string.IsNullOrWhiteSpace(TextValue) && TryParseNumber(TextValue, out _) is false)
@@ -111,7 +135,19 @@ namespace CbsContractsDesktopClient.ViewModels.References
                 return "Поле обязательно для заполнения.";
             }
 
-            return string.Empty;
+            return _externalValidationMessage;
+        }
+
+        public void SetExternalValidationMessage(string? validationMessage)
+        {
+            var normalizedMessage = validationMessage ?? string.Empty;
+            if (string.Equals(_externalValidationMessage, normalizedMessage, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _externalValidationMessage = normalizedMessage;
+            RefreshState();
         }
 
         private object? GetCurrentValue()
@@ -119,6 +155,13 @@ namespace CbsContractsDesktopClient.ViewModels.References
             if (IsBooleanEditor)
             {
                 return BoolValue;
+            }
+
+            if (IsDateEditor)
+            {
+                return DateValue is DateTimeOffset value
+                    ? value.ToString("ddd MMM dd yyyy", CultureInfo.InvariantCulture)
+                    : null;
             }
 
             if (string.IsNullOrWhiteSpace(TextValue))
@@ -192,6 +235,14 @@ namespace CbsContractsDesktopClient.ViewModels.References
                 return leftLong == rightDecimal;
             }
 
+            if (left is string leftText
+                && right is string rightText
+                && TryParseDateValue(leftText, out var leftDate)
+                && TryParseDateValue(rightText, out var rightDate))
+            {
+                return leftDate.Date == rightDate.Date;
+            }
+
             return Equals(left, right);
         }
 
@@ -203,6 +254,31 @@ namespace CbsContractsDesktopClient.ViewModels.References
                 decimal decimalValue => decimalValue.ToString(CultureInfo.InvariantCulture),
                 _ => value.ToString() ?? string.Empty
             };
+        }
+
+        private static DateTimeOffset? ParseDateValue(object? value)
+        {
+            return value switch
+            {
+                DateTimeOffset dateTimeOffset => dateTimeOffset,
+                DateTime dateTime => new DateTimeOffset(dateTime),
+                string text when TryParseDateValue(text, out var parsedDate) => parsedDate,
+                _ => null
+            };
+        }
+
+        private static bool TryParseDateValue(string text, out DateTimeOffset value)
+        {
+            return DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out value)
+                || DateTimeOffset.TryParse(
+                    text,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                    out value);
         }
     }
 }

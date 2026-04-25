@@ -4,6 +4,7 @@ namespace CbsContractsDesktopClient.Models.References
     {
         Text,
         Number,
-        Boolean
+        Boolean,
+        Date
     }
 }

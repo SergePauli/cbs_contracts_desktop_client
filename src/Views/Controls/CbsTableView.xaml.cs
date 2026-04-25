@@ -214,7 +214,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                     {
                         _filterTexts.Remove(GetFilterStateKey(column));
                     }
-                    else if (column.Filter.Mode == DataFilterMode.DateTime)
+                    else if (IsDateFilterMode(column.Filter.Mode))
                     {
                         _filterTexts[GetFilterStateKey(column)] = string.Empty;
                         if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
@@ -230,7 +230,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
                 foreach (var textBox in _filterTextBoxes.Values)
                 {
-                    if (textBox.Tag is CbsTableColumnDefinition column && column.Filter.Mode == DataFilterMode.DateTime)
+                    if (textBox.Tag is CbsTableColumnDefinition column && IsDateFilterMode(column.Filter.Mode))
                     {
                         textBox.Text = string.Empty;
                     }
@@ -1121,7 +1121,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return border;
             }
 
-            if (column.Filter.Mode == DataFilterMode.DateTime)
+            if (IsDateFilterMode(column.Filter.Mode))
             {
                 border.Child = CreateDateTimeFilterHost(column);
                 return border;
@@ -1166,7 +1166,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Margin = new Thickness(4, 1, 4, 1),
                 Padding = new Thickness(6, 2, 6, 0),
                 Text = GetFilterText(column),
-                PlaceholderText = column.Filter.Mode == DataFilterMode.DateTime
+                PlaceholderText = IsDateFilterMode(column.Filter.Mode)
                     ? GetDateTimePlaceholder(column)
                     : column.Filter.PlaceholderText,
                 FontSize = Math.Max(11, GetHeaderFontSize() - 1),
@@ -1180,7 +1180,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 textBox.BeforeTextChanging += OnNumericFilterTextBoxBeforeTextChanging;
             }
-            else if (column.Filter.Mode == DataFilterMode.DateTime)
+            else if (IsDateFilterMode(column.Filter.Mode))
             {
                 textBox.BeforeTextChanging += OnDateTimeFilterTextBoxBeforeTextChanging;
             }
@@ -1506,7 +1506,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void RefreshDateTimeFilterTextBox(CbsTableColumnDefinition column)
         {
-            if (column.Filter.Mode != DataFilterMode.DateTime
+            if (!IsDateFilterMode(column.Filter.Mode)
                 || !_filterDateTimeStates.TryGetValue(column.FieldKey, out var state))
             {
                 return;
@@ -1702,7 +1702,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private object? GetFilterValue(CbsTableColumnDefinition column)
         {
-            if (column.Filter.Mode == DataFilterMode.DateTime)
+            if (IsDateFilterMode(column.Filter.Mode))
             {
                 if (!IsMaskedDateTimeMode(column)
                     && _filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
@@ -1890,7 +1890,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 ];
             }
 
-            if (column.Filter.Mode == DataFilterMode.DateTime)
+            if (IsDateFilterMode(column.Filter.Mode))
             {
                 return
                 [
@@ -1934,7 +1934,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private static string GetFilterModeLabel(CbsTableColumnDefinition column, DataFilterMatchMode mode)
         {
-            if (column.Filter.Mode == DataFilterMode.DateTime)
+            if (IsDateFilterMode(column.Filter.Mode))
             {
                 return mode switch
                 {
@@ -2007,13 +2007,15 @@ namespace CbsContractsDesktopClient.Views.Controls
         private string GetDateTimePlaceholder(CbsTableColumnDefinition column)
         {
             return IsMaskedDateTimeMode(column)
-                ? BuildIsoDateTimePlaceholderPattern()
+                ? (column.Filter.Mode == DataFilterMode.Date
+                    ? BuildIsoDatePlaceholderPattern()
+                    : BuildIsoDateTimePlaceholderPattern())
                 : column.Filter.PlaceholderText;
         }
 
         private bool IsMaskedDateTimeMode(CbsTableColumnDefinition column)
         {
-            if (column.Filter.Mode != DataFilterMode.DateTime)
+            if (!IsDateFilterMode(column.Filter.Mode))
             {
                 return false;
             }
@@ -2040,14 +2042,14 @@ namespace CbsContractsDesktopClient.Views.Controls
             return GetFilterMode(column) switch
             {
                 DataFilterMatchMode.Contains or DataFilterMatchMode.StartsWith or DataFilterMatchMode.EndsWith or DataFilterMatchMode.NotContains
-                    => NormalizeIsoDateTimeTextFragment(text),
-                _ => TryExtractCompleteDateTimeValue(text, out var completeValue)
+                    => NormalizeIsoDateTimeTextFragment(column.Filter.Mode, text),
+                _ => TryExtractCompleteDateTimeValue(column.Filter.Mode, text, out var completeValue)
                     ? completeValue
                     : string.Empty
             };
         }
 
-        private static bool TryExtractCompleteDateTimeValue(string maskedText, out string value)
+        private static bool TryExtractCompleteDateTimeValue(DataFilterMode mode, string maskedText, out string value)
         {
             value = string.Empty;
             return DateTime.TryParse(
@@ -2055,15 +2057,33 @@ namespace CbsContractsDesktopClient.Views.Controls
                     System.Globalization.CultureInfo.CurrentCulture,
                     System.Globalization.DateTimeStyles.AllowWhiteSpaces | System.Globalization.DateTimeStyles.AssumeLocal,
                     out var dateTime)
-                && (value = dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture)) is not null;
+                && (value = dateTime.ToString(
+                    mode == DataFilterMode.Date ? "yyyy-MM-dd" : "yyyy-MM-dd'T'HH:mm:ss",
+                    System.Globalization.CultureInfo.InvariantCulture)) is not null;
         }
 
-        private static string NormalizeIsoDateTimeTextFragment(string text)
+        private static string NormalizeIsoDateTimeTextFragment(DataFilterMode mode, string text)
         {
             var allowed = text.Where(static character =>
                 char.IsDigit(character)
                 || character is '-' or ':' or ' ' or 'T').ToArray();
+
+            if (mode == DataFilterMode.Date)
+            {
+                allowed = allowed.Where(static character => char.IsDigit(character) || character == '-').ToArray();
+            }
+
             return new string(allowed);
+        }
+
+        private static string BuildIsoDatePlaceholderPattern()
+        {
+            return "ГГГГ-ММ-ДД";
+        }
+
+        private static bool IsDateFilterMode(DataFilterMode mode)
+        {
+            return mode is DataFilterMode.Date or DataFilterMode.DateTime;
         }
 
         private static string BuildIsoDateTimePlaceholderPattern()

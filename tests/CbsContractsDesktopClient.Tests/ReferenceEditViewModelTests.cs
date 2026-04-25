@@ -198,6 +198,92 @@ public sealed class ReferenceEditViewModelTests
         Assert.Equal("Введите корректное числовое значение.", numericField.ValidationMessage);
     }
 
+    [Fact]
+    public void DateField_UsesRailsStyleDateStringInPayload()
+    {
+        var field = new ReferenceEditFieldViewModel(
+            new ReferenceFieldDefinition
+            {
+                FieldKey = "begin_at",
+                Label = "Начало",
+                EditorType = ReferenceFieldEditorType.Date,
+                IsRequired = true
+            },
+            isCreateMode: true);
+
+        field.DateValue = new DateTimeOffset(2026, 5, 9, 0, 0, 0, TimeSpan.Zero);
+
+        Assert.False(field.HasValidationError);
+        Assert.Equal("Sat May 09 2026", field.CurrentValue);
+    }
+
+    [Fact]
+    public void DateField_CreateMode_InitializesWithCurrentDay()
+    {
+        var before = DateTimeOffset.Now.Date;
+        var field = new ReferenceEditFieldViewModel(
+            new ReferenceFieldDefinition
+            {
+                FieldKey = "begin_at",
+                Label = "Начало",
+                EditorType = ReferenceFieldEditorType.Date,
+                IsRequired = true
+            },
+            isCreateMode: true);
+        var after = DateTimeOffset.Now.Date;
+
+        Assert.NotNull(field.DateValue);
+        Assert.InRange(field.DateValue!.Value.Date, before, after);
+        Assert.True(field.HasValue);
+    }
+
+    [Fact]
+    public void CreateForCreate_BlocksSubmit_WhenEndDateIsEarlierThanBeginDate()
+    {
+        var definition = new ReferenceDefinition
+        {
+            Route = "/holidays",
+            Model = "Holiday",
+            Title = "Календарь",
+            Fields =
+            [
+                new ReferenceFieldDefinition
+                {
+                    FieldKey = "begin_at",
+                    Label = "Начало",
+                    EditorType = ReferenceFieldEditorType.Date,
+                    IsRequired = true
+                },
+                new ReferenceFieldDefinition
+                {
+                    FieldKey = "end_at",
+                    Label = "Окончание",
+                    EditorType = ReferenceFieldEditorType.Date
+                },
+                new ReferenceFieldDefinition
+                {
+                    FieldKey = "name",
+                    Label = "Описание",
+                    EditorType = ReferenceFieldEditorType.Text,
+                    IsRequired = true
+                }
+            ]
+        };
+
+        var viewModel = ReferenceEditViewModel.CreateForCreate(definition);
+        var beginAtField = viewModel.Fields.Single(static item => item.FieldKey == "begin_at");
+        var endAtField = viewModel.Fields.Single(static item => item.FieldKey == "end_at");
+        var nameField = viewModel.Fields.Single(static item => item.FieldKey == "name");
+
+        beginAtField.DateValue = new DateTimeOffset(2026, 5, 10, 0, 0, 0, TimeSpan.Zero);
+        endAtField.DateValue = new DateTimeOffset(2026, 5, 9, 0, 0, 0, TimeSpan.Zero);
+        nameField.TextValue = "Праздник";
+
+        Assert.True(endAtField.HasValidationError);
+        Assert.Equal("Поле <окончание> должно быть не раньше начала.", endAtField.ValidationMessage);
+        Assert.False(viewModel.CanSubmit);
+    }
+
     private static ReferenceDefinition CreateDefinition()
     {
         return new ReferenceDefinition

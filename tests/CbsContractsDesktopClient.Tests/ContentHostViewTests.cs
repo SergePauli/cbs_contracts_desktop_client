@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContentHostViewTests
 {
     private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     private static readonly string ContentHostViewXamlPath = Path.Combine(
         ProjectRoot,
@@ -102,5 +102,22 @@ public sealed class ContentHostViewTests
         Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
         Assert.Contains("private bool IsInternEditBlocked()", codeBehind);
         Assert.Contains("string.Equals(role, \"intern\", System.StringComparison.OrdinalIgnoreCase)", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_DefinesHolidayRecalcActionButton()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("x:Name=\"HolidayRecalcButton\"", xaml);
+        Assert.Contains("Click=\"HolidayRecalcButton_Click\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"Пересчитать сроки этапов\"", xaml);
+        Assert.Contains("private async void HolidayRecalcButton_Click(object sender, RoutedEventArgs e)", codeBehind);
+        Assert.Contains("await RecalculateHolidayStagesAsync();", codeBehind);
+        Assert.Contains("private async Task RecalculateHolidayStagesAsync()", codeBehind);
+        Assert.Contains("LoadAffectedStagesAsync", codeBehind);
+        Assert.Contains("LoadHolidayCalendarAsync", codeBehind);
+        Assert.Contains("BuildStagePatch", codeBehind);
     }
 }

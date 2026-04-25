@@ -73,6 +73,22 @@
                             Content="&#xE70F;" />
 
                         <Button
+                            x:Name="HolidayRecalcButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="HolidayRecalcButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Пересчитать сроки этапов"
+                            Content="&#xE9D9;" />
+
+                        <Button
                             x:Name="DeleteSelectedRowButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"

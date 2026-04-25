@@ -75,7 +75,7 @@ namespace CbsContractsDesktopClient.Services
                 DataFilterMatchMode.StartsWith => BuildString($"{apiField}__start", value),
                 DataFilterMatchMode.Contains => BuildString($"{apiField}__cnt", value),
                 DataFilterMatchMode.EndsWith => BuildString($"{apiField}__end", value),
-                DataFilterMatchMode.NotContains => BuildString($"{apiField}__not_cont", value),
+                DataFilterMatchMode.NotContains => BuildString($"{apiField}__not_cnt", value),
                 DataFilterMatchMode.In => BuildInFilter($"{apiField}__in", $"{apiField}__null", value),
                 _ => []
             };
@@ -96,6 +96,11 @@ namespace CbsContractsDesktopClient.Services
             if (filter.FilterMode == DataFilterMode.DateTime)
             {
                 return BuildDateTime(key, value);
+            }
+
+            if (filter.FilterMode == DataFilterMode.Date)
+            {
+                return BuildDate(key, value);
             }
 
             return BuildSingle(key, value);
@@ -124,6 +129,16 @@ namespace CbsContractsDesktopClient.Services
             if (TryConvertDateTime(value, out var dateTimeValue))
             {
                 return new Dictionary<string, object?> { [key] = dateTimeValue };
+            }
+
+            return [];
+        }
+
+        private static Dictionary<string, object?> BuildDate(string key, object value)
+        {
+            if (TryConvertDate(value, out var dateValue))
+            {
+                return new Dictionary<string, object?> { [key] = dateValue };
             }
 
             return [];
@@ -215,6 +230,64 @@ namespace CbsContractsDesktopClient.Services
             }
 
             dateTimeValue = string.Empty;
+            return false;
+        }
+
+        private static bool TryConvertDate(object value, out string dateValue)
+        {
+            switch (value)
+            {
+                case DateTimeOffset dateTimeOffset:
+                    dateValue = dateTimeOffset.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    return true;
+                case DateTime dateTime:
+                    dateValue = dateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                    return true;
+                case string text when !string.IsNullOrWhiteSpace(text):
+                    if (DateTimeOffset.TryParse(
+                        text,
+                        CultureInfo.CurrentCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                        out var parsedOffset))
+                    {
+                        dateValue = parsedOffset.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    if (DateTime.TryParse(
+                        text,
+                        CultureInfo.CurrentCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                        out var parsedDateTime))
+                    {
+                        dateValue = parsedDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    if (DateTimeOffset.TryParse(
+                        text,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                        out parsedOffset))
+                    {
+                        dateValue = parsedOffset.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    if (DateTime.TryParse(
+                        text,
+                        CultureInfo.InvariantCulture,
+                        DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                        out parsedDateTime))
+                    {
+                        dateValue = parsedDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                        return true;
+                    }
+
+                    break;
+            }
+
+            dateValue = string.Empty;
             return false;
         }
 

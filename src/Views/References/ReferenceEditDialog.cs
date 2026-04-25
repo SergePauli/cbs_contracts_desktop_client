@@ -13,6 +13,7 @@ namespace CbsContractsDesktopClient.Views.References
     public sealed class ReferenceEditDialog : ContentDialog
     {
         private readonly List<(TextBox Editor, ReferenceEditFieldViewModel ViewModel)> _textEditors = [];
+        private readonly List<(CalendarDatePicker Editor, ReferenceEditFieldViewModel ViewModel)> _dateEditors = [];
 
         public ReferenceEditDialog(ReferenceEditViewModel viewModel)
         {
@@ -181,6 +182,30 @@ namespace CbsContractsDesktopClient.Views.References
                 Converter = BoolVisibilityConverter
             });
             container.Children.Add(checkBox);
+
+            var datePicker = new CalendarDatePicker
+            {
+                DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
+                IsTodayHighlighted = true
+            };
+            datePicker.SetBinding(CalendarDatePicker.DateProperty, new Binding
+            {
+                Mode = BindingMode.TwoWay,
+                Path = new PropertyPath(nameof(ReferenceEditFieldViewModel.DateValue))
+            });
+            datePicker.SetBinding(Control.IsEnabledProperty, new Binding
+            {
+                Path = new PropertyPath(nameof(ReferenceEditFieldViewModel.IsReadOnly)),
+                Converter = new BoolNegationConverter()
+            });
+            datePicker.SetBinding(UIElement.VisibilityProperty, new Binding
+            {
+                Path = new PropertyPath(nameof(ReferenceEditFieldViewModel.IsDateEditor)),
+                Converter = BoolVisibilityConverter
+            });
+            datePicker.DateChanged += (_, _) => UpdatePrimaryButtonState();
+            _dateEditors.Add((datePicker, item));
+            container.Children.Add(datePicker);
 
             var validation = new TextBlock
             {

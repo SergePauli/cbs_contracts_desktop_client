@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ReferenceEditDialogTests
 {
     private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     private static readonly string ReferenceEditDialogPath = Path.Combine(
         ProjectRoot,
@@ -21,6 +21,7 @@ public sealed class ReferenceEditDialogTests
         var code = File.ReadAllText(ReferenceEditDialogPath);
 
         Assert.Contains("textBox.TextChanged += (_, _) =>", code);
+        Assert.Contains("datePicker.DateChanged += (_, _) => UpdatePrimaryButtonState();", code);
         Assert.Contains("UpdatePrimaryButtonState();", code);
         Assert.Contains("IsPrimaryButtonEnabled = ViewModel.CanSubmit;", code);
         Assert.DoesNotContain("LostFocus", code);

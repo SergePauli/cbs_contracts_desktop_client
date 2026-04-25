@@ -73,6 +73,36 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsHolidayDefinition()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/holidays", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("Holiday", definition.Model);
+        Assert.Equal("card", definition.Preset);
+        Assert.Equal("Календарь выходных", definition.EffectiveNavigationDescription);
+        Assert.Equal("begin_at", definition.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+        Assert.Equal(["id", "begin_at", "end_at", "name", "work"], definition.Columns.Select(static column => column.FieldKey));
+        Assert.Equal(["id", "begin_at", "end_at", "name", "work"], definition.Fields.Select(static field => field.FieldKey));
+
+        var beginAtColumn = definition.Columns.Single(static column => column.FieldKey == "begin_at");
+        Assert.True(beginAtColumn.IsFilterable);
+        Assert.Equal(DataFilterMode.Date, beginAtColumn.Filter.Mode);
+        Assert.Equal(DataFilterMatchMode.GreaterThanOrEqual, beginAtColumn.Filter.MatchMode);
+        Assert.Equal(DataFilterMode.Date, definition.Columns.Single(static column => column.FieldKey == "end_at").Filter.Mode);
+
+        var workColumn = definition.Columns.Single(static column => column.FieldKey == "work");
+        Assert.Equal(CbsTableBodyMode.BooleanIcon, workColumn.BodyMode);
+
+        var beginAtField = definition.Fields.Single(static field => field.FieldKey == "begin_at");
+        Assert.Equal(ReferenceFieldEditorType.Date, beginAtField.EditorType);
+        Assert.True(beginAtField.IsRequired);
+    }
+
+    [Fact]
     public void TryGetByRoute_ReturnsFalseForUnsupportedRoute()
     {
         var service = CreateService();
@@ -165,7 +195,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal("18rem", definition.Columns.Single(static column => column.FieldKey == "department").Width);
         Assert.Equal("20rem", definition.Columns.Single(static column => column.FieldKey == "person").Width);
         Assert.Equal("department.name", definition.Columns.Single(static column => column.FieldKey == "department").DisplayField);
-        Assert.Equal("user.person.person_name.naming.fio", definition.Columns.Single(static column => column.FieldKey == "person").DisplayField);
+        Assert.Equal("user.person.full_name", definition.Columns.Single(static column => column.FieldKey == "person").DisplayField);
     }
 
     [Fact]

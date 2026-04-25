@@ -4,6 +4,7 @@ namespace CbsContractsDesktopClient.Models.Data
     {
         Text,
         Numeric,
+        Date,
         DateTime
     }
 }

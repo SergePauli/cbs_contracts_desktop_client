@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class CbsTableRowViewTests
 {
     private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", ".."));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
 
     private static readonly string CbsTableRowViewPath = Path.Combine(
         ProjectRoot,
@@ -21,10 +21,13 @@ public sealed class CbsTableRowViewTests
         var code = File.ReadAllText(CbsTableRowViewPath);
 
         Assert.Contains("FormatCellValue", code);
+        Assert.Contains("column.Filter.Mode == DataFilterMode.Date", code);
+        Assert.Contains("FormatDateValue", code);
         Assert.Contains("CultureInfo.CurrentCulture", code);
         Assert.Contains("DateTimeOffset.TryParse", code);
         Assert.Contains("DateTime.TryParse", code);
         Assert.Contains("dateTimeOffset.LocalDateTime.ToString(CultureInfo.CurrentCulture)", code);
+        Assert.Contains("dateTimeOffset.LocalDateTime.ToString(\"d\", CultureInfo.CurrentCulture)", code);
     }
 
     [Fact]

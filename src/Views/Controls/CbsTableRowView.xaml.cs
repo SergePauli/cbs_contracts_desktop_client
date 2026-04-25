@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using Windows.UI;
@@ -237,18 +238,35 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
-            textCell.Text = FormatCellValue(value);
+            textCell.Text = FormatCellValue(column, value);
             textCell.Foreground = ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
         }
 
-        private static string FormatCellValue(object? value)
+        private static string FormatCellValue(CbsTableColumnDefinition column, object? value)
         {
+            if (column.Filter.Mode == DataFilterMode.Date)
+            {
+                return FormatDateValue(value);
+            }
+
             return value switch
             {
                 null => string.Empty,
                 DateTime dateTime => dateTime.ToLocalTime().ToString(CultureInfo.CurrentCulture),
                 DateTimeOffset dateTimeOffset => dateTimeOffset.LocalDateTime.ToString(CultureInfo.CurrentCulture),
                 string text when TryFormatDateTimeText(text, out var formattedDateTime) => formattedDateTime,
+                _ => value.ToString() ?? string.Empty
+            };
+        }
+
+        private static string FormatDateValue(object? value)
+        {
+            return value switch
+            {
+                null => string.Empty,
+                DateTime dateTime => dateTime.ToLocalTime().ToString("d", CultureInfo.CurrentCulture),
+                DateTimeOffset dateTimeOffset => dateTimeOffset.LocalDateTime.ToString("d", CultureInfo.CurrentCulture),
+                string text when TryFormatDateText(text, out var formattedDate) => formattedDate,
                 _ => value.ToString() ?? string.Empty
             };
         }
@@ -284,6 +302,38 @@ namespace CbsContractsDesktopClient.Views.Controls
                 out var dateTime))
             {
                 formattedValue = dateTime.ToString(CultureInfo.CurrentCulture);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryFormatDateText(string text, out string formattedValue)
+        {
+            formattedValue = string.Empty;
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            if (DateTimeOffset.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AllowWhiteSpaces,
+                out var dateTimeOffset))
+            {
+                formattedValue = dateTimeOffset.LocalDateTime.ToString("d", CultureInfo.CurrentCulture);
+                return true;
+            }
+
+            if (DateTime.TryParse(
+                text,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeLocal | DateTimeStyles.AllowWhiteSpaces,
+                out var dateTime))
+            {
+                formattedValue = dateTime.ToString("d", CultureInfo.CurrentCulture);
                 return true;
             }
 

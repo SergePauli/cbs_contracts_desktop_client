@@ -143,4 +143,52 @@ public class DataQueryStateBuilderTests
 
         Assert.Equal("2026-04-20T14:30:00", payload["user.last_login__gte"]);
     }
+
+    [Fact]
+    public void BuildFilters_MapsDateCriteriaToApiPayload()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "beginAt",
+                FilterMode = DataFilterMode.Date,
+                MatchMode = DataFilterMatchMode.GreaterThanOrEqual,
+                Value = "20.04.2026"
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["beginAt"] = "begin_at"
+            }));
+
+        Assert.Equal("2026-04-20", payload["begin_at__gte"]);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsNotContainsCriteriaToApiPayload()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "name",
+                MatchMode = DataFilterMatchMode.NotContains,
+                Value = "test"
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["name"] = "name"
+            }));
+
+        Assert.Equal("test", payload["name__not_cnt"]);
+        Assert.DoesNotContain("name__not_cont", payload.Keys);
+    }
 }
