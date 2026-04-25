@@ -103,6 +103,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public bool HasSelectedRow => SelectedRow is not null && !SelectedRow.IsPlaceholder;
 
+        public bool IsEmployeeReference => CurrentReference?.EditorKind == ReferenceEditorKind.Employee;
+
+        public bool ShowEmployeeDetailView => IsEmployeeReference && HasSelectedRow;
+
         public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
 
         public bool HasMoreItems => _rows?.HasMoreItems == true;
@@ -148,6 +152,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         {
             OnPropertyChanged(nameof(ShowPlaceholder));
             OnPropertyChanged(nameof(CompactHeaderText));
+            OnPropertyChanged(nameof(ShowEmployeeDetailView));
         }
 
         partial void OnErrorMessageChanged(string value)
@@ -159,9 +164,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         {
             OnPropertyChanged(nameof(HasSelectedRow));
             OnPropertyChanged(nameof(SelectedRowInfoMessage));
+            OnPropertyChanged(nameof(ShowEmployeeDetailView));
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
+        }
+
+        partial void OnCurrentReferenceChanged(ReferenceDefinition? value)
+        {
+            OnPropertyChanged(nameof(IsEmployeeReference));
+            OnPropertyChanged(nameof(ShowEmployeeDetailView));
         }
 
         partial void OnTotalCountChanged(int value)

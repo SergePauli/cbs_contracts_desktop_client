@@ -73,6 +73,62 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsEmployeesDefinition()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/employees", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("Employee", definition.Model);
+        Assert.Equal("card", definition.Preset);
+        Assert.Equal("Сотрудники", definition.Title);
+        Assert.Equal(ReferenceEditorKind.Employee, definition.EditorKind);
+        Assert.Equal("id", definition.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+        Assert.Equal(
+            ["id", "name", "contragent", "position", "contacts", "used", "priority", "description"],
+            definition.Columns.Select(static column => column.FieldKey));
+
+        var usedColumn = definition.Columns.Single(static column => column.FieldKey == "used");
+        Assert.Equal(CbsTableBodyMode.BooleanIcon, usedColumn.BodyMode);
+        Assert.Equal(CbsTableColumnAlignment.Center, usedColumn.Alignment);
+        Assert.Equal("used", usedColumn.FilterField);
+        Assert.Equal("used", usedColumn.SortField);
+
+        var nameColumn = definition.Columns.Single(static column => column.FieldKey == "name");
+        Assert.Equal("person.full_name", nameColumn.DisplayField);
+        Assert.Equal("person.person_name.naming.fio", nameColumn.FilterField);
+        Assert.Equal("person.person_name.naming.surname", nameColumn.SortField);
+
+        var contragentColumn = definition.Columns.Single(static column => column.FieldKey == "contragent");
+        Assert.Equal("contragent.name", contragentColumn.DisplayField);
+        Assert.Equal("org.name_or_org.full_name", contragentColumn.FilterField);
+        Assert.Equal("org.name_or_org.full_name", contragentColumn.SortField);
+
+        var positionColumn = definition.Columns.Single(static column => column.FieldKey == "position");
+        Assert.Equal("position.name", positionColumn.DisplayField);
+        Assert.Equal("position.name", positionColumn.FilterField);
+        Assert.Equal("position.name", positionColumn.SortField);
+
+        var contactsColumn = definition.Columns.Single(static column => column.FieldKey == "contacts");
+        Assert.Equal("person.contacts.name", contactsColumn.DisplayField);
+        Assert.Equal("person.person_contacts.contact.value", contactsColumn.FilterField);
+        Assert.False(contactsColumn.IsSortable);
+        Assert.True(contactsColumn.IsFilterable);
+
+        var priorityColumn = definition.Columns.Single(static column => column.FieldKey == "priority");
+        Assert.Equal("priority", priorityColumn.DisplayField);
+        Assert.Equal(DataFilterMode.Numeric, priorityColumn.Filter.Mode);
+        Assert.Equal(CbsTableColumnAlignment.Right, priorityColumn.Alignment);
+
+        var descriptionColumn = definition.Columns.Single(static column => column.FieldKey == "description");
+        Assert.Equal("description", descriptionColumn.DisplayField);
+        Assert.Equal("description", descriptionColumn.FilterField);
+        Assert.Equal("description", descriptionColumn.SortField);
+    }
+
+    [Fact]
     public void TryGetByRoute_ReturnsHolidayDefinition()
     {
         var service = CreateService();

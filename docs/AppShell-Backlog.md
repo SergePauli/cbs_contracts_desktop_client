@@ -514,3 +514,125 @@ Shell уже больше не является только каркасом п
 
 - при необходимости добавить date/time filter в другие reference definitions
 - при необходимости расширить mask/validation UX под более строгие пользовательские сценарии
+
+## Implementation Plan: Complex Reference / Employees
+
+Контекст:
+
+- переносим web-страницу `EmploeesPage.tsx` не отдельным экраном, а как complex reference внутри текущего reference workspace
+- таблица, lazy loading, фильтры, сортировки, resize колонок и persistence остаются общими
+- сложность сотрудников находится в DetailView и специализированном editor-flow: `Employee -> Person -> Names/Contacts`, `Contragent`, `Position`
+
+### Phase 1. Подключить list-screen на текущей reference-platform
+
+Цель:
+
+- открыть `/employees` в том же `ContentHostView`, что и остальные справочники
+
+Шаги:
+
+1. Добавить `ReferenceDefinition`:
+   - `Route = /employees`
+   - `Model = Employee`
+   - `Preset = card`
+   - default sort: `id desc`
+2. Описать колонки:
+   - `id`
+   - `used`
+   - `name`
+   - `contragent`
+   - `position`
+   - `contacts`
+3. Использовать nested display/filter/sort mapping по web-версии:
+   - `name` -> `person.full_name`, filter `person.person_name.naming.fio`
+   - `contragent` -> `contragent.name`, filter `org.name_or_org.full_name`
+   - `position` -> `position.name`
+   - `contacts` -> `person.contacts.name`, filter `person.person_contacts.contact.value`
+4. Зафиксировать definition tests.
+
+Статус:
+
+- в работе
+- `/employees` подключается как complex reference list
+- generic editor для сотрудников должен быть заблокирован до специализированного `EmployeeEditDialog`
+
+### Phase 2. Добавить DetailView под таблицей
+
+Цель:
+
+- повторить ключевое поведение web Fieldset под таблицей без дублирования table-screen
+
+Шаги:
+
+1. Ввести detail strategy / detail kind для complex reference.
+2. Добавить `EmployeeDetailView`:
+   - ФИО
+   - должность
+   - контрагент
+   - статус `уже не работает`
+   - контакты с типами и clickable links
+3. Перенести action buttons из верхнего header в контекст DetailView там, где это удобнее для сложной карточки.
+4. При смене выбранной строки обновлять доменный audit context по `auditable_type = Employee`, `auditable_id = selected.id`.
+
+### Phase 3. Реализовать specialized `EmployeeEditDialog`
+
+Цель:
+
+- не расширять generic scalar dialog до вложенной формы сотрудников
+
+Шаги:
+
+1. Создать `EmployeeEditViewModel`.
+2. Создать `EmployeeEditDialog`.
+3. Перед edit загружать свежую запись:
+   - `Model = Employee`
+   - `Preset = edit`
+   - `filters: id__eq`
+4. Поддержать поля первого этапа:
+   - ФИО
+   - должность через autocomplete / lookup
+   - контрагент через searchable lookup
+   - контакты
+   - `used`
+   - `priority`
+   - `description`
+
+### Phase 4. Сделать payload builder сотрудников
+
+Цель:
+
+- явно повторить backend contract web `EmployeeStore`, но в typed desktop-коде
+
+Шаги:
+
+1. Создать `EmployeeEditPayloadBuilder`.
+2. Для create формировать:
+   - `list_key`
+   - `contragent_id`
+   - `position_id` или `position_attributes`
+   - `person_attributes.person_names_attributes`
+   - `person_attributes.person_contacts_attributes`
+3. Для update формировать только изменения:
+   - scalar fields
+   - смена `contragent_id`
+   - смена `position_id` или новая `position_attributes`
+   - новая запись имени при изменении ФИО
+   - delta контактов: created + removed
+4. Добавить тесты на create/update payload contract.
+
+### Phase 5. Ограничить первую поставку
+
+Первая поставка:
+
+1. `/employees` list
+2. выбор строки
+3. DetailView под таблицей
+4. edit existing employee
+5. save + reload + notification
+
+Отложить:
+
+- Excel export
+- delete/archive правила
+- массовые операции
+- расширенные шаблоны ячеек таблицы для clickable contact chips

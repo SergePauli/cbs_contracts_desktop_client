@@ -286,11 +286,12 @@ namespace CbsContractsDesktopClient.Views.Shell
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
 
-            if (HolidayRecalcButton is not null)
+            var holidayRecalcButton = FindName("HolidayRecalcButton") as Button;
+            if (holidayRecalcButton is not null)
             {
-                HolidayRecalcButton.Visibility = isHolidayReference ? Visibility.Visible : Visibility.Collapsed;
-                HolidayRecalcButton.IsEnabled = canRecalculateHoliday;
-                HolidayRecalcButton.Foreground = canRecalculateHoliday
+                holidayRecalcButton.Visibility = isHolidayReference ? Visibility.Visible : Visibility.Collapsed;
+                holidayRecalcButton.IsEnabled = canRecalculateHoliday;
+                holidayRecalcButton.Foreground = canRecalculateHoliday
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.SteelBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
@@ -311,6 +312,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Profile)
             {
                 await ShowProfileEditDialogAsync(isCreateMode);
+                return;
+            }
+
+            if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Employee)
+            {
+                await ShowErrorDialogAsync(
+                    "Редактор сотрудников",
+                    "Просмотр списка сотрудников подключен. Редактирование будет добавлено отдельным специализированным диалогом.");
                 return;
             }
 
@@ -516,7 +525,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось пересчитать сроки.", ex.Message);
+                await ShowErrorDialogAsync("Ошибки при пересчёте сроков", ex.Message);
             }
             finally
             {

@@ -43,6 +43,29 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContentHostView_DefinesEmployeeDetailFooterBelowTable()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var detailXamlPath = Path.Combine(ProjectRoot, "src", "Views", "References", "EmployeeDetailView.xaml");
+        var detailXaml = File.ReadAllText(detailXamlPath);
+
+        Assert.Contains("xmlns:references=\"using:CbsContractsDesktopClient.Views.References\"", xaml);
+        Assert.Contains("<references:EmployeeDetailView", xaml);
+        Assert.Contains("Grid.Row=\"1\"", xaml);
+        Assert.Contains("Row=\"{Binding SelectedRow}\"", xaml);
+        Assert.Contains("Visibility=\"{Binding ShowEmployeeDetailView, Converter={StaticResource BoolVisibilityConverter}}\"", xaml);
+        Assert.Contains("Height=\"130\"", detailXaml);
+        Assert.Contains("Background=\"{StaticResource ShellTableHeaderBackgroundBrush}\"", detailXaml);
+        Assert.Contains("<ColumnDefinition Width=\"15*\" />", detailXaml);
+        Assert.Contains("<ColumnDefinition Width=\"85*\" />", detailXaml);
+        Assert.Contains("HorizontalAlignment=\"Right\"", detailXaml);
+        Assert.Contains("HorizontalAlignment=\"Left\"", detailXaml);
+        Assert.Contains("x:Name=\"EmployeeDismissedStatusTextBlock\"", detailXaml);
+        Assert.Contains("Text=\"Должность\"", detailXaml);
+        Assert.Contains("Text=\"Контакты\"", detailXaml);
+    }
+
+    [Fact]
     public void ContentHostView_SettingsMenu_DefinesThreeResetCommands()
     {
         var xaml = File.ReadAllText(ContentHostViewXamlPath);
