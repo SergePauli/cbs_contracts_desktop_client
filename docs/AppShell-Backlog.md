@@ -552,9 +552,10 @@ Shell уже больше не является только каркасом п
 
 Статус:
 
-- в работе
-- `/employees` подключается как complex reference list
-- generic editor для сотрудников должен быть заблокирован до специализированного `EmployeeEditDialog`
+- завершено
+- `/employees` подключен как complex reference list
+- generic editor для сотрудников заменен специализированным `EmployeeEditDialog`
+- definition зафиксирован тестами
 
 ### Phase 2. Добавить DetailView под таблицей
 
@@ -573,6 +574,14 @@ Shell уже больше не является только каркасом п
    - контакты с типами и clickable links
 3. Перенести action buttons из верхнего header в контекст DetailView там, где это удобнее для сложной карточки.
 4. При смене выбранной строки обновлять доменный audit context по `auditable_type = Employee`, `auditable_id = selected.id`.
+
+Статус:
+
+- завершено для первой поставки
+- `EmployeeDetailView` добавлен вторым footer над основным footer
+- высота detail области зафиксирована на 130
+- контакты выводятся через общий contact-chip без кнопки удаления
+- перенос action buttons в DetailView и доменный audit context остаются отдельными следующими задачами
 
 ### Phase 3. Реализовать specialized `EmployeeEditDialog`
 
@@ -597,6 +606,14 @@ Shell уже больше не является только каркасом п
    - `priority`
    - `description`
 
+Статус:
+
+- завершено для первой поставки
+- edit/double-click загружает свежую запись через `IDataQueryService`
+- должность и контрагент используют общий lookup UI
+- контрагент выбирается только из списка найденных значений
+- контакты редактируются через `DialogContactsEditor` с контролем типа и валидности
+
 ### Phase 4. Сделать payload builder сотрудников
 
 Цель:
@@ -620,15 +637,21 @@ Shell уже больше не является только каркасом п
    - delta контактов: created + removed
 4. Добавить тесты на create/update payload contract.
 
+Статус:
+
+- завершено
+- create/update payload вынесен в `EmployeeEditPayloadBuilder`
+- covered by tests: create payload, update payload, contact delta, unknown contact type rejection
+
 ### Phase 5. Ограничить первую поставку
 
 Первая поставка:
 
-1. `/employees` list
-2. выбор строки
-3. DetailView под таблицей
-4. edit existing employee
-5. save + reload + notification
+1. `/employees` list - готово
+2. выбор строки - готово
+3. DetailView под таблицей - готово
+4. edit existing employee - готово
+5. save + reload + notification - готово
 
 Отложить:
 

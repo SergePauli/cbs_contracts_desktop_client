@@ -317,9 +317,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Employee)
             {
-                await ShowErrorDialogAsync(
-                    "Редактор сотрудников",
-                    "Просмотр списка сотрудников подключен. Редактирование будет добавлено отдельным специализированным диалогом.");
+                await ShowEmployeeEditDialogAsync(isCreateMode);
                 return;
             }
 
@@ -907,6 +905,107 @@ namespace CbsContractsDesktopClient.Views.Shell
                 BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
         }
 
+        private async Task ShowEmployeeEditDialogAsync(bool isCreateMode)
+        {
+            if (_viewModel.CurrentReference is null)
+            {
+                return;
+            }
+
+            ReferenceDataRow? sourceRow = null;
+            if (!isCreateMode)
+            {
+                sourceRow = await LoadEmployeeEditRowAsync();
+                if (sourceRow is null)
+                {
+                    await ShowErrorDialogAsync("Не удалось открыть сотрудника.", "Не удалось загрузить свежую карточку сотрудника.");
+                    return;
+                }
+            }
+
+            var state = EmployeeEditStateFactory.Create(_viewModel.CurrentReference, isCreateMode, sourceRow);
+            var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);
+            var dialog = new EmployeeEditDialog(viewModel)
+            {
+                XamlRoot = XamlRoot
+            };
+
+            ReferenceDataRow? savedRow = null;
+
+            dialog.PrimaryButtonClick += async (_, args) =>
+            {
+                var deferral = args.GetDeferral();
+                try
+                {
+                    viewModel.ClearErrorInfo();
+
+                    var payload = isCreateMode
+                        ? EmployeeEditPayloadBuilder.BuildForCreate(viewModel)
+                        : EmployeeEditPayloadBuilder.BuildForUpdate(viewModel);
+
+                    if (!isCreateMode && payload.Count <= 1)
+                    {
+                        viewModel.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    savedRow = isCreateMode
+                        ? await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)
+                        : await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload);
+                }
+                catch (Exception ex)
+                {
+                    viewModel.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+                finally
+                {
+                    deferral.Complete();
+                }
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary || savedRow is null || _viewModel.CurrentReference is null)
+            {
+                return;
+            }
+
+            await _viewModel.ReloadCurrentReferenceAsync();
+            ShowSuccessNotification(
+                isCreateMode ? "Сотрудник создан" : "Изменения сотрудника сохранены",
+                BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
+        }
+
+        private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync(CancellationToken cancellationToken = default)
+        {
+            if (_viewModel.SelectedRow is null)
+            {
+                return null;
+            }
+
+            var id = TryGetSelectedRowId(_viewModel.SelectedRow);
+            if (id is null)
+            {
+                return null;
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "Employee",
+                    Preset = "edit",
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["id__eq"] = id.Value
+                    },
+                    Limit = 1
+                },
+                cancellationToken);
+
+            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
+        }
+
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(
             string searchText,
             CancellationToken cancellationToken)
@@ -937,6 +1036,48 @@ namespace CbsContractsDesktopClient.Views.Shell
                 {
                     Value = row.GetValue("id"),
                     Label = row.GetValue("name")?.ToString() ?? string.Empty
+                })
+                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
+                .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadContragentOptionsAsync(
+            string searchText,
+            CancellationToken cancellationToken)
+        {
+            var normalizedSearchText = searchText?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(normalizedSearchText))
+            {
+                return [];
+            }
+
+            var request = new DataQueryRequest
+            {
+                Model = "Contragent",
+                Preset = "item",
+                Filters = new Dictionary<string, object?>
+                {
+                    ["org.name_or_org.full_name__cnt"] = normalizedSearchText
+                },
+                Sorts = ["org.name asc"],
+                Limit = 25
+            };
+
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                request,
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(static row => new CbsTableFilterOptionDefinition
+                {
+                    Value = row.GetValue("id"),
+                    Label =
+                        row.GetValue("full_name")?.ToString()
+                        ?? row.GetValue("name")?.ToString()
+                        ?? string.Empty
                 })
                 .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
                 .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)

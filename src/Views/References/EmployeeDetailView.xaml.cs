@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Services.References;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -40,7 +41,7 @@ namespace CbsContractsDesktopClient.Views.References
                 EmployeeDismissedStatusTextBlock.Text = string.Empty;
                 PositionTextBlock.Text = string.Empty;
                 ContragentTextBlock.Text = string.Empty;
-                ContactsTextBlock.Text = string.Empty;
+                ContactsPanel.Children.Clear();
                 return;
             }
 
@@ -59,7 +60,47 @@ namespace CbsContractsDesktopClient.Views.References
                 : string.Empty;
             PositionTextBlock.Text = GetText(row, "position.name") ?? string.Empty;
             ContragentTextBlock.Text = GetText(row, "contragent.full_name", "contragent.name") ?? string.Empty;
-            ContactsTextBlock.Text = GetText(row, "person.contacts.name", "person.person_contacts.contact.value") ?? string.Empty;
+            RenderContacts(GetText(row, "person.contacts.name", "person.person_contacts.contact.value") ?? string.Empty);
+        }
+
+        private void RenderContacts(string contactsText)
+        {
+            ContactsPanel.Children.Clear();
+            ContactsPanel.ColumnDefinitions.Clear();
+            ContactsPanel.RowDefinitions.Clear();
+
+            ContactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            ContactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            ContactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            ContactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            ContactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var column = 0;
+            var row = 0;
+            foreach (var value in DialogContactsEditor.ParseContactValues(contactsText))
+            {
+                if (!ContactTypeClassifier.TryClassify(value, out var match))
+                {
+                    continue;
+                }
+
+                var element = (FrameworkElement)DialogContactsEditor.BuildContactElement(value, match, showRemoveButton: false);
+                Grid.SetColumn(element, column);
+                Grid.SetRow(element, row);
+                ContactsPanel.Children.Add(element);
+
+                column++;
+                if (column == 3)
+                {
+                    column = 0;
+                    row++;
+                }
+
+                if (row > 1)
+                {
+                    return;
+                }
+            }
         }
 
         private static string? GetText(ReferenceDataRow row, params string[] fieldKeys)

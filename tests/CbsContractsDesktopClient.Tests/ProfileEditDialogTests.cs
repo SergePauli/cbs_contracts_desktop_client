@@ -58,13 +58,11 @@ public sealed class ProfileEditDialogTests
         Assert.Contains("nameof(ProfileEditViewModel.IsRoleExcelSelected)", code);
         Assert.Contains("nameof(ProfileEditViewModel.IsRoleInternSelected)", code);
 
-        Assert.Contains("new AutoSuggestBox", code);
-        Assert.Contains("MaxSuggestionListHeight = 180", code);
-        Assert.Contains("UpdateTextOnSelect = false", code);
-        Assert.Contains("ItemTemplate = BuildPositionSuggestionTemplate()", code);
+        Assert.Contains("DialogLookupEditors.BuildAutoSuggestBox", code);
         Assert.Contains("nameof(ProfileEditViewModel.PositionSuggestionLabels)", code);
         Assert.Contains("UpdatePositionOptionsAsync", code);
         Assert.Contains("CommitPositionInput", code);
+        Assert.Contains("TrySelectPositionSuggestion", code);
 
         Assert.Contains("new ComboBox", code);
         Assert.Contains("DisplayMemberPath = \"Label\"", code);

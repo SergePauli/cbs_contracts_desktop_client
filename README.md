@@ -15,6 +15,7 @@
 - общий shell-state через `AppShellViewModel`
 - рабочий экран справочников в центральной области shell
 - create / update / delete для поддержанных справочников
+- complex reference `/employees` с detail footer, специализированным editor flow и контактами с определением типа
 - собственный `CbsTableView` с lazy loading, resize, selection, sorting и hot filters
 - локальное сохранение ширин колонок
 - компактный `AppShell` с breadcrumbs, role-based sidebar и контекстным меню настроек таблицы

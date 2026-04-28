@@ -61,6 +61,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("HorizontalAlignment=\"Right\"", detailXaml);
         Assert.Contains("HorizontalAlignment=\"Left\"", detailXaml);
         Assert.Contains("x:Name=\"EmployeeDismissedStatusTextBlock\"", detailXaml);
+        Assert.Contains("x:Name=\"ContactsPanel\"", detailXaml);
         Assert.Contains("Text=\"Должность\"", detailXaml);
         Assert.Contains("Text=\"Контакты\"", detailXaml);
     }
@@ -99,6 +100,8 @@ public sealed class ContentHostViewTests
         Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
         Assert.Contains("if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Profile)", codeBehind);
         Assert.Contains("await ShowProfileEditDialogAsync(isCreateMode);", codeBehind);
+        Assert.Contains("if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Employee)", codeBehind);
+        Assert.Contains("await ShowEmployeeEditDialogAsync(isCreateMode);", codeBehind);
         Assert.Contains("var viewModel = new ProfileEditViewModel(state, LoadPositionOptionsAsync);", codeBehind);
         Assert.Contains("var dialog = new ProfileEditDialog(viewModel)", codeBehind);
         Assert.Contains("ProfileEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
@@ -108,6 +111,13 @@ public sealed class ContentHostViewTests
         Assert.Contains("CreateProfileEditDialogState", codeBehind);
         Assert.Contains("ProfileEditStateFactory.Create(", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(", codeBehind);
+        Assert.Contains("private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync", codeBehind);
+        Assert.Contains("Preset = \"edit\"", codeBehind);
+        Assert.Contains("[\"id__eq\"] = id.Value", codeBehind);
+        Assert.Contains("var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);", codeBehind);
+        Assert.Contains("EmployeeEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
+        Assert.Contains("EmployeeEditPayloadBuilder.BuildForUpdate(viewModel)", codeBehind);
+        Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadContragentOptionsAsync(", codeBehind);
         Assert.Contains("Model = \"Position\"", codeBehind);
         Assert.Contains("Preset = \"item\"", codeBehind);
         Assert.Contains("[\"name__cnt\"] = normalizedSearchText", codeBehind);

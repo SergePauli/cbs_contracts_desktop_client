@@ -106,16 +106,14 @@
                     TextAlignment="Right"
                     Foreground="{StaticResource ShellTertiaryTextBrush}"
                     Text="Контакты" />
-                <TextBlock
-                    x:Name="ContactsTextBlock"
+                <Grid
+                    x:Name="ContactsPanel"
                     Grid.Row="3"
                     Grid.Column="1"
-                    Style="{StaticResource BodyTextBlockStyle}"
                     HorizontalAlignment="Left"
-                    TextAlignment="Left"
-                    Foreground="{StaticResource ShellPrimaryTextBrush}"
-                    TextTrimming="CharacterEllipsis"
-                    TextWrapping="Wrap" />
+                    VerticalAlignment="Center"
+                    ColumnSpacing="0"
+                    RowSpacing="0" />
             </Grid>
 
             <TextBlock

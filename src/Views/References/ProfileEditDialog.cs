@@ -3,7 +3,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.References
@@ -255,83 +254,25 @@ namespace CbsContractsDesktopClient.Views.References
 
         private FrameworkElement BuildPositionEditor()
         {
-            var autoSuggestBox = new AutoSuggestBox
-            {
-                MinWidth = 280,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                MaxSuggestionListHeight = 180,
-                UpdateTextOnSelect = false,
-                ItemTemplate = BuildPositionSuggestionTemplate()
-            };
-            autoSuggestBox.SetBinding(ItemsControl.ItemsSourceProperty, new Binding
-            {
-                Path = new PropertyPath(nameof(ProfileEditViewModel.PositionSuggestionLabels))
-            });
-
-            autoSuggestBox.Loaded += (_, _) =>
-            {
-                autoSuggestBox.Text = ViewModel.PositionInput;
-            };
-
-            autoSuggestBox.TextChanged += async (_, args) =>
-            {
-                if (args.Reason != AutoSuggestionBoxTextChangeReason.UserInput)
-                {
-                    return;
-                }
-
-                await ViewModel.UpdatePositionOptionsAsync(autoSuggestBox.Text);
-                autoSuggestBox.IsSuggestionListOpen = ViewModel.PositionSuggestionLabels.Count > 0;
-            };
-
-            autoSuggestBox.SuggestionChosen += (_, args) =>
-            {
-                var label = args.SelectedItem as string;
-                var option = ViewModel.FindPositionOption(label);
-                if (option is null)
-                {
-                    return;
-                }
-
-                ViewModel.SelectPositionOption(option);
-                autoSuggestBox.Text = ViewModel.PositionInput;
-            };
-
-            autoSuggestBox.QuerySubmitted += (_, args) =>
-            {
-                var chosenLabel = args.ChosenSuggestion as string;
-                var option = ViewModel.FindPositionOption(chosenLabel);
-                if (option is not null)
-                {
-                    ViewModel.SelectPositionOption(option);
-                }
-                else
-                {
-                    ViewModel.CommitPositionInput(autoSuggestBox.Text);
-                }
-
-                autoSuggestBox.Text = ViewModel.PositionInput;
-                autoSuggestBox.IsSuggestionListOpen = false;
-            };
-
-            autoSuggestBox.LostFocus += (_, _) =>
-            {
-                ViewModel.CommitPositionInput(autoSuggestBox.Text);
-                autoSuggestBox.Text = ViewModel.PositionInput;
-                autoSuggestBox.IsSuggestionListOpen = false;
-            };
-
-            return autoSuggestBox;
+            return DialogLookupEditors.BuildAutoSuggestBox(
+                nameof(ProfileEditViewModel.PositionSuggestionLabels),
+                () => ViewModel.PositionInput,
+                async text => await ViewModel.UpdatePositionOptionsAsync(text),
+                TrySelectPositionSuggestion,
+                text => ViewModel.CommitPositionInput(text),
+                () => ViewModel.PositionInput);
         }
 
-        private static DataTemplate BuildPositionSuggestionTemplate()
+        private bool TrySelectPositionSuggestion(string? label)
         {
-            return (DataTemplate)XamlReader.Load(
-                """
-                <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
-                  <TextBlock Text="{Binding}" Margin="0" Padding="0" Height="24" TextTrimming="CharacterEllipsis" />
-                </DataTemplate>
-                """);
+            var option = ViewModel.FindPositionOption(label);
+            if (option is null)
+            {
+                return false;
+            }
+
+            ViewModel.SelectPositionOption(option);
+            return true;
         }
 
         private FrameworkElement BuildDepartmentEditor()

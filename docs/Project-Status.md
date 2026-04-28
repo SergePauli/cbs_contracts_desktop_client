@@ -50,6 +50,16 @@
   - модель `Profile`
   - nested columns для `email`, `ФИО`, `department`, `position`, `last_login`
   - route открывается в том же `ContentHostView`, без отдельного shell-path
+- complex reference screen сотрудников:
+  - `/employees`
+  - модель `Employee`, preset `card`
+  - таблица с web-совместимыми колонками `ID`, `ФИО`, `Контрагент`, `Должность`, `Контакты`, `Ув.`, `Пор.`, `Описание`
+  - `EmployeeDetailView` под таблицей
+  - специализированный `EmployeeEditDialog`
+  - загрузка свежей записи перед edit через `IDataQueryService` с `preset = edit` и `id__eq`
+  - edit/create через `IReferenceCrudService`
+  - lookup должности и контрагента через общий `DialogLookupEditors`
+  - контакты через общий `DialogContactsEditor` с определением типа, валидацией и link-uri
 
 ### 4. Табличная платформа
 
@@ -101,6 +111,10 @@
 - `CbsTableView` date/time filter modes, masked input и `CalendarDatePicker` switch
 - `DataQueryStateBuilder` mapping date/time criteria в API payload
 - `ReferenceDefinitionService` metadata для `last_login` filter в `/users`
+- `/employees` definition, detail footer и specialized employee editor flow
+- `EmployeeEditStateFactory` flatten fresh edit-row contract
+- `EmployeeEditPayloadBuilder` create/update payload contract, включая delta контактов
+- `ContactTypeClassifier` для поддерживаемых типов контактов
 
 ## Что сейчас в разработке по смыслу
 
@@ -122,8 +136,8 @@
   - read/details
   - delete/archive с учетом бизнес-правил
 - specialized editor для complex references:
-  - `ProfileEditDialog`
-  - lookup editors для связанных сущностей
+  - следующие complex references после `ProfileEditDialog` и `EmployeeEditDialog`
+  - расширение общей библиотеки dialog editors по мере появления новых доменных форм
 - дополнительные рабочие экраны внутри shell
 - дальнейшая чистка и упрощение диагностического слоя по мере стабилизации интеграций
 
