@@ -21,6 +21,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
     {
         private static readonly bool DiagnosticsEnabled = true;
         private const int MaxUiTraceLines = 80;
+        private const int AuditPageSize = 20;
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
@@ -29,8 +30,15 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private ICbsTableRows<ReferenceDataRow>? _rows;
         private INotifyPropertyChanged? _rowsNotifier;
         private CancellationTokenSource? _navigationCts;
+        private CancellationTokenSource? _auditCts;
         private IReadOnlyList<ReferenceDataRow> _itemsSnapshot = [];
-        private string _lastAuditPanelText = string.Empty;
+        private string _lastDiagnosticsSnapshot = string.Empty;
+        private string _lastAuditPanelKey = string.Empty;
+        private List<AuditRecord> _auditRecords = [];
+        private int _auditOffset;
+        private bool _hasPreviousAuditRecords;
+        private bool _hasNextAuditRecords = true;
+        private bool _isAuditLoading;
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
 
@@ -168,12 +176,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
+            _ = RefreshAuditPanelAsync();
         }
 
         partial void OnCurrentReferenceChanged(ReferenceDefinition? value)
         {
             OnPropertyChanged(nameof(IsEmployeeReference));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
+
+            _auditCts?.Cancel();
+            ResetAuditPagingState();
         }
 
         partial void OnTotalCountChanged(int value)
@@ -208,12 +220,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             OnPropertyChanged(nameof(UiTraceLog));
             OnPropertyChanged(nameof(CombinedTraceLog));
-            UpdateAuditPanelText();
+            DiagnosticsFileLogger.AppendLine(line);
         }
 
         public void RefreshAuditPanelSnapshot()
         {
-            UpdateAuditPanelText(force: true);
+            WriteDiagnosticsSnapshot(force: true);
         }
 
         public async Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
@@ -337,6 +349,40 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             var result = await _rows.LoadMoreAsync(requestedCount);
             UpdateStateProperties();
             return result;
+        }
+
+        public async Task<bool> ShiftAuditPanelWindowAsync(int direction)
+        {
+            if (!_shellViewModel.IsAuditPanelOpen
+                || _isAuditLoading
+                || string.IsNullOrWhiteSpace(_lastAuditPanelKey))
+            {
+                return false;
+            }
+
+            if (direction > 0)
+            {
+                if (!_hasNextAuditRecords)
+                {
+                    return false;
+                }
+
+                return await LoadAuditPageAsync(_lastAuditPanelKey, _auditOffset + AuditPageSize);
+            }
+
+            if (direction < 0)
+            {
+                if (!_hasPreviousAuditRecords)
+                {
+                    return false;
+                }
+
+                return await LoadAuditPageAsync(
+                    _lastAuditPanelKey,
+                    Math.Max(0, _auditOffset - AuditPageSize));
+            }
+
+            return false;
         }
 
         public async Task SaveColumnWidthAsync(string fieldKey, string? width, CancellationToken cancellationToken = default)
@@ -464,7 +510,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 if (_shellViewModel.IsAuditPanelOpen)
                 {
-                    UpdateAuditPanelText(force: true);
+                    await RefreshAuditPanelAsync(force: true);
                 }
 
                 return;
@@ -512,7 +558,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 CurrentSortDirection = definition.InitialSortDirection ?? DataSortDirection.Ascending;
                 SelectedRow = null;
                 UiTraceLog = string.Empty;
-                _lastAuditPanelText = string.Empty;
+                _lastDiagnosticsSnapshot = string.Empty;
+                ResetAuditPagingState();
                 _shellViewModel.SetFooterTableStats(string.Empty);
 
                 var initialSorts = CurrentSortField is not null && CurrentSortDirection is DataSortDirection initialDirection
@@ -568,6 +615,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 AppendUiTrace($"NAVIGATE AFTER INITIALIZE model={definition.Model} {GetDebugStateSnapshot()}");
                 await TryLoadFilterOptionSourcesAsync(definition, cancellationToken);
                 UpdateStateProperties();
+
+                if (_shellViewModel.IsAuditPanelOpen)
+                {
+                    await RefreshAuditPanelAsync(force: true);
+                }
             }
             finally
             {
@@ -606,7 +658,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             ErrorMessage = string.Empty;
             TotalCount = 0;
             UiTraceLog = string.Empty;
-            _lastAuditPanelText = string.Empty;
+            _lastDiagnosticsSnapshot = string.Empty;
+            ResetAuditPagingState();
             CurrentSortField = null;
             CurrentSortDirection = null;
             SelectedRow = null;
@@ -851,7 +904,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
-            UpdateAuditPanelText();
+            WriteDiagnosticsSnapshot();
         }
 
         private string BuildFooterTotalCountValue()
@@ -913,7 +966,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 : $"ID: {id}";
         }
 
-        private void UpdateAuditPanelText(bool force = false)
+        private void WriteDiagnosticsSnapshot(bool force = false)
         {
             if (!DiagnosticsEnabled)
             {
@@ -925,40 +978,397 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 return;
             }
 
-            if (!_shellViewModel.IsAuditPanelOpen)
-            {
-                return;
-            }
-
-            const string auditTitle = "Диагностика таблицы";
-            const string auditDescription = "Временный диагностический поток жизненного цикла state и lazy-scroll таблицы.";
-
-            if (!string.Equals(_shellViewModel.AuditPanelState.Title, auditTitle, StringComparison.Ordinal)
-                || !string.Equals(_shellViewModel.AuditPanelState.Description, auditDescription, StringComparison.Ordinal))
-            {
-                _shellViewModel.SetAuditPanelState(new AuditPanelState
-                {
-                    Title = auditTitle,
-                    Description = auditDescription,
-                    Entries = []
-                });
-            }
-
-            var auditText =
+            var diagnosticsText =
+                $"Route: {_shellViewModel.CurrentRoute}{Environment.NewLine}" +
+                $"Reference: {CurrentReference?.Model ?? "<none>"}{Environment.NewLine}" +
                 $"Loaded: {LoadedCount}/{TotalCount}{Environment.NewLine}" +
                 $"Resident: {ResidentCount}/{TotalCount}{Environment.NewLine}{Environment.NewLine}" +
                 $"Count payload:{Environment.NewLine}{LastCountRequestJson}{Environment.NewLine}{Environment.NewLine}" +
                 $"Page payload:{Environment.NewLine}{LastPageRequestJson}{Environment.NewLine}{Environment.NewLine}" +
                 $"Trace:{Environment.NewLine}{CombinedTraceLog}";
 
-            if (!force && string.Equals(_lastAuditPanelText, auditText, StringComparison.Ordinal))
+            if (!force && string.Equals(_lastDiagnosticsSnapshot, diagnosticsText, StringComparison.Ordinal))
             {
                 return;
             }
 
-            _lastAuditPanelText = auditText;
-            _shellViewModel.SetAuditPanelText(auditText);
+            _lastDiagnosticsSnapshot = diagnosticsText;
+            DiagnosticsFileLogger.AppendBlock("TABLE DIAGNOSTICS", diagnosticsText);
         }
+
+        private async Task RefreshAuditPanelAsync(bool force = false)
+        {
+            if (!_shellViewModel.IsAuditPanelOpen)
+            {
+                return;
+            }
+
+            if (HasSelectedRow && SelectedRow is not null && TryGetSelectedRowId(SelectedRow) is null)
+            {
+                _auditCts?.Cancel();
+                ResetAuditPagingState();
+                _shellViewModel.SetAuditPanelState(new AuditPanelState
+                {
+                    Title = "Аудит изменений",
+                    Description = CurrentReference is null
+                        ? "Выбранная запись"
+                        : BuildSelectedRecordAuditDescription(CurrentReference, SelectedRow),
+                    Entries =
+                    [
+                        BuildAuditPanelMessageEntry(
+                            "ID не найден",
+                            "Не удалось определить ID записи для загрузки аудита.")
+                    ]
+                });
+                _shellViewModel.SetAuditPanelText("Не удалось определить ID записи для загрузки аудита.");
+                return;
+            }
+
+            var scope = BuildAuditScope();
+            if (scope is null)
+            {
+                _auditCts?.Cancel();
+                ResetAuditPagingState();
+                _shellViewModel.SetAuditPanelState(new AuditPanelState
+                {
+                    Title = "Аудит изменений",
+                    Description = "Выберите справочник, чтобы увидеть последние события.",
+                    Entries =
+                    [
+                        BuildAuditPanelMessageEntry(
+                            "Справочник не выбран",
+                            "Последние события появятся после выбора активного справочника.")
+                    ]
+                });
+                _shellViewModel.SetAuditPanelText("Справочник не выбран.");
+                return;
+            }
+
+            if (!force && string.Equals(_lastAuditPanelKey, scope.Key, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _auditCts?.Cancel();
+            ResetAuditPagingState();
+            _lastAuditPanelKey = scope.Key;
+
+            _shellViewModel.SetAuditPanelState(new AuditPanelState
+            {
+                Title = scope.Title,
+                Description = scope.Description,
+                Entries =
+                [
+                    BuildAuditPanelMessageEntry(
+                        "Загрузка",
+                        "Загрузка событий аудита...")
+                ]
+            });
+            _shellViewModel.SetAuditPanelText("Загрузка событий аудита...");
+
+            await LoadAuditPageAsync(scope.Key, offset: 0);
+        }
+
+        private async Task<bool> LoadAuditPageAsync(string auditKey, int offset)
+        {
+            var scope = BuildAuditScope();
+            if (scope is null || !string.Equals(scope.Key, auditKey, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            _isAuditLoading = true;
+            _auditCts?.Cancel();
+            _auditCts = new CancellationTokenSource();
+            var cancellationToken = _auditCts.Token;
+            var requestedOffset = Math.Max(0, offset);
+
+            try
+            {
+                var audits = await _dataQueryService.GetDataAsync<AuditRecord>(
+                    new DataQueryRequest
+                    {
+                        Model = "Audit",
+                        Filters = scope.Filters,
+                        Sorts = ["created_at desc"],
+                        Limit = AuditPageSize,
+                        Offset = requestedOffset,
+                        Preset = "card"
+                    },
+                    cancellationToken);
+
+                if (cancellationToken.IsCancellationRequested
+                    || !string.Equals(_lastAuditPanelKey, scope.Key, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                _auditRecords = audits
+                    .OrderByDescending(GetAuditSortTimestamp)
+                    .ThenByDescending(static audit => audit.Id)
+                    .ToList();
+                _auditOffset = requestedOffset;
+                _hasPreviousAuditRecords = _auditOffset > 0;
+                _hasNextAuditRecords = audits.Count == AuditPageSize;
+
+                _shellViewModel.SetAuditPanelState(new AuditPanelState
+                {
+                    Title = scope.Title,
+                    Description = BuildAuditWindowDescription(scope, _auditOffset),
+                    Entries = BuildAuditEntries(_auditRecords)
+                });
+                _shellViewModel.SetAuditPanelText(BuildAuditPanelText(_auditRecords));
+                return true;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+            catch (Exception ex)
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    _shellViewModel.SetAuditPanelState(new AuditPanelState
+                    {
+                        Title = scope.Title,
+                        Description = $"{BuildAuditWindowDescription(scope, _auditOffset)} Не удалось загрузить страницу: {ex.Message}",
+                        Entries = _auditRecords.Count == 0
+                            ? [
+                                BuildAuditPanelMessageEntry(
+                                    "Не удалось загрузить аудит",
+                                    ex.Message)
+                            ]
+                            : BuildAuditEntries(_auditRecords)
+                    });
+                    _shellViewModel.SetAuditPanelText($"Не удалось загрузить аудит: {ex.Message}");
+                }
+
+                return false;
+            }
+            finally
+            {
+                _isAuditLoading = false;
+            }
+        }
+
+        private void ResetAuditPagingState()
+        {
+            _lastAuditPanelKey = string.Empty;
+            _auditRecords = [];
+            _auditOffset = 0;
+            _hasPreviousAuditRecords = false;
+            _hasNextAuditRecords = true;
+            _isAuditLoading = false;
+        }
+
+        private AuditScope? BuildAuditScope()
+        {
+            if (!HasActiveReference || CurrentReference is null)
+            {
+                return null;
+            }
+
+            var model = CurrentReference.Model;
+            var filters = new Dictionary<string, object?>
+            {
+                ["auditable_type__eq"] = model
+            };
+
+            if (HasSelectedRow && SelectedRow is not null)
+            {
+                var selectedId = TryGetSelectedRowId(SelectedRow);
+                if (selectedId is null)
+                {
+                    return null;
+                }
+
+                filters["auditable_id__eq"] = selectedId.Value;
+                return new AuditScope(
+                    $"record:{model}:{selectedId.Value}",
+                    "Аудит изменений",
+                    BuildSelectedRecordAuditDescription(CurrentReference, SelectedRow),
+                    filters);
+            }
+
+            return new AuditScope(
+                $"reference:{model}",
+                "Последние события аудита",
+                $"Активный справочник: {CurrentReference.EffectiveNavigationDescription}",
+                filters);
+        }
+
+        private static string BuildAuditWindowDescription(AuditScope scope, int offset)
+        {
+            return offset == 0
+                ? scope.Description
+                : $"{scope.Description}. Позиция timeline: {offset + 1}";
+        }
+
+        private static IReadOnlyList<AuditEntry> BuildAuditEntries(IReadOnlyList<AuditRecord> audits)
+        {
+            if (audits.Count == 0)
+            {
+                return
+                [
+                    BuildAuditPanelMessageEntry(
+                        "Событий не найдено",
+                        "По текущему контексту нет событий аудита.")
+                ];
+            }
+
+            return audits.Select(ToAuditEntry).ToList();
+        }
+
+        private static AuditEntry ToAuditEntry(AuditRecord audit)
+        {
+            return new AuditEntry
+            {
+                Timestamp = audit.When ?? string.Empty,
+                Title = GetAuditActionTitle(audit.Action),
+                Description = BuildAuditRecordText(audit),
+                BackgroundBrushKey = GetAuditBrushKey(audit.Action)
+            };
+        }
+
+        private static string BuildAuditPanelText(IReadOnlyList<AuditRecord> audits)
+        {
+            if (audits.Count == 0)
+            {
+                return "Событий не найдено.";
+            }
+
+            return string.Join(
+                $"{Environment.NewLine}{Environment.NewLine}",
+                audits.Select(BuildAuditRecordText));
+        }
+
+        private static AuditEntry BuildAuditPanelMessageEntry(string title, string description)
+        {
+            return new AuditEntry
+            {
+                Timestamp = "Статус",
+                Title = title,
+                Description = description,
+                BackgroundBrushKey = "ShellMutedPanelBackgroundBrush"
+            };
+        }
+
+        private static DateTimeOffset GetAuditSortTimestamp(AuditRecord audit)
+        {
+            return DateTimeOffset.TryParse(audit.When, out var timestamp)
+                ? timestamp
+                : DateTimeOffset.MinValue;
+        }
+
+        private static string BuildAuditRecordText(AuditRecord audit)
+        {
+            var lines = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(audit.Where))
+            {
+                lines.Add($"где: {audit.Where}");
+            }
+
+            var what = !string.IsNullOrWhiteSpace(audit.What)
+                ? audit.What
+                : audit.Detail;
+            if (!string.IsNullOrWhiteSpace(what))
+            {
+                lines.Add($"что: {what}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(audit.Field))
+            {
+                lines.Add($"поле: {audit.Field}; изменено {audit.Before} на {audit.After}");
+            }
+
+            lines.Add($"кем: {audit.Who ?? string.Empty}");
+            return lines.Count == 0
+                ? "Детали события не переданы."
+                : string.Join(Environment.NewLine, lines);
+        }
+
+        private static string GetAuditActionTitle(string? action)
+        {
+            return action switch
+            {
+                "added" => "Добавлено:",
+                "updated" => "Изменено:",
+                "removed" => "Удалено:",
+                "deleted" => "Удалено:",
+                "archived" => "Архивировано:",
+                "imported" => "Импорт:",
+                "closed" => "Закрыто:",
+                "signed" => "Подписано:",
+                _ => action ?? "Событие:"
+            };
+        }
+
+        private static string GetAuditBrushKey(string? action)
+        {
+            return action switch
+            {
+                "added" => "ShellTableRowSelectedBackgroundBrush",
+                "updated" => "ShellAccentPanelBackgroundBrush",
+                "removed" or "deleted" => "ShellTableHeaderBackgroundBrush",
+                _ => "ShellAccentPanelBackgroundBrush"
+            };
+        }
+
+        private static string BuildEmployeeAuditDescription(ReferenceDataRow row)
+        {
+            var name =
+                row.GetValue("person.full_name")?.ToString()
+                ?? row.GetValue("name")?.ToString()
+                ?? row.GetValue("head")?.ToString()
+                ?? "Сотрудник";
+            var id = row.GetValue("id")?.ToString();
+
+            return string.IsNullOrWhiteSpace(id)
+                ? name
+                : $"{name} (ID: {id})";
+        }
+
+        private static string BuildSelectedRecordAuditDescription(
+            ReferenceDefinition definition,
+            ReferenceDataRow row)
+        {
+            if (definition.EditorKind == ReferenceEditorKind.Employee)
+            {
+                return BuildEmployeeAuditDescription(row);
+            }
+
+            var name =
+                row.GetValue("name")?.ToString()
+                ?? row.GetValue("title")?.ToString()
+                ?? row.GetValue("full_name")?.ToString()
+                ?? row.GetValue("display_name")?.ToString()
+                ?? definition.EffectiveNavigationDescription;
+            var id = row.GetValue("id")?.ToString();
+
+            return string.IsNullOrWhiteSpace(id)
+                ? name
+                : $"{name} (ID: {id})";
+        }
+
+        private static long? TryGetSelectedRowId(ReferenceDataRow row)
+        {
+            var value = row.GetValue("id");
+
+            return value switch
+            {
+                long longValue => longValue,
+                int intValue => intValue,
+                string text when long.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
+        }
+
+        private sealed record AuditScope(
+            string Key,
+            string Title,
+            string Description,
+            Dictionary<string, object?> Filters);
 
         private void RefreshItemsSnapshot()
         {

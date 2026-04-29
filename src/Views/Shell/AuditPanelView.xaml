@@ -4,7 +4,6 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    xmlns:shell="using:CbsContractsDesktopClient.Models.Shell"
     mc:Ignorable="d">
 
     <Border
@@ -32,20 +31,23 @@
                     TextWrapping="Wrap" />
             </StackPanel>
 
-            <TextBox
+            <ScrollViewer
+                x:Name="AuditScrollViewer"
                 Grid.Row="1"
                 Margin="0,18,0,0"
-                AcceptsReturn="True"
-                FontFamily="Cascadia Mono"
-                IsReadOnly="True"
-                IsSpellCheckEnabled="False"
-                MinHeight="240"
-                Padding="12"
-                ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                ScrollViewer.VerticalScrollBarVisibility="Auto"
-                SelectionHighlightColor="Green"
-                Text="{x:Bind ViewModel.AuditPanelText, Mode=OneWay}"
-                TextWrapping="NoWrap" />
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto"
+                ViewChanged="AuditScrollViewer_ViewChanged">
+                <Grid>
+                    <Border
+                        Width="2"
+                        Margin="10,0,0,0"
+                        HorizontalAlignment="Left"
+                        Background="{StaticResource ShellAccentMutedBrush}"
+                        Opacity="0.55" />
+                    <StackPanel x:Name="AuditTimelineHost" />
+                </Grid>
+            </ScrollViewer>
         </Grid>
     </Border>
 </UserControl>
