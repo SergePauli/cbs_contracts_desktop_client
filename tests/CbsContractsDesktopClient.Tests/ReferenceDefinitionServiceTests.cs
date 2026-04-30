@@ -129,6 +129,63 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsContragentsDefinition()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/contragents", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("Contragent", definition.Model);
+        Assert.Equal("card", definition.Preset);
+        Assert.Equal("Контрагенты", definition.Title);
+        Assert.Equal(ReferenceEditorKind.Generic, definition.EditorKind);
+        Assert.Equal("id", definition.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+        Assert.Equal(
+            ["id", "name", "inn", "ownership", "region", "full_name", "address"],
+            definition.Columns.Select(static column => column.FieldKey));
+        Assert.All(definition.Fields, static field =>
+        {
+            Assert.True(field.IsReadOnlyOnCreate);
+            Assert.True(field.IsReadOnlyOnEdit);
+        });
+
+        var nameColumn = definition.Columns.Single(static column => column.FieldKey == "name");
+        Assert.Equal("requisites.organization.name", nameColumn.DisplayField);
+        Assert.Equal("org.name", nameColumn.FilterField);
+        Assert.Equal("org.name", nameColumn.SortField);
+        Assert.Equal(DataFilterMatchMode.Contains, nameColumn.Filter.MatchMode);
+
+        var innColumn = definition.Columns.Single(static column => column.FieldKey == "inn");
+        Assert.Equal("requisites.organization.inn", innColumn.DisplayField);
+        Assert.Equal("org.inn", innColumn.FilterField);
+        Assert.Equal(DataFilterMatchMode.StartsWith, innColumn.Filter.MatchMode);
+
+        var ownershipColumn = definition.Columns.Single(static column => column.FieldKey == "ownership");
+        Assert.Equal("requisites.organization.ownership.name", ownershipColumn.DisplayField);
+        Assert.Equal("org.ownership_id", ownershipColumn.FilterField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, ownershipColumn.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, ownershipColumn.Filter.MatchMode);
+        Assert.Equal("Ownership", ownershipColumn.Filter.OptionsSourceKey);
+
+        var regionColumn = definition.Columns.Single(static column => column.FieldKey == "region");
+        Assert.Equal("region.name", regionColumn.DisplayField);
+        Assert.Equal("real_addr.address.area_id", regionColumn.FilterField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, regionColumn.Filter.EditorKind);
+        Assert.Equal("Area", regionColumn.Filter.OptionsSourceKey);
+
+        var fullNameColumn = definition.Columns.Single(static column => column.FieldKey == "full_name");
+        Assert.Equal("requisites.organization.full_name", fullNameColumn.DisplayField);
+        Assert.Equal("org.full_name", fullNameColumn.FilterField);
+
+        var addressColumn = definition.Columns.Single(static column => column.FieldKey == "address");
+        Assert.Equal("real_addr.address.value", addressColumn.DisplayField);
+        Assert.False(addressColumn.IsSortable);
+        Assert.False(addressColumn.IsFilterable);
+    }
+
+    [Fact]
     public void TryGetByRoute_ReturnsHolidayDefinition()
     {
         var service = CreateService();

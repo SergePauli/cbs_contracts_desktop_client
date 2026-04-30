@@ -1,0 +1,162 @@
+<UserControl
+    x:Class="CbsContractsDesktopClient.Views.References.ContragentDetailView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:references="using:CbsContractsDesktopClient.Views.References"
+    mc:Ignorable="d">
+
+    <Border
+        Height="170"
+        Background="{StaticResource ShellTableHeaderBackgroundBrush}"
+        BorderBrush="{StaticResource ShellPanelBorderBrush}"
+        BorderThickness="0,1,0,0">
+        <Grid
+            Padding="14,9,14,10"
+            ColumnSpacing="14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="60*" />
+                <ColumnDefinition Width="40*" />
+            </Grid.ColumnDefinitions>
+
+            <Grid
+                Grid.Column="0"
+                VerticalAlignment="Top"
+                RowSpacing="7"
+                ColumnSpacing="8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="13*" />
+                    <ColumnDefinition Width="87*" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    Grid.Row="0"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Контрагент" />
+                <StackPanel
+                    Grid.Row="0"
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8">
+                    <TextBlock
+                        x:Name="ContragentNameTextBlock"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Foreground="{StaticResource ShellPrimaryTextBrush}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                    <TextBlock
+                        x:Name="ContragentIdTextBlock"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        VerticalAlignment="Bottom"
+                        Foreground="{StaticResource ShellCaptionTextBrush}" />
+                </StackPanel>
+
+                <TextBlock
+                    Grid.Row="1"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Полное имя" />
+                <TextBlock
+                    x:Name="FullNameTextBlock"
+                    Grid.Row="1"
+                    Grid.Column="1"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+
+                <TextBlock
+                    Grid.Row="2"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Реквизиты" />
+                <TextBlock
+                    x:Name="RequisitesTextBlock"
+                    Grid.Row="2"
+                    Grid.Column="1"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+
+                <TextBlock
+                    Grid.Row="3"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Описание" />
+                <TextBlock
+                    x:Name="DescriptionTextBlock"
+                    Grid.Row="3"
+                    Grid.Column="1"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+
+                <TextBlock
+                    Grid.Row="4"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Контакты" />
+                <Grid
+                    x:Name="ContactsPanel"
+                    Grid.Row="4"
+                    Grid.Column="1"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    ColumnSpacing="0"
+                    RowSpacing="0" />
+
+                <TextBlock
+                    Grid.Row="5"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Адреса" />
+                <TextBlock
+                    x:Name="AddressesTextBlock"
+                    Grid.Row="5"
+                    Grid.Column="1"
+                    Style="{StaticResource BodyTextBlockStyle}"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+            </Grid>
+
+            <Border
+                Grid.Column="1"
+                BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                BorderThickness="1,0,0,0"
+                Padding="12,0,0,0">
+                <references:EmployeeBox x:Name="EmployeesBox" />
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

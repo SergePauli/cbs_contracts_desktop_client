@@ -67,6 +67,69 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContentHostView_DefinesContragentDetailFooterBelowTable()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var detailXamlPath = Path.Combine(ProjectRoot, "src", "Views", "References", "ContragentDetailView.xaml");
+        var detailCodePath = Path.Combine(ProjectRoot, "src", "Views", "References", "ContragentDetailView.xaml.cs");
+        var employeeBoxXamlPath = Path.Combine(ProjectRoot, "src", "Views", "References", "EmployeeBox.xaml");
+        var employeeBoxCodePath = Path.Combine(ProjectRoot, "src", "Views", "References", "EmployeeBox.xaml.cs");
+        var detailXaml = File.ReadAllText(detailXamlPath);
+        var detailCode = File.ReadAllText(detailCodePath);
+        var employeeBoxXaml = File.ReadAllText(employeeBoxXamlPath);
+        var employeeBoxCode = File.ReadAllText(employeeBoxCodePath);
+
+        Assert.Contains("<references:ContragentDetailView", xaml);
+        Assert.Contains("Grid.Row=\"1\"", xaml);
+        Assert.Contains("Row=\"{Binding SelectedRow}\"", xaml);
+        Assert.Contains("EmployeeEditRequested=\"ContragentDetailView_EmployeeEditRequested\"", xaml);
+        Assert.Contains("Visibility=\"{Binding ShowContragentDetailView, Converter={StaticResource BoolVisibilityConverter}}\"", xaml);
+        Assert.Contains("Height=\"170\"", detailXaml);
+        Assert.Contains("<ColumnDefinition Width=\"60*\" />", detailXaml);
+        Assert.Contains("<ColumnDefinition Width=\"40*\" />", detailXaml);
+        Assert.Contains("<ColumnDefinition Width=\"13*\" />", detailXaml);
+        Assert.Contains("<ColumnDefinition Width=\"87*\" />", detailXaml);
+        Assert.Contains("x:Name=\"ContragentNameTextBlock\"", detailXaml);
+        Assert.Contains("x:Name=\"ContactsPanel\"", detailXaml);
+        Assert.Contains("<references:EmployeeBox x:Name=\"EmployeesBox\" />", detailXaml);
+        Assert.Contains("Padding=\"12,0,0,0\"", detailXaml);
+        Assert.Contains("public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EmployeeEditRequested;", detailCode);
+        Assert.Contains("EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);", detailCode);
+        Assert.Contains("EmployeesBox.Employees = ReadEmployees(row);", detailCode);
+        Assert.Contains("\"requisites.organization.full_name\"", detailCode);
+        Assert.Contains("FormatPart(\"ИНН\", GetText(row, \"requisites.organization.inn\", \"inn\"))", detailCode);
+        Assert.Contains("FormatPart(\"КПП\", GetText(row, \"requisites.organization.kpp\", \"kpp\"))", detailCode);
+        Assert.Contains("FormatPart(\"Подразделение\", GetText(row, \"requisites.organization.division\", \"division\", \"contragent.division\"))", detailCode);
+        Assert.DoesNotContain("FormatPart(\"ОГРН\"", detailCode);
+        Assert.DoesNotContain("FormatPart(\"ОКПО\"", detailCode);
+        Assert.Contains("\"contacts.contact_attributes.value\"", detailCode);
+        Assert.Contains("\"contacts.contact_attributes.name\"", detailCode);
+        Assert.Contains("\"contacts.contact.name\"", detailCode);
+        Assert.Contains("ReadNestedContactValue(item, \"contact_attributes\")", detailCode);
+        Assert.Contains("ReadNestedContactValue(item, \"contact\")", detailCode);
+        Assert.Contains("\"real_addr.address.value\"", detailCode);
+        Assert.Contains("x:Class=\"CbsContractsDesktopClient.Views.References.EmployeeBox\"", employeeBoxXaml);
+        Assert.Contains("x:Name=\"EmployeesListView\"", employeeBoxXaml);
+        Assert.Contains("SelectionMode=\"Single\"", employeeBoxXaml);
+        Assert.Contains("Text=\"Сотрудники\"", employeeBoxXaml);
+        Assert.Contains("Text=\"НЕТ ЗАПИСЕЙ\"", employeeBoxXaml);
+        Assert.Contains("public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EditRequested;", employeeBoxCode);
+        Assert.Contains("Padding = new Thickness(2)", employeeBoxCode);
+        Assert.Contains("Padding = new Thickness(2, 4, 2, 4)", employeeBoxCode);
+        Assert.Contains("ShellAccentPanelBackgroundAltBrush", employeeBoxCode);
+        Assert.Contains("DisableContainerHover(listViewItem);", employeeBoxCode);
+        Assert.Contains("ListViewItemBackgroundPointerOver", employeeBoxCode);
+        Assert.Contains("ListViewItemBackgroundPointerOverSelected", employeeBoxCode);
+        Assert.Contains("ToolTipService.SetToolTip(listViewItem, employee.Description);", employeeBoxCode);
+        Assert.DoesNotContain("ToolTipService.SetToolTip(name, employee.Description);", employeeBoxCode);
+        Assert.Contains("Clipboard.SetContent(dataPackage);", employeeBoxCode);
+        Assert.Contains("ContactTypeClassifier.TryClassify(contact, out var match)", employeeBoxCode);
+        Assert.DoesNotContain("employee.Contacts.Take(4)", employeeBoxCode);
+        Assert.Contains("nameof(CanEdit)", employeeBoxCode);
+        Assert.Contains("string.Equals(role, \"intern\", StringComparison.OrdinalIgnoreCase)", employeeBoxCode);
+    }
+
+    [Fact]
     public void ContentHostView_SettingsMenu_DefinesThreeResetCommands()
     {
         var xaml = File.ReadAllText(ContentHostViewXamlPath);
@@ -106,12 +169,13 @@ public sealed class ContentHostViewTests
         Assert.Contains("var dialog = new ProfileEditDialog(viewModel)", codeBehind);
         Assert.Contains("ProfileEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
         Assert.Contains("ProfileEditPayloadBuilder.BuildForUpdate(viewModel)", codeBehind);
-        Assert.Contains("await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)", codeBehind);
-        Assert.Contains("await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload)", codeBehind);
+        Assert.Contains("await _referenceCrudService.CreateAsync(definition, payload)", codeBehind);
+        Assert.Contains("await _referenceCrudService.UpdateAsync(definition, payload)", codeBehind);
         Assert.Contains("CreateProfileEditDialogState", codeBehind);
         Assert.Contains("ProfileEditStateFactory.Create(", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(", codeBehind);
-        Assert.Contains("private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync", codeBehind);
+        Assert.Contains("private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync(", codeBehind);
+        Assert.Contains("long? employeeId = null", codeBehind);
         Assert.Contains("Preset = \"edit\"", codeBehind);
         Assert.Contains("[\"id__eq\"] = id.Value", codeBehind);
         Assert.Contains("var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);", codeBehind);
@@ -135,6 +199,20 @@ public sealed class ContentHostViewTests
         Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
         Assert.Contains("private bool IsInternEditBlocked()", codeBehind);
         Assert.Contains("string.Equals(role, \"intern\", System.StringComparison.OrdinalIgnoreCase)", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_OpensEmployeeEditDialog_FromContragentEmployeeBox()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("private async void ContragentDetailView_EmployeeEditRequested", codeBehind);
+        Assert.Contains("e.Employee.Id is not long employeeId", codeBehind);
+        Assert.Contains("_referenceDefinitionService.TryGetByRoute(\"/employees\", out var employeeDefinition)", codeBehind);
+        Assert.Contains("await ShowEmployeeEditDialogAsync(isCreateMode: false, employeeId, employeeDefinition);", codeBehind);
+        Assert.Contains("var definition = employeeDefinition ?? _viewModel.CurrentReference;", codeBehind);
+        Assert.Contains("sourceRow = await LoadEmployeeEditRowAsync(employeeId);", codeBehind);
+        Assert.Contains("EmployeeEditStateFactory.Create(definition, isCreateMode, sourceRow)", codeBehind);
     }
 
     [Fact]

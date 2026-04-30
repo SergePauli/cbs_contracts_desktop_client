@@ -118,7 +118,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public bool IsEmployeeReference => CurrentReference?.EditorKind == ReferenceEditorKind.Employee;
 
+        public bool IsContragentReference => string.Equals(CurrentReference?.Route, "/contragents", StringComparison.OrdinalIgnoreCase);
+
         public bool ShowEmployeeDetailView => IsEmployeeReference && HasSelectedRow;
+
+        public bool ShowContragentDetailView => IsContragentReference && HasSelectedRow;
 
         public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
 
@@ -166,6 +170,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(ShowPlaceholder));
             OnPropertyChanged(nameof(CompactHeaderText));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
+            OnPropertyChanged(nameof(ShowContragentDetailView));
         }
 
         partial void OnErrorMessageChanged(string value)
@@ -178,6 +183,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(HasSelectedRow));
             OnPropertyChanged(nameof(SelectedRowInfoMessage));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
+            OnPropertyChanged(nameof(ShowContragentDetailView));
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
@@ -187,7 +193,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         partial void OnCurrentReferenceChanged(ReferenceDefinition? value)
         {
             OnPropertyChanged(nameof(IsEmployeeReference));
+            OnPropertyChanged(nameof(IsContragentReference));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
+            OnPropertyChanged(nameof(ShowContragentDetailView));
 
             _auditCts?.Cancel();
             ResetAuditPagingState();
@@ -806,7 +814,15 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             string sourceKey,
             CancellationToken cancellationToken)
         {
-            if (!string.Equals(sourceKey, "Department", StringComparison.OrdinalIgnoreCase))
+            var model = sourceKey switch
+            {
+                var key when string.Equals(key, "Department", StringComparison.OrdinalIgnoreCase) => "Department",
+                var key when string.Equals(key, "Area", StringComparison.OrdinalIgnoreCase) => "Area",
+                var key when string.Equals(key, "Ownership", StringComparison.OrdinalIgnoreCase) => "Ownership",
+                _ => null
+            };
+
+            if (model is null)
             {
                 return [];
             }
@@ -814,7 +830,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
                 new DataQueryRequest
                 {
-                    Model = "Department",
+                    Model = model,
                     Preset = "item",
                     Sorts = ["name asc"],
                     Limit = 500

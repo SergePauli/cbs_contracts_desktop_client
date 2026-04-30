@@ -27,6 +27,7 @@ namespace CbsContractsDesktopClient.Views.Shell
     {
         private readonly ReferencesContentViewModel _viewModel;
         private readonly IReferenceCrudService _referenceCrudService;
+        private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
         private readonly IDataQueryService _dataQueryService;
         private readonly IUserService _userService;
@@ -46,6 +47,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
             _referenceCrudService = App.Services.GetRequiredService<IReferenceCrudService>();
+            _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _userService = App.Services.GetRequiredService<IUserService>();
@@ -106,6 +108,22 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void HolidayRecalcButton_Click(object sender, RoutedEventArgs e)
         {
             await RecalculateHolidayStagesAsync();
+        }
+
+        private async void ContragentDetailView_EmployeeEditRequested(object sender, EmployeeBoxEditRequestedEventArgs e)
+        {
+            if (IsInternEditBlocked() || e.Employee.Id is not long employeeId)
+            {
+                return;
+            }
+
+            if (!_referenceDefinitionService.TryGetByRoute("/employees", out var employeeDefinition))
+            {
+                await ShowErrorDialogAsync("Не удалось открыть сотрудника.", "Справочник сотрудников не подключен.");
+                return;
+            }
+
+            await ShowEmployeeEditDialogAsync(isCreateMode: false, employeeId, employeeDefinition);
         }
 
         private async void ResetColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e)
@@ -905,9 +923,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
         }
 
-        private async Task ShowEmployeeEditDialogAsync(bool isCreateMode)
+        private async Task ShowEmployeeEditDialogAsync(
+            bool isCreateMode,
+            long? employeeId = null,
+            ReferenceDefinition? employeeDefinition = null)
         {
-            if (_viewModel.CurrentReference is null)
+            var definition = employeeDefinition ?? _viewModel.CurrentReference;
+            if (definition is null)
             {
                 return;
             }
@@ -915,7 +937,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             ReferenceDataRow? sourceRow = null;
             if (!isCreateMode)
             {
-                sourceRow = await LoadEmployeeEditRowAsync();
+                sourceRow = await LoadEmployeeEditRowAsync(employeeId);
                 if (sourceRow is null)
                 {
                     await ShowErrorDialogAsync("Не удалось открыть сотрудника.", "Не удалось загрузить свежую карточку сотрудника.");
@@ -923,7 +945,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 }
             }
 
-            var state = EmployeeEditStateFactory.Create(_viewModel.CurrentReference, isCreateMode, sourceRow);
+            var state = EmployeeEditStateFactory.Create(definition, isCreateMode, sourceRow);
             var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);
             var dialog = new EmployeeEditDialog(viewModel)
             {
@@ -951,8 +973,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     savedRow = isCreateMode
-                        ? await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)
-                        : await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload);
+                        ? await _referenceCrudService.CreateAsync(definition, payload)
+                        : await _referenceCrudService.UpdateAsync(definition, payload);
                 }
                 catch (Exception ex)
                 {
@@ -966,7 +988,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary || savedRow is null || _viewModel.CurrentReference is null)
+            if (result != ContentDialogResult.Primary || savedRow is null)
             {
                 return;
             }
@@ -974,17 +996,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             await _viewModel.ReloadCurrentReferenceAsync();
             ShowSuccessNotification(
                 isCreateMode ? "Сотрудник создан" : "Изменения сотрудника сохранены",
-                BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
+                BuildReferenceNotificationMessage(definition.Title, TryGetSelectedRowId(savedRow)));
         }
 
-        private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync(CancellationToken cancellationToken = default)
+        private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync(
+            long? employeeId = null,
+            CancellationToken cancellationToken = default)
         {
-            if (_viewModel.SelectedRow is null)
-            {
-                return null;
-            }
-
-            var id = TryGetSelectedRowId(_viewModel.SelectedRow);
+            var id = employeeId ?? (_viewModel.SelectedRow is null ? null : TryGetSelectedRowId(_viewModel.SelectedRow));
             if (id is null)
             {
                 return null;

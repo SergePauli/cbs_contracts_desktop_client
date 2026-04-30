@@ -1,0 +1,34 @@
+<UserControl
+    x:Class="CbsContractsDesktopClient.Views.References.EmployeeBox"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid RowSpacing="8">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TextBlock
+            Style="{StaticResource BodyStrongTextBlockStyle}"
+            Foreground="{StaticResource ShellTertiaryTextBrush}"
+            Text="Сотрудники" />
+
+        <Grid Grid.Row="1">
+            <ListView
+                x:Name="EmployeesListView"
+                SelectionMode="Single" />
+
+            <TextBlock
+                x:Name="EmptyTextBlock"
+                Style="{StaticResource CaptionTextBlockStyle}"
+                Margin="2,4,0,0"
+                Foreground="{StaticResource ShellCaptionTextBrush}"
+                Text="НЕТ ЗАПИСЕЙ"
+                Visibility="Collapsed" />
+        </Grid>
+    </Grid>
+</UserControl>

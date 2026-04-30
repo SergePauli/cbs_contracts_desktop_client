@@ -215,6 +215,13 @@
                         Row="{Binding SelectedRow}"
                         Visibility="{Binding ShowEmployeeDetailView, Converter={StaticResource BoolVisibilityConverter}}" />
 
+                    <references:ContragentDetailView
+                        x:Name="ContragentDetailView"
+                        Grid.Row="1"
+                        Row="{Binding SelectedRow}"
+                        EmployeeEditRequested="ContragentDetailView_EmployeeEditRequested"
+                        Visibility="{Binding ShowContragentDetailView, Converter={StaticResource BoolVisibilityConverter}}" />
+
                     <Border
                         Grid.RowSpan="2"
                         Padding="20,16,20,12"
