@@ -15,7 +15,9 @@
 - общий shell-state через `AppShellViewModel`
 - рабочий экран справочников в центральной области shell
 - create / update / delete для поддержанных справочников
+- complex reference `/users` со специализированным `ProfileEditDialog`
 - complex reference `/employees` с detail footer, специализированным editor flow и контактами с определением типа
+- audit panel в виде timeline-карточек с фильтрами, ленивой прокруткой и копированием ошибок
 - собственный `CbsTableView` с lazy loading, resize, selection, sorting и hot filters
 - локальное сохранение ширин колонок
 - компактный `AppShell` с breadcrumbs, role-based sidebar и контекстным меню настроек таблицы
@@ -51,6 +53,7 @@
 - `BreadcrumbBar` показывает иерархию `Справочники -> {Текущий справочник}`
 - `ContentHostView` больше не дублирует заголовок раздела, а использует компактный однострочный header
 - `NavigationSidebarView` стал компактнее и отделен от content-area отдельной более темной gradient-панелью
+- `AuditPanelView` показывает события активного справочника или выбранной записи
 
 ### Экран справочников
 
@@ -63,10 +66,31 @@
 - `ReferenceEditViewModel` / `ReferenceEditDialog` для create и edit
 - `ReferenceEditPayloadBuilder` для create/update payload
 - `ReferenceCrudService` для `create/update/delete`
+- `ReferenceEditorKind` для переключения generic/specialized editor flow
+- `ProfileEditDialog` / `ProfileEditPayloadBuilder` для `/users`
+- `EmployeeEditDialog` / `EmployeeEditPayloadBuilder` для `/employees`
 - lazy/virtual pipeline через:
   - `LazyDataCollection<T>`
   - `LazyDataViewState<T>`
   - `CbsVirtualTableRows<T>`
+
+### Complex references
+
+Поддержаны первые сложные справочники поверх той же table/reference platform:
+
+- `/users`
+  - nested display/filter/sort metadata
+  - specialized profile editor
+  - роли через compact multi-select
+  - lookup/autocomplete для связанных сущностей
+  - typed create/update payload
+- `/employees`
+  - list-screen на `Employee/card`
+  - `EmployeeDetailView` под таблицей
+  - fresh edit load через `Employee/edit`
+  - lookup для должности и контрагента
+  - contacts editor с классификацией типа контакта
+  - typed create/update payload, включая delta контактов
 
 ### Собственный `CbsTableView`
 
@@ -79,6 +103,7 @@
 - ручной resize колонок
 - сохранение пользовательских ширин
 - single-row selection
+- double-click event для edit/open flow
 - scope-safe состояние фильтров по `table route + fieldKey`
 - кнопка "настройки таблицы" с действиями:
   - сброс ширин
@@ -95,7 +120,9 @@
 
 - `text`
 - `numeric`
+- `boolean`
 - `date-time`
+- `multiselect`
 
 Для text:
 
@@ -122,6 +149,27 @@
 - текстовые режимы работают через masked input в формате `ГГГГ-ММ-ДД ЧЧ:ММ:СС`
 - значение нормализуется в API payload формата `yyyy-MM-ddTHH:mm:ss`
 
+Для multiselect:
+
+- используется `Button + Flyout + CheckBox list`
+- есть локальный поиск по опциям
+- значение уходит в API как `__in`
+- options поступают через `CurrentFilterOptionsSources`
+
+### Audit panel
+
+Audit panel теперь является reusable частью reference workspace:
+
+- вертикальный timeline карточками от последнего события к первому
+- при выбранной записи загружается аудит записи
+- без выбранной записи загружаются последние события активного справочника
+- прокрутка смещает окно загруженных событий, не раздувая буфер
+- timeout/ошибка страницы не блокирует дальнейшую прокрутку
+- фильтр по диапазону дат
+- фильтр по действиям
+- ошибки аудита доступны для копирования
+- `AuditPanelFormatter` фиксирует контракт отображения action и mapping фильтра `string -> smallint`
+
 ## На каком этапе сейчас разработка
 
 Текущий этап:
@@ -134,18 +182,21 @@
 - shell
 - reference workspace
 - собственная table platform
+- первые complex references: `/users`, `/employees`
+- audit timeline как общий сценарий для всех справочников
 
 Текущая работа теперь смещается с «собрать основу приложения» на:
 
 - расширение сценариев поверх reference workspace
-- дальнейшую полировку UX таблицы
+- дальнейшую полировку UX таблицы и audit panel
 - перенос следующих рабочих экранов из web-клиента
 
 ## Ближайшие направления
 
 - details/read scenarios и доменные ограничения CRUD
-- следующие специализированные типы колонок и фильтров поверх уже готовых `text` / `numeric` / `date-time`
-- развитие audit/context state от реальных бизнес-сценариев
+- следующие специализированные типы колонок и фильтров поверх уже готовых `text` / `numeric` / `boolean` / `date-time` / `multiselect`
+- поиск по аудиту
+- delete/archive правила для сложных справочников
 - новые рабочие страницы внутри shell
 - возможная чистка диагностического слоя после завершения активной оптимизации
 
@@ -163,8 +214,14 @@
 - `ReferenceDefinitionService`
 - `ReferenceEditViewModel`
 - `ReferenceCrudService`
+- `ProfileEditPayloadBuilder`
+- `EmployeeEditPayloadBuilder`
+- `ContactTypeClassifier`
+- `AuditPanelFormatter`
 - локальные настройки ширин колонок
 - alignment и filter mode дефолты колонок
+- table multiselect/date-time filter UI regressions
+- employee/profile specialized editor payload/state
 - видимость `СЗИ` в меню для `admin` / `ОЗИ`
 - регрессия на меню настроек `ContentHostView`
 - регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`

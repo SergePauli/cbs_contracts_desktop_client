@@ -4,10 +4,13 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
+using Windows.ApplicationModel.DataTransfer;
 using CbsContractsDesktopClient.Models.Shell;
+using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.ViewModels.Shell;
 
 namespace CbsContractsDesktopClient.Views.Shell
@@ -15,8 +18,20 @@ namespace CbsContractsDesktopClient.Views.Shell
     public sealed partial class AuditPanelView : UserControl
     {
         private const double ShiftThreshold = 140;
+        private const double ActionFilterFlyoutWidth = 220;
         private bool _isSubscribed;
         private bool _isAuditShiftPending;
+        private bool _isAuditDatePickerUpdating;
+        private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _actionFilterOptions =
+        [
+            new() { Value = "added", Label = "Добавлено" },
+            new() { Value = "updated", Label = "Изменено" },
+            new() { Value = "removed", Label = "Удалено" },
+            new() { Value = "archived", Label = "Архивировано" },
+            new() { Value = "imported", Label = "Импорт" }
+        ];
+        private readonly List<string> _selectedActionValues = [];
+        private StackPanel? _actionOptionsHost;
 
         public AppShellViewModel ViewModel { get; }
         public ReferencesContentViewModel ReferencesViewModel { get; }
@@ -26,6 +41,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             ViewModel = App.Services.GetRequiredService<AppShellViewModel>();
             ReferencesViewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
             InitializeComponent();
+            InitializeActionFilter();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             RenderTimeline();
@@ -109,6 +125,172 @@ namespace CbsContractsDesktopClient.Views.Shell
             });
         }
 
+        private async void AuditDatePicker_DateChanged(
+            CalendarDatePicker sender,
+            CalendarDatePickerDateChangedEventArgs args)
+        {
+            if (_isAuditDatePickerUpdating)
+            {
+                return;
+            }
+
+            await ReferencesViewModel.SetAuditDateRangeAsync(
+                AuditFromDatePicker.Date,
+                AuditToDatePicker.Date);
+            SyncAuditDatePickers();
+            AuditScrollViewer.ChangeView(
+                horizontalOffset: null,
+                verticalOffset: 0,
+                zoomFactor: null,
+                disableAnimation: true);
+        }
+
+        private async void ClearAuditDateRangeButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ClearAuditFiltersAsync();
+        }
+
+        private async void ClearAuditFiltersButton_Click(object sender, RoutedEventArgs e)
+        {
+            await ClearAuditFiltersAsync();
+        }
+
+        private async Task ClearAuditFiltersAsync()
+        {
+            _isAuditDatePickerUpdating = true;
+            AuditFromDatePicker.Date = null;
+            AuditToDatePicker.Date = null;
+            _isAuditDatePickerUpdating = false;
+            _selectedActionValues.Clear();
+            RebuildActionFilterOptions();
+            UpdateActionFilterButtonContent();
+
+            await ReferencesViewModel.SetAuditDateRangeAsync(null, null);
+            await ReferencesViewModel.SetAuditActionFilterAsync([]);
+            AuditScrollViewer.ChangeView(
+                horizontalOffset: null,
+                verticalOffset: 0,
+                zoomFactor: null,
+                disableAnimation: true);
+        }
+
+        private void SyncAuditDatePickers()
+        {
+            if (AuditFromDatePicker.Date is not DateTimeOffset fromDate
+                || AuditToDatePicker.Date is not DateTimeOffset toDate
+                || fromDate <= toDate)
+            {
+                return;
+            }
+
+            _isAuditDatePickerUpdating = true;
+            AuditFromDatePicker.Date = toDate;
+            AuditToDatePicker.Date = fromDate;
+            _isAuditDatePickerUpdating = false;
+        }
+
+        private void InitializeActionFilter()
+        {
+            _actionOptionsHost = new StackPanel { Spacing = 2 };
+            var scrollViewer = new ScrollViewer
+            {
+                MaxHeight = 260,
+                VerticalScrollMode = ScrollMode.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollMode = ScrollMode.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = _actionOptionsHost
+            };
+
+            AuditActionFilterButton.Flyout = new Flyout
+            {
+                Placement = FlyoutPlacementMode.BottomEdgeAlignedLeft,
+                Content = new StackPanel
+                {
+                    Width = ActionFilterFlyoutWidth,
+                    Children =
+                    {
+                        scrollViewer
+                    }
+                }
+            };
+
+            RebuildActionFilterOptions();
+            UpdateActionFilterButtonContent();
+        }
+
+        private void RebuildActionFilterOptions()
+        {
+            if (_actionOptionsHost is null)
+            {
+                return;
+            }
+
+            _actionOptionsHost.Children.Clear();
+            foreach (var option in _actionFilterOptions)
+            {
+                if (option.Value is not string value)
+                {
+                    continue;
+                }
+
+                var checkBox = new CheckBox
+                {
+                    Content = option.Label,
+                    Tag = value,
+                    IsChecked = _selectedActionValues.Contains(value),
+                    MinHeight = 28
+                };
+                checkBox.Checked += ActionFilterCheckBoxChanged;
+                checkBox.Unchecked += ActionFilterCheckBoxChanged;
+                _actionOptionsHost.Children.Add(checkBox);
+            }
+        }
+
+        private async void ActionFilterCheckBoxChanged(object sender, RoutedEventArgs e)
+        {
+            if (sender is not CheckBox { Tag: string action } checkBox)
+            {
+                return;
+            }
+
+            if (checkBox.IsChecked == true)
+            {
+                if (!_selectedActionValues.Contains(action))
+                {
+                    _selectedActionValues.Add(action);
+                }
+            }
+            else
+            {
+                _selectedActionValues.Remove(action);
+            }
+
+            UpdateActionFilterButtonContent();
+            await ReferencesViewModel.SetAuditActionFilterAsync(_selectedActionValues);
+            AuditScrollViewer.ChangeView(
+                horizontalOffset: null,
+                verticalOffset: 0,
+                zoomFactor: null,
+                disableAnimation: true);
+        }
+
+        private void UpdateActionFilterButtonContent()
+        {
+            var text = _selectedActionValues.Count == 0
+                ? "Действия"
+                : _selectedActionValues.Count == 1
+                    ? _actionFilterOptions.FirstOrDefault(
+                        option => option.Value is string value && value == _selectedActionValues[0])?.Label ?? "1 действие"
+                    : $"Действия: {_selectedActionValues.Count}";
+
+            AuditActionFilterButton.Content = new TextBlock
+            {
+                Text = text,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+        }
+
         private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(AppShellViewModel.AuditPanelState))
@@ -151,6 +333,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             var content = new StackPanel { Spacing = 5 };
             content.Children.Add(CreateHeaderLine(entry.Timestamp, entry.Title));
             content.Children.Add(CreateDetailsPanel(entry.Description));
+            if (entry.IsCopyEnabled)
+            {
+                content.Children.Add(CreateCopyButton(entry));
+            }
 
             var card = new Border
             {
@@ -190,6 +376,32 @@ namespace CbsContractsDesktopClient.Views.Shell
             });
 
             return textBlock;
+        }
+
+        private static Button CreateCopyButton(AuditEntry entry)
+        {
+            var button = new Button
+            {
+                Tag = $"{entry.Timestamp} {entry.Title}{Environment.NewLine}{entry.Description}".Trim(),
+                MinHeight = 28,
+                Padding = new Thickness(8, 0, 8, 0),
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Content = "Копировать"
+            };
+            button.Click += CopyAuditEntryButton_Click;
+            return button;
+        }
+
+        private static void CopyAuditEntryButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: string text } || string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            var package = new DataPackage();
+            package.SetText(text);
+            Clipboard.SetContent(package);
         }
 
         private static StackPanel CreateDetailsPanel(string description)

@@ -18,7 +18,7 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <StackPanel Spacing="4">
+            <StackPanel Spacing="8">
                 <TextBlock
                     Style="{StaticResource SubtitleTextBlockStyle}"
                     Foreground="{StaticResource ShellPrimaryTextBrush}"
@@ -29,6 +29,52 @@
                     Foreground="{StaticResource ShellSecondaryTextBrush}"
                     Text="{x:Bind ViewModel.AuditPanelState.Description, Mode=OneWay}"
                     TextWrapping="Wrap" />
+                <Border
+                    Padding="8,6"
+                    Background="{StaticResource ShellMutedPanelBackgroundBrush}"
+                    BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="8">
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            Glyph="&#xE71C;"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            VerticalAlignment="Center" />
+                        <CalendarDatePicker
+                            x:Name="AuditFromDatePicker"
+                            Grid.Column="1"
+                            MinHeight="30"
+                            PlaceholderText="С"
+                            DateChanged="AuditDatePicker_DateChanged" />
+                        <CalendarDatePicker
+                            x:Name="AuditToDatePicker"
+                            Grid.Column="2"
+                            MinHeight="30"
+                            PlaceholderText="По"
+                            DateChanged="AuditDatePicker_DateChanged" />
+                        <Button
+                            x:Name="AuditActionFilterButton"
+                            Grid.Column="3"
+                            MinHeight="30"
+                            Padding="10,0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch" />
+                        <Button
+                            Grid.Column="4"
+                            MinHeight="30"
+                            Padding="10,0"
+                            Click="ClearAuditFiltersButton_Click"
+                            Content="Сброс" />
+                    </Grid>
+                </Border>
             </StackPanel>
 
             <ScrollViewer

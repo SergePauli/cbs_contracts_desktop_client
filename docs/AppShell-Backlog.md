@@ -46,12 +46,30 @@ Shell уже больше не является только каркасом п
 - в shell встроен рабочий экран справочников
 - он route-driven
 - поддерживает lazy loading
-- публикует технический контекст в audit panel
+- публикует доменный контекст в audit panel
 - показывает ошибки загрузки через верхний `InfoBar`
 - использует компактный header формата `Название - N записей`
 - поддерживает create / update / delete для подключенных справочников
 - открывает code-based `ReferenceEditDialog` с read-only `ID` в edit-режиме
 - собирает create/update payload через отдельный `ReferenceEditPayloadBuilder`
+- поддерживает complex references `/users` и `/employees`
+- переключает generic/specialized editor по `ReferenceEditorKind`
+
+### Audit panel
+
+- `AuditPanelView` переведен из текстового placeholder в вертикальный timeline
+- события отображаются карточками от последнего к первому
+- при выбранной записи загружается аудит записи
+- без выбранной записи загружаются последние события активного справочника
+- timeline поддерживает прокрутку с ленивым смещением окна вверх/вниз
+- размер буфера событий остается постоянным
+- сбой/timeout загрузки страницы не блокирует дальнейшую прокрутку
+- добавлены фильтры по диапазону дат и действиям
+- фильтр действий использует строковые API-константы в UI и конвертацию в backend `smallint` только при сборке запроса
+- `deleted` поддерживается только в отображении как вариант `removed`
+- ошибки аудита можно копировать в буфер обмена
+- логика форматирования action вынесена в reusable `AuditPanelFormatter`
+- добавлены регрессионные тесты на отображение, фон и `string -> smallint` mapping
 
 ## Что теперь считается следующим этапом
 
@@ -59,22 +77,40 @@ Shell уже больше не является только каркасом п
 
 1. Расширять CRUD-слой справочников от базового create/update/delete к details и доменным ограничениям
 2. Развивать reference workspace как основу прикладных процессов
-3. Публиковать в `ContextNavigationItems` и `AuditPanelState` не только техническую телеметрию, но и доменный контекст
-4. При росте числа экранов выделить более формальный `INavigationService` и реестр страниц
-5. Продолжать уплотнение и полировку shell UX только по месту, без возврата к broad redesign
+3. При росте числа экранов выделить более формальный `INavigationService` и реестр страниц
+4. Продолжать уплотнение и полировку shell UX только по месту, без возврата к broad redesign
+5. Поддерживать audit panel как общий cross-reference сценарий для всех новых таблиц
 
-## Практический next step
+## Ближайшая следующая задача
 
-Наиболее логичный следующий шаг:
+Следующий production-шаг: справочник `Контрагенты` как новый complex reference внутри текущего reference workspace.
 
-- довести reference CRUD от базового flow до прикладного уровня:
-  - открытие / просмотр карточки
-  - delete/archive правила по доменной модели
-  - сообщения об ограничениях и конфликтах backend
-  - точечный UX-polish диалогов редактирования
-- определить, какие справочники переводятся на CRUD первыми и в каком порядке
-- затем на этой же shell-платформе переносить следующие рабочие страницы из web-клиента
-- parallel track: поддерживать регрессионные тесты на shell navigation / content chrome
+Цель:
+
+- подключить `/contragents` на уже готовой table/reference platform
+- использовать контрагентов как первый сценарий для нового reusable detail-widget `EmployeeBox`
+- сделать `EmployeeBox` базовым UI-блоком для отображения ответственных сотрудников во всех последующих таблицах
+
+Ожидаемый первый scope:
+
+1. Добавить `ReferenceDefinition` для `Contragent`
+2. Настроить list-screen: колонки, nested display/filter/sort mapping, lazy loading, width persistence
+3. Добавить `ContragentDetailView` под таблицей
+4. В detail-view вывести связанные роли/сотрудников через новый `EmployeeBox`
+5. Спроектировать `EmployeeBox` как самостоятельный reusable control:
+   - ФИО
+   - должность
+   - контакты или compact contact summary
+   - статус активности
+   - визуальный вариант для compact/detail density
+6. Закрыть `EmployeeBox` регрессионными тестами на contract/rendering hooks
+7. Подключить audit panel к `Contragent` через общий audit flow
+
+После этого:
+
+- переносить следующие complex references уже с готовым паттерном detail-widget
+- возвращаться к delete/archive правилам и доменным ограничениям CRUD
+- parallel track: поддерживать регрессионные тесты на shell navigation / content chrome / audit
 
 ## Короткий CRUD-план
 
@@ -84,9 +120,10 @@ Shell уже больше не является только каркасом п
 2. `ReferenceEditDialog` + `ReferenceEditViewModel` выполнено
 3. `DirtyFields -> payload builder` выполнено
 4. `Create/Update/Delete` сервисные методы выполнено
-5. Дальше: `details/read flow` и доменные ограничения CRUD
+5. `details/read flow` выполнен для `/employees`
+6. Дальше: delete/archive правила и доменные ограничения CRUD
 
-## Следующий крупный этап: сложные справочники со связями
+## Закрытый крупный этап: сложные справочники со связями
 
 Первый кандидат: экран пользователей / профилей из web-клиента (`ProfilesPage`).
 
@@ -172,6 +209,12 @@ Shell уже больше не является только каркасом п
 - текущий CRUD простых справочников не ломается
 - появляется легальная точка расширения для сложных редакторов
 
+Статус:
+
+- выполнено
+- добавлен `ReferenceEditorKind`
+- `ContentHostView` выбирает generic/profile/employee dialog по kind
+
 ### Phase 3. Реализовать специализированный `ProfileEditDialog`
 
 Цель:
@@ -194,17 +237,7 @@ Shell уже больше не является только каркасом п
 
 - edit-profile реализован без перегрузки generic dialog
 
-Ближайшая следующая задача:
-
-- перейти от этапа верстки `ProfileEditDialog` к этапу обработки изменений и сохранения
-- подключить submit-flow в этом же диалоге:
-  - локальная валидация полей перед отправкой
-  - построение payload для `create/update` c учетом `role`, `position`, `department`, `password`, `activated`
-  - вызов API через `ReferenceCrudService`/специализированный builder
-  - обработка ошибок API и валидации через встроенный `InfoBar`
-  - закрытие диалога только при успешном сохранении + последующий reload списка
-
-Статус на текущий момент:
+Статус:
 
 - выполнено: `ProfileEditDialog` переведен на `AutoSuggestBox` для поля `position`
 - выполнено: загрузка lookup-опций `Position/item` по `name__cnt` и алфавитная сортировка
@@ -213,6 +246,10 @@ Shell уже больше не является только каркасом п
 - выполнено: поле `role` в `ProfileEditDialog` переведено на multi-select (`user`, `admin`, `excel`, `intern`) с правилом взаимного исключения `intern` vs `admin/excel`
 - выполнено: добавлен API-ready контракт роли `RoleApiValue` в формате CSV (`user,admin,excel`)
 - выполнено: завершен этап верстки `ProfileEditDialog` (компактный layout, стили меток, поведение select-полей, служебный `InfoBar` для ошибок)
+- выполнено: submit-flow подключен к `ReferenceCrudService`
+- выполнено: payload для `create/update` строится через `ProfileEditPayloadBuilder`
+- выполнено: ошибки API и валидации показываются через встроенный `InfoBar`
+- выполнено: успешное сохранение закрывает диалог и перезагружает список
 
 ### Phase 4. Добавить lookup infrastructure для связанных сущностей
 
@@ -230,6 +267,13 @@ Shell уже больше не является только каркасом п
 Ожидаемый результат:
 
 - первая reusable инфраструктура связей появляется без полного form-builder
+
+Статус:
+
+- выполнено для первых production scenarios
+- `ProfileEditDialog` и `EmployeeEditDialog` используют lookup/autocomplete для связанных сущностей
+- `DialogLookupEditors` стал reusable основой для searchable lookup в specialized dialogs
+- `CbsTableFilterOptionDefinition` используется как общий `Value + Label` contract для выбора связанных записей
 
 ### Phase 5. Сделать specialized payload builder
 
@@ -277,9 +321,13 @@ Shell уже больше не является только каркасом п
 3. edit existing profile
 4. save + reload + notifications
 
+Статус:
+
+- выполнено
+- фактическая поставка расширена до create/update profile через specialized dialog
+
 Отложить до отдельного шага:
 
-- create profile
 - delete / archive profile
 - редактирование всех вложенных сущностей в одной форме
 
@@ -452,6 +500,12 @@ Shell уже больше не является только каркасом п
 
 - `CbsTableView` не знает, откуда пришли опции, а просто рисует их
 
+Статус:
+
+- выполнено в составе `ReferencesContentViewModel`
+- options для table multiselect приходят через `CurrentFilterOptionsSources`
+- `CbsTableView` получает готовые option sources и остается UI-only контролом
+
 #### Phase E. First production target: `department_id`
 
 Файлы:
@@ -470,6 +524,12 @@ Shell уже больше не является только каркасом п
 
 - первый рабочий relational multiselect filter на users/profile table
 
+Статус:
+
+- выполнено
+- `/users` использует multiselect-filter для lookup-колонок
+- `department_id__in` payload зафиксирован тестами
+
 #### Phase F. Tests
 
 Файлы:
@@ -487,6 +547,13 @@ Shell уже больше не является только каркасом п
 Результат:
 
 - reusable multiselect-filter закрыт регрессией до подключения новых сложных таблиц
+
+Статус:
+
+- выполнено
+- добавлены тесты на `CbsTableMultiSelectFilterValue`
+- добавлены регрессионные тесты `CbsTableView` на flyout, search, checkbox-list, summary и reset behavior
+- `DataQueryStateBuilderTests` фиксируют `__in` payload contract
 
 ## Production Update: DateTime Filter for `last_login`
 
@@ -514,6 +581,42 @@ Shell уже больше не является только каркасом п
 
 - при необходимости добавить date/time filter в другие reference definitions
 - при необходимости расширить mask/validation UX под более строгие пользовательские сценарии
+
+## Production Update: Audit Panel Timeline
+
+Контекст:
+
+- audit panel стала общей частью reference workspace
+- все последующие таблицы будут использовать один и тот же сценарий аудита
+- важно сохранить контракт API: в ответе `action` приходит строковой константой, а фильтр отправляется как backend enum `smallint`
+
+Что сделано:
+
+- `AuditRecord.Action` читается как `string`
+- отображение action:
+  - `added` -> `Добавлено:`
+  - `updated` -> `Изменено:`
+  - `removed` -> `Удалено:`
+  - `deleted` -> `Удалено:` только для отображения
+  - `archived` -> `Архивировано:`
+  - `imported` -> `Импорт:`
+- `removed` и `deleted` получают отдельный красноватый фон `ShellAuditRemovedBackgroundBrush`
+- фильтр действий отправляет только поддержанный enum:
+  - `added` -> `0`
+  - `updated` -> `1`
+  - `removed` -> `2`
+  - `archived` -> `3`
+  - `imported` -> `4`
+- `deleted` не отправляется в фильтр запроса
+- дата-фильтр аудита отправляет `created_at__gte` / `created_at__lte`
+- список событий скроллится окном фиксированного размера вместо бесконечного наращивания массива
+- ошибки загрузки показываются карточкой и доступны для копирования
+- добавлен `AuditPanelFormatter` и тесты `AuditPanelFormatterTests`
+
+Статус:
+
+- выполнено
+- закрыто регрессионными тестами
 
 ## Implementation Plan: Complex Reference / Employees
 
@@ -581,7 +684,8 @@ Shell уже больше не является только каркасом п
 - `EmployeeDetailView` добавлен вторым footer над основным footer
 - высота detail области зафиксирована на 130
 - контакты выводятся через общий contact-chip без кнопки удаления
-- перенос action buttons в DetailView и доменный audit context остаются отдельными следующими задачами
+- доменный audit context работает через общий audit panel flow
+- перенос action buttons в DetailView остается отдельной UX-задачей
 
 ### Phase 3. Реализовать specialized `EmployeeEditDialog`
 
@@ -659,3 +763,40 @@ Shell уже больше не является только каркасом п
 - delete/archive правила
 - массовые операции
 - расширенные шаблоны ячеек таблицы для clickable contact chips
+
+## Reusable UI / Service Components Closed
+
+В ходе работ над `/users`, `/employees` и audit panel появились reusable building blocks:
+
+- `CbsTableView`
+  - lazy table UI
+  - resize колонок
+  - sorting
+  - text/numeric/boolean/date-time/multiselect filters
+  - row selection и double-click event
+- `CbsTableMultiSelectFilterValue`
+  - общий контракт `MultiSelect -> __in`
+- `CbsTableFilterOptionDefinition`
+  - общий контракт option `Value + Label`
+- `ReferenceEditorKind`
+  - переключение generic/profile/employee editor flow
+- `ProfileEditDialog` / `ProfileEditPayloadBuilder`
+  - specialized pattern для сложного справочника с lookup-полями
+- `EmployeeEditDialog` / `EmployeeEditPayloadBuilder`
+  - specialized pattern для nested payload и contacts delta
+- `DialogLookupEditors`
+  - reusable searchable lookup UI для специализированных диалогов
+- `DialogContactsEditor`
+  - reusable editor контактов с классификацией типа
+- `ContactTypeClassifier`
+  - определение `Email`, `Phone`, `Fax`, `SiteUrl`, `Telegram` и link-uri
+- `EmployeeDetailView`
+  - первый reusable-ish detail footer pattern под таблицей
+- `AuditPanelFormatter`
+  - общий контракт отображения/фильтрации audit actions
+
+Следующий принцип:
+
+- новые справочники должны переиспользовать эти блоки до появления новых специализированных controls
+- расширять generic editor только для scalar-сценариев
+- сложные nested-сценарии вести через specialized editor + typed payload builder

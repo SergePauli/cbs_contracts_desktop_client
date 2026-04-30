@@ -11,6 +11,7 @@
     <SolidColorBrush x:Key="ShellMutedPanelBackgroundBrush" Color="#FFFBFDFF" />
     <SolidColorBrush x:Key="ShellAccentPanelBackgroundBrush" Color="#FFEFF7FF" />
     <SolidColorBrush x:Key="ShellAccentPanelBackgroundAltBrush" Color="#FFF7FBFF" />
+    <SolidColorBrush x:Key="ShellAuditRemovedBackgroundBrush" Color="#FFFFF1F1" />
 
     <SolidColorBrush x:Key="ShellPanelBorderBrush" Color="#66D4E5F5" />
     <SolidColorBrush x:Key="ShellTableHeaderBackgroundBrush" Color="#FFF3F4F6" />

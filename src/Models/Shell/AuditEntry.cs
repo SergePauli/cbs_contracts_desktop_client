@@ -9,5 +9,7 @@
         public string Description { get; init; } = string.Empty;
 
         public string BackgroundBrushKey { get; init; } = "ShellAccentPanelBackgroundBrush";
+
+        public bool IsCopyEnabled { get; init; }
     }
 }

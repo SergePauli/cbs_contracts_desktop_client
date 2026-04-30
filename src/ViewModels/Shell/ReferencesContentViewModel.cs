@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,7 @@ using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.ViewModels.Data;
 
 namespace CbsContractsDesktopClient.ViewModels.Shell
@@ -39,6 +41,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private bool _hasPreviousAuditRecords;
         private bool _hasNextAuditRecords = true;
         private bool _isAuditLoading;
+        private DateTimeOffset? _auditFromDate;
+        private DateTimeOffset? _auditToDate;
+        private IReadOnlyList<string> _auditActions = [];
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
 
@@ -383,6 +388,46 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             return false;
+        }
+
+        public async Task SetAuditDateRangeAsync(DateTimeOffset? fromDate, DateTimeOffset? toDate)
+        {
+            var normalizedFrom = fromDate?.Date;
+            var normalizedTo = toDate?.Date;
+
+            if (normalizedFrom is not null
+                && normalizedTo is not null
+                && normalizedFrom > normalizedTo)
+            {
+                (normalizedFrom, normalizedTo) = (normalizedTo, normalizedFrom);
+            }
+
+            if (_auditFromDate == normalizedFrom && _auditToDate == normalizedTo)
+            {
+                return;
+            }
+
+            _auditFromDate = normalizedFrom;
+            _auditToDate = normalizedTo;
+            await RefreshAuditPanelAsync(force: true);
+        }
+
+        public async Task SetAuditActionFilterAsync(IReadOnlyList<string> actions)
+        {
+            var normalizedActions = actions
+                .Select(NormalizeAuditAction)
+                .Where(static action => !string.IsNullOrWhiteSpace(action))
+                .Distinct()
+                .Order()
+                .ToList();
+
+            if (_auditActions.SequenceEqual(normalizedActions))
+            {
+                return;
+            }
+
+            _auditActions = normalizedActions;
+            await RefreshAuditPanelAsync(force: true);
         }
 
         public async Task SaveColumnWidthAsync(string fieldKey, string? width, CancellationToken cancellationToken = default)
@@ -1173,6 +1218,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 ["auditable_type__eq"] = model
             };
+            ApplyAuditDateRangeFilters(filters);
+            ApplyAuditActionFilters(filters);
+            var filterKey = BuildAuditFilterKey();
 
             if (HasSelectedRow && SelectedRow is not null)
             {
@@ -1184,17 +1232,56 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
                 filters["auditable_id__eq"] = selectedId.Value;
                 return new AuditScope(
-                    $"record:{model}:{selectedId.Value}",
+                    $"record:{model}:{selectedId.Value}:{filterKey}",
                     "Аудит изменений",
                     BuildSelectedRecordAuditDescription(CurrentReference, SelectedRow),
                     filters);
             }
 
             return new AuditScope(
-                $"reference:{model}",
+                $"reference:{model}:{filterKey}",
                 "Последние события аудита",
                 $"Активный справочник: {CurrentReference.EffectiveNavigationDescription}",
                 filters);
+        }
+
+        private void ApplyAuditDateRangeFilters(Dictionary<string, object?> filters)
+        {
+            if (_auditFromDate is DateTimeOffset fromDate)
+            {
+                filters["created_at__gte"] = fromDate
+                    .Date
+                    .ToString("yyyy-MM-dd'T'00:00:00", CultureInfo.InvariantCulture);
+            }
+
+            if (_auditToDate is DateTimeOffset toDate)
+            {
+                filters["created_at__lte"] = toDate
+                    .Date
+                    .ToString("yyyy-MM-dd'T'23:59:59", CultureInfo.InvariantCulture);
+            }
+        }
+
+        private void ApplyAuditActionFilters(Dictionary<string, object?> filters)
+        {
+            if (_auditActions.Count > 0)
+            {
+                filters["action__in"] = _auditActions
+                    .Select(AuditPanelFormatter.GetActionFilterValue)
+                    .Where(static action => action is not null)
+                    .Select(static action => action!.Value)
+                    .ToList();
+            }
+        }
+
+        private string BuildAuditFilterKey()
+        {
+            var from = _auditFromDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "any";
+            var to = _auditToDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "any";
+            var actions = _auditActions.Count == 0
+                ? "any"
+                : string.Join(",", _auditActions);
+            return $"{from}..{to}:{actions}";
         }
 
         private static string BuildAuditWindowDescription(AuditScope scope, int offset)
@@ -1249,7 +1336,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 Timestamp = "Статус",
                 Title = title,
                 Description = description,
-                BackgroundBrushKey = "ShellMutedPanelBackgroundBrush"
+                BackgroundBrushKey = "ShellMutedPanelBackgroundBrush",
+                IsCopyEnabled = title.Contains("ошиб", StringComparison.OrdinalIgnoreCase)
+                    || title.Contains("не удалось", StringComparison.OrdinalIgnoreCase)
             };
         }
 
@@ -1290,29 +1379,17 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         private static string GetAuditActionTitle(string? action)
         {
-            return action switch
-            {
-                "added" => "Добавлено:",
-                "updated" => "Изменено:",
-                "removed" => "Удалено:",
-                "deleted" => "Удалено:",
-                "archived" => "Архивировано:",
-                "imported" => "Импорт:",
-                "closed" => "Закрыто:",
-                "signed" => "Подписано:",
-                _ => action ?? "Событие:"
-            };
+            return AuditPanelFormatter.GetActionTitle(action);
         }
 
         private static string GetAuditBrushKey(string? action)
         {
-            return action switch
-            {
-                "added" => "ShellTableRowSelectedBackgroundBrush",
-                "updated" => "ShellAccentPanelBackgroundBrush",
-                "removed" or "deleted" => "ShellTableHeaderBackgroundBrush",
-                _ => "ShellAccentPanelBackgroundBrush"
-            };
+            return AuditPanelFormatter.GetActionBrushKey(action);
+        }
+
+        private static string NormalizeAuditAction(string? action)
+        {
+            return AuditPanelFormatter.NormalizeAction(action);
         }
 
         private static string BuildEmployeeAuditDescription(ReferenceDataRow row)
