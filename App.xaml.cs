@@ -18,6 +18,7 @@ namespace CbsContractsDesktopClient
     {
         private static readonly Uri PrimaryApiUri = new("http://serge-lenovo:5000/");
         private static readonly Uri DataQueryApiUri = new("http://serge-lenovo:8080/");
+        private static readonly Uri FnsApiUri = new("https://api-fns.ru/api/");
 
         public static IServiceProvider Services { get; private set; } = null!;
 
@@ -36,6 +37,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<INavigationMenuService, NavigationMenuService>();
             services.AddSingleton<ILocalUserSettingsService, LocalUserSettingsService>();
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
+            services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
             services.AddSingleton<AppShellViewModel>();
             services.AddSingleton<ReferencesContentViewModel>();
             services.AddSingleton<StatusTableViewModel>();
@@ -54,6 +56,12 @@ namespace CbsContractsDesktopClient
             services.AddHttpClient<IDataQueryService, DataQueryService>(client =>
             {
                 client.BaseAddress = DataQueryApiUri;
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            });
+            services.AddHttpClient<IFnsContragentService, FnsContragentService>(client =>
+            {
+                client.BaseAddress = FnsApiUri;
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });

@@ -139,7 +139,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal("Contragent", definition.Model);
         Assert.Equal("card", definition.Preset);
         Assert.Equal("Контрагенты", definition.Title);
-        Assert.Equal(ReferenceEditorKind.Generic, definition.EditorKind);
+        Assert.Equal(ReferenceEditorKind.Contragent, definition.EditorKind);
         Assert.Equal("id", definition.InitialSortField);
         Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
         Assert.Equal(

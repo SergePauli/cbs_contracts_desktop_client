@@ -158,6 +158,7 @@ namespace CbsContractsDesktopClient.Services.References
                     route: "/references/Ownership",
                     model: "Ownership",
                     title: "Формы орг.",
+                    navigationDescription: "Формы собственности организаций",
                     preset: "card",
                     fields:
                     [
@@ -390,6 +391,7 @@ namespace CbsContractsDesktopClient.Services.References
                     preset: "card",
                     initialSortField: "id",
                     initialSortDirection: DataSortDirection.Descending,
+                    editorKind: ReferenceEditorKind.Contragent,
                     fields:
                     [
                         CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),

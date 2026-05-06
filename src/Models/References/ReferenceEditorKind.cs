@@ -4,6 +4,7 @@ namespace CbsContractsDesktopClient.Models.References
     {
         Generic,
         Profile,
-        Employee
+        Employee,
+        Contragent
     }
 }

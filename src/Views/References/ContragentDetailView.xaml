@@ -8,7 +8,7 @@
     mc:Ignorable="d">
 
     <Border
-        Height="170"
+        Height="215"
         Background="{StaticResource ShellTableHeaderBackgroundBrush}"
         BorderBrush="{StaticResource ShellPanelBorderBrush}"
         BorderThickness="0,1,0,0">
@@ -36,6 +36,7 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <TextBlock
@@ -45,20 +46,20 @@
                     HorizontalAlignment="Right"
                     TextAlignment="Right"
                     Foreground="{StaticResource ShellTertiaryTextBrush}"
-                    Text="Контрагент" />
+                    Text="Форма" />
                 <StackPanel
                     Grid.Row="0"
                     Grid.Column="1"
                     Orientation="Horizontal"
                     Spacing="8">
                     <TextBlock
-                        x:Name="ContragentNameTextBlock"
+                        x:Name="OwnershipFullNameTextBlock"
                         Style="{StaticResource BodyStrongTextBlockStyle}"
                         Foreground="{StaticResource ShellPrimaryTextBrush}"
                         TextTrimming="CharacterEllipsis"
                         TextWrapping="NoWrap" />
                     <TextBlock
-                        x:Name="ContragentIdTextBlock"
+                        x:Name="OwnershipCodeTextBlock"
                         Style="{StaticResource CaptionTextBlockStyle}"
                         VerticalAlignment="Bottom"
                         Foreground="{StaticResource ShellCaptionTextBrush}" />
@@ -148,6 +149,21 @@
                     Foreground="{StaticResource ShellPrimaryTextBrush}"
                     TextTrimming="CharacterEllipsis"
                     TextWrapping="NoWrap" />
+
+                <TextBlock
+                    Grid.Row="6"
+                    Grid.Column="0"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    HorizontalAlignment="Right"
+                    TextAlignment="Right"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Text="Контракты" />
+                <StackPanel
+                    x:Name="ContractLinksPanel"
+                    Grid.Row="6"
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="4" />
             </Grid>
 
             <Border

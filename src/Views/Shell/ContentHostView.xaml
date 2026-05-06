@@ -90,6 +90,22 @@
                             Content="&#xE9D9;" />
 
                         <Button
+                            x:Name="FnsCompareButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="FnsCompareButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Сверить данные с ФНС"
+                            Content="&#xE895;" />
+
+                        <Button
                             x:Name="DeleteSelectedRowButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"

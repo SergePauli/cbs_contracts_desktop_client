@@ -175,6 +175,11 @@ namespace CbsContractsDesktopClient.Services
             TraceEmitted?.Invoke(message);
         }
 
+        public static void EmitExternalTrace(string message)
+        {
+            EmitTrace(message);
+        }
+
         private static string SerializeForTrace<TRequest>(TRequest request)
         {
             try

@@ -27,6 +27,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
+        private readonly IReferenceLookupCacheService? _referenceLookupCacheService;
         private readonly SemaphoreSlim _navigationGate = new(1, 1);
         private LazyDataViewState<ReferenceDataRow>? _state;
         private ICbsTableRows<ReferenceDataRow>? _rows;
@@ -50,11 +51,13 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public ReferencesContentViewModel(
             AppShellViewModel shellViewModel,
             IDataQueryService dataQueryService,
-            IReferenceDefinitionService referenceDefinitionService)
+            IReferenceDefinitionService referenceDefinitionService,
+            IReferenceLookupCacheService? referenceLookupCacheService = null)
         {
             _shellViewModel = shellViewModel;
             _dataQueryService = dataQueryService;
             _referenceDefinitionService = referenceDefinitionService;
+            _referenceLookupCacheService = referenceLookupCacheService;
 
             FilterFields = [];
 
@@ -825,6 +828,13 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             if (model is null)
             {
                 return [];
+            }
+
+            if (_referenceLookupCacheService is not null)
+            {
+                return await _referenceLookupCacheService.GetOptionsAsync(
+                    model,
+                    cancellationToken: cancellationToken);
             }
 
             var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(

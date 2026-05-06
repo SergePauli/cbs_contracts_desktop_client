@@ -84,18 +84,44 @@ public sealed class ContentHostViewTests
         Assert.Contains("Row=\"{Binding SelectedRow}\"", xaml);
         Assert.Contains("EmployeeEditRequested=\"ContragentDetailView_EmployeeEditRequested\"", xaml);
         Assert.Contains("Visibility=\"{Binding ShowContragentDetailView, Converter={StaticResource BoolVisibilityConverter}}\"", xaml);
-        Assert.Contains("Height=\"170\"", detailXaml);
+        Assert.Contains("Height=\"215\"", detailXaml);
         Assert.Contains("<ColumnDefinition Width=\"60*\" />", detailXaml);
         Assert.Contains("<ColumnDefinition Width=\"40*\" />", detailXaml);
         Assert.Contains("<ColumnDefinition Width=\"13*\" />", detailXaml);
         Assert.Contains("<ColumnDefinition Width=\"87*\" />", detailXaml);
-        Assert.Contains("x:Name=\"ContragentNameTextBlock\"", detailXaml);
+        Assert.Contains("x:Name=\"OwnershipFullNameTextBlock\"", detailXaml);
+        Assert.Contains("x:Name=\"OwnershipCodeTextBlock\"", detailXaml);
+        Assert.Contains("Text=\"Форма\"", detailXaml);
+        Assert.DoesNotContain("x:Name=\"ContragentNameTextBlock\"", detailXaml);
+        Assert.DoesNotContain("x:Name=\"ContragentIdTextBlock\"", detailXaml);
         Assert.Contains("x:Name=\"ContactsPanel\"", detailXaml);
+        Assert.Contains("x:Name=\"ContractLinksPanel\"", detailXaml);
+        Assert.Contains("Text=\"Контракты\"", detailXaml);
         Assert.Contains("<references:EmployeeBox x:Name=\"EmployeesBox\" />", detailXaml);
         Assert.Contains("Padding=\"12,0,0,0\"", detailXaml);
         Assert.Contains("public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EmployeeEditRequested;", detailCode);
         Assert.Contains("EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);", detailCode);
         Assert.Contains("EmployeesBox.Employees = ReadEmployees(row);", detailCode);
+        Assert.Contains("public ReferenceDataRow? ContractsRow", detailCode);
+        Assert.Contains("RefreshContractLinks();", detailCode);
+        Assert.Contains("ReadContractLinks(ContractsRow)", detailCode);
+        Assert.Contains("ContractLinksPanel.Children.Add(new HyperlinkButton", detailCode);
+        Assert.Contains("private sealed record ContractLinkItem", detailCode);
+        Assert.Contains("\"contragent.contracts\"", detailCode);
+        Assert.Contains("var title = ReadStringProperty(item, \"name\");", detailCode);
+        Assert.DoesNotContain("ReadStringProperty(item, \"list_key\")", detailCode);
+        Assert.Contains("\"requisites.organization.ownership.full_name\"", detailCode);
+        Assert.Contains("\"requisites.organization.ownership.code\"", detailCode);
+        Assert.Contains("\"requisites.organization.okopf\"", detailCode);
+        Assert.Contains("_referenceLookupCacheService = App.Services.GetService<IReferenceLookupCacheService>();", detailCode);
+        Assert.Contains("RefreshOwnershipFromReferenceAsync(row, refreshVersion)", detailCode);
+        Assert.Contains("_referenceLookupCacheService.FindOwnershipAsync(", detailCode);
+        Assert.Contains("GetOwnershipId(row)", detailCode);
+        Assert.Contains("GetOwnershipCode(row)", detailCode);
+        Assert.Contains("ownership.FullName", detailCode);
+        Assert.Contains("ownership.Code", detailCode);
+        Assert.Contains("код: {code}", detailCode);
+        Assert.DoesNotContain("ID: {id}", detailCode);
         Assert.Contains("\"requisites.organization.full_name\"", detailCode);
         Assert.Contains("FormatPart(\"ИНН\", GetText(row, \"requisites.organization.inn\", \"inn\"))", detailCode);
         Assert.Contains("FormatPart(\"КПП\", GetText(row, \"requisites.organization.kpp\", \"kpp\"))", detailCode);
@@ -160,11 +186,19 @@ public sealed class ContentHostViewTests
         var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
 
         Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: true);", codeBehind);
+        Assert.Contains("ShowContragentCreateMenu(anchor);", codeBehind);
+        Assert.Contains("Text = \"Смена юр.лица\"", codeBehind);
+        Assert.Contains("IsEnabled = false", codeBehind);
+        Assert.Contains("Text = \"Импорт из ФНС\"", codeBehind);
+        Assert.Contains("Text = \"Ручной ввод\"", codeBehind);
+        Assert.Contains("await ImportContragentFromFnsAsync();", codeBehind);
         Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
         Assert.Contains("if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Profile)", codeBehind);
         Assert.Contains("await ShowProfileEditDialogAsync(isCreateMode);", codeBehind);
         Assert.Contains("if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Employee)", codeBehind);
         Assert.Contains("await ShowEmployeeEditDialogAsync(isCreateMode);", codeBehind);
+        Assert.Contains("if (_viewModel.CurrentReference.EditorKind == ReferenceEditorKind.Contragent)", codeBehind);
+        Assert.Contains("await ShowContragentEditDialogAsync(isCreateMode);", codeBehind);
         Assert.Contains("var viewModel = new ProfileEditViewModel(state, LoadPositionOptionsAsync);", codeBehind);
         Assert.Contains("var dialog = new ProfileEditDialog(viewModel)", codeBehind);
         Assert.Contains("ProfileEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
@@ -181,6 +215,31 @@ public sealed class ContentHostViewTests
         Assert.Contains("var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);", codeBehind);
         Assert.Contains("EmployeeEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
         Assert.Contains("EmployeeEditPayloadBuilder.BuildForUpdate(viewModel)", codeBehind);
+        Assert.Contains("var viewModel = new ContragentEditViewModel(state, LoadAddressOptionsAsync);", codeBehind);
+        Assert.Contains("ContragentEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
+        Assert.Contains("ContragentEditPayloadBuilder.BuildForUpdate(viewModel)", codeBehind);
+        Assert.Contains("await EnsureContragentAddressAsync(viewModel);", codeBehind);
+        Assert.Contains("private async Task ImportContragentFromFnsAsync()", codeBehind);
+        Assert.Contains("private async Task<string?> ShowFnsImportInnDialogAsync()", codeBehind);
+        Assert.Contains("private async Task<FnsContragentLookupResult?> ShowFnsImportResultSelectionDialogAsync(", codeBehind);
+        Assert.Contains("private async Task<ContragentEditDialogState> CreateContragentImportStateAsync(", codeBehind);
+        Assert.Contains("_fnsContragentService.SearchByReqAsync(inn.Trim())", codeBehind);
+        Assert.Contains("await ShowContragentEditDialogAsync(isCreateMode: true, state);", codeBehind);
+        Assert.Contains("private sealed record FnsImportSelectionItem", codeBehind);
+        Assert.Contains("BuildFnsImportSelectionLabel(result)", codeBehind);
+        Assert.Contains("NormalizeSingleLine(result.Organization.FullName)", codeBehind);
+        Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadAddressOptionsAsync(", codeBehind);
+        Assert.Contains("private async Task<ReferenceDataRow?> LoadContragentEditRowAsync", codeBehind);
+        Assert.Contains("Model = \"Contragent\"", codeBehind);
+        Assert.Contains("Preset = \"edit\"", codeBehind);
+        Assert.Contains("LoadSimpleReferenceOptionsAsync(\"Ownership\", \"card\")", codeBehind);
+        Assert.Contains("LoadSimpleReferenceOptionsAsync(\"Area\", \"item\")", codeBehind);
+        Assert.Contains("RefreshContragentDetailContractsAsync()", codeBehind);
+        Assert.Contains("ContragentDetailView.ContractsRow = row;", codeBehind);
+        Assert.Contains("LoadContragentEditRowAsync(id.Value, cancellationTokenSource.Token)", codeBehind);
+        Assert.Contains("BuildOwnershipOptionLabel(item)", codeBehind);
+        Assert.Contains("return $\"{item.Name} - {item.FullName}\";", codeBehind);
+        Assert.Contains("_referenceLookupCacheService.GetOptionsAsync(model, preset, cancellationToken)", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadContragentOptionsAsync(", codeBehind);
         Assert.Contains("Model = \"Position\"", codeBehind);
         Assert.Contains("Preset = \"item\"", codeBehind);
@@ -230,5 +289,22 @@ public sealed class ContentHostViewTests
         Assert.Contains("LoadAffectedStagesAsync", codeBehind);
         Assert.Contains("LoadHolidayCalendarAsync", codeBehind);
         Assert.Contains("BuildStagePatch", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_DefinesFnsCompareActionButton()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("x:Name=\"FnsCompareButton\"", xaml);
+        Assert.Contains("Click=\"FnsCompareButton_Click\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"Сверить данные с ФНС\"", xaml);
+        Assert.Contains("private async void FnsCompareButton_Click(object sender, RoutedEventArgs e)", codeBehind);
+        Assert.Contains("await CompareSelectedContragentWithFnsAsync();", codeBehind);
+        Assert.Contains("_fnsContragentService = App.Services.GetRequiredService<IFnsContragentService>();", codeBehind);
+        Assert.Contains("_fnsContragentService.SearchByReqAsync(state.Inn.Trim(), state.Kpp)", codeBehind);
+        Assert.Contains("BuildFnsCompareRows(editViewModel, remote)", codeBehind);
+        Assert.Contains("ContragentEditPayloadBuilder.BuildForUpdate(editViewModel)", codeBehind);
     }
 }
