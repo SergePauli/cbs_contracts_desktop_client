@@ -56,6 +56,65 @@ namespace CbsContractsDesktopClient.Services.References
             return request;
         }
 
+        public static IReadOnlyDictionary<string, object?> BuildForLegalEntityChange(ContragentEditViewModel viewModel)
+        {
+            ArgumentNullException.ThrowIfNull(viewModel);
+            Validate(viewModel);
+
+            if (viewModel.State.Id is null)
+            {
+                throw new InvalidOperationException("Contragent id is missing for legal entity change.");
+            }
+
+            var newRegistration = viewModel.ActiveRegistration;
+            if (newRegistration is null || newRegistration.Id is not null)
+            {
+                throw new InvalidOperationException("New active contragent organization is missing.");
+            }
+
+            var requisitesAttributes = new List<object?>();
+            foreach (var registration in viewModel.OrganizationHistory.Where(static item => item.OriginalIsActive && item.Id is not null))
+            {
+                requisitesAttributes.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["id"] = registration.Id,
+                    ["list_key"] = registration.ListKey,
+                    ["used"] = false
+                });
+            }
+
+            if (requisitesAttributes.Count == 0 && viewModel.State.RequisitesId is long requisitesId)
+            {
+                requisitesAttributes.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["id"] = requisitesId,
+                    ["list_key"] = viewModel.State.RequisitesListKey,
+                    ["used"] = false
+                });
+            }
+
+            requisitesAttributes.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["list_key"] = string.IsNullOrWhiteSpace(newRegistration.ListKey)
+                    ? Guid.NewGuid().ToString()
+                    : newRegistration.ListKey,
+                ["used"] = true,
+                ["organization_attributes"] = BuildOrganizationAttributes(viewModel, includeAll: true)
+            });
+
+            var request = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["id"] = viewModel.State.Id.Value
+            };
+
+            AppendChangedText(request, "description", viewModel.Description, viewModel.State.Description);
+            AppendBankFieldsIfChanged(request, viewModel);
+            AppendRealAddressIfChanged(request, viewModel);
+            AppendContactDeltaIfChanged(request, viewModel);
+            request["contragent_organizations_attributes"] = requisitesAttributes.ToArray();
+            return request;
+        }
+
         private static void AppendOrganizationPayloadIfChanged(
             Dictionary<string, object?> request,
             ContragentEditViewModel viewModel)

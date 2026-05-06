@@ -83,34 +83,117 @@ Shell уже больше не является только каркасом п
 
 ## Ближайшая следующая задача
 
-Следующий production-шаг: справочник `Контрагенты` как новый complex reference внутри текущего reference workspace.
+Следующий production-шаг: первая функциональная таблица `Дополнительные соглашения к контрактам`.
 
-Цель:
+Почему она первая:
 
-- подключить `/contragents` на уже готовой table/reference platform
-- использовать контрагентов как первый сценарий для нового reusable detail-widget `EmployeeBox`
-- сделать `EmployeeBox` базовым UI-блоком для отображения ответственных сотрудников во всех последующих таблицах
+- это самая простая прикладная таблица после этапа справочников
+- можно переиспользовать уже готовые table/reference primitives без нового complex-editor риска
+- она даст первый рабочий сценарий за пределами справочников и проверит shell на настоящем контрактном процессе
 
 Ожидаемый первый scope:
 
-1. Добавить `ReferenceDefinition` для `Contragent`
-2. Настроить list-screen: колонки, nested display/filter/sort mapping, lazy loading, width persistence
-3. Добавить `ContragentDetailView` под таблицей
-4. В detail-view вывести связанные роли/сотрудников через новый `EmployeeBox`
-5. Спроектировать `EmployeeBox` как самостоятельный reusable control:
-   - ФИО
-   - должность
-   - контакты или compact contact summary
-   - статус активности
-   - визуальный вариант для compact/detail density
-6. Закрыть `EmployeeBox` регрессионными тестами на contract/rendering hooks
-7. Подключить audit panel к `Contragent` через общий audit flow
+1. Изучить web/API-метаданные таблицы дополнительных соглашений.
+2. Добавить route/page definition внутри shell для функциональной таблицы.
+3. Настроить list-screen: колонки, nested display/filter/sort mapping, lazy loading, width persistence.
+4. Подключить базовый selection/detail context и audit panel.
+5. Определить минимальный набор row actions для первой поставки.
+6. Зафиксировать metadata и query-contract регрессионными тестами.
 
 После этого:
 
-- переносить следующие complex references уже с готовым паттерном detail-widget
+- переносить следующие функциональные таблицы уже с проверенным pattern
 - возвращаться к delete/archive правилам и доменным ограничениям CRUD
-- parallel track: поддерживать регрессионные тесты на shell navigation / content chrome / audit
+- поддерживать регрессионные тесты на shell navigation / content chrome / audit
+
+## Закрытый production-этап: complex reference `Контрагенты`
+
+Справочник `Контрагенты` закрыт как большой production-этап внутри текущего reference workspace.
+
+Что выполнено:
+
+1. Добавлен `ReferenceDefinition` для `/contragents`:
+   - `Model = Contragent`
+   - table/list preset
+   - nested display/filter/sort mapping
+   - lazy loading и width persistence через общую table-platform
+2. Добавлен `ContragentDetailView` под таблицей:
+   - форма собственности и код
+   - полное имя
+   - реквизиты `ИНН + КПП + подразделение`
+   - описание
+   - контакты как clickable contact chips
+   - адреса
+   - список контрактов
+   - копирование detail-view в буфер обмена без списка сотрудников
+3. Добавлен специализированный `ContragentEditDialog`:
+   - основные поля
+   - реквизиты/регистрации
+   - контакты
+   - коды и банковские поля
+   - lookup ownership/region/address
+   - compact dialog header/footer
+   - подавление системных keyboard tooltip
+4. Добавлен timeline регистраций `contragent.organizations`:
+   - отображение истории
+   - переключение активной регистрации
+   - удаление архивной регистрации через `_destroy = "1"`
+   - локальный datetime formatting
+5. Добавлен сценарий смены юр.лица:
+   - submenu `Смена юр.лица -> Импорт из ФНС`
+   - submenu `Смена юр.лица -> Ручной ввод`
+   - новая `contragent_organization` создается с `used = true`
+   - старая активная регистрация отправляется с `used = false`
+   - ФНС предзаполняет только новую регистрацию, не перезаписывая остальные поля контрагента
+   - пользовательские изменения остальных полей в диалоге сохраняются штатно
+6. Добавлен импорт и сверка с ФНС:
+   - `IFnsContragentService`
+   - поиск по ИНН
+   - дополнительный фильтр выбора филиала по КПП и частичному имени
+   - диалог сверки с выбором применяемых изменений
+   - файловый диагностический лог обмена с ФНС
+7. Добавлен `IReferenceLookupCacheService`:
+   - общий cache lookup-справочников
+   - `Ownership` поддерживает полный lookup для отображения `name + full_name`
+   - `Position` сознательно исключен из cache-list
+8. Добавлен address lookup workflow:
+   - выбор существующего `Address`
+   - создание нового `Address` перед сохранением контрагента, если точного значения нет
+   - сохранение `address_id` без лишней замены адресной записи
+9. Добавлены typed state/view model/payload builder:
+   - `ContragentEditDialogState`
+   - `ContragentEditViewModel`
+   - `ContragentEditStateFactory`
+   - `ContragentEditPayloadBuilder`
+   - отдельный payload для смены юр.лица
+10. Этап закрыт регрессионными тестами:
+    - reference definition
+    - detail-view wiring
+    - edit-state factory
+    - payload builder
+    - FNS service
+    - lookup cache
+    - content-host сценарии
+
+## Закрытый UI-этап: reusable `EmployeeBox`
+
+`EmployeeBox` закрыт как самостоятельный reusable control для отображения сотрудников в detail/list контекстах.
+
+Что выполнено:
+
+- ФИО
+- должность
+- контакты / compact contact summary
+- статус активности
+- striped rows
+- отключенный hover container background
+- tooltip item с `description`
+- role-aware edit action
+- подключение edit dialog сотрудника из контекста контрагента
+- контакты как ссылки по типу через общий `ContactTypeClassifier`
+- copy action сотрудника в буфер обмена
+- empty state
+- регрессионные проверки на wiring/rendering hooks
 
 ## Короткий CRUD-план
 

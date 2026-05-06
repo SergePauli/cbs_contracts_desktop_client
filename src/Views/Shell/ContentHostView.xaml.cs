@@ -20,6 +20,7 @@ using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.ApplicationModel.DataTransfer;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
@@ -187,17 +188,44 @@ namespace CbsContractsDesktopClient.Views.Shell
             await CompareSelectedContragentWithFnsAsync();
         }
 
+        private void CopyContragentDetailsButton_Click(object sender, RoutedEventArgs e)
+        {
+            var text = ContragentDetailView.BuildClipboardText();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            var dataPackage = new DataPackage();
+            dataPackage.SetText(text);
+            Clipboard.SetContent(dataPackage);
+            ShowSuccessNotification("Данные скопированы", "Карточка контрагента скопирована в буфер обмена.");
+        }
+
         private void ShowContragentCreateMenu(FrameworkElement anchor)
         {
             var menu = new MenuFlyout();
 
             if (_viewModel.HasSelectedRow)
             {
-                var legalEntityChangeItem = new MenuFlyoutItem
+                var legalEntityChangeItem = new MenuFlyoutSubItem
                 {
-                    Text = "Смена юр.лица",
-                    IsEnabled = false
+                    Text = "Смена юр.лица"
                 };
+                var importLegalEntityFnsItem = new MenuFlyoutItem
+                {
+                    Text = "Импорт из ФНС"
+                };
+                importLegalEntityFnsItem.Click += async (_, _) => await ChangeContragentLegalEntityFromFnsAsync();
+                legalEntityChangeItem.Items.Add(importLegalEntityFnsItem);
+
+                var manualLegalEntityItem = new MenuFlyoutItem
+                {
+                    Text = "Ручной ввод"
+                };
+                manualLegalEntityItem.Click += async (_, _) => await ChangeContragentLegalEntityManuallyAsync();
+                legalEntityChangeItem.Items.Add(manualLegalEntityItem);
+
                 menu.Items.Add(legalEntityChangeItem);
 
                 menu.Items.Add(new MenuFlyoutSeparator());
@@ -399,6 +427,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var isContragentReference = _viewModel.IsContragentReference;
             var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
             var canCompareFns = hasSelectedRow && isContragentReference && !_isFnsCompareInProgress;
+            var canCopyContragentDetails = hasSelectedRow && isContragentReference;
 
             if (EditSelectedRowButton is not null)
             {
@@ -432,6 +461,15 @@ namespace CbsContractsDesktopClient.Views.Shell
                 FnsCompareButton.IsEnabled = canCompareFns;
                 FnsCompareButton.Foreground = canCompareFns
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.SeaGreen)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (CopyContragentDetailsButton is not null)
+            {
+                CopyContragentDetailsButton.Visibility = isContragentReference ? Visibility.Visible : Visibility.Collapsed;
+                CopyContragentDetailsButton.IsEnabled = canCopyContragentDetails;
+                CopyContragentDetailsButton.Foreground = canCopyContragentDetails
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkSlateBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
         }
@@ -710,13 +748,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var inn = await ShowFnsImportInnDialogAsync();
-            if (string.IsNullOrWhiteSpace(inn))
+            var criteria = await ShowFnsImportCriteriaDialogAsync();
+            if (criteria is null)
             {
                 return;
             }
 
-            if (!IsValidInn(inn))
+            if (!IsValidInn(criteria.Inn))
             {
                 await ShowErrorDialogAsync("Импорт из ФНС", "Укажите корректный ИНН.");
                 return;
@@ -724,16 +762,23 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             try
             {
-                var results = await _fnsContragentService.SearchByReqAsync(inn.Trim());
+                var results = await _fnsContragentService.SearchByReqAsync(criteria.Inn);
                 if (results.Count == 0)
                 {
                     await ShowErrorDialogAsync("Импорт из ФНС", "Данные в ФНС не найдены.");
                     return;
                 }
 
-                var selectedResult = results.Count == 1
-                    ? results[0]
-                    : await ShowFnsImportResultSelectionDialogAsync(results);
+                var filteredResults = FilterFnsImportResults(results, criteria);
+                if (filteredResults.Count == 0)
+                {
+                    await ShowErrorDialogAsync("Импорт из ФНС", "По указанным КПП или наименованию данные не найдены.");
+                    return;
+                }
+
+                var selectedResult = filteredResults.Count == 1
+                    ? filteredResults[0]
+                    : await ShowFnsImportResultSelectionDialogAsync(filteredResults);
                 if (selectedResult is null)
                 {
                     return;
@@ -748,13 +793,119 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        private async Task<string?> ShowFnsImportInnDialogAsync()
+        private async Task ChangeContragentLegalEntityManuallyAsync()
+        {
+            if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null || !_viewModel.IsContragentReference)
+            {
+                return;
+            }
+
+            var state = await CreateLegalEntityChangeStateAsync();
+            if (state is null)
+            {
+                return;
+            }
+
+            await ShowContragentEditDialogAsync(
+                isCreateMode: false,
+                state,
+                isLegalEntityChangeMode: true);
+        }
+
+        private async Task ChangeContragentLegalEntityFromFnsAsync()
+        {
+            if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null || !_viewModel.IsContragentReference)
+            {
+                return;
+            }
+
+            try
+            {
+                var fnsResult = await SelectFnsImportResultAsync();
+                if (fnsResult is null)
+                {
+                    return;
+                }
+
+                var state = await CreateLegalEntityChangeStateAsync(fnsResult);
+                if (state is null)
+                {
+                    return;
+                }
+
+                await ShowContragentEditDialogAsync(
+                    isCreateMode: false,
+                    state,
+                    isLegalEntityChangeMode: true);
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось сменить юр.лицо через ФНС", ex.Message);
+            }
+        }
+
+        private async Task<FnsContragentLookupResult?> SelectFnsImportResultAsync()
+        {
+            var criteria = await ShowFnsImportCriteriaDialogAsync();
+            if (criteria is null)
+            {
+                return null;
+            }
+
+            if (!IsValidInn(criteria.Inn))
+            {
+                await ShowErrorDialogAsync("Импорт из ФНС", "Укажите корректный ИНН.");
+                return null;
+            }
+
+            var results = await _fnsContragentService.SearchByReqAsync(criteria.Inn);
+            if (results.Count == 0)
+            {
+                await ShowErrorDialogAsync("Импорт из ФНС", "Данные в ФНС не найдены.");
+                return null;
+            }
+
+            var filteredResults = FilterFnsImportResults(results, criteria);
+            if (filteredResults.Count == 0)
+            {
+                await ShowErrorDialogAsync("Импорт из ФНС", "По указанным КПП или наименованию данные не найдены.");
+                return null;
+            }
+
+            return filteredResults.Count == 1
+                ? filteredResults[0]
+                : await ShowFnsImportResultSelectionDialogAsync(filteredResults);
+        }
+
+        private async Task<FnsImportCriteria?> ShowFnsImportCriteriaDialogAsync()
         {
             var innBox = new TextBox
             {
                 Header = "ИНН",
                 PlaceholderText = "Введите ИНН",
-                MinWidth = 320
+                MinWidth = 360
+            };
+            var kppBox = new TextBox
+            {
+                Header = "КПП",
+                PlaceholderText = "Необязательно",
+                MinWidth = 360
+            };
+            var nameBox = new TextBox
+            {
+                Header = "Наименование",
+                PlaceholderText = "Короткое или полное имя",
+                MinWidth = 360
+            };
+            var content = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    innBox,
+                    kppBox,
+                    nameBox
+                }
             };
 
             var dialog = new ContentDialog
@@ -764,14 +915,64 @@ namespace CbsContractsDesktopClient.Views.Shell
                 PrimaryButtonText = "Найти",
                 CloseButtonText = "Отмена",
                 DefaultButton = ContentDialogButton.Primary,
-                Content = innBox
+                Content = content
             };
             dialog.Resources["ContentDialogTitleMargin"] = new Thickness(4);
             dialog.Resources["ContentDialogCommandSpaceMargin"] = new Thickness(4);
 
-            return await dialog.ShowAsync() == ContentDialogResult.Primary
-                ? innBox.Text.Trim()
-                : null;
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return null;
+            }
+
+            var inn = NormalizeSingleLine(innBox.Text);
+            if (string.IsNullOrWhiteSpace(inn))
+            {
+                return null;
+            }
+
+            return new FnsImportCriteria(
+                inn,
+                NormalizeSingleLine(kppBox.Text),
+                NormalizeSingleLine(nameBox.Text));
+        }
+
+        private static IReadOnlyList<FnsContragentLookupResult> FilterFnsImportResults(
+            IReadOnlyList<FnsContragentLookupResult> results,
+            FnsImportCriteria criteria)
+        {
+            if (string.IsNullOrWhiteSpace(criteria.Kpp) && string.IsNullOrWhiteSpace(criteria.Name))
+            {
+                return results;
+            }
+
+            return results
+                .Where(result =>
+                    MatchesFnsImportKpp(result, criteria.Kpp)
+                    || MatchesFnsImportName(result, criteria.Name))
+                .ToList();
+        }
+
+        private static bool MatchesFnsImportKpp(FnsContragentLookupResult result, string kpp)
+        {
+            return !string.IsNullOrWhiteSpace(kpp)
+                && string.Equals(
+                    NormalizeSingleLine(result.Organization.Kpp),
+                    kpp,
+                    StringComparison.CurrentCultureIgnoreCase);
+        }
+
+        private static bool MatchesFnsImportName(FnsContragentLookupResult result, string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            var fullName = NormalizeSingleLine(result.Organization.FullName);
+            var shortName = NormalizeSingleLine(result.Organization.Name);
+            return fullName.Contains(name, StringComparison.CurrentCultureIgnoreCase)
+                || shortName.Contains(name, StringComparison.CurrentCultureIgnoreCase);
         }
 
         private async Task<FnsContragentLookupResult?> ShowFnsImportResultSelectionDialogAsync(
@@ -851,6 +1052,131 @@ namespace CbsContractsDesktopClient.Views.Shell
                         .Distinct(StringComparer.CurrentCultureIgnoreCase)),
                 OwnershipOptions = ownershipOptions,
                 RegionOptions = regionOptions
+            };
+        }
+
+        private async Task<ContragentEditDialogState?> CreateLegalEntityChangeStateAsync(
+            FnsContragentLookupResult? result = null)
+        {
+            if (_viewModel.CurrentReference is null)
+            {
+                return null;
+            }
+
+            var sourceRow = await LoadContragentEditRowAsync();
+            if (sourceRow is null)
+            {
+                await ShowErrorDialogAsync("Смена юр.лица", "Не удалось загрузить свежую карточку контрагента.");
+                return null;
+            }
+
+            var ownershipOptions = await LoadSimpleReferenceOptionsAsync("Ownership", "card");
+            var regionOptions = await LoadSimpleReferenceOptionsAsync("Area", "item");
+            var currentState = ContragentEditStateFactory.Create(
+                _viewModel.CurrentReference,
+                isCreateMode: false,
+                sourceRow,
+                ownershipOptions,
+                regionOptions);
+            var newRegistration = CreateNewLegalEntityRegistration(result);
+            var organizationHistory = currentState.OrganizationHistory
+                .Select(static registration => CopyRegistrationForLegalEntityChange(registration))
+                .Prepend(newRegistration)
+                .ToList();
+
+            return new ContragentEditDialogState
+            {
+                Definition = currentState.Definition,
+                IsCreateMode = false,
+                Id = currentState.Id,
+                ObjUuid = currentState.ObjUuid,
+                RequisitesId = currentState.RequisitesId,
+                RequisitesListKey = currentState.RequisitesListKey,
+                OrganizationId = currentState.OrganizationId,
+                Inn = newRegistration.Inn,
+                Kpp = newRegistration.Kpp,
+                Division = newRegistration.Division,
+                OwnershipId = newRegistration.OwnershipId,
+                OwnershipName = newRegistration.OwnershipName,
+                Name = newRegistration.Name,
+                RegionId = currentState.RegionId,
+                RegionName = currentState.RegionName,
+                RealAddressId = currentState.RealAddressId,
+                RealAddressListKey = currentState.RealAddressListKey,
+                AddressRealAddressId = currentState.AddressRealAddressId,
+                AddressReal = currentState.AddressReal,
+                FullName = newRegistration.FullName,
+                Description = currentState.Description,
+                Ogrn = newRegistration.Ogrn,
+                Okfc = newRegistration.Okfc,
+                Okopf = newRegistration.Okopf,
+                Okpo = newRegistration.Okpo,
+                Okogu = newRegistration.Okogu,
+                Okved = newRegistration.Okved,
+                Oktmo = newRegistration.Oktmo,
+                BankName = currentState.BankName,
+                BankBik = currentState.BankBik,
+                BankAccount = currentState.BankAccount,
+                BankCorAccount = currentState.BankCorAccount,
+                Contacts = currentState.Contacts,
+                ContactsText = currentState.ContactsText,
+                OrganizationHistory = organizationHistory,
+                OwnershipOptions = ownershipOptions,
+                RegionOptions = regionOptions,
+                InitialAddressOption = currentState.InitialAddressOption
+            };
+        }
+
+        private static ContragentOrganizationHistoryItem CreateNewLegalEntityRegistration(
+            FnsContragentLookupResult? result)
+        {
+            return new ContragentOrganizationHistoryItem
+            {
+                ListKey = Guid.NewGuid().ToString(),
+                IsActive = true,
+                OriginalIsActive = false,
+                Name = NormalizeSingleLine(result?.Organization.Name),
+                FullName = NormalizeSingleLine(result?.Organization.FullName),
+                Inn = NormalizeSingleLine(result?.Organization.Inn),
+                Kpp = NormalizeSingleLine(result?.Organization.Kpp),
+                OwnershipId = result?.Organization.OwnershipId,
+                Ogrn = NormalizeSingleLine(result?.Organization.Ogrn),
+                Okfc = NormalizeSingleLine(result?.Organization.Okfc),
+                Okopf = NormalizeSingleLine(result?.Organization.Okopf),
+                Okpo = NormalizeSingleLine(result?.Organization.Okpo),
+                Okogu = NormalizeSingleLine(result?.Organization.Okogu),
+                Oktmo = NormalizeSingleLine(result?.Organization.Oktmo)
+            };
+        }
+
+        private static ContragentOrganizationHistoryItem CopyRegistrationForLegalEntityChange(
+            ContragentOrganizationHistoryItem registration)
+        {
+            return new ContragentOrganizationHistoryItem
+            {
+                Id = registration.Id,
+                OrganizationId = registration.OrganizationId,
+                Name = registration.Name,
+                FullName = registration.FullName,
+                Inn = registration.Inn,
+                Kpp = registration.Kpp,
+                Division = registration.Division,
+                OwnershipName = registration.OwnershipName,
+                OwnershipId = registration.OwnershipId,
+                OwnershipCode = registration.OwnershipCode,
+                Ogrn = registration.Ogrn,
+                Okfc = registration.Okfc,
+                Okopf = registration.Okopf,
+                Okpo = registration.Okpo,
+                Okogu = registration.Okogu,
+                Okved = registration.Okved,
+                Oktmo = registration.Oktmo,
+                ListKey = registration.ListKey,
+                CreatedAt = registration.CreatedAt,
+                UpdatedAt = registration.UpdatedAt,
+                OriginalIsActive = registration.OriginalIsActive,
+                IsActive = false,
+                IsMarkedForDestroy = registration.IsMarkedForDestroy
             };
         }
 
@@ -1704,7 +2030,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task ShowContragentEditDialogAsync(
             bool isCreateMode,
-            ContragentEditDialogState? initialState = null)
+            ContragentEditDialogState? initialState = null,
+            bool isLegalEntityChangeMode = false)
         {
             if (_viewModel.CurrentReference is null)
             {
@@ -1747,11 +2074,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                     viewModel.ClearErrorInfo();
                     await EnsureContragentAddressAsync(viewModel);
 
-                    var payload = isCreateMode
-                        ? ContragentEditPayloadBuilder.BuildForCreate(viewModel)
-                        : ContragentEditPayloadBuilder.BuildForUpdate(viewModel);
+                    var payload = isLegalEntityChangeMode
+                        ? ContragentEditPayloadBuilder.BuildForLegalEntityChange(viewModel)
+                        : isCreateMode
+                            ? ContragentEditPayloadBuilder.BuildForCreate(viewModel)
+                            : ContragentEditPayloadBuilder.BuildForUpdate(viewModel);
 
-                    if (!isCreateMode && payload.Count <= 1)
+                    if (!isCreateMode && !isLegalEntityChangeMode && payload.Count <= 1)
                     {
                         viewModel.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
@@ -1782,7 +2111,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
             await _viewModel.ReloadCurrentReferenceAsync();
             ShowSuccessNotification(
-                isCreateMode ? "Контрагент создан" : "Изменения контрагента сохранены",
+                isCreateMode
+                    ? "Контрагент создан"
+                    : isLegalEntityChangeMode
+                        ? "Юр.лицо контрагента изменено"
+                        : "Изменения контрагента сохранены",
                 BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
         }
 
@@ -2161,6 +2494,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             string? FundedAt,
             string? PaymentDeadlineAt,
             long? ContractId);
+
+        private sealed record FnsImportCriteria(string Inn, string Kpp, string Name);
 
         private sealed record FnsImportSelectionItem(string Label, FnsContragentLookupResult Result);
 

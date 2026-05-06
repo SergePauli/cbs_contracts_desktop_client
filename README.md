@@ -17,6 +17,7 @@
 - create / update / delete для поддержанных справочников
 - complex reference `/users` со специализированным `ProfileEditDialog`
 - complex reference `/employees` с detail footer, специализированным editor flow и контактами с определением типа
+- complex reference `/contragents` с detail footer, `EmployeeBox`, специализированным editor flow, регистрациями и ФНС-сценариями
 - audit panel в виде timeline-карточек с фильтрами, ленивой прокруткой и копированием ошибок
 - собственный `CbsTableView` с lazy loading, resize, selection, sorting и hot filters
 - локальное сохранение ширин колонок
@@ -69,6 +70,7 @@
 - `ReferenceEditorKind` для переключения generic/specialized editor flow
 - `ProfileEditDialog` / `ProfileEditPayloadBuilder` для `/users`
 - `EmployeeEditDialog` / `EmployeeEditPayloadBuilder` для `/employees`
+- `ContragentEditDialog` / `ContragentEditPayloadBuilder` для `/contragents`
 - lazy/virtual pipeline через:
   - `LazyDataCollection<T>`
   - `LazyDataViewState<T>`
@@ -91,6 +93,16 @@
   - lookup для должности и контрагента
   - contacts editor с классификацией типа контакта
   - typed create/update payload, включая delta контактов
+- `/contragents`
+  - list-screen на общей reference/table platform
+  - `ContragentDetailView` под таблицей
+  - reusable `EmployeeBox` для сотрудников контрагента
+  - specialized edit/create dialog
+  - timeline регистраций `contragent.organizations`
+  - ручная смена юр.лица и смена через импорт из ФНС
+  - сверка данных с ФНС
+  - lookup/cache ownership и адресов
+  - копирование деталей контрагента в буфер обмена без списка сотрудников
 
 ### Собственный `CbsTableView`
 
@@ -183,16 +195,18 @@ Audit panel теперь является reusable частью reference worksp
 - reference workspace
 - собственная table platform
 - первые complex references: `/users`, `/employees`
+- крупный complex reference `/contragents`
 - audit timeline как общий сценарий для всех справочников
 
 Текущая работа теперь смещается с «собрать основу приложения» на:
 
-- расширение сценариев поверх reference workspace
+- разработку первых функциональных таблиц поверх shell/table platform
 - дальнейшую полировку UX таблицы и audit panel
 - перенос следующих рабочих экранов из web-клиента
 
 ## Ближайшие направления
 
+- первая функциональная таблица: `Дополнительные соглашения к контрактам`
 - details/read scenarios и доменные ограничения CRUD
 - следующие специализированные типы колонок и фильтров поверх уже готовых `text` / `numeric` / `boolean` / `date-time` / `multiselect`
 - поиск по аудиту
@@ -216,6 +230,7 @@ Audit panel теперь является reusable частью reference worksp
 - `ReferenceCrudService`
 - `ProfileEditPayloadBuilder`
 - `EmployeeEditPayloadBuilder`
+- `ContragentEditPayloadBuilder`
 - `ContactTypeClassifier`
 - `AuditPanelFormatter`
 - локальные настройки ширин колонок

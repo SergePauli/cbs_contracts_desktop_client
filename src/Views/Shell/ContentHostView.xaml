@@ -106,6 +106,22 @@
                             Content="&#xE895;" />
 
                         <Button
+                            x:Name="CopyContragentDetailsButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="CopyContragentDetailsButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Скопировать данные контрагента"
+                            Content="&#xE8C8;" />
+
+                        <Button
                             x:Name="DeleteSelectedRowButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"

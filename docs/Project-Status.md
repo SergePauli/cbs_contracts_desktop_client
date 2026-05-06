@@ -60,6 +60,20 @@
   - edit/create через `IReferenceCrudService`
   - lookup должности и контрагента через общий `DialogLookupEditors`
   - контакты через общий `DialogContactsEditor` с определением типа, валидацией и link-uri
+- complex reference screen контрагентов:
+  - `/contragents`
+  - модель `Contragent`
+  - list-screen на общей table/reference platform
+  - `ContragentDetailView` под таблицей
+  - reusable `EmployeeBox` для сотрудников контрагента
+  - контакты, адреса, реквизиты, ownership и список контрактов в detail-view
+  - копирование detail-view в буфер обмена без списка сотрудников
+  - специализированный `ContragentEditDialog`
+  - typed state/view model/payload builder
+  - история регистраций `contragent.organizations`
+  - смена юр.лица через ручной ввод или импорт из ФНС
+  - импорт/сверка с ФНС
+  - lookup/cache infrastructure для ownership и адресов
 
 ### 4. Табличная платформа
 
@@ -115,14 +129,16 @@
 - `EmployeeEditStateFactory` flatten fresh edit-row contract
 - `EmployeeEditPayloadBuilder` create/update payload contract, включая delta контактов
 - `ContactTypeClassifier` для поддерживаемых типов контактов
+- `/contragents` definition, detail-view, specialized editor flow, FNS integration и payload contracts
+- `EmployeeBox` reusable UI contract/rendering hooks
 
 ## Что сейчас в разработке по смыслу
 
 Текущая фаза проекта:
 
-**расширение прикладного функционала поверх уже готовой shell + table platform**
+**переход от справочников к первым функциональным таблицам поверх готовой shell + table platform**
 
-То есть команда больше не строит “скелет”, а доращивает рабочие сценарии.
+То есть команда больше не строит “скелет” и завершила крупный этап сложных справочников. Следующий фокус - рабочие контрактные таблицы.
 
 Отдельно важно:
 
@@ -135,16 +151,15 @@
 - полноценный CRUD справочников:
   - read/details
   - delete/archive с учетом бизнес-правил
-- specialized editor для complex references:
-  - следующие complex references после `ProfileEditDialog` и `EmployeeEditDialog`
-  - расширение общей библиотеки dialog editors по мере появления новых доменных форм
+- расширение общей библиотеки dialog editors по мере появления новых доменных форм
 - дополнительные рабочие экраны внутри shell
 - дальнейшая чистка и упрощение диагностического слоя по мере стабилизации интеграций
 
 ## Что логично делать дальше
 
-1. Довести CRUD справочников до details/archive и backend-aware ограничений
-2. Переносить следующие экраны из web-клиента
-3. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect
-4. Расширять доменный контекст в audit/context panel
-5. Укреплять тестовое покрытие вокруг новых shell/table сценариев
+1. Начать первую функциональную таблицу: `Дополнительные соглашения к контрактам`
+2. Проверить reuse table/reference primitives вне раздела справочников
+3. Довести CRUD справочников до details/archive и backend-aware ограничений
+4. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect
+5. Расширять доменный контекст в audit/context panel
+6. Укреплять тестовое покрытие вокруг новых shell/table сценариев

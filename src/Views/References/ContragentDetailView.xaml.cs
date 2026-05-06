@@ -49,6 +49,25 @@ namespace CbsContractsDesktopClient.Views.References
             set => SetValue(ContractsRowProperty, value);
         }
 
+        public string BuildClipboardText()
+        {
+            var row = Row;
+            if (row is null || row.IsPlaceholder)
+            {
+                return string.Empty;
+            }
+
+            var lines = new List<string>();
+            AddClipboardLine(lines, "Форма", BuildInlineValue(OwnershipFullNameTextBlock.Text, OwnershipCodeTextBlock.Text));
+            AddClipboardLine(lines, "Полное имя", FullNameTextBlock.Text);
+            AddClipboardLine(lines, "Реквизиты", RequisitesTextBlock.Text);
+            AddClipboardLine(lines, "Описание", DescriptionTextBlock.Text);
+            AddClipboardLine(lines, "Контакты", BuildContactsText(row));
+            AddClipboardLine(lines, "Адреса", AddressesTextBlock.Text);
+            AddClipboardLine(lines, "Контракты", BuildContractLinksClipboardText(ContractsRow));
+            return string.Join(Environment.NewLine, lines);
+        }
+
         private static void OnRowChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((ContragentDetailView)d).Refresh();
@@ -98,6 +117,38 @@ namespace CbsContractsDesktopClient.Views.References
             RenderContractLinks(ContractsRow is null || ContractsRow.IsPlaceholder
                 ? []
                 : ReadContractLinks(ContractsRow));
+        }
+
+        private static void AddClipboardLine(ICollection<string> lines, string label, string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return;
+            }
+
+            lines.Add($"{label}: {value.Trim()}");
+        }
+
+        private static string BuildInlineValue(params string?[] values)
+        {
+            return string.Join(
+                " ",
+                values
+                    .Select(static value => value?.Trim() ?? string.Empty)
+                    .Where(static value => !string.IsNullOrWhiteSpace(value)));
+        }
+
+        private static string BuildContractLinksClipboardText(ReferenceDataRow? contractsRow)
+        {
+            if (contractsRow is null || contractsRow.IsPlaceholder)
+            {
+                return string.Empty;
+            }
+
+            var contracts = ReadContractLinks(contractsRow);
+            return contracts.Count == 0
+                ? string.Empty
+                : string.Join(", ", contracts.Select(static contract => contract.Title));
         }
 
         private static string BuildOwnershipFullNameText(ReferenceDataRow row)

@@ -201,6 +201,79 @@ public sealed class ContragentEditPayloadBuilderTests
     }
 
     [Fact]
+    public void BuildForLegalEntityChange_DeactivatesOldRegistrationAndKeepsUserContragentChanges()
+    {
+        var oldRegistration = new ContragentOrganizationHistoryItem
+        {
+            Id = 20,
+            OrganizationId = 30,
+            ListKey = "old-list",
+            OriginalIsActive = true,
+            IsActive = false,
+            Inn = "1",
+            OwnershipId = 5,
+            Name = "Old"
+        };
+        var newRegistration = new ContragentOrganizationHistoryItem
+        {
+            ListKey = "new-list",
+            OriginalIsActive = false,
+            IsActive = true,
+            Inn = "2",
+            OwnershipId = 6,
+            Name = "New"
+        };
+        var viewModel = new ContragentEditViewModel(new ContragentEditDialogState
+        {
+            Definition = Definition(),
+            IsCreateMode = false,
+            Id = 10,
+            RequisitesId = 20,
+            RequisitesListKey = "old-list",
+            OrganizationId = 30,
+            Inn = "2",
+            OwnershipId = 6,
+            Name = "New",
+            Description = "Оставить как есть",
+            AddressReal = "Оставить адрес",
+            ContactsText = "keep@example.com",
+            BankName = "Оставить банк",
+            OrganizationHistory = [newRegistration, oldRegistration]
+        })
+        {
+            FullName = "New Full",
+            Ogrn = "1027700132195",
+            Description = "Не должно уйти",
+            AddressReal = "Не должно уйти",
+            ContactsText = "drop@example.com",
+            BankName = "Не должно уйти"
+        };
+
+        var payload = ContragentEditPayloadBuilder.BuildForLegalEntityChange(viewModel);
+
+        Assert.Equal(10L, payload["id"]);
+        Assert.Equal("Не должно уйти", payload["description"]);
+        Assert.Equal("Не должно уйти", payload["bank_name"]);
+        Assert.True(payload.ContainsKey("contragent_addresses_attributes"));
+        Assert.True(payload.ContainsKey("contragent_contacts_attributes"));
+        var requisites = Assert.IsAssignableFrom<object?[]>(payload["contragent_organizations_attributes"]);
+        Assert.Equal(2, requisites.Length);
+        var oldRequisites = Assert.IsType<Dictionary<string, object?>>(requisites[0]);
+        Assert.Equal(20L, oldRequisites["id"]);
+        Assert.Equal("old-list", oldRequisites["list_key"]);
+        Assert.False(Assert.IsType<bool>(oldRequisites["used"]));
+        var newRequisites = Assert.IsType<Dictionary<string, object?>>(requisites[1]);
+        Assert.Equal("new-list", newRequisites["list_key"]);
+        Assert.True(Assert.IsType<bool>(newRequisites["used"]));
+        var organization = Assert.IsType<Dictionary<string, object?>>(newRequisites["organization_attributes"]);
+        Assert.Equal("New", organization["name"]);
+        Assert.Equal("2", organization["inn"]);
+        Assert.Equal(6L, organization["ownership_id"]);
+        Assert.Equal("New Full", organization["full_name"]);
+        Assert.Equal("1027700132195", organization["ogrn"]);
+    }
+
+    [Fact]
     public void BuildForCreate_WithSelectedAddress_UsesAddressId()
     {
         var viewModel = new ContragentEditViewModel(new ContragentEditDialogState
