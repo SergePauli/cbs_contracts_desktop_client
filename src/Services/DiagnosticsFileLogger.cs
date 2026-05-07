@@ -27,6 +27,24 @@ namespace CbsContractsDesktopClient.Services
             Write($"{line}{Environment.NewLine}");
         }
 
+        public static void Clear()
+        {
+            try
+            {
+                lock (SyncRoot)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(LogFilePath)!);
+                    File.WriteAllText(LogFilePath, string.Empty, Encoding.UTF8);
+                }
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+        }
+
         public static void AppendBlock(string title, string text)
         {
             if (string.IsNullOrWhiteSpace(text))

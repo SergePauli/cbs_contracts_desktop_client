@@ -12,9 +12,11 @@ using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Shell;
+using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels.Data;
 
 namespace CbsContractsDesktopClient.ViewModels.Shell
@@ -27,6 +29,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
+        private readonly ITablePageDefinitionService _tablePageDefinitionService;
         private readonly IReferenceLookupCacheService? _referenceLookupCacheService;
         private readonly SemaphoreSlim _navigationGate = new(1, 1);
         private LazyDataViewState<ReferenceDataRow>? _state;
@@ -52,11 +55,13 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             AppShellViewModel shellViewModel,
             IDataQueryService dataQueryService,
             IReferenceDefinitionService referenceDefinitionService,
+            ITablePageDefinitionService tablePageDefinitionService,
             IReferenceLookupCacheService? referenceLookupCacheService = null)
         {
             _shellViewModel = shellViewModel;
             _dataQueryService = dataQueryService;
             _referenceDefinitionService = referenceDefinitionService;
+            _tablePageDefinitionService = tablePageDefinitionService;
             _referenceLookupCacheService = referenceLookupCacheService;
 
             FilterFields = [];
@@ -80,6 +85,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         [ObservableProperty]
         public partial ReferenceDefinition? CurrentReference { get; set; }
+
+        [ObservableProperty]
+        public partial TablePageDefinition? CurrentTablePage { get; set; }
 
         [ObservableProperty]
         public partial bool IsLoading { get; set; }
@@ -107,9 +115,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> CurrentFilterOptionsSources { get; private set; }
             = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
-        public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentReference?.Columns ?? [];
+        public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentTablePage?.Columns ?? [];
 
-        public string CurrentTableStateKey => CurrentReference?.Route ?? string.Empty;
+        public string CurrentTableStateKey => CurrentTablePage?.Route ?? string.Empty;
 
         public bool HasFilters => FilterFields.Count > 0;
 
@@ -123,9 +131,19 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public bool IsContragentReference => string.Equals(CurrentReference?.Route, "/contragents", StringComparison.OrdinalIgnoreCase);
 
+        public bool CanCreateRows => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.Create) == true;
+
+        public bool CanEditRows => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.Edit) == true;
+
+        public bool CanDeleteRows => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.Delete) == true;
+
         public bool ShowEmployeeDetailView => IsEmployeeReference && HasSelectedRow;
 
         public bool ShowContragentDetailView => IsContragentReference && HasSelectedRow;
+
+        public bool ShowRevisionsDetailView =>
+            string.Equals(CurrentTablePage?.Route, "/revisions", StringComparison.OrdinalIgnoreCase)
+            && HasSelectedRow;
 
         public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
 
@@ -160,7 +178,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             return
                 $"route={_shellViewModel.CurrentRoute ?? "<null>"} " +
                 $"hasActiveReference={HasActiveReference} " +
-                $"referenceModel={CurrentReference?.Model ?? "<null>"} " +
+                $"tableModel={CurrentTablePage?.Model ?? "<null>"} " +
                 $"state={(_state is null ? "null" : "set")} " +
                 $"rows={(_rows is null ? "null" : _rows.GetType().Name)} " +
                 $"total={_rows?.TotalCount ?? 0} " +
@@ -172,6 +190,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         {
             OnPropertyChanged(nameof(ShowPlaceholder));
             OnPropertyChanged(nameof(CompactHeaderText));
+            OnPropertyChanged(nameof(CanCreateRows));
+            OnPropertyChanged(nameof(CanEditRows));
+            OnPropertyChanged(nameof(CanDeleteRows));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
             OnPropertyChanged(nameof(ShowContragentDetailView));
         }
@@ -187,6 +208,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(SelectedRowInfoMessage));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
             OnPropertyChanged(nameof(ShowContragentDetailView));
+            OnPropertyChanged(nameof(ShowRevisionsDetailView));
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
@@ -199,9 +221,20 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(IsContragentReference));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
             OnPropertyChanged(nameof(ShowContragentDetailView));
+            OnPropertyChanged(nameof(ShowRevisionsDetailView));
 
             _auditCts?.Cancel();
             ResetAuditPagingState();
+        }
+
+        partial void OnCurrentTablePageChanged(TablePageDefinition? value)
+        {
+            OnPropertyChanged(nameof(CurrentColumns));
+            OnPropertyChanged(nameof(CurrentTableStateKey));
+            OnPropertyChanged(nameof(CanCreateRows));
+            OnPropertyChanged(nameof(CanEditRows));
+            OnPropertyChanged(nameof(CanDeleteRows));
+            OnPropertyChanged(nameof(ShowRevisionsDetailView));
         }
 
         partial void OnTotalCountChanged(int value)
@@ -257,12 +290,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public async Task ReloadCurrentReferenceAsync(CancellationToken cancellationToken = default)
         {
-            if (CurrentReference is null)
+            if (CurrentTablePage is null)
             {
                 return;
             }
 
-            await NavigateAsync(CurrentReference.Route, cancellationToken);
+            await NavigateAsync(CurrentTablePage.Route, cancellationToken);
         }
 
         public async Task ApplyFilterAsync(
@@ -279,7 +312,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 return;
             }
 
-            var column = CurrentReference?.Columns.FirstOrDefault(
+            var column = CurrentTablePage?.Columns.FirstOrDefault(
                 column => string.Equals(column.FieldKey, fieldKey, StringComparison.OrdinalIgnoreCase));
             if (column is not null)
             {
@@ -317,16 +350,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public async Task ApplySortAsync(string fieldKey, DataSortDirection direction, CancellationToken cancellationToken = default)
         {
-            if (_state is null || CurrentReference is null)
+            if (_state is null || CurrentTablePage is null)
             {
                 return;
             }
 
             await _state.SetSortAsync(fieldKey, direction, cancellationToken);
-            await _referenceDefinitionService.SaveSortAsync(
+            await _tablePageDefinitionService.SaveSortAsync(
                 new ReferenceTableSortSettings
                 {
-                    Route = CurrentReference.Route,
+                    Route = CurrentTablePage.Route,
                     FieldKey = fieldKey,
                     Direction = direction
                 },
@@ -337,16 +370,16 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public async Task ClearSortsAsync(CancellationToken cancellationToken = default)
         {
-            if (_state is null || CurrentReference is null)
+            if (_state is null || CurrentTablePage is null)
             {
                 return;
             }
 
             await _state.ClearSortsAsync(cancellationToken);
-            await _referenceDefinitionService.SaveSortAsync(
+            await _tablePageDefinitionService.SaveSortAsync(
                 new ReferenceTableSortSettings
                 {
-                    Route = CurrentReference.Route,
+                    Route = CurrentTablePage.Route,
                     FieldKey = null,
                     Direction = null
                 },
@@ -443,12 +476,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public async Task SaveColumnWidthAsync(string fieldKey, string? width, CancellationToken cancellationToken = default)
         {
-            if (CurrentReference is null || string.IsNullOrWhiteSpace(fieldKey))
+            if (CurrentTablePage is null || string.IsNullOrWhiteSpace(fieldKey))
             {
                 return;
             }
 
-            var column = CurrentReference.Columns.FirstOrDefault(
+            var column = CurrentTablePage.Columns.FirstOrDefault(
                 column => string.Equals(column.FieldKey, fieldKey, StringComparison.OrdinalIgnoreCase));
             if (column is null)
             {
@@ -456,10 +489,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             column.Width = width;
-            await _referenceDefinitionService.SaveColumnWidthAsync(
+            await _tablePageDefinitionService.SaveColumnWidthAsync(
                 new ReferenceTableColumnWidthSettings
                 {
-                    Route = CurrentReference.Route,
+                    Route = CurrentTablePage.Route,
                     FieldKey = fieldKey,
                     Width = width
                 },
@@ -468,25 +501,25 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public async Task ResetColumnWidthsAsync(CancellationToken cancellationToken = default)
         {
-            if (CurrentReference is null || CurrentReference.Columns.Count == 0)
+            if (CurrentTablePage is null || CurrentTablePage.Columns.Count == 0)
             {
                 return;
             }
 
-            foreach (var column in CurrentReference.Columns)
+            foreach (var column in CurrentTablePage.Columns)
             {
                 column.Width = null;
-                await _referenceDefinitionService.SaveColumnWidthAsync(
+                await _tablePageDefinitionService.SaveColumnWidthAsync(
                     new ReferenceTableColumnWidthSettings
                     {
-                        Route = CurrentReference.Route,
+                        Route = CurrentTablePage.Route,
                         FieldKey = column.FieldKey,
                         Width = null
                     },
                     cancellationToken);
             }
 
-            CurrentReference = CurrentReference.Clone();
+            CurrentTablePage = CurrentTablePage.Clone();
             OnPropertyChanged(nameof(CurrentColumns));
         }
 
@@ -597,18 +630,21 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 AppendUiTrace($"NAVIGATE ENTER route={route ?? "<null>"} {GetDebugStateSnapshot()}");
 
-                if (!_referenceDefinitionService.TryGetByRoute(route, out var definition))
+                if (!_tablePageDefinitionService.TryGetByRoute(route, out var definition))
                 {
                     AppendUiTrace($"NAVIGATE ROUTE NOT FOUND route={route ?? "<null>"}");
                     ApplyPlaceholderForCurrentSelection();
                     return;
                 }
 
-                SectionTitle = "Справочники";
+                SectionTitle = definition.Kind == TablePageKind.Reference ? "Справочники" : "База";
                 ContentTitle = definition.EffectiveNavigationDescription;
                 ContentDescription = definition.Description;
                 PlaceholderMessage = string.Empty;
-                CurrentReference = definition;
+                CurrentTablePage = definition;
+                CurrentReference = _referenceDefinitionService.TryGetByRoute(route, out var referenceDefinition)
+                    ? referenceDefinition
+                    : null;
                 HasActiveReference = true;
                 CurrentSortField = definition.InitialSortField ?? "id";
                 CurrentSortDirection = definition.InitialSortDirection ?? DataSortDirection.Ascending;
@@ -645,6 +681,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                         static column => column.SortField ?? column.FilterField ?? column.ApiField ?? column.FieldKey),
                     placeholderFactory: ReferenceDataRow.CreatePlaceholder,
                     isPlaceholder: static row => row.IsPlaceholder,
+                    initialFilters: definition.InitialFilters,
                     initialSorts: initialSorts);
 
                 AppendUiTrace($"STATE CREATED model={definition.Model} {GetDebugStateSnapshot()}");
@@ -706,10 +743,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 : _shellViewModel.CurrentRoute;
 
             PlaceholderMessage = string.IsNullOrWhiteSpace(_shellViewModel.CurrentRoute)
-                ? "Универсальная таблица появится после выбора поддерживаемого справочника."
-                : $"Маршрут {_shellViewModel.CurrentRoute} пока не подключен к универсальному view справочников.";
+                ? "Универсальная таблица появится после выбора поддерживаемого маршрута."
+                : $"Маршрут {_shellViewModel.CurrentRoute} пока не подключен к универсальному табличному view.";
 
             CurrentReference = null;
+            CurrentTablePage = null;
             HasActiveReference = false;
             ErrorMessage = string.Empty;
             TotalCount = 0;
@@ -740,7 +778,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             AppendUiTrace($"PLACEHOLDER APPLY EXIT route={route} {GetDebugStateSnapshot()}");
         }
 
-        private void BuildFilters(ReferenceDefinition definition)
+        private void BuildFilters(TablePageDefinition definition)
         {
             FilterFields.Clear();
 
@@ -767,7 +805,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
         }
 
-        private async Task TryLoadFilterOptionSourcesAsync(ReferenceDefinition definition, CancellationToken cancellationToken)
+        private async Task TryLoadFilterOptionSourcesAsync(TablePageDefinition definition, CancellationToken cancellationToken)
         {
             try
             {
@@ -786,7 +824,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
         }
 
-        private async Task LoadFilterOptionSourcesAsync(ReferenceDefinition definition, CancellationToken cancellationToken)
+        private async Task LoadFilterOptionSourcesAsync(TablePageDefinition definition, CancellationToken cancellationToken)
         {
             var sourceKeys = definition.Columns
                 .Where(static column =>
@@ -962,7 +1000,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             TotalCount = _rows?.TotalCount ?? 0;
             ErrorMessage = string.IsNullOrWhiteSpace(_rows?.ErrorMessage)
                 ? string.Empty
-                : $"Не удалось загрузить справочник {CurrentReference?.Model}: {_rows?.ErrorMessage}";
+                : $"Не удалось загрузить таблицу {CurrentTablePage?.Model}: {_rows?.ErrorMessage}";
 
             OnPropertyChanged(nameof(HasMoreItems));
             OnPropertyChanged(nameof(LoadedCount));
@@ -1051,7 +1089,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             var diagnosticsText =
                 $"Route: {_shellViewModel.CurrentRoute}{Environment.NewLine}" +
-                $"Reference: {CurrentReference?.Model ?? "<none>"}{Environment.NewLine}" +
+                $"Table: {CurrentTablePage?.Model ?? "<none>"}{Environment.NewLine}" +
                 $"Loaded: {LoadedCount}/{TotalCount}{Environment.NewLine}" +
                 $"Resident: {ResidentCount}/{TotalCount}{Environment.NewLine}{Environment.NewLine}" +
                 $"Count payload:{Environment.NewLine}{LastCountRequestJson}{Environment.NewLine}{Environment.NewLine}" +
@@ -1081,9 +1119,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 _shellViewModel.SetAuditPanelState(new AuditPanelState
                 {
                     Title = "Аудит изменений",
-                    Description = CurrentReference is null
+                    Description = CurrentTablePage is null
                         ? "Выбранная запись"
-                        : BuildSelectedRecordAuditDescription(CurrentReference, SelectedRow),
+                        : BuildSelectedRecordAuditDescription(CurrentTablePage, SelectedRow),
                     Entries =
                     [
                         BuildAuditPanelMessageEntry(
@@ -1234,12 +1272,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         private AuditScope? BuildAuditScope()
         {
-            if (!HasActiveReference || CurrentReference is null)
+            if (!HasActiveReference || CurrentTablePage is null)
             {
                 return null;
             }
 
-            var model = CurrentReference.Model;
+            var model = CurrentTablePage.AuditModel;
             var filters = new Dictionary<string, object?>
             {
                 ["auditable_type__eq"] = model
@@ -1260,14 +1298,14 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 return new AuditScope(
                     $"record:{model}:{selectedId.Value}:{filterKey}",
                     "Аудит изменений",
-                    BuildSelectedRecordAuditDescription(CurrentReference, SelectedRow),
+                    BuildSelectedRecordAuditDescription(CurrentTablePage, SelectedRow),
                     filters);
             }
 
             return new AuditScope(
-                $"reference:{model}:{filterKey}",
+                $"table:{model}:{filterKey}",
                 "Последние события аудита",
-                $"Активный справочник: {CurrentReference.EffectiveNavigationDescription}",
+                $"Активная таблица: {CurrentTablePage.EffectiveNavigationDescription}",
                 filters);
         }
 
@@ -1443,6 +1481,24 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             var name =
                 row.GetValue("name")?.ToString()
+                ?? row.GetValue("title")?.ToString()
+                ?? row.GetValue("full_name")?.ToString()
+                ?? row.GetValue("display_name")?.ToString()
+                ?? definition.EffectiveNavigationDescription;
+            var id = row.GetValue("id")?.ToString();
+
+            return string.IsNullOrWhiteSpace(id)
+                ? name
+                : $"{name} (ID: {id})";
+        }
+
+        private static string BuildSelectedRecordAuditDescription(
+            TablePageDefinition definition,
+            ReferenceDataRow row)
+        {
+            var name =
+                row.GetValue("name")?.ToString()
+                ?? row.GetValue("contract.name")?.ToString()
                 ?? row.GetValue("title")?.ToString()
                 ?? row.GetValue("full_name")?.ToString()
                 ?? row.GetValue("display_name")?.ToString()

@@ -1,0 +1,98 @@
+<UserControl
+    x:Class="CbsContractsDesktopClient.Views.Functional.RevisionsDetailView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:references="using:CbsContractsDesktopClient.Views.References"
+    mc:Ignorable="d">
+
+    <Border
+        Height="215"
+        Background="{StaticResource ShellTableHeaderBackgroundBrush}"
+        BorderBrush="{StaticResource ShellPanelBorderBrush}"
+        BorderThickness="0,1,0,0">
+        <Grid
+            Padding="14,9,14,10"
+            ColumnSpacing="14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="62*" />
+                <ColumnDefinition Width="38*" />
+            </Grid.ColumnDefinitions>
+
+            <Grid
+                Grid.Column="0"
+                RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <TextBlock
+                        x:Name="ContractNameTextBlock"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Foreground="{StaticResource ShellPrimaryTextBrush}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                    <TextBlock
+                        x:Name="ContragentNameTextBlock"
+                        Style="{StaticResource BodyTextBlockStyle}"
+                        Foreground="{StaticResource ShellSecondaryTextBrush}"
+                        FontStyle="Italic"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+                    <Grid
+                        x:Name="ContactsPanel"
+                        VerticalAlignment="Center"
+                        ColumnSpacing="0"
+                        RowSpacing="0" />
+                </StackPanel>
+
+                <StackPanel
+                    Grid.Row="1"
+                    Spacing="8">
+                    <TextBlock
+                        x:Name="PerformersTextBlock"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Foreground="{StaticResource ShellSecondaryTextBrush}"
+                        TextTrimming="CharacterEllipsis"
+                        TextWrapping="NoWrap" />
+
+                    <Border
+                        MinHeight="132"
+                        Padding="10,8"
+                        Background="{StaticResource ShellPanelBackgroundBrush}"
+                        BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="6">
+                        <Grid>
+                            <TextBlock
+                                Style="{StaticResource BodyStrongTextBlockStyle}"
+                                Foreground="{StaticResource ShellTertiaryTextBrush}"
+                                Text="Комментарии" />
+                            <TextBlock
+                                Margin="0,28,0,0"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Foreground="{StaticResource ShellCaptionTextBrush}"
+                                Text="МЕСТО ДЛЯ COMMENTBOX" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Border
+                Grid.Column="1"
+                BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                BorderThickness="1,0,0,0"
+                Padding="12,0,0,0">
+                <references:EmployeeBox
+                    x:Name="EmployeesBox"
+                    CanEdit="False" />
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

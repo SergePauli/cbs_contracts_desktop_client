@@ -5,6 +5,7 @@ using Xunit;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Data;
+using CbsContractsDesktopClient.Models.Workspace;
 
 namespace CbsContractsDesktopClient.Tests;
 
@@ -31,6 +32,38 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal("card", definition.Preset);
         Assert.Equal(["id", "name", "order", "description"], definition.Columns.Select(static column => column.FieldKey));
         Assert.Equal(["id", "name", "order", "description"], definition.Fields.Select(static field => field.FieldKey));
+    }
+
+    [Fact]
+    public void ReferenceDefinition_ToTablePageDefinition_PreservesSharedTableMetadata()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/employees", out var definition);
+
+        Assert.True(found);
+        var tablePage = definition.ToTablePageDefinition();
+        Assert.Equal("/employees", tablePage.Route);
+        Assert.Equal("Employee", tablePage.Model);
+        Assert.Equal("card", tablePage.Preset);
+        Assert.Equal("Сотрудники", tablePage.Title);
+        Assert.Equal(TablePageKind.Reference, tablePage.Kind);
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.RowSelection));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.Create));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.Edit));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.Delete));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.ResetFilters));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.PersistColumnWidths));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.PersistSort));
+        Assert.True(tablePage.Capabilities.HasFlag(TablePageCapabilities.Audit));
+        Assert.Equal("id", tablePage.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, tablePage.InitialSortDirection);
+        Assert.Equal(
+            ["id", "name", "contragent", "position", "contacts", "used", "priority", "description"],
+            tablePage.Columns.Select(static column => column.FieldKey));
+        Assert.Equal("person.full_name", tablePage.Columns.Single(static column => column.FieldKey == "name").DisplayField);
+        Assert.Equal("person.person_name.naming.fio", tablePage.Columns.Single(static column => column.FieldKey == "name").FilterField);
+        Assert.Equal("person.person_name.naming.surname", tablePage.Columns.Single(static column => column.FieldKey == "name").SortField);
     }
 
     [Fact]

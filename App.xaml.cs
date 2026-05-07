@@ -9,8 +9,10 @@ using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
+using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.ViewModels.Shell;
+using CbsContractsDesktopClient.ViewModels.Workflow;
 
 namespace CbsContractsDesktopClient
 {
@@ -24,6 +26,7 @@ namespace CbsContractsDesktopClient
 
         public App()
         {
+            DiagnosticsFileLogger.Clear();
             this.InitializeComponent();
             Services = ConfigureServices();
         }
@@ -37,9 +40,11 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<INavigationMenuService, NavigationMenuService>();
             services.AddSingleton<ILocalUserSettingsService, LocalUserSettingsService>();
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
+            services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
             services.AddSingleton<AppShellViewModel>();
             services.AddSingleton<ReferencesContentViewModel>();
+            services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<StatusTableViewModel>();
             services.AddHttpClient<IHolidayRecalculationService, HolidayRecalculationService>(client =>
             {

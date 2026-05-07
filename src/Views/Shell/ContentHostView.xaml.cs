@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
@@ -13,6 +14,7 @@ using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.ViewModels.Shell;
+using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
@@ -34,9 +36,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IFnsContragentService _fnsContragentService;
         private readonly IDataQueryService _dataQueryService;
         private readonly IUserService _userService;
+        private readonly ContractWorkflowStore _contractWorkflowStore;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private CancellationTokenSource? _contragentDetailCts;
+        private CancellationTokenSource? _revisionDetailCts;
         private bool _isViewportSubscribed;
         private bool _isHolidayRecalcInProgress;
         private bool _isFnsCompareInProgress;
@@ -65,6 +69,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _fnsContragentService = App.Services.GetRequiredService<IFnsContragentService>();
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _userService = App.Services.GetRequiredService<IUserService>();
+            _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             InitializeComponent();
             DataContext = _viewModel;
             UpdateSelectionActionButtons();
@@ -85,6 +90,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _filterDebounceCts?.Cancel();
             _viewportCts?.Cancel();
             _contragentDetailCts?.Cancel();
+            _revisionDetailCts?.Cancel();
             RemoveViewportSubscription();
         }
 
@@ -92,7 +98,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow)
                 || e.PropertyName == nameof(ReferencesContentViewModel.HasSelectedRow)
-                || e.PropertyName == nameof(ReferencesContentViewModel.HasActiveReference))
+                || e.PropertyName == nameof(ReferencesContentViewModel.HasActiveReference)
+                || e.PropertyName == nameof(ReferencesContentViewModel.CanEditRows)
+                || e.PropertyName == nameof(ReferencesContentViewModel.CanDeleteRows))
             {
                 UpdateSelectionActionButtons();
             }
@@ -101,6 +109,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                 || e.PropertyName == nameof(ReferencesContentViewModel.ShowContragentDetailView))
             {
                 _ = RefreshContragentDetailContractsAsync();
+            }
+
+            if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow))
+            {
+                _ = RefreshRevisionDetailAsync();
             }
         }
 
@@ -147,6 +160,103 @@ namespace CbsContractsDesktopClient.Views.Shell
                 {
                     ContragentDetailView.ContractsRow = null;
                 }
+            }
+        }
+
+        private async Task RefreshRevisionDetailAsync()
+        {
+            _revisionDetailCts?.Cancel();
+            RevisionsDetailView.ContractRow = null;
+            RevisionsDetailView.ContragentRow = null;
+            _contractWorkflowStore.ClearRevisionSelection();
+
+            if (!_viewModel.ShowRevisionsDetailView || _viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            var contractId = TryGetLongValue(_viewModel.SelectedRow, "contract.id");
+            var listContragentId = TryGetLongValue(_viewModel.SelectedRow, "contract.contragent.id");
+            if (contractId is null && listContragentId is null)
+            {
+                return;
+            }
+
+            var cancellationTokenSource = new CancellationTokenSource();
+            _revisionDetailCts = cancellationTokenSource;
+
+            try
+            {
+                var contractTask = contractId is long selectedContractId
+                    ? LoadRevisionDetailRowSafelyAsync(
+                        "Contract/card",
+                        () => LoadRevisionContractCardAsync(selectedContractId, cancellationTokenSource.Token),
+                        cancellationTokenSource.Token)
+                    : Task.FromResult<ReferenceDataRow?>(null);
+                var contragentTask = listContragentId is long selectedContragentId
+                    ? LoadRevisionDetailRowSafelyAsync(
+                        "Contragent/card",
+                        () => LoadRevisionContragentCardAsync(selectedContragentId, cancellationTokenSource.Token),
+                        cancellationTokenSource.Token)
+                    : Task.FromResult<ReferenceDataRow?>(null);
+
+                var contract = await contractTask;
+                var contragent = await contragentTask;
+                if (cancellationTokenSource.IsCancellationRequested || !_viewModel.ShowRevisionsDetailView)
+                {
+                    return;
+                }
+
+                if (_viewModel.SelectedRow is null
+                    || (contractId is not null && TryGetLongValue(_viewModel.SelectedRow, "contract.id") != contractId))
+                {
+                    return;
+                }
+
+                var contractContragentId = contract is null
+                    ? null
+                    : TryGetLongValue(contract, "contragent.id");
+                if (contragent is null && contractContragentId is long loadedContragentId)
+                {
+                    contragent = await LoadRevisionDetailRowSafelyAsync(
+                        "Contragent/card from Contract/card",
+                        () => LoadRevisionContragentCardAsync(loadedContragentId, cancellationTokenSource.Token),
+                        cancellationTokenSource.Token);
+                }
+
+                _contractWorkflowStore.SetRevisionSelection(_viewModel.SelectedRow, contract, contragent);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch
+            {
+                if (!cancellationTokenSource.IsCancellationRequested)
+                {
+                    _contractWorkflowStore.ClearRevisionSelection();
+                }
+            }
+        }
+
+        private static async Task<ReferenceDataRow?> LoadRevisionDetailRowSafelyAsync(
+            string title,
+            Func<Task<ReferenceDataRow?>> loadAsync,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await loadAsync();
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsFileLogger.AppendBlock(
+                    $"REVISION DETAIL LOAD FAILED {title}",
+                    $"{ex.GetType().Name}: {ex.Message}");
+                return null;
             }
         }
 
@@ -423,6 +533,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void UpdateSelectionActionButtons()
         {
             var hasSelectedRow = _viewModel.HasSelectedRow && _viewModel.HasActiveReference;
+            var canEditSelectedRow = hasSelectedRow && _viewModel.CanEditRows;
+            var canDeleteSelectedRow = hasSelectedRow && _viewModel.CanDeleteRows;
             var isHolidayReference = string.Equals(_viewModel.CurrentReference?.Route, "/holidays", StringComparison.OrdinalIgnoreCase);
             var isContragentReference = _viewModel.IsContragentReference;
             var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
@@ -431,16 +543,16 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (EditSelectedRowButton is not null)
             {
-                EditSelectedRowButton.IsEnabled = hasSelectedRow;
-                EditSelectedRowButton.Foreground = hasSelectedRow
+                EditSelectedRowButton.IsEnabled = canEditSelectedRow;
+                EditSelectedRowButton.Foreground = canEditSelectedRow
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.RoyalBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
 
             if (DeleteSelectedRowButton is not null)
             {
-                DeleteSelectedRowButton.IsEnabled = hasSelectedRow;
-                DeleteSelectedRowButton.Foreground = hasSelectedRow
+                DeleteSelectedRowButton.IsEnabled = canDeleteSelectedRow;
+                DeleteSelectedRowButton.Foreground = canDeleteSelectedRow
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Firebrick)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
@@ -2145,6 +2257,104 @@ namespace CbsContractsDesktopClient.Views.Shell
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
+        private async Task<ReferenceDataRow?> LoadRevisionContractCardAsync(
+            long contractId,
+            CancellationToken cancellationToken = default)
+        {
+            var request = new DataQueryRequest
+            {
+                Model = "Contract",
+                Preset = "edit",
+                Filters = new Dictionary<string, object?>
+                {
+                    ["id__eq"] = contractId
+                },
+                Limit = 1
+            };
+            LogRevisionDetailRequest("Contract/edit", request);
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                request,
+                cancellationToken);
+
+            LogRevisionDetailResponse("Contract/edit", request, rows);
+            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
+        }
+
+        private async Task<ReferenceDataRow?> LoadRevisionContragentCardAsync(
+            long contragentId,
+            CancellationToken cancellationToken = default)
+        {
+            var request = new DataQueryRequest
+            {
+                Model = "Contragent",
+                Preset = "card",
+                Filters = new Dictionary<string, object?>
+                {
+                    ["id__eq"] = contragentId
+                },
+                Limit = 1
+            };
+            LogRevisionDetailRequest("Contragent/card", request);
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                request,
+                cancellationToken);
+
+            LogRevisionDetailResponse("Contragent/card", request, rows);
+            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
+        }
+
+        private static void LogRevisionDetailRequest(string title, DataQueryRequest request)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                $"REVISION DETAIL REQUEST {title}",
+                JsonSerializer.Serialize(request, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                }));
+        }
+
+        private static void LogRevisionDetailResponse(
+            string title,
+            DataQueryRequest request,
+            IReadOnlyList<ReferenceDataRow> rows)
+        {
+            var response = new
+            {
+                Request = BuildRevisionDetailRequestSummary(request),
+                Count = rows.Count,
+                Rows = rows.Select(static row => new
+                {
+                    row.IsPlaceholder,
+                    Keys = row.Values.Keys.OrderBy(static key => key).ToArray(),
+                    Raw = row.Values.ToDictionary(
+                        static pair => pair.Key,
+                        static pair => pair.Value.ValueKind == JsonValueKind.String
+                            ? pair.Value.GetString()
+                            : pair.Value.GetRawText())
+                }).ToArray()
+            };
+
+            DiagnosticsFileLogger.AppendBlock(
+                $"REVISION DETAIL RESPONSE {title}",
+                JsonSerializer.Serialize(response, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                }));
+        }
+
+        private static object BuildRevisionDetailRequestSummary(DataQueryRequest request)
+        {
+            return new
+            {
+                request.Model,
+                request.Preset,
+                request.Filters,
+                request.Sorts,
+                request.Limit,
+                request.Offset
+            };
+        }
+
         private async Task<ReferenceDataRow?> LoadContragentEditRowAsync(CancellationToken cancellationToken = default)
         {
             if (_viewModel.SelectedRow is null)
@@ -2447,6 +2657,19 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             var rawId = row.GetValue("id");
             return rawId switch
+            {
+                long int64Value => int64Value,
+                int int32Value => int32Value,
+                decimal decimalValue => (long)decimalValue,
+                string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
+                _ => null
+            };
+        }
+
+        private static long? TryGetLongValue(ReferenceDataRow row, string fieldKey)
+        {
+            var value = row.GetValue(fieldKey);
+            return value switch
             {
                 long int64Value => int64Value,
                 int int32Value => int32Value,

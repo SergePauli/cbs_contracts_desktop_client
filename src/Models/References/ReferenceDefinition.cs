@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Models.Workspace;
 
 namespace CbsContractsDesktopClient.Models.References
 {
@@ -40,6 +41,34 @@ namespace CbsContractsDesktopClient.Models.References
             Title = Title,
             Columns = Columns
         };
+
+        public TablePageDefinition TablePage => ToTablePageDefinition();
+
+        public TablePageDefinition ToTablePageDefinition()
+        {
+            return new TablePageDefinition
+            {
+                Route = Route,
+                Model = Model,
+                Title = Title,
+                NavigationDescription = NavigationDescription,
+                Preset = Preset,
+                Summary = Summary,
+                Kind = TablePageKind.Reference,
+                Capabilities =
+                    TablePageCapabilities.RowSelection
+                    | TablePageCapabilities.Create
+                    | TablePageCapabilities.Edit
+                    | TablePageCapabilities.Delete
+                    | TablePageCapabilities.ResetFilters
+                    | TablePageCapabilities.PersistColumnWidths
+                    | TablePageCapabilities.PersistSort
+                    | TablePageCapabilities.Audit,
+                Columns = Columns,
+                InitialSortField = InitialSortField,
+                InitialSortDirection = InitialSortDirection
+            };
+        }
 
         public ReferenceDefinition Clone()
         {
