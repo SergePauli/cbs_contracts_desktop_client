@@ -115,7 +115,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> CurrentFilterOptionsSources { get; private set; }
             = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
-        public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns => CurrentTablePage?.Columns ?? [];
+        public IReadOnlyList<CbsTableColumnDefinition> CurrentColumns =>
+            CurrentTablePage?.Columns.Where(static column => column.IsVisible).ToList() ?? [];
 
         public string CurrentTableStateKey => CurrentTablePage?.Route ?? string.Empty;
 
@@ -137,12 +138,21 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public bool CanDeleteRows => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.Delete) == true;
 
+        public bool CanConfigureColumns => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns) == true;
+
+        public CbsTableRowStyleKey CurrentRowStyleKey => CurrentTablePage?.RowStyleKey ?? CbsTableRowStyleKey.None;
+
         public bool ShowEmployeeDetailView => IsEmployeeReference && HasSelectedRow;
 
         public bool ShowContragentDetailView => IsContragentReference && HasSelectedRow;
 
         public bool ShowRevisionsDetailView =>
             string.Equals(CurrentTablePage?.Route, "/revisions", StringComparison.OrdinalIgnoreCase)
+            && HasSelectedRow;
+
+        public bool ShowContractDetailView =>
+            (string.Equals(CurrentTablePage?.Route, "/revisions", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(CurrentTablePage?.Route, "/stages", StringComparison.OrdinalIgnoreCase))
             && HasSelectedRow;
 
         public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
@@ -193,8 +203,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(CanCreateRows));
             OnPropertyChanged(nameof(CanEditRows));
             OnPropertyChanged(nameof(CanDeleteRows));
+            OnPropertyChanged(nameof(CanConfigureColumns));
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
             OnPropertyChanged(nameof(ShowContragentDetailView));
+            OnPropertyChanged(nameof(ShowRevisionsDetailView));
+            OnPropertyChanged(nameof(ShowContractDetailView));
         }
 
         partial void OnErrorMessageChanged(string value)
@@ -209,6 +222,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
             OnPropertyChanged(nameof(ShowContragentDetailView));
             OnPropertyChanged(nameof(ShowRevisionsDetailView));
+            OnPropertyChanged(nameof(ShowContractDetailView));
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
@@ -222,6 +236,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(ShowEmployeeDetailView));
             OnPropertyChanged(nameof(ShowContragentDetailView));
             OnPropertyChanged(nameof(ShowRevisionsDetailView));
+            OnPropertyChanged(nameof(ShowContractDetailView));
 
             _auditCts?.Cancel();
             ResetAuditPagingState();
@@ -234,7 +249,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(CanCreateRows));
             OnPropertyChanged(nameof(CanEditRows));
             OnPropertyChanged(nameof(CanDeleteRows));
+            OnPropertyChanged(nameof(CanConfigureColumns));
+            OnPropertyChanged(nameof(CurrentRowStyleKey));
             OnPropertyChanged(nameof(ShowRevisionsDetailView));
+            OnPropertyChanged(nameof(ShowContractDetailView));
         }
 
         partial void OnTotalCountChanged(int value)
@@ -521,6 +539,50 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             CurrentTablePage = CurrentTablePage.Clone();
             OnPropertyChanged(nameof(CurrentColumns));
+        }
+
+        public async Task SaveColumnLayoutAsync(
+            IReadOnlyList<CbsTableColumnDefinition> columns,
+            CancellationToken cancellationToken = default)
+        {
+            if (CurrentTablePage is null || columns.Count == 0)
+            {
+                return;
+            }
+
+            var updatedDefinition = new TablePageDefinition
+            {
+                Route = CurrentTablePage.Route,
+                Model = CurrentTablePage.Model,
+                Title = CurrentTablePage.Title,
+                NavigationDescription = CurrentTablePage.NavigationDescription,
+                Preset = CurrentTablePage.Preset,
+                Summary = CurrentTablePage.Summary,
+                Kind = CurrentTablePage.Kind,
+                Capabilities = CurrentTablePage.Capabilities,
+                InitialSortField = CurrentTablePage.InitialSortField,
+                InitialSortDirection = CurrentTablePage.InitialSortDirection,
+                InitialFilters = CurrentTablePage.InitialFilters,
+                Columns = columns,
+                RowStyleKey = CurrentTablePage.RowStyleKey
+            };
+
+            CurrentTablePage = updatedDefinition;
+
+            await _tablePageDefinitionService.SaveColumnLayoutAsync(
+                new ReferenceTableColumnLayoutSettings
+                {
+                    Route = updatedDefinition.Route,
+                    OrderedFieldKeys = columns.Select(static column => column.FieldKey).ToList(),
+                    VisibleFieldKeys = columns
+                        .Where(static column => column.IsVisible)
+                        .Select(static column => column.FieldKey)
+                        .ToList()
+                },
+                cancellationToken);
+
+            OnPropertyChanged(nameof(CurrentColumns));
+            OnPropertyChanged(nameof(CurrentTableStateKey));
         }
 
         public void UpdateViewportRetention(
@@ -860,6 +922,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 var key when string.Equals(key, "Department", StringComparison.OrdinalIgnoreCase) => "Department",
                 var key when string.Equals(key, "Area", StringComparison.OrdinalIgnoreCase) => "Area",
                 var key when string.Equals(key, "Ownership", StringComparison.OrdinalIgnoreCase) => "Ownership",
+                var key when string.Equals(key, "TaskKind", StringComparison.OrdinalIgnoreCase) => "TaskKind",
+                var key when string.Equals(key, "StageStatus", StringComparison.OrdinalIgnoreCase) => "Status",
                 _ => null
             };
 

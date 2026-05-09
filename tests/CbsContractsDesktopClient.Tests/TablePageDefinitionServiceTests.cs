@@ -86,6 +86,57 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
             });
     }
 
+    [Fact]
+    public void TryGetByRoute_ReturnsStagesFunctionalTableDefinition()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/stages", out var definition);
+
+        Assert.True(found);
+        Assert.Equal(TablePageKind.Functional, definition.Kind);
+        Assert.Equal("Stage", definition.Model);
+        Assert.Equal("list", definition.Preset);
+        Assert.Equal("Этапы контрактов", definition.Title);
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
+        Assert.Equal(CbsTableRowStyleKey.StageDeadline, definition.RowStyleKey);
+        Assert.Equal("id", definition.InitialSortField);
+        Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "contragent"
+            && column.FilterField == "contract.contragent.org.name_or_contract.contragent.org.full_name");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "region"
+            && column.BodyTemplateKey == "StageRegion");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "duration"
+            && column.BodyTemplateKey == "StageDuration");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "register"
+            && column.BodyTemplateKey == "StageRegister");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "status"
+            && column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
+            && column.Filter.OptionsSourceKey == "StageStatus");
+    }
+
+    [Fact]
+    public async Task SaveColumnLayoutAsync_PersistsStagesOrderAndVisibility()
+    {
+        var service = CreateService();
+
+        await service.SaveColumnLayoutAsync(new ReferenceTableColumnLayoutSettings
+        {
+            Route = "/stages",
+            OrderedFieldKeys = ["status", "id", "region", "contragent"],
+            VisibleFieldKeys = ["status", "id", "contragent"]
+        });
+
+        var found = service.TryGetByRoute("/stages", out var definition);
+
+        Assert.True(found);
+        Assert.Equal(["status", "id", "region", "contragent"], definition.Columns.Take(4).Select(static column => column.FieldKey));
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "status").IsVisible);
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "id").IsVisible);
+        Assert.False(definition.Columns.Single(static column => column.FieldKey == "region").IsVisible);
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "contragent").IsVisible);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))

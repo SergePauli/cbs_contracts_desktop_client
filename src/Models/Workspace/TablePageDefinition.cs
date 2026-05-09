@@ -28,6 +28,8 @@ namespace CbsContractsDesktopClient.Models.Workspace
 
         public IReadOnlyList<CbsTableColumnDefinition> Columns { get; init; } = [];
 
+        public CbsTableRowStyleKey RowStyleKey { get; init; } = CbsTableRowStyleKey.None;
+
         public string? InitialSortField { get; init; }
 
         public DataSortDirection? InitialSortDirection { get; init; }
@@ -70,7 +72,8 @@ namespace CbsContractsDesktopClient.Models.Workspace
                     MatchMode = filter.MatchMode,
                     Value = filter.Value
                 }).ToList(),
-                Columns = Columns.Select(CloneColumn).ToList()
+                Columns = Columns.Select(CloneColumn).ToList(),
+                RowStyleKey = RowStyleKey
             };
         }
 
@@ -86,6 +89,8 @@ namespace CbsContractsDesktopClient.Models.Workspace
                 SortField = column.SortField,
                 DefaultWidth = column.DefaultWidth,
                 Width = column.Width,
+                IsVisible = column.IsVisible,
+                IsImmutable = column.IsImmutable,
                 IsSortable = column.IsSortable,
                 IsFilterable = column.IsFilterable,
                 Alignment = column.Alignment,

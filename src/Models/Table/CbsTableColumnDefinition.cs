@@ -18,6 +18,10 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public string? Width { get; set; }
 
+        public bool IsVisible { get; set; } = true;
+
+        public bool IsImmutable { get; init; }
+
         public bool IsSortable { get; init; } = true;
 
         public bool IsFilterable { get; init; }

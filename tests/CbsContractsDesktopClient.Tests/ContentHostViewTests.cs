@@ -336,11 +336,11 @@ public sealed class ContentHostViewTests
         Assert.Contains("private void CopyContragentDetailsButton_Click(object sender, RoutedEventArgs e)", codeBehind);
         Assert.Contains("ContragentDetailView.BuildClipboardText()", codeBehind);
         Assert.Contains("Clipboard.SetContent(dataPackage);", codeBehind);
-        Assert.Contains("var isRevisionsTable = IsRevisionsTableActive();", codeBehind);
+        Assert.Contains("var isContractDetailTable = IsContractDetailTableActive();", codeBehind);
         Assert.Contains("var hasWorkflowContract = _contractWorkflowStore.Contract is { IsPlaceholder: false };", codeBehind);
-        Assert.Contains("var canCopyRevisionContract = isRevisionsTable && hasWorkflowContract;", codeBehind);
-        Assert.Contains("CopyContragentDetailsButton.Visibility = isContragentReference || isRevisionsTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
-        Assert.Contains("isRevisionsTable", codeBehind);
+        Assert.Contains("var canCopyRevisionContract = isContractDetailTable && hasWorkflowContract;", codeBehind);
+        Assert.Contains("CopyContragentDetailsButton.Visibility = isContragentReference || isContractDetailTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
+        Assert.Contains("IsContractDetailTableActive", codeBehind);
         Assert.Contains("? \"Скопировать данные контракта\"", codeBehind);
         Assert.Contains("_fnsContragentService = App.Services.GetRequiredService<IFnsContragentService>();", codeBehind);
         Assert.Contains("_fnsContragentService.SearchByReqAsync(state.Inn.Trim(), state.Kpp)", codeBehind);

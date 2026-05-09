@@ -89,6 +89,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             UpdateSelectionActionButtons();
+            UpdateTableRowStyle();
             EnsureViewportSubscription();
             await _viewModel.EnsureLoadedAsync();
         }
@@ -115,6 +116,12 @@ namespace CbsContractsDesktopClient.Views.Shell
                 UpdateSelectionActionButtons();
             }
 
+            if (e.PropertyName == nameof(ReferencesContentViewModel.CurrentTablePage)
+                || e.PropertyName == nameof(ReferencesContentViewModel.CurrentRowStyleKey))
+            {
+                UpdateTableRowStyle();
+            }
+
             if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow)
                 || e.PropertyName == nameof(ReferencesContentViewModel.ShowContragentDetailView))
             {
@@ -133,6 +140,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 UpdateSelectionActionButtons();
             }
+        }
+
+        private void UpdateTableRowStyle()
+        {
+            ReferenceTableView.RowStyleKey = _viewModel.CurrentRowStyleKey;
         }
 
         private async Task RefreshContragentDetailContractsAsync()
@@ -188,7 +200,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             RevisionsDetailView.ContragentRow = null;
             _contractWorkflowStore.ClearRevisionSelection();
 
-            if (!_viewModel.ShowRevisionsDetailView || _viewModel.SelectedRow is null)
+            if (!_viewModel.ShowContractDetailView || _viewModel.SelectedRow is null)
             {
                 return;
             }
@@ -220,7 +232,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                 var contract = await contractTask;
                 var contragent = await contragentTask;
-                if (cancellationTokenSource.IsCancellationRequested || !_viewModel.ShowRevisionsDetailView)
+                if (cancellationTokenSource.IsCancellationRequested || !_viewModel.ShowContractDetailView)
                 {
                     return;
                 }
@@ -321,7 +333,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void CopyContragentDetailsButton_Click(object sender, RoutedEventArgs e)
         {
-            if (IsRevisionsTableActive())
+            if (IsContractDetailTableActive())
             {
                 var contractText = RevisionsDetailView.BuildClipboardText();
                 if (string.IsNullOrWhiteSpace(contractText))
@@ -413,6 +425,27 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void ResetColumnWidthsMenuItem_Click(object sender, RoutedEventArgs e)
         {
             await _viewModel.ResetColumnWidthsAsync();
+        }
+
+        private async void ConfigureColumnsMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.CurrentTablePage is null)
+            {
+                return;
+            }
+
+            var dialog = new TableColumnLayoutDialog(_viewModel.CurrentTablePage.Columns)
+            {
+                XamlRoot = XamlRoot
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+            {
+                return;
+            }
+
+            await _viewModel.SaveColumnLayoutAsync(dialog.BuildColumns());
         }
 
         private async void ResetFiltersMenuItem_Click(object sender, RoutedEventArgs e)
@@ -579,12 +612,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             var canDeleteSelectedRow = hasSelectedRow && _viewModel.CanDeleteRows;
             var isHolidayReference = string.Equals(_viewModel.CurrentReference?.Route, "/holidays", StringComparison.OrdinalIgnoreCase);
             var isContragentReference = _viewModel.IsContragentReference;
-            var isRevisionsTable = IsRevisionsTableActive();
+            var isContractDetailTable = IsContractDetailTableActive();
             var hasWorkflowContract = _contractWorkflowStore.Contract is { IsPlaceholder: false };
             var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
             var canCompareFns = hasSelectedRow && isContragentReference && !_isFnsCompareInProgress;
             var canCopyContragentDetails = hasSelectedRow && isContragentReference;
-            var canCopyRevisionContract = isRevisionsTable && hasWorkflowContract;
+            var canCopyRevisionContract = isContractDetailTable && hasWorkflowContract;
             var canCopyDetails = canCopyContragentDetails || canCopyRevisionContract;
 
             if (EditSelectedRowButton is not null)
@@ -624,11 +657,11 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (CopyContragentDetailsButton is not null)
             {
-                CopyContragentDetailsButton.Visibility = isContragentReference || isRevisionsTable ? Visibility.Visible : Visibility.Collapsed;
+                CopyContragentDetailsButton.Visibility = isContragentReference || isContractDetailTable ? Visibility.Visible : Visibility.Collapsed;
                 CopyContragentDetailsButton.IsEnabled = canCopyDetails;
                 ToolTipService.SetToolTip(
                     CopyContragentDetailsButton,
-                    isRevisionsTable
+                    isContractDetailTable
                         ? "Скопировать данные контракта"
                         : "Скопировать данные контрагента");
                 CopyContragentDetailsButton.Foreground = canCopyDetails
@@ -643,6 +676,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _viewModel.CurrentTablePage?.Route,
                 "/revisions",
                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsContractDetailTableActive()
+        {
+            return string.Equals(
+                    _viewModel.CurrentTablePage?.Route,
+                    "/revisions",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    _viewModel.CurrentTablePage?.Route,
+                    "/stages",
+                    StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task ShowReferenceEditDialogAsync(bool isCreateMode)

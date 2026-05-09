@@ -16,5 +16,9 @@ namespace CbsContractsDesktopClient.Services.Workspace
         Task SaveSortAsync(
             ReferenceTableSortSettings settings,
             CancellationToken cancellationToken = default);
+
+        Task SaveColumnLayoutAsync(
+            ReferenceTableColumnLayoutSettings settings,
+            CancellationToken cancellationToken = default);
     }
 }

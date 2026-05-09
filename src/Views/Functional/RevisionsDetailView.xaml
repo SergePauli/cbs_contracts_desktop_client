@@ -9,7 +9,7 @@
     mc:Ignorable="d">
 
     <Border
-        Height="215"
+        Height="360"
         Style="{StaticResource ShellDetailFooterRootBorderStyle}">
         <Grid
             Padding="4"

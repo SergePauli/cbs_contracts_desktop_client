@@ -106,6 +106,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableView),
                 new PropertyMetadata(CbsTableDensity.Compact, OnDensityChanged));
 
+        public static readonly DependencyProperty RowStyleKeyProperty =
+            DependencyProperty.Register(
+                nameof(RowStyleKey),
+                typeof(CbsTableRowStyleKey),
+                typeof(CbsTableView),
+                new PropertyMetadata(CbsTableRowStyleKey.None, OnRowStyleKeyChanged));
+
         public static readonly DependencyProperty SupportsRowSelectionProperty =
             DependencyProperty.Register(
                 nameof(SupportsRowSelection),
@@ -323,6 +330,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(DensityProperty, value);
         }
 
+        public CbsTableRowStyleKey RowStyleKey
+        {
+            get => (CbsTableRowStyleKey)GetValue(RowStyleKeyProperty);
+            set => SetValue(RowStyleKeyProperty, value);
+        }
+
         public int RetainedBufferRows
         {
             get => (int)GetValue(RetainedBufferRowsProperty);
@@ -510,7 +523,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 _rowPool[index].Configure(
                     sourceRows[absoluteIndex],
                     Columns,
-                    RowHeight);
+                    RowHeight,
+                    RowStyleKey);
                 _rowPool[index].Tag = absoluteIndex;
                 ApplyRowSelectionState(_rowPool[index], absoluteIndex);
             }
@@ -598,6 +612,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             control.RowHeight = control.GetRowHeightForDensity((CbsTableDensity)e.NewValue);
             control.RebuildHeader();
             control.RebuildRows();
+        }
+
+        private static void OnRowStyleKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((CbsTableView)d).RebuildRows();
         }
 
         private static ColumnDefinition CreateDataColumnDefinition(CbsTableColumnDefinition column)

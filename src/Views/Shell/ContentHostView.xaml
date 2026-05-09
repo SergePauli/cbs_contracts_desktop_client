@@ -181,6 +181,9 @@
                             <Button.Flyout>
                                 <MenuFlyout>
                                     <MenuFlyoutItem
+                                        Text="Расстановка столбцов"
+                                        Click="ConfigureColumnsMenuItem_Click" />
+                                    <MenuFlyoutItem
                                         Text="Сбросить ширину"
                                         Click="ResetColumnWidthsMenuItem_Click" />
                                     <MenuFlyoutItem
@@ -258,7 +261,7 @@
                     <functional:RevisionsDetailView
                         x:Name="RevisionsDetailView"
                         Grid.Row="1"
-                        Visibility="{Binding ShowRevisionsDetailView, Converter={StaticResource BoolVisibilityConverter}}" />
+                        Visibility="{Binding ShowContractDetailView, Converter={StaticResource BoolVisibilityConverter}}" />
 
                     <Border
                         Grid.RowSpan="2"

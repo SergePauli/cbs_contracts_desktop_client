@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using Windows.UI;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -66,6 +68,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableRowView),
                 new PropertyMetadata(false, OnStateChanged));
 
+        public static readonly DependencyProperty RowStyleKeyProperty =
+            DependencyProperty.Register(
+                nameof(RowStyleKey),
+                typeof(CbsTableRowStyleKey),
+                typeof(CbsTableRowView),
+                new PropertyMetadata(CbsTableRowStyleKey.None, OnStateChanged));
+
         public CbsTableRowView()
         {
             InitializeComponent();
@@ -113,11 +122,22 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(IsPressedProperty, value);
         }
 
-        public void Configure(ReferenceDataRow? row, IReadOnlyList<CbsTableColumnDefinition> columns, double rowHeight)
+        public CbsTableRowStyleKey RowStyleKey
+        {
+            get => (CbsTableRowStyleKey)GetValue(RowStyleKeyProperty);
+            set => SetValue(RowStyleKeyProperty, value);
+        }
+
+        public void Configure(
+            ReferenceDataRow? row,
+            IReadOnlyList<CbsTableColumnDefinition> columns,
+            double rowHeight,
+            CbsTableRowStyleKey rowStyleKey)
         {
             Row = row;
             Columns = columns;
             RowHeight = rowHeight;
+            RowStyleKey = rowStyleKey;
             Density = ResolveDensity(rowHeight);
             RefreshRow();
         }
@@ -214,13 +234,28 @@ namespace CbsContractsDesktopClient.Views.Controls
                 {
                     var valueKey = Columns[index].DisplayField ?? Columns[index].ApiField ?? Columns[index].FieldKey;
                     var value = Row?.GetValue(valueKey);
-                    ApplyBodyContent(_textCells[index], Columns[index], value);
+                    ApplyBodyContent(_textCells[index], Columns[index], Row, value);
                 }
             }
         }
 
-        private static void ApplyBodyContent(TextBlock textCell, CbsTableColumnDefinition column, object? value)
+        private static void ApplyBodyContent(
+            TextBlock textCell,
+            CbsTableColumnDefinition column,
+            ReferenceDataRow? row,
+            object? value)
         {
+            if (!string.IsNullOrWhiteSpace(column.BodyTemplateKey))
+            {
+                var formatted = FormatTemplateValue(column.BodyTemplateKey, row, value);
+                if (formatted is not null)
+                {
+                    textCell.Text = formatted;
+                    textCell.Foreground = ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
+                    return;
+                }
+            }
+
             if (column.BodyMode == CbsTableBodyMode.BooleanIcon)
             {
                 var (text, foregroundKey) = value switch
@@ -257,6 +292,96 @@ namespace CbsContractsDesktopClient.Views.Controls
                 string text when TryFormatDateTimeText(text, out var formattedDateTime) => formattedDateTime,
                 _ => value.ToString() ?? string.Empty
             };
+        }
+
+        private static string? FormatTemplateValue(string templateKey, ReferenceDataRow? row, object? value)
+        {
+            if (row is null)
+            {
+                return null;
+            }
+
+            return templateKey switch
+            {
+                "StageRegion" => FirstText(
+                    row.GetValue("contract.contragent.region.name"),
+                    row.GetValue("contract.region.name"),
+                    value),
+                "StageRegister" => FormatStageRegister(row),
+                "StageDuration" => FormatStageDuration(row, value),
+                "StageSzi" => HasStageTaskKind(row, 10) ? "\u2713" : string.Empty,
+                _ => null
+            };
+        }
+
+        private static string FirstText(params object?[] values)
+        {
+            foreach (var value in values)
+            {
+                var text = value?.ToString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static string FormatStageRegister(ReferenceDataRow row)
+        {
+            var quarter = row.GetValue("registry_quarter")?.ToString();
+            var year = row.GetValue("registry_year")?.ToString();
+            return string.IsNullOrWhiteSpace(quarter)
+                ? string.Empty
+                : string.IsNullOrWhiteSpace(year)
+                    ? quarter
+                    : $"{quarter}.{year}";
+        }
+
+        private static string FormatStageDuration(ReferenceDataRow row, object? value)
+        {
+            var duration = value?.ToString();
+            if (string.IsNullOrWhiteSpace(duration))
+            {
+                return string.Empty;
+            }
+
+            return $"{duration}{FormatDeadlineKind(row.GetValue("deadline_kind")?.ToString())}";
+        }
+
+        private static string FormatDeadlineKind(string? kind)
+        {
+            return kind switch
+            {
+                "calendar_plan" => "KП",
+                "calendar_days" => "КД",
+                "calendar_prepayment" => "KДП",
+                "working_days" => "РД",
+                "working_prepayment" => "РДП",
+                _ => string.Empty
+            };
+        }
+
+        private static bool HasStageTaskKind(ReferenceDataRow row, long taskKindId)
+        {
+            if (!row.Values.TryGetValue("tasks", out var tasks) || tasks.ValueKind != JsonValueKind.Array)
+            {
+                return false;
+            }
+
+            foreach (var task in tasks.EnumerateArray())
+            {
+                if (task.ValueKind == JsonValueKind.Object
+                    && task.TryGetProperty("task_kind_id", out var taskKind)
+                    && taskKind.TryGetInt64(out var id)
+                    && id == taskKindId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string FormatDateValue(object? value)
@@ -381,6 +506,118 @@ namespace CbsContractsDesktopClient.Views.Controls
             RowBorder.BorderBrush = (Brush)Application.Current.Resources["ShellTableGridLineBrush"];
             RowBorder.BorderThickness = new Thickness(0, 0, 0, 1);
             SelectionAccent.Visibility = !isPlaceholder && IsSelected ? Visibility.Visible : Visibility.Collapsed;
+            ApplyConditionalRowStyle(isPlaceholder);
+        }
+
+        private void ApplyConditionalRowStyle(bool isPlaceholder)
+        {
+            var foregroundKey = "ShellPrimaryTextBrush";
+            var fontWeight = FontWeights.Normal;
+
+            if (!isPlaceholder && RowStyleKey == CbsTableRowStyleKey.StageDeadline && Row is not null)
+            {
+                var style = ResolveStageDeadlineStyle(Row);
+                if (!string.IsNullOrWhiteSpace(style.BackgroundBrushKey) && !IsSelected && !IsHovered && !IsPressed)
+                {
+                    RowBorder.Background = ResolveBrush(style.BackgroundBrushKey, "ShellTableRowBackgroundBrush");
+                }
+
+                if (!string.IsNullOrWhiteSpace(style.ForegroundBrushKey))
+                {
+                    foregroundKey = style.ForegroundBrushKey;
+                }
+
+                fontWeight = style.IsSemibold ? FontWeights.SemiBold : FontWeights.Normal;
+            }
+
+            foreach (var textCell in _textCells)
+            {
+                textCell.FontWeight = fontWeight;
+                if (!string.Equals(textCell.Text, "\u2713", StringComparison.Ordinal))
+                {
+                    textCell.Foreground = ResolveBrush(foregroundKey, "ShellPrimaryTextBrush");
+                }
+            }
+        }
+
+        private static ConditionalRowStyle ResolveStageDeadlineStyle(ReferenceDataRow row)
+        {
+            var deadline = TryGetDateTime(row.GetValue("deadline_at"));
+            var statusId = TryGetLong(row.GetValue("status.id")) ?? TryGetLong(row.GetValue("status_id")) ?? 2;
+            var governmental = TryGetBoolean(row.GetValue("contract.governmental"));
+            var isNotDone = statusId is not (5 or 4 or 7 or 6);
+
+            if (deadline is null)
+            {
+                return governmental
+                    ? new ConditionalRowStyle("StageGovernmentForegroundBrush", null, null, true)
+                    : ConditionalRowStyle.Empty;
+            }
+
+            var now = DateTimeOffset.Now;
+            var isDeadline = deadline.Value <= now;
+            var isCloseDeadline = deadline.Value.AddDays(-14) <= now;
+
+            if (isNotDone && isDeadline && governmental)
+            {
+                return new ConditionalRowStyle(
+                    "StageGovernmentForegroundBrush",
+                    "StageDeadlineAlertBackgroundBrush",
+                    "StageDeadlineAlertBorderBrush",
+                    true);
+            }
+
+            if (isNotDone && isCloseDeadline && !isDeadline)
+            {
+                return new ConditionalRowStyle(
+                    governmental ? "StageGovernmentForegroundBrush" : null,
+                    "StageDeadlineWarningBackgroundBrush",
+                    "StageDeadlineWarningBorderBrush",
+                    governmental);
+            }
+
+            if (isNotDone && isDeadline)
+            {
+                return new ConditionalRowStyle("StageDeadlineTextBrush", null, "StageDeadlineAlertBorderBrush", false);
+            }
+
+            return governmental
+                ? new ConditionalRowStyle("StageGovernmentForegroundBrush", null, null, true)
+                : ConditionalRowStyle.Empty;
+        }
+
+        private static DateTimeOffset? TryGetDateTime(object? value)
+        {
+            return value switch
+            {
+                DateTimeOffset dateTimeOffset => dateTimeOffset,
+                DateTime dateTime => dateTime,
+                string text when DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var parsed) => parsed,
+                string text when DateTimeOffset.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.AssumeLocal, out var parsed) => parsed,
+                _ => null
+            };
+        }
+
+        private static long? TryGetLong(object? value)
+        {
+            return value switch
+            {
+                long longValue => longValue,
+                int intValue => intValue,
+                decimal decimalValue => (long)decimalValue,
+                string text when long.TryParse(text, out var parsed) => parsed,
+                _ => null
+            };
+        }
+
+        private static bool TryGetBoolean(object? value)
+        {
+            return value switch
+            {
+                bool booleanValue => booleanValue,
+                string text when bool.TryParse(text, out var parsed) => parsed,
+                _ => false
+            };
         }
 
         private static TextBlock CreateTextCell()
@@ -520,6 +757,15 @@ namespace CbsContractsDesktopClient.Views.Controls
             RowGrid.ColumnDefinitions[columnIndex].Width = new GridLength(width);
         }
 
+    }
+
+    internal sealed record ConditionalRowStyle(
+        string? ForegroundBrushKey,
+        string? BackgroundBrushKey,
+        string? BorderBrushKey,
+        bool IsSemibold)
+    {
+        public static ConditionalRowStyle Empty { get; } = new(null, null, null, false);
     }
 }
 

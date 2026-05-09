@@ -11,12 +11,16 @@ namespace CbsContractsDesktopClient.Models.Settings
     {
         public Dictionary<string, LocalTableColumnSettings> Columns { get; init; } = [];
 
+        public List<string> ColumnOrder { get; set; } = [];
+
         public LocalTableSortSettings? Sort { get; set; }
     }
 
     public sealed class LocalTableColumnSettings
     {
         public string? Width { get; set; }
+
+        public bool? IsVisible { get; set; }
     }
 
     public sealed class LocalTableSortSettings

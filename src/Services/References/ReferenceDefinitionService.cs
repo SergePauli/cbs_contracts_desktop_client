@@ -57,14 +57,24 @@ namespace CbsContractsDesktopClient.Services.References
 
                 if (string.IsNullOrWhiteSpace(settings.Width))
                 {
-                    tableSettings.Columns.Remove(settings.FieldKey);
+                    if (tableSettings.Columns.TryGetValue(settings.FieldKey, out var columnSettings))
+                    {
+                        columnSettings.Width = null;
+                        if (columnSettings.IsVisible is null)
+                        {
+                            tableSettings.Columns.Remove(settings.FieldKey);
+                        }
+                    }
                 }
                 else
                 {
-                    tableSettings.Columns[settings.FieldKey] = new LocalTableColumnSettings
+                    if (!tableSettings.Columns.TryGetValue(settings.FieldKey, out var columnSettings))
                     {
-                        Width = settings.Width
-                    };
+                        columnSettings = new LocalTableColumnSettings();
+                        tableSettings.Columns[settings.FieldKey] = columnSettings;
+                    }
+
+                    columnSettings.Width = settings.Width;
                 }
 
                 RemoveTableIfEmpty(localSettings, settings.Route, tableSettings);
@@ -1137,7 +1147,7 @@ namespace CbsContractsDesktopClient.Services.References
             string route,
             LocalTableSettings tableSettings)
         {
-            if (tableSettings.Columns.Count == 0 && tableSettings.Sort is null)
+            if (tableSettings.Columns.Count == 0 && tableSettings.ColumnOrder.Count == 0 && tableSettings.Sort is null)
             {
                 localSettings.Tables.Remove(route);
             }
