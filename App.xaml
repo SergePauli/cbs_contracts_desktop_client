@@ -44,6 +44,17 @@
                         Value="{StaticResource CompactComboBoxItemStyle}" />
             </Style>
 
+            <!-- Global compact desktop dialogs -->
+            <Thickness x:Key="ContentDialogPadding">0</Thickness>
+            <Thickness x:Key="ContentDialogTitleMargin">0</Thickness>
+            <Thickness x:Key="ContentDialogCommandSpaceMargin">0</Thickness>
+            <Thickness x:Key="ContentDialogContentMargin">0</Thickness>
+            <Thickness x:Key="ContentDialogContentScrollViewerMargin">0</Thickness>
+            <Thickness x:Key="ContentDialogBorderWidth">0</Thickness>
+            <Thickness x:Key="ContentDialogSeparatorThickness">0</Thickness>
+            <SolidColorBrush x:Key="ContentDialogBorderBrush" Color="Transparent" />
+            <StaticResource x:Key="ContentDialogTopOverlay" ResourceKey="ShellPanelBackgroundBrush" />
+
             <helpers:BoolNegationConverter x:Key="BoolNegationConverter" />
             <helpers:BoolVisibilityConverter x:Key="BoolVisibilityConverter" />
             <helpers:StringVisibilityConverter x:Key="StringVisibilityConverter" />

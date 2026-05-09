@@ -5,11 +5,7 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class ReferenceEditDialogTests
 {
-    private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static readonly string ReferenceEditDialogPath = Path.Combine(
-        ProjectRoot,
+    private static readonly string ReferenceEditDialogPath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Views",
         "References",

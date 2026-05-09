@@ -24,6 +24,8 @@ namespace CbsContractsDesktopClient
 
         public static IServiceProvider Services { get; private set; } = null!;
 
+        public static MainWindow? CurrentWindow { get; private set; }
+
         public App()
         {
             DiagnosticsFileLogger.Clear();
@@ -86,6 +88,7 @@ namespace CbsContractsDesktopClient
         {
             TryRegisterAppNotifications();
             var window = Services.GetRequiredService<MainWindow>();
+            CurrentWindow = window;
             window.Activate();
         }
 

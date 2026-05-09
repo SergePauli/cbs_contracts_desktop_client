@@ -5,11 +5,7 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class CbsTableRowViewTests
 {
-    private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static readonly string CbsTableRowViewPath = Path.Combine(
-        ProjectRoot,
+    private static readonly string CbsTableRowViewPath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Views",
         "Controls",

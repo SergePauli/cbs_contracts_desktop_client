@@ -5,11 +5,7 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class ApiServiceBaseTraceTests
 {
-    private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static readonly string ApiServiceBasePath = Path.Combine(
-        ProjectRoot,
+    private static readonly string ApiServiceBasePath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Services",
         "ApiServiceBase.cs");

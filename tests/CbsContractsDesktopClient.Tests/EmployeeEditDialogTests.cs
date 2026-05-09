@@ -5,25 +5,19 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class EmployeeEditDialogTests
 {
-    private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static readonly string EmployeeEditDialogPath = Path.Combine(
-        ProjectRoot,
+    private static readonly string EmployeeEditDialogPath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Views",
         "References",
         "EmployeeEditDialog.cs");
 
-    private static readonly string DialogLookupEditorsPath = Path.Combine(
-        ProjectRoot,
+    private static readonly string DialogLookupEditorsPath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Views",
         "References",
         "DialogLookupEditors.cs");
 
-    private static readonly string DialogContactsEditorPath = Path.Combine(
-        ProjectRoot,
+    private static readonly string DialogContactsEditorPath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Views",
         "References",

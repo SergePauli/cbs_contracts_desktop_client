@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -28,6 +29,7 @@ namespace CbsContractsDesktopClient.Views.References
             Resources["ContentDialogMinWidth"] = 500d;
             Resources["ContentDialogMaxWidth"] = 800d;
             Content = BuildContent();
+            DialogChrome.Apply(this);
         }
 
         public EmployeeEditViewModel ViewModel { get; }

@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using CbsContractsDesktopClient.Helpers;
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,6 +33,7 @@ namespace CbsContractsDesktopClient.Views.References
                 field.PropertyChanged += OnFieldPropertyChanged;
             }
             Content = BuildContent();
+            DialogChrome.Apply(this);
         }
 
         public ReferenceEditViewModel ViewModel { get; }

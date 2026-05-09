@@ -1,5 +1,6 @@
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -23,7 +24,7 @@ namespace CbsContractsDesktopClient.Views.References
             HorizontalAlignment = HorizontalAlignment.Center;
             ViewModel = viewModel;
             DataContext = viewModel;
-            Title = BuildHeader();
+            Title = ViewModel.DialogTitle;
             PrimaryButtonText = viewModel.PrimaryButtonText;
             CloseButtonText = "Закрыть";
             DefaultButton = ContentDialogButton.Close;
@@ -34,10 +35,8 @@ namespace CbsContractsDesktopClient.Views.References
             Resources["ContentDialogMinWidth"] = 650d;
             Resources["ContentDialogMinHeight"] = 600d;
             Resources["ContentDialogMaxWidth"] = 920d;
-            Resources["ContentDialogPadding"] = new Thickness(8);
-            Resources["ContentDialogTitleMargin"] = new Thickness(0);
-            Resources["ContentDialogCommandSpaceMargin"] = new Thickness(4);
             Content = BuildContent();
+            DialogChrome.Apply(this);
             Loaded += OnLoaded;
         }
 
@@ -220,7 +219,7 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var root = new Grid
             {
-                Padding = new Thickness(0, 12, 0, 0),
+                Padding = new Thickness(0, 4, 0, 0),
                 MinHeight = 420
             };
 
@@ -308,7 +307,7 @@ namespace CbsContractsDesktopClient.Views.References
 
             var border = new Border
             {
-                Padding = new Thickness(10, 8, 10, 8),
+                Padding = new Thickness(4),
                 BorderThickness = new Thickness(0, 0, 0, 1),
                 BorderBrush = (Brush)Application.Current.Resources["ShellPanelBorderBrush"],
                 Background = organization.IsActive
@@ -464,7 +463,7 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var grid = new Grid
             {
-                Padding = new Thickness(0,12,0,0),
+                Padding = new Thickness(0, 4, 0, 0),
                 ColumnSpacing = 8,
                 RowSpacing = 8
             };

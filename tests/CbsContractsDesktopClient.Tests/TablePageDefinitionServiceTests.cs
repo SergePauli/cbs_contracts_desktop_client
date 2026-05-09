@@ -33,7 +33,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal("Дополнительные соглашения", definition.Title);
         Assert.Equal("Дополнительные соглашения контрактов", definition.EffectiveNavigationDescription);
         Assert.False(definition.Capabilities.HasFlag(TablePageCapabilities.Create));
-        Assert.False(definition.Capabilities.HasFlag(TablePageCapabilities.Edit));
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Edit));
         Assert.False(definition.Capabilities.HasFlag(TablePageCapabilities.Delete));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.RowSelection));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.DetailFooter));

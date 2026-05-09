@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml.Controls;
 using CbsContractsDesktopClient.ViewModels;
+using CbsContractsDesktopClient.Views.Controls;
 using System.Threading.Tasks;
 
 namespace CbsContractsDesktopClient.Views
@@ -59,6 +60,8 @@ namespace CbsContractsDesktopClient.Views
                 CloseButtonText = "Закрыть",
                 XamlRoot = this.XamlRoot
             };
+
+            DialogChrome.Apply(dialog);
 
             await dialog.ShowAsync();
         }

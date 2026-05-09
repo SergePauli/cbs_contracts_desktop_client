@@ -6,7 +6,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
@@ -16,6 +15,7 @@ using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.Views.Controls;
+using CbsContractsDesktopClient.Views.Functional;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Windows.AppNotifications;
@@ -58,6 +58,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             Title = "Address",
             Preset = "edit"
         };
+        private static readonly ReferenceDefinition RevisionEditDefinition = new()
+        {
+            Route = "/revisions",
+            Model = "Revision",
+            Title = "Дополнительное соглашение",
+            Preset = "edit"
+        };
 
         public ContentHostView()
         {
@@ -76,6 +83,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
+            _contractWorkflowStore.PropertyChanged += OnContractWorkflowStorePropertyChanged;
         }
 
         private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -91,6 +99,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _viewportCts?.Cancel();
             _contragentDetailCts?.Cancel();
             _revisionDetailCts?.Cancel();
+            _contractWorkflowStore.PropertyChanged -= OnContractWorkflowStorePropertyChanged;
             RemoveViewportSubscription();
         }
 
@@ -99,6 +108,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow)
                 || e.PropertyName == nameof(ReferencesContentViewModel.HasSelectedRow)
                 || e.PropertyName == nameof(ReferencesContentViewModel.HasActiveReference)
+                || e.PropertyName == nameof(ReferencesContentViewModel.CurrentTablePage)
                 || e.PropertyName == nameof(ReferencesContentViewModel.CanEditRows)
                 || e.PropertyName == nameof(ReferencesContentViewModel.CanDeleteRows))
             {
@@ -114,6 +124,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow))
             {
                 _ = RefreshRevisionDetailAsync();
+            }
+        }
+
+        private void OnContractWorkflowStorePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(ContractWorkflowStore.Contract))
+            {
+                UpdateSelectionActionButtons();
             }
         }
 
@@ -189,7 +207,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 var contractTask = contractId is long selectedContractId
                     ? LoadRevisionDetailRowSafelyAsync(
-                        "Contract/card",
+                        "Contract/edit",
                         () => LoadRevisionContractCardAsync(selectedContractId, cancellationTokenSource.Token),
                         cancellationTokenSource.Token)
                     : Task.FromResult<ReferenceDataRow?>(null);
@@ -251,11 +269,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 throw;
             }
-            catch (Exception ex)
+            catch
             {
-                DiagnosticsFileLogger.AppendBlock(
-                    $"REVISION DETAIL LOAD FAILED {title}",
-                    $"{ex.GetType().Name}: {ex.Message}");
                 return null;
             }
         }
@@ -280,6 +295,12 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void EditSelectedRowButton_Click(object sender, RoutedEventArgs e)
         {
+            if (_viewModel.ShowRevisionsDetailView)
+            {
+                await ShowRevisionEditDialogAsync();
+                return;
+            }
+
             await ShowReferenceEditDialogAsync(isCreateMode: false);
         }
 
@@ -300,6 +321,21 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void CopyContragentDetailsButton_Click(object sender, RoutedEventArgs e)
         {
+            if (IsRevisionsTableActive())
+            {
+                var contractText = RevisionsDetailView.BuildClipboardText();
+                if (string.IsNullOrWhiteSpace(contractText))
+                {
+                    return;
+                }
+
+                var contractDataPackage = new DataPackage();
+                contractDataPackage.SetText(contractText);
+                Clipboard.SetContent(contractDataPackage);
+                ShowSuccessNotification("Данные скопированы", "Карточка контракта скопирована в буфер обмена.");
+                return;
+            }
+
             var text = ContragentDetailView.BuildClipboardText();
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -414,6 +450,12 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (IsInternEditBlocked())
             {
+                return;
+            }
+
+            if (_viewModel.ShowRevisionsDetailView)
+            {
+                await ShowRevisionEditDialogAsync();
                 return;
             }
 
@@ -537,9 +579,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             var canDeleteSelectedRow = hasSelectedRow && _viewModel.CanDeleteRows;
             var isHolidayReference = string.Equals(_viewModel.CurrentReference?.Route, "/holidays", StringComparison.OrdinalIgnoreCase);
             var isContragentReference = _viewModel.IsContragentReference;
+            var isRevisionsTable = IsRevisionsTableActive();
+            var hasWorkflowContract = _contractWorkflowStore.Contract is { IsPlaceholder: false };
             var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
             var canCompareFns = hasSelectedRow && isContragentReference && !_isFnsCompareInProgress;
             var canCopyContragentDetails = hasSelectedRow && isContragentReference;
+            var canCopyRevisionContract = isRevisionsTable && hasWorkflowContract;
+            var canCopyDetails = canCopyContragentDetails || canCopyRevisionContract;
 
             if (EditSelectedRowButton is not null)
             {
@@ -578,12 +624,25 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (CopyContragentDetailsButton is not null)
             {
-                CopyContragentDetailsButton.Visibility = isContragentReference ? Visibility.Visible : Visibility.Collapsed;
-                CopyContragentDetailsButton.IsEnabled = canCopyContragentDetails;
-                CopyContragentDetailsButton.Foreground = canCopyContragentDetails
+                CopyContragentDetailsButton.Visibility = isContragentReference || isRevisionsTable ? Visibility.Visible : Visibility.Collapsed;
+                CopyContragentDetailsButton.IsEnabled = canCopyDetails;
+                ToolTipService.SetToolTip(
+                    CopyContragentDetailsButton,
+                    isRevisionsTable
+                        ? "Скопировать данные контракта"
+                        : "Скопировать данные контрагента");
+                CopyContragentDetailsButton.Foreground = canCopyDetails
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkSlateBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
+        }
+
+        private bool IsRevisionsTableActive()
+        {
+            return string.Equals(
+                _viewModel.CurrentTablePage?.Route,
+                "/revisions",
+                StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task ShowReferenceEditDialogAsync(bool isCreateMode)
@@ -667,6 +726,61 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
+        private async Task ShowRevisionEditDialogAsync()
+        {
+            if (_viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            RevisionEditDialog dialog;
+            try
+            {
+                dialog = new RevisionEditDialog(_viewModel.SelectedRow)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть ревизию.", ex.Message);
+                return;
+            }
+
+            ReferenceDataRow? savedRow = null;
+            dialog.PrimaryButtonClick += async (_, args) =>
+            {
+                var deferral = args.GetDeferral();
+                try
+                {
+                    savedRow = await _referenceCrudService.UpdateAsync(
+                        RevisionEditDefinition,
+                        dialog.BuildPayload());
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+                finally
+                {
+                    deferral.Complete();
+                }
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary || savedRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(RevisionEditDefinition.Model);
+            await _viewModel.ReloadCurrentReferenceAsync();
+            ShowSuccessNotification(
+                "Ревизия сохранена",
+                BuildReferenceNotificationMessage(RevisionEditDefinition.Title, TryGetSelectedRowId(savedRow)));
+        }
+
         private async Task DeleteSelectedRowAsync()
         {
             if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null)
@@ -690,6 +804,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 DefaultButton = ContentDialogButton.Close,
                 Content = "Удалить выбранную запись?"
             };
+            DialogChrome.Apply(confirmDialog);
 
             if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
             {
@@ -721,6 +836,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 DefaultButton = ContentDialogButton.Close,
                 Content = message
             };
+            DialogChrome.Apply(dialog);
 
             await dialog.ShowAsync();
         }
@@ -789,9 +905,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 };
                 dialog.Resources["ContentDialogMinWidth"] = 1180d;
                 dialog.Resources["ContentDialogMaxWidth"] = 1280d;
-                dialog.Resources["ContentDialogPadding"] = new Thickness(8);
-                dialog.Resources["ContentDialogTitleMargin"] = new Thickness(4);
-                dialog.Resources["ContentDialogCommandSpaceMargin"] = new Thickness(4);
+                DialogChrome.Apply(dialog, "Сверка с ФНС");
 
                 if (await dialog.ShowAsync() != ContentDialogResult.Primary)
                 {
@@ -1029,8 +1143,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 DefaultButton = ContentDialogButton.Primary,
                 Content = content
             };
-            dialog.Resources["ContentDialogTitleMargin"] = new Thickness(4);
-            dialog.Resources["ContentDialogCommandSpaceMargin"] = new Thickness(4);
+            DialogChrome.Apply(dialog);
 
             if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             {
@@ -1112,8 +1225,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Content = comboBox
             };
             dialog.Resources["ContentDialogMinWidth"] = 760d;
-            dialog.Resources["ContentDialogTitleMargin"] = new Thickness(4);
-            dialog.Resources["ContentDialogCommandSpaceMargin"] = new Thickness(4);
+            DialogChrome.Apply(dialog);
 
             return await dialog.ShowAsync() == ContentDialogResult.Primary
                 ? (comboBox.SelectedItem as FnsImportSelectionItem)?.Result
@@ -1626,6 +1738,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     DefaultButton = ContentDialogButton.Primary,
                     Content = $"Будут затронуты {affectedStages.Count} этапа(ов) в {uniqueContracts} контракте(ах). Продолжить?"
                 };
+                DialogChrome.Apply(confirmDialog);
 
                 if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
                 {
@@ -2271,12 +2384,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                 },
                 Limit = 1
             };
-            LogRevisionDetailRequest("Contract/edit", request);
             var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
                 request,
                 cancellationToken);
 
-            LogRevisionDetailResponse("Contract/edit", request, rows);
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
@@ -2294,65 +2405,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                 },
                 Limit = 1
             };
-            LogRevisionDetailRequest("Contragent/card", request);
             var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
                 request,
                 cancellationToken);
 
-            LogRevisionDetailResponse("Contragent/card", request, rows);
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
-        }
-
-        private static void LogRevisionDetailRequest(string title, DataQueryRequest request)
-        {
-            DiagnosticsFileLogger.AppendBlock(
-                $"REVISION DETAIL REQUEST {title}",
-                JsonSerializer.Serialize(request, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                }));
-        }
-
-        private static void LogRevisionDetailResponse(
-            string title,
-            DataQueryRequest request,
-            IReadOnlyList<ReferenceDataRow> rows)
-        {
-            var response = new
-            {
-                Request = BuildRevisionDetailRequestSummary(request),
-                Count = rows.Count,
-                Rows = rows.Select(static row => new
-                {
-                    row.IsPlaceholder,
-                    Keys = row.Values.Keys.OrderBy(static key => key).ToArray(),
-                    Raw = row.Values.ToDictionary(
-                        static pair => pair.Key,
-                        static pair => pair.Value.ValueKind == JsonValueKind.String
-                            ? pair.Value.GetString()
-                            : pair.Value.GetRawText())
-                }).ToArray()
-            };
-
-            DiagnosticsFileLogger.AppendBlock(
-                $"REVISION DETAIL RESPONSE {title}",
-                JsonSerializer.Serialize(response, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                }));
-        }
-
-        private static object BuildRevisionDetailRequestSummary(DataQueryRequest request)
-        {
-            return new
-            {
-                request.Model,
-                request.Preset,
-                request.Filters,
-                request.Sorts,
-                request.Limit,
-                request.Offset
-            };
         }
 
         private async Task<ReferenceDataRow?> LoadContragentEditRowAsync(CancellationToken cancellationToken = default)

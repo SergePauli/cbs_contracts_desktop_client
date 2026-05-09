@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
@@ -64,6 +65,24 @@ namespace CbsContractsDesktopClient.Views.Functional
             set => SetValue(ContragentRowProperty, value);
         }
 
+        public string BuildClipboardText()
+        {
+            var contract = ContractRow ?? _contractWorkflowStore.Contract;
+            var contragent = ContragentRow ?? _contractWorkflowStore.Contragent;
+            if (contract is null || contract.IsPlaceholder)
+            {
+                return string.Empty;
+            }
+
+            var stage = ReadUsedStage(contract);
+            var startAt = stage is null ? null : ReadStringProperty(stage.Value, "start_at");
+            var deadlineAt = stage is null ? null : ReadStringProperty(stage.Value, "deadline_at");
+            var contragentName = GetText(contragent, "name", "requisites.organization.name") ?? string.Empty;
+            var contractTitle = GetText(contract, "external_number") ?? GetText(contract, "name") ?? string.Empty;
+
+            return $"{FormatClipboardDate(startAt)}-{FormatClipboardDate(deadlineAt)} | {contragentName} | {contractTitle}";
+        }
+
         private static void OnDetailChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((RevisionsDetailView)d).Refresh();
@@ -95,7 +114,8 @@ namespace CbsContractsDesktopClient.Views.Functional
         {
             if (e.PropertyName == nameof(ContractWorkflowStore.Contract)
                 || e.PropertyName == nameof(ContractWorkflowStore.Contragent)
-                || e.PropertyName == nameof(ContractWorkflowStore.SelectedRevision))
+                || e.PropertyName == nameof(ContractWorkflowStore.SelectedRevision)
+                || e.PropertyName == nameof(ContractWorkflowStore.Comments))
             {
                 Refresh();
             }
@@ -114,6 +134,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ContactsPanel.Children.Clear();
                 PerformersTextBlock.Text = string.Empty;
                 EmployeesBox.Employees = [];
+                CommentsBox.Comments = [];
                 return;
             }
 
@@ -129,39 +150,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             var employees = ReadEmployees(contragent);
             PerformersTextBlock.Text = performersText;
             EmployeesBox.Employees = employees;
-            LogRenderSnapshot(revision, contract, contragent, employees, performersText);
-        }
-
-        private static void LogRenderSnapshot(
-            ReferenceDataRow revision,
-            ReferenceDataRow? contract,
-            ReferenceDataRow? contragent,
-            IReadOnlyList<EmployeeBoxItem> employees,
-            string performersText)
-        {
-            var hasContragentEmployees = TryGetArray(contragent, out var employeesArray, "employees", "emploees");
-            var hasStages = TryGetArray(contract, out var stagesArray, "stages");
-            DiagnosticsFileLogger.AppendBlock(
-                "REVISION DETAIL RENDER SNAPSHOT",
-                JsonSerializer.Serialize(new
-                {
-                    RevisionKeys = revision.Values.Keys.OrderBy(static key => key).ToArray(),
-                    ContractKeys = contract?.Values.Keys.OrderBy(static key => key).ToArray() ?? Array.Empty<string>(),
-                    ContragentKeys = contragent?.Values.Keys.OrderBy(static key => key).ToArray() ?? Array.Empty<string>(),
-                    HasContragentEmployees = hasContragentEmployees,
-                    ContragentEmployeesJsonCount = hasContragentEmployees && employeesArray.ValueKind == JsonValueKind.Array
-                        ? employeesArray.GetArrayLength()
-                        : 0,
-                    ParsedEmployeesCount = employees.Count,
-                    ParsedEmployeeNames = employees.Select(static employee => employee.FullName).Take(10).ToArray(),
-                    PerformersText = performersText,
-                    StagesJsonCount = hasStages && stagesArray.ValueKind == JsonValueKind.Array
-                        ? stagesArray.GetArrayLength()
-                        : 0
-                }, new JsonSerializerOptions
-                {
-                    WriteIndented = true
-                }));
+            CommentsBox.Comments = _contractWorkflowStore.Comments;
         }
 
         private void RenderContacts(IReadOnlyList<string> contacts)
@@ -407,6 +396,27 @@ namespace CbsContractsDesktopClient.Views.Functional
                 && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
                 : null;
+        }
+
+        private static string FormatClipboardDate(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return " ";
+            }
+
+            return DateTime.TryParse(
+                value,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                out var invariantDate)
+                || DateTime.TryParse(
+                    value,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                    out invariantDate)
+                ? invariantDate.ToString("d", CultureInfo.GetCultureInfo("ru-RU"))
+                : " ";
         }
 
         private static string? ReadNestedStringProperty(JsonElement item, string propertyName, string nestedPropertyName)

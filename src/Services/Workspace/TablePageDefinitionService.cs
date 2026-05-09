@@ -81,6 +81,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
                     Kind = TablePageKind.Functional,
                     Capabilities =
                         TablePageCapabilities.RowSelection
+                        | TablePageCapabilities.Edit
                         | TablePageCapabilities.ResetFilters
                         | TablePageCapabilities.PersistColumnWidths
                         | TablePageCapabilities.PersistSort

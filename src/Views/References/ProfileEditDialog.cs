@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -22,6 +23,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Path = new PropertyPath(nameof(ProfileEditViewModel.CanSubmit))
             });
             Content = BuildContent();
+            DialogChrome.Apply(this);
         }
 
         public ProfileEditViewModel ViewModel { get; }

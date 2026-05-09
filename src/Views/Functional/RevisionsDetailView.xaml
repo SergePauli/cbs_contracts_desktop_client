@@ -3,21 +3,20 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:CbsContractsDesktopClient.Views.Functional"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:references="using:CbsContractsDesktopClient.Views.References"
     mc:Ignorable="d">
 
     <Border
         Height="215"
-        Background="{StaticResource ShellTableHeaderBackgroundBrush}"
-        BorderBrush="{StaticResource ShellPanelBorderBrush}"
-        BorderThickness="0,1,0,0">
+        Style="{StaticResource ShellDetailFooterRootBorderStyle}">
         <Grid
-            Padding="14,9,14,10"
+            Padding="4"
             ColumnSpacing="14">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="62*" />
-                <ColumnDefinition Width="38*" />
+                <ColumnDefinition Width="72*" />
+                <ColumnDefinition Width="28*" />
             </Grid.ColumnDefinitions>
 
             <Grid
@@ -64,21 +63,23 @@
 
                     <Border
                         MinHeight="132"
-                        Padding="10,8"
+                        Padding="4"
                         Background="{StaticResource ShellPanelBackgroundBrush}"
                         BorderBrush="{StaticResource ShellPanelBorderBrush}"
                         BorderThickness="1"
                         CornerRadius="6">
-                        <Grid>
+                        <Grid RowSpacing="6">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
+                            </Grid.RowDefinitions>
                             <TextBlock
                                 Style="{StaticResource BodyStrongTextBlockStyle}"
                                 Foreground="{StaticResource ShellTertiaryTextBrush}"
                                 Text="Комментарии" />
-                            <TextBlock
-                                Margin="0,28,0,0"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Foreground="{StaticResource ShellCaptionTextBrush}"
-                                Text="МЕСТО ДЛЯ COMMENTBOX" />
+                            <local:CommentBox
+                                x:Name="CommentsBox"
+                                Grid.Row="1" />
                         </Grid>
                     </Border>
                 </StackPanel>
@@ -86,9 +87,7 @@
 
             <Border
                 Grid.Column="1"
-                BorderBrush="{StaticResource ShellPanelBorderBrush}"
-                BorderThickness="1,0,0,0"
-                Padding="12,0,0,0">
+                Style="{StaticResource ShellDetailFooterColumnSeparatorStyle}">
                 <references:EmployeeBox
                     x:Name="EmployeesBox"
                     CanEdit="False" />

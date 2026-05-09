@@ -9,11 +9,9 @@
 
     <Border
         Height="215"
-        Background="{StaticResource ShellTableHeaderBackgroundBrush}"
-        BorderBrush="{StaticResource ShellPanelBorderBrush}"
-        BorderThickness="0,1,0,0">
+        Style="{StaticResource ShellDetailFooterRootBorderStyle}">
         <Grid
-            Padding="14,9,14,10"
+            Padding="4"
             ColumnSpacing="14">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="60*" />
@@ -168,9 +166,7 @@
 
             <Border
                 Grid.Column="1"
-                BorderBrush="{StaticResource ShellPanelBorderBrush}"
-                BorderThickness="1,0,0,0"
-                Padding="12,0,0,0">
+                Style="{StaticResource ShellDetailFooterColumnSeparatorStyle}">
                 <references:EmployeeBox x:Name="EmployeesBox" />
             </Border>
         </Grid>

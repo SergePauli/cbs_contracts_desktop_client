@@ -11,7 +11,7 @@
         Background="{StaticResource ShellTableHeaderBackgroundBrush}"
         BorderBrush="{StaticResource ShellPanelBorderBrush}"
         BorderThickness="0,1,0,0">
-        <Grid Padding="14,9,14,10">
+        <Grid Padding="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />

@@ -32,4 +32,16 @@
     <x:Double x:Key="ShellBackButtonSize">32</x:Double>
     <x:Double x:Key="ShellActionButtonSize">28</x:Double>
     <GridLength x:Key="ShellContentHeaderCardHeight">72</GridLength>
+
+    <Style x:Key="ShellDetailFooterRootBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource ShellTableHeaderBackgroundBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource ShellPanelBorderBrush}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+    </Style>
+
+    <Style x:Key="ShellDetailFooterColumnSeparatorStyle" TargetType="Border">
+        <Setter Property="BorderBrush" Value="{StaticResource ShellTableGridLineBrush}" />
+        <Setter Property="BorderThickness" Value="1,0,0,0" />
+        <Setter Property="Padding" Value="4,0,0,0" />
+    </Style>
 </ResourceDictionary>

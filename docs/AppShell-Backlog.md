@@ -83,21 +83,21 @@ Shell уже больше не является только каркасом п
 
 ## Ближайшая следующая задача
 
-Следующий production-шаг: первая функциональная таблица `Дополнительные соглашения к контрактам`.
+Следующий production-шаг: функциональная таблица `Этапы контрактов`.
 
-Почему она первая:
+Почему она следующая:
 
-- это самая простая прикладная таблица после этапа справочников
-- можно переиспользовать уже готовые table/reference primitives без нового complex-editor риска
-- она даст первый рабочий сценарий за пределами справочников и проверит shell на настоящем контрактном процессе
+- таблица `Дополнительные соглашения к контрактам` уже проверила общий `TablePageDefinition` pattern вне раздела справочников
+- для этапов можно переиспользовать тот же `ContentHostView`, table metadata, settings persistence, detail footer и workflow-store подход
+- это естественное продолжение контрактного рабочего процесса после выбора договора/ревизии
 
 Ожидаемый первый scope:
 
-1. Изучить web/API-метаданные таблицы дополнительных соглашений.
-2. Добавить route/page definition внутри shell для функциональной таблицы.
+1. Изучить web/API-метаданные таблицы этапов контрактов.
+2. Добавить route/page definition для функциональной таблицы этапов.
 3. Настроить list-screen: колонки, nested display/filter/sort mapping, lazy loading, width persistence.
-4. Подключить базовый selection/detail context и audit panel.
-5. Определить минимальный набор row actions для первой поставки.
+4. Переиспользовать общий contract-oriented detail footer там, где он совпадает с `/revisions`.
+5. Определить минимальный набор row actions и edit-dialog scope для первой поставки.
 6. Зафиксировать metadata и query-contract регрессионными тестами.
 
 После этого:
@@ -105,6 +105,45 @@ Shell уже больше не является только каркасом п
 - переносить следующие функциональные таблицы уже с проверенным pattern
 - возвращаться к delete/archive правилам и доменным ограничениям CRUD
 - поддерживать регрессионные тесты на shell navigation / content chrome / audit
+
+## Закрытый production-этап: функциональная таблица `Дополнительные соглашения к контрактам`
+
+Функциональная страница `/revisions` закрыта как первый production-этап вне раздела справочников.
+
+Что выполнено:
+
+1. Route `/revisions` подключен к общей table-definition platform через `TablePageDefinition`.
+2. Metadata таблицы перенесена из web-версии:
+   - модель `Revision`
+   - preset `list`
+   - nested display/filter/sort mapping
+   - boolean icon columns
+   - начальный фильтр `priority > 0`
+   - начальная сортировка по `contract.id desc`
+3. Реализован contract-oriented `RevisionsDetailView`:
+   - строка контекста текущей ревизии/контракта
+   - карточка контрагента через reusable `EmployeeBox`
+   - список исполнителей и задач этапа
+   - `CommentBox` для комментариев
+4. Добавлен общий `ContractWorkflowStore` для выбранного контракта, контрагента, ревизии и этапа.
+5. Поддержаны файлы выбранного контракта в navigation sidebar:
+   - документы
+   - сканы
+   - протоколы
+   - каталог
+   - открытие напрямую через shell/system app
+6. Добавлен `RevisionEditDialog`:
+   - readonly-контекст договора и номера ревизии в header
+   - редактируемые поля ревизии
+   - выбор путей через Explorer
+   - открытие файлов через `UseShellExecute`
+7. Добавлена кнопка копирования contract summary в буфер обмена на основе workflow-store.
+8. Унифицированы compact detail/dialog styles:
+   - общий разделитель detail footer
+   - padding внутри detail views не больше 4
+   - общий `DialogChrome` для заголовка, close button, компактных content/footer margins
+9. Временная диагностика запросов contract/contragent для `/revisions` удалена после стабилизации.
+10. Регрессионные тесты обновлены под новую table-definition, detail footer, dialog chrome и copy action.
 
 ## Закрытый production-этап: complex reference `Контрагенты`
 

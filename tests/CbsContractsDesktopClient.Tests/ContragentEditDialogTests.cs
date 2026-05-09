@@ -4,11 +4,7 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class ContragentEditDialogTests
 {
-    private static readonly string ProjectRoot = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
-
-    private static readonly string DialogPath = Path.Combine(
-        ProjectRoot,
+    private static readonly string DialogPath = TestProjectPaths.FromRepositoryRoot(
         "src",
         "Views",
         "References",
@@ -20,17 +16,13 @@ public sealed class ContragentEditDialogTests
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("public sealed class ContragentEditDialog : ContentDialog", code);
-        Assert.Contains("Title = BuildHeader();", code);
-        Assert.Contains("Resources[\"ContentDialogPadding\"] = new Thickness(8);", code);
+        Assert.Contains("using CbsContractsDesktopClient.Views.Controls;", code);
+        Assert.Contains("Title = ViewModel.DialogTitle;", code);
         Assert.Contains("Resources[\"ContentDialogMinWidth\"] = 650d;", code);
         Assert.Contains("Resources[\"ContentDialogMinHeight\"] = 600d;", code);
         Assert.Contains("Resources[\"ContentDialogMaxWidth\"] = 920d;", code);
-        Assert.Contains("Resources[\"ContentDialogTitleMargin\"] = new Thickness(0);", code);
-        Assert.Contains("Resources[\"ContentDialogCommandSpaceMargin\"] = new Thickness(4);", code);
-        Assert.Contains("Content = \"\\uE711\"", code);
-        Assert.Contains("KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementModeEnum.Hidden", code);
-        Assert.Contains("ToolTipService.SetToolTip(closeButton, \"Закрыть\");", code);
-        Assert.Contains("closeButton.Click += (_, _) => Hide();", code);
+        Assert.Contains("Content = BuildContent();", code);
+        Assert.Contains("DialogChrome.Apply(this);", code);
         Assert.Contains("Loaded += OnLoaded;", code);
         Assert.Contains("SuppressKeyboardAcceleratorTooltips(this);", code);
         Assert.Contains("element.KeyboardAcceleratorPlacementMode = KeyboardAcceleratorPlacementModeEnum.Hidden;", code);

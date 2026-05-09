@@ -74,6 +74,19 @@
   - смена юр.лица через ручной ввод или импорт из ФНС
   - импорт/сверка с ФНС
   - lookup/cache infrastructure для ownership и адресов
+- первая функциональная таблица:
+  - `/revisions`
+  - модель `Revision`, preset `list`
+  - подключена к общей `TablePageDefinition` platform
+  - metadata перенесена из web-версии
+  - contract-oriented `RevisionsDetailView`
+  - общий `ContractWorkflowStore`
+  - `EmployeeBox` для карточки контрагента
+  - `CommentBox` для комментариев
+  - navigation-раздел `Файлы` по выбранному контракту
+  - `RevisionEditDialog`
+  - копирование contract summary в буфер обмена
+  - временная диагностика API-запросов снята после стабилизации
 
 ### 4. Табличная платформа
 
@@ -131,14 +144,15 @@
 - `ContactTypeClassifier` для поддерживаемых типов контактов
 - `/contragents` definition, detail-view, specialized editor flow, FNS integration и payload contracts
 - `EmployeeBox` reusable UI contract/rendering hooks
+- `/revisions` functional table definition, metadata, detail footer, workflow-store hooks, edit dialog и copy action
 
 ## Что сейчас в разработке по смыслу
 
 Текущая фаза проекта:
 
-**переход от справочников к первым функциональным таблицам поверх готовой shell + table platform**
+**масштабирование функциональных контрактных таблиц поверх готовой shell + table platform**
 
-То есть команда больше не строит “скелет” и завершила крупный этап сложных справочников. Следующий фокус - рабочие контрактные таблицы.
+То есть команда больше не строит “скелет”, завершила крупный этап сложных справочников и закрыла первую функциональную таблицу `/revisions`. Следующий фокус - таблица этапов контрактов и дальнейшее переиспользование contract-oriented detail workflow.
 
 Отдельно важно:
 
@@ -157,8 +171,8 @@
 
 ## Что логично делать дальше
 
-1. Начать первую функциональную таблицу: `Дополнительные соглашения к контрактам`
-2. Проверить reuse table/reference primitives вне раздела справочников
+1. Реализовать следующую функциональную таблицу: `Этапы контрактов`
+2. Переиспользовать `TablePageDefinition`, `ContentHostView`, workflow-store и общий contract-oriented detail footer
 3. Довести CRUD справочников до details/archive и backend-aware ограничений
 4. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect
 5. Расширять доменный контекст в audit/context panel
