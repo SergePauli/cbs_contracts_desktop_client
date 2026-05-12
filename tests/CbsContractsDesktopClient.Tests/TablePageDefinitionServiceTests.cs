@@ -104,15 +104,26 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
         Assert.Contains(definition.Columns, static column => column.FieldKey == "contragent"
             && column.FilterField == "contract.contragent.org.name_or_contract.contragent.org.full_name");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "name"
+            && column.DisplayField == "name"
+            && column.FilterField == "name"
+            && column.SortField == "name");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "region"
             && column.BodyTemplateKey == "StageRegion");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "duration"
             && column.BodyTemplateKey == "StageDuration");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "register"
-            && column.BodyTemplateKey == "StageRegister");
+            && column.BodyTemplateKey == "StageRegister"
+            && column.FilterField == "registry_quarter_or_registry_year"
+            && column.SortField == "registry_year");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "szi"
+            && column.BodyTemplateKey == "StageSzi"
+            && column.FilterField == "tasks.task_kind_id"
+            && column.SortField == "tasks.task_kind_id");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "status"
             && column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
-            && column.Filter.OptionsSourceKey == "StageStatus");
+            && column.Filter.OptionsSourceKey == "StageStatus"
+            && column.BodyTemplateKey == "StatusBadge");
     }
 
     [Fact]

@@ -26,6 +26,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private static readonly bool DiagnosticsEnabled = true;
         private const int MaxUiTraceLines = 80;
         private const int AuditPageSize = 20;
+        private static readonly long[] StageStatusIds = [2L, 4L, 5L, 6L, 7L];
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
@@ -50,6 +51,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private IReadOnlyList<string> _auditActions = [];
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
+        private int _viewportMutationDepth;
+        private bool _deferredItemsRefresh;
+        private bool _deferredStateUpdate;
 
         public ReferencesContentViewModel(
             AppShellViewModel shellViewModel,
@@ -626,29 +630,27 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             try
             {
-                AppendUiTrace($"STEP VM 02 before-ensure-range visible={visibleStart}..{visibleEnd}");
-                hasLoadedPages = await _state.Items.EnsureRangeLoadedAsync(visibleStart, visibleEnd, cancellationToken);
-                AppendUiTrace($"STEP VM 03 after-ensure-range visible={visibleStart}..{visibleEnd}");
+                BeginViewportMutationBatch();
+                try
+                {
+                    AppendUiTrace($"STEP VM 02 before-ensure-range visible={visibleStart}..{visibleEnd}");
+                    hasLoadedPages = await _state.Items.EnsureRangeLoadedAsync(visibleStart, visibleEnd, cancellationToken);
+                    AppendUiTrace($"STEP VM 03 after-ensure-range visible={visibleStart}..{visibleEnd}");
+                }
+                finally
+                {
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        AppendUiTrace($"STEP VM 04 before-release visible={visibleStart}..{visibleEnd}");
+                        hasReleasedRows = _state.Items.ReleaseOutsideRange(keepStart, keepEnd);
+                        AppendUiTrace($"STEP VM 05 after-release visible={visibleStart}..{visibleEnd}");
+                    }
+                }
             }
             finally
             {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    AppendUiTrace($"STEP VM 04 before-release visible={visibleStart}..{visibleEnd}");
-                    hasReleasedRows = _state.Items.ReleaseOutsideRange(keepStart, keepEnd);
-                    AppendUiTrace($"STEP VM 05 after-release visible={visibleStart}..{visibleEnd}");
-                }
-
-                if (hasLoadedPages || hasReleasedRows)
-                {
-                    RefreshItemsSnapshot();
-                    AppendUiTrace($"STEP VM 06 after-refresh-snapshot visible={visibleStart}..{visibleEnd}");
-                    OnPropertyChanged(nameof(Items));
-                    AppendUiTrace($"STEP VM 07 after-items-changed visible={visibleStart}..{visibleEnd}");
-                    UpdateStateProperties();
-                    AppendUiTrace($"STEP VM 08 after-state-update visible={visibleStart}..{visibleEnd}");
-                }
-                else
+                var hasDeferredUpdates = EndViewportMutationBatch();
+                if (!hasLoadedPages && !hasReleasedRows && !hasDeferredUpdates)
                 {
                     AppendUiTrace($"STEP VM 06a skip-refresh visible={visibleStart}..{visibleEnd}");
                 }
@@ -917,13 +919,25 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             string sourceKey,
             CancellationToken cancellationToken)
         {
+            if (string.Equals(sourceKey, "StageStatus", StringComparison.OrdinalIgnoreCase))
+            {
+                var statusOptions = _referenceLookupCacheService is not null
+                    ? await _referenceLookupCacheService.GetOptionsAsync("Status", cancellationToken: cancellationToken)
+                    : await LoadLookupOptionsFromApiAsync("Status", cancellationToken);
+
+                return NormalizeStageStatusOptions(statusOptions);
+            }
+
+            if (string.Equals(sourceKey, "TaskKind", StringComparison.OrdinalIgnoreCase))
+            {
+                return await LoadTaskKindOptionsAsync(cancellationToken);
+            }
+
             var model = sourceKey switch
             {
                 var key when string.Equals(key, "Department", StringComparison.OrdinalIgnoreCase) => "Department",
                 var key when string.Equals(key, "Area", StringComparison.OrdinalIgnoreCase) => "Area",
                 var key when string.Equals(key, "Ownership", StringComparison.OrdinalIgnoreCase) => "Ownership",
-                var key when string.Equals(key, "TaskKind", StringComparison.OrdinalIgnoreCase) => "TaskKind",
-                var key when string.Equals(key, "StageStatus", StringComparison.OrdinalIgnoreCase) => "Status",
                 _ => null
             };
 
@@ -939,6 +953,13 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                     cancellationToken: cancellationToken);
             }
 
+            return await LoadLookupOptionsFromApiAsync(model, cancellationToken);
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadLookupOptionsFromApiAsync(
+            string model,
+            CancellationToken cancellationToken)
+        {
             var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
                 new DataQueryRequest
                 {
@@ -958,6 +979,95 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 })
                 .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
                 .ToList();
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadTaskKindOptionsAsync(CancellationToken cancellationToken)
+        {
+            if (_referenceLookupCacheService is not null)
+            {
+                var items = await _referenceLookupCacheService.GetItemsAsync("TaskKind", cancellationToken: cancellationToken);
+                return items
+                    .Select(static item => new CbsTableFilterOptionDefinition
+                    {
+                        Value = item.Id,
+                        Label = FormatTaskKindOptionLabel(item.Code, item.DisplayName)
+                    })
+                    .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
+                    .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                    .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                    .ToList();
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "TaskKind",
+                    Preset = "item",
+                    Sorts = ["name asc"],
+                    Limit = 500
+                },
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(static row => new CbsTableFilterOptionDefinition
+                {
+                    Value = row.GetValue("id"),
+                    Label = FormatTaskKindOptionLabel(
+                        row.GetValue("code")?.ToString(),
+                        row.GetValue("name")?.ToString())
+                })
+                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
+                .ToList();
+        }
+
+        private static string FormatTaskKindOptionLabel(string? code, string? name)
+        {
+            var normalizedCode = string.IsNullOrWhiteSpace(code) ? "ХХ" : code.Trim();
+            var normalizedName = name?.Trim() ?? string.Empty;
+            return string.IsNullOrWhiteSpace(normalizedName)
+                ? normalizedCode
+                : $"{normalizedCode} - {normalizedName}";
+        }
+
+        private static IReadOnlyList<CbsTableFilterOptionDefinition> NormalizeStageStatusOptions(
+            IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
+        {
+            var optionsById = statusOptions
+                .Where(static option => TryNormalizeLong(option.Value) is not null)
+                .GroupBy(static option => TryNormalizeLong(option.Value)!.Value)
+                .ToDictionary(static group => group.Key, static group => group.First());
+
+            var result = new List<CbsTableFilterOptionDefinition>
+            {
+                new()
+                {
+                    Value = null,
+                    Label = "Пустой"
+                }
+            };
+
+            foreach (var statusId in StageStatusIds)
+            {
+                if (optionsById.TryGetValue(statusId, out var option))
+                {
+                    result.Add(option);
+                }
+            }
+
+            return result;
+        }
+
+        private static long? TryNormalizeLong(object? value)
+        {
+            return value switch
+            {
+                long longValue => longValue,
+                int intValue => intValue,
+                decimal decimalValue => (long)decimalValue,
+                string text when long.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
         }
 
         private static string DescribeFilterValue(object? value)
@@ -1048,14 +1158,68 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 || e.PropertyName == nameof(ICbsTableRows<ReferenceDataRow>.TotalCount)
                 || e.PropertyName == nameof(ICbsTableRows<ReferenceDataRow>.Items))
             {
+                if (_viewportMutationDepth > 0)
+                {
+                    _deferredItemsRefresh = true;
+                    _deferredStateUpdate = true;
+                    AppendUiTrace($"STEP VM 09a defer-items {e.PropertyName}");
+                    return;
+                }
+
                 RefreshItemsSnapshot();
                 AppendUiTrace($"STEP VM 10 items-refreshed {e.PropertyName}");
                 OnPropertyChanged(nameof(Items));
                 AppendUiTrace($"STEP VM 11 items-notified {e.PropertyName}");
             }
 
+            if (_viewportMutationDepth > 0)
+            {
+                _deferredStateUpdate = true;
+                AppendUiTrace($"STEP VM 09b defer-state {e.PropertyName}");
+                return;
+            }
+
             UpdateStateProperties();
             AppendUiTrace($"STEP VM 12 state-updated {e.PropertyName}");
+        }
+
+        private void BeginViewportMutationBatch()
+        {
+            _viewportMutationDepth++;
+        }
+
+        private bool EndViewportMutationBatch()
+        {
+            if (_viewportMutationDepth > 0)
+            {
+                _viewportMutationDepth--;
+            }
+
+            if (_viewportMutationDepth > 0)
+            {
+                return false;
+            }
+
+            var shouldRefreshItems = _deferredItemsRefresh;
+            var shouldUpdateState = _deferredStateUpdate;
+            _deferredItemsRefresh = false;
+            _deferredStateUpdate = false;
+
+            if (shouldRefreshItems)
+            {
+                RefreshItemsSnapshot();
+                AppendUiTrace("STEP VM 10b batched-items-refreshed");
+                OnPropertyChanged(nameof(Items));
+                AppendUiTrace("STEP VM 11b batched-items-notified");
+            }
+
+            if (shouldRefreshItems || shouldUpdateState)
+            {
+                UpdateStateProperties();
+                AppendUiTrace("STEP VM 12b batched-state-updated");
+            }
+
+            return shouldRefreshItems || shouldUpdateState;
         }
 
         private void UpdateStateProperties()

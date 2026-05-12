@@ -64,6 +64,19 @@ namespace CbsContractsDesktopClient.Services
                 return [];
             }
 
+            if (string.Equals(apiField, "registry_quarter_or_registry_year", StringComparison.OrdinalIgnoreCase)
+                && filter.MatchMode == DataFilterMatchMode.Contains)
+            {
+                return BuildStageRegisterFilter(value);
+            }
+
+            if (string.Equals(filter.FieldKey, "szi", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(apiField, "tasks.task_kind_id", StringComparison.OrdinalIgnoreCase)
+                && filter.MatchMode == DataFilterMatchMode.Equals)
+            {
+                return BuildStageSziFilter(value);
+            }
+
             return filter.MatchMode switch
             {
                 DataFilterMatchMode.Equals => BuildFilterValue(filter, $"{apiField}__eq", value),
@@ -112,6 +125,84 @@ namespace CbsContractsDesktopClient.Services
             return string.IsNullOrWhiteSpace(text)
                 ? []
                 : new Dictionary<string, object?> { [key] = text };
+        }
+
+        private static Dictionary<string, object?> BuildStageRegisterFilter(object value)
+        {
+            var text = value.ToString()?.Trim();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return [];
+            }
+
+            if (!text.Contains('.', StringComparison.Ordinal))
+            {
+                return text.Length < 2
+                    ? BuildStageRegisterPart("registry_quarter__eq", text)
+                    : BuildStageRegisterPart("registry_year__eq", text);
+            }
+
+            var parts = text.Split('.', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length != 2
+                || string.IsNullOrWhiteSpace(parts[0])
+                || string.IsNullOrWhiteSpace(parts[1])
+                || !TryParseInt(parts[0], out var quarter)
+                || !TryParseInt(parts[1], out var year))
+            {
+                return [];
+            }
+
+            return new Dictionary<string, object?>
+            {
+                ["registry_quarter__eq"] = quarter,
+                ["registry_year__eq"] = year
+            };
+        }
+
+        private static Dictionary<string, object?> BuildStageRegisterPart(string key, string text)
+        {
+            return TryParseInt(text, out var value)
+                ? new Dictionary<string, object?> { [key] = value }
+                : [];
+        }
+
+        private static bool TryParseInt(string text, out int value)
+        {
+            return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static Dictionary<string, object?> BuildStageSziFilter(object value)
+        {
+            if (!TryConvertBoolean(value, out var isSzi))
+            {
+                return [];
+            }
+
+            return isSzi
+                ? new Dictionary<string, object?> { ["tasks.task_kind_id__eq"] = 10 }
+                : new Dictionary<string, object?>
+                {
+                    ["not"] = new Dictionary<string, object?>
+                    {
+                        ["tasks.task_kind_id__eq"] = 10
+                    }
+                };
+        }
+
+        private static bool TryConvertBoolean(object value, out bool booleanValue)
+        {
+            switch (value)
+            {
+                case bool boolValue:
+                    booleanValue = boolValue;
+                    return true;
+                case string text when bool.TryParse(text, out var parsedValue):
+                    booleanValue = parsedValue;
+                    return true;
+                default:
+                    booleanValue = false;
+                    return false;
+            }
         }
 
         private static Dictionary<string, object?> BuildNumeric(string key, object value)
@@ -307,13 +398,19 @@ namespace CbsContractsDesktopClient.Services
             if (list.Contains(null))
             {
                 var nonNull = list.Where(static item => item is not null).ToArray();
-                var group = new Dictionary<string, object?> { ["m"] = "or", [nullKey] = true };
-                if (nonNull.Length > 0)
+                if (nonNull.Length == 0)
                 {
-                    group[inKey] = nonNull;
+                    return new Dictionary<string, object?> { [nullKey] = true };
                 }
 
-                return new Dictionary<string, object?> { ["g"] = new[] { group } };
+                return new Dictionary<string, object?>
+                {
+                    ["or"] = new Dictionary<string, object?>
+                    {
+                        [inKey] = nonNull,
+                        [nullKey] = true
+                    }
+                };
             }
 
             return new Dictionary<string, object?> { [inKey] = list };

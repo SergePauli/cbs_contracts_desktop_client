@@ -239,6 +239,7 @@
                         SupportsRowSelection="True"
                         ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"
                         FilterRequested="ReferenceTableView_FilterRequested"
+                        RowSelectionChanged="ReferenceTableView_RowSelectionChanged"
                         SortRequested="ReferenceTableView_SortRequested"
                         TotalCount="{Binding TotalCount}"
                         RowDoubleTapped="ReferenceTableView_RowDoubleTapped"

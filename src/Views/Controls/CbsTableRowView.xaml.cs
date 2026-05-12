@@ -18,6 +18,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         private IReadOnlyList<CbsTableColumnDefinition> _currentColumns = Array.Empty<CbsTableColumnDefinition>();
         private readonly List<TextBlock> _textCells = [];
         private readonly List<Border> _skeletonCells = [];
+        private readonly List<Border> _badgeCells = [];
+        private readonly List<TextBlock> _badgeTexts = [];
+        private bool _isConfiguring;
 
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
@@ -134,17 +137,32 @@ namespace CbsContractsDesktopClient.Views.Controls
             double rowHeight,
             CbsTableRowStyleKey rowStyleKey)
         {
-            Row = row;
-            Columns = columns;
-            RowHeight = rowHeight;
-            RowStyleKey = rowStyleKey;
-            Density = ResolveDensity(rowHeight);
+            _isConfiguring = true;
+            try
+            {
+                Row = row;
+                Columns = columns;
+                RowHeight = rowHeight;
+                RowStyleKey = rowStyleKey;
+                Density = ResolveDensity(rowHeight);
+            }
+            finally
+            {
+                _isConfiguring = false;
+            }
+
             RefreshRow();
         }
 
         private static void OnStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((CbsTableRowView)d).RefreshRow();
+            var rowView = (CbsTableRowView)d;
+            if (rowView._isConfiguring)
+            {
+                return;
+            }
+
+            rowView.RefreshRow();
         }
 
         private void RefreshRow()
@@ -166,7 +184,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             if (ReferenceEquals(_currentColumns, Columns)
                 && _textCells.Count == Columns.Count
-                && _skeletonCells.Count == Columns.Count)
+                && _skeletonCells.Count == Columns.Count
+                && _badgeCells.Count == Columns.Count
+                && _badgeTexts.Count == Columns.Count)
             {
                 return;
             }
@@ -174,6 +194,8 @@ namespace CbsContractsDesktopClient.Views.Controls
             _currentColumns = Columns;
             _textCells.Clear();
             _skeletonCells.Clear();
+            _badgeCells.Clear();
+            _badgeTexts.Clear();
             RowGrid.Children.Clear();
             RowGrid.ColumnDefinitions.Clear();
 
@@ -184,13 +206,18 @@ namespace CbsContractsDesktopClient.Views.Controls
                 var cellHost = new Grid();
                 var textCell = CreateTextCell();
                 var skeletonCell = CreateSkeletonCell();
+                var badgeText = CreateBadgeText();
+                var badgeCell = CreateBadgeCell(badgeText);
                 ApplyColumnAlignment(textCell, Columns[index]);
 
                 _textCells.Add(textCell);
                 _skeletonCells.Add(skeletonCell);
+                _badgeCells.Add(badgeCell);
+                _badgeTexts.Add(badgeText);
 
                 cellHost.Children.Add(textCell);
                 cellHost.Children.Add(skeletonCell);
+                cellHost.Children.Add(badgeCell);
 
                 Grid.SetColumn(cellHost, index);
                 RowGrid.Children.Add(cellHost);
@@ -229,12 +256,29 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 _textCells[index].Visibility = isPlaceholder ? Visibility.Collapsed : Visibility.Visible;
                 _skeletonCells[index].Visibility = isPlaceholder ? Visibility.Visible : Visibility.Collapsed;
+                _badgeCells[index].Visibility = Visibility.Collapsed;
 
-                if (!isPlaceholder)
+                if (isPlaceholder)
+                {
+                    _textCells[index].Text = string.Empty;
+                }
+                else
                 {
                     var valueKey = Columns[index].DisplayField ?? Columns[index].ApiField ?? Columns[index].FieldKey;
                     var value = Row?.GetValue(valueKey);
-                    ApplyBodyContent(_textCells[index], Columns[index], Row, value);
+                    if (IsStatusBadgeTemplate(Columns[index]))
+                    {
+                        ApplyStatusBadgeContent(_badgeCells[index], _badgeTexts[index], Row, value);
+                        _textCells[index].Text = string.Empty;
+                        _textCells[index].Visibility = Visibility.Collapsed;
+                        _badgeCells[index].Visibility = string.IsNullOrWhiteSpace(_badgeTexts[index].Text)
+                            ? Visibility.Collapsed
+                            : Visibility.Visible;
+                    }
+                    else
+                    {
+                        ApplyBodyContent(_textCells[index], Columns[index], Row, value);
+                    }
                 }
             }
         }
@@ -311,6 +355,39 @@ namespace CbsContractsDesktopClient.Views.Controls
                 "StageDuration" => FormatStageDuration(row, value),
                 "StageSzi" => HasStageTaskKind(row, 10) ? "\u2713" : string.Empty,
                 _ => null
+            };
+        }
+
+        private static bool IsStatusBadgeTemplate(CbsTableColumnDefinition column)
+        {
+            return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void ApplyStatusBadgeContent(Border badgeCell, TextBlock badgeText, ReferenceDataRow? row, object? value)
+        {
+            var statusName = FirstText(value, row?.GetValue("status.name"));
+            if (string.IsNullOrWhiteSpace(statusName))
+            {
+                badgeText.Text = string.Empty;
+                return;
+            }
+
+            var statusId = TryGetLong(row?.GetValue("status.id")) ?? TryGetLong(row?.GetValue("status_id"));
+            var colors = ResolveStatusBadgeColors(statusId);
+            badgeText.Text = statusName;
+            badgeText.Foreground = new SolidColorBrush(colors.Foreground);
+            badgeCell.Background = new SolidColorBrush(colors.Background);
+        }
+
+        private static (Color Background, Color Foreground) ResolveStatusBadgeColors(long? statusId)
+        {
+            return statusId switch
+            {
+                4 or 5 => (Color.FromArgb(255, 201, 233, 212), Color.FromArgb(255, 64, 64, 64)),
+                6 => (Color.FromArgb(255, 255, 205, 210), Color.FromArgb(255, 64, 64, 64)),
+                1 or 2 => (Color.FromArgb(254, 194, 237, 246), Color.FromArgb(255, 64, 64, 64)),
+                3 => (Color.FromArgb(254, 246, 227, 194), Color.FromArgb(255, 64, 64, 64)),
+                _ => (Color.FromArgb(255, 222, 226, 230), Color.FromArgb(255, 64, 64, 64))
             };
         }
 
@@ -644,6 +721,34 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
         }
 
+        private static TextBlock CreateBadgeText()
+        {
+            return new TextBlock
+            {
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Text = string.Empty,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+        }
+
+        private static Border CreateBadgeCell(TextBlock badgeText)
+        {
+            return new Border
+            {
+                Margin = new Thickness(6, 2, 6, 2),
+                Padding = new Thickness(6, 1, 6, 1),
+                CornerRadius = new CornerRadius(4),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 120,
+                Child = badgeText,
+                Visibility = Visibility.Collapsed
+            };
+        }
+
         private static Border CreateSkeletonCell()
         {
             return new Border
@@ -693,6 +798,16 @@ namespace CbsContractsDesktopClient.Views.Controls
                     metrics.HorizontalPadding,
                     metrics.SkeletonVerticalMargin);
                 skeletonCell.Height = metrics.SkeletonHeight;
+            }
+
+            foreach (var badgeCell in _badgeCells)
+            {
+                badgeCell.Margin = new Thickness(metrics.HorizontalPadding, 2, metrics.HorizontalPadding, 2);
+            }
+
+            foreach (var badgeText in _badgeTexts)
+            {
+                badgeText.FontSize = Math.Max(11, metrics.FontSize - 1);
             }
         }
 

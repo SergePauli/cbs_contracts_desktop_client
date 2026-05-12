@@ -285,7 +285,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
                 [
                     CreateStageNumberColumn("id", "ID", "id", "4rem", immutable: true),
                     CreateStageTaskColumn(),
-                    CreateStageTextColumn("name", "Номер", "contract.name", "contract.name", "contract.name", "5rem", immutable: true),
+                    CreateStageTextColumn("name", "Номер", "name", "name", "name", "5rem", immutable: true),
                     CreateStageDateColumn("start_at", "Старт", "start_at", "start_at", "6rem", immutable: true),
                     CreateStageDateColumn("deadline_at", "Срок", "deadline_at", "deadline_at", "6rem", immutable: true),
                     CreateStageTextColumn("contragent", "Контрагент", "contract.contragent.name", "contract.contragent.org.name_or_contract.contragent.org.full_name", "contract.contragent.org.name", "19rem", immutable: true),
@@ -305,8 +305,8 @@ namespace CbsContractsDesktopClient.Services.Workspace
                     CreateStageDateColumn("invoice_at", "ДСчета", "invoice_at", "invoice_at", "6rem"),
                     CreateStageDateColumn("payment_deadline_at", "СрокОп", "payment_deadline_at", "payment_deadline_at", "6rem"),
                     CreateStageDateColumn("payment_at", "Оплата", "payment_at", "payment_at", "6rem"),
-                    CreateStageBooleanColumn("szi", "СЗИ", "tasks.task_kind_id", "szi", "szi", bodyTemplateKey: "StageSzi"),
-                    CreateStageTextColumn("register", "Реестр", "register", "register", "register", "5rem", bodyTemplateKey: "StageRegister")
+                    CreateStageBooleanColumn("szi", "СЗИ", "tasks.task_kind_id", "tasks.task_kind_id", "tasks.task_kind_id", bodyTemplateKey: "StageSzi"),
+                    CreateStageTextColumn("register", "Реестр", "register", "registry_quarter_or_registry_year", "registry_year", "5rem", bodyTemplateKey: "StageRegister")
                 ]
             };
         }
@@ -497,6 +497,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
                 DefaultWidth = "7rem",
                 Alignment = CbsTableColumnAlignment.Center,
                 IsImmutable = true,
+                BodyTemplateKey = "StatusBadge",
                 IsFilterable = true,
                 Filter = new CbsTableColumnFilterDefinition
                 {

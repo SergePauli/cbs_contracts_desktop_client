@@ -150,4 +150,16 @@ public sealed class CbsTableViewTests
         Assert.Contains("RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));", code);
         Assert.Contains("public sealed class CbsTableRowDoubleTappedEventArgs : EventArgs", code);
     }
+
+    [Fact]
+    public void CbsTableView_TogglesSingleRowSelectionAndEmitsSelectionChanged()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("public event EventHandler<CbsTableRowSelectionChangedEventArgs>? RowSelectionChanged;", code);
+        Assert.Contains("if (_selectedIndexes.Contains(rowIndex))", code);
+        Assert.Contains("SelectedItem = null;", code);
+        Assert.Contains("new CbsTableRowSelectionChangedEventArgs(null, rowIndex, isSelected: false)", code);
+        Assert.Contains("public sealed class CbsTableRowSelectionChangedEventArgs : EventArgs", code);
+    }
 }

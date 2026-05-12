@@ -35,11 +35,138 @@ public class DataQueryStateBuilderTests
             }));
 
         Assert.Equal("proj", payload["name__cnt"]);
-        var groups = Assert.IsType<Dictionary<string, object?>[]>(payload["g"]);
-        Assert.Single(groups);
-        Assert.Equal("or", groups[0]["m"]);
-        Assert.Equal(true, groups[0]["status__null"]);
-        Assert.Equal(new object?[] { 1, 2 }, groups[0]["status__in"]);
+        var group = Assert.IsType<Dictionary<string, object?>>(payload["or"]);
+        Assert.Equal(true, group["status__null"]);
+        Assert.Equal(new object?[] { 1, 2 }, group["status__in"]);
+        Assert.DoesNotContain("g", payload.Keys);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsShortStageRegisterFilterToRegistryQuarter()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "register",
+                MatchMode = DataFilterMatchMode.Contains,
+                Value = "1"
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["register"] = "registry_quarter_or_registry_year"
+            }));
+
+        Assert.Equal(1, payload["registry_quarter__eq"]);
+        Assert.DoesNotContain("registry_year__eq", payload.Keys);
+        Assert.DoesNotContain("registry_quarter_or_registry_year__cnt", payload.Keys);
+        Assert.DoesNotContain("register__cnt", payload.Keys);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsLongStageRegisterFilterToRegistryYear()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "register",
+                MatchMode = DataFilterMatchMode.Contains,
+                Value = "2025"
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["register"] = "registry_quarter_or_registry_year"
+            }));
+
+        Assert.Equal(2025, payload["registry_year__eq"]);
+        Assert.DoesNotContain("registry_quarter__eq", payload.Keys);
+        Assert.DoesNotContain("registry_quarter_or_registry_year__cnt", payload.Keys);
+        Assert.DoesNotContain("register__cnt", payload.Keys);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsDottedStageRegisterFilterToRegistryQuarterAndYear()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "register",
+                MatchMode = DataFilterMatchMode.Contains,
+                Value = "1.2025"
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["register"] = "registry_quarter_or_registry_year"
+            }));
+
+        Assert.Equal(1, payload["registry_quarter__eq"]);
+        Assert.Equal(2025, payload["registry_year__eq"]);
+        Assert.DoesNotContain("registry_quarter_or_registry_year__cnt", payload.Keys);
+        Assert.DoesNotContain("register__cnt", payload.Keys);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsPositiveStageSziFilterToTaskKindId()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "szi",
+                MatchMode = DataFilterMatchMode.Equals,
+                Value = true
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["szi"] = "tasks.task_kind_id"
+            }));
+
+        Assert.Equal(10, payload["tasks.task_kind_id__eq"]);
+        Assert.DoesNotContain("szi__eq", payload.Keys);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsNegativeStageSziFilterToNotTaskKindIdGroup()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "szi",
+                MatchMode = DataFilterMatchMode.Equals,
+                Value = false
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["szi"] = "tasks.task_kind_id"
+            }));
+
+        var notGroup = Assert.IsType<Dictionary<string, object?>>(payload["not"]);
+        Assert.Equal(10, notGroup["tasks.task_kind_id__eq"]);
+        Assert.DoesNotContain("tasks.task_kind_id__not_eq", payload.Keys);
+        Assert.DoesNotContain("szi__eq", payload.Keys);
     }
 
     [Fact]
@@ -85,6 +212,31 @@ public class DataQueryStateBuilderTests
             }));
 
         Assert.Equal(new object?[] { 2, 5, 7 }, payload["department_id__in"]);
+    }
+
+    [Fact]
+    public void BuildFilters_MapsNullOnlyInCriteriaToNullFilter()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "status",
+                MatchMode = DataFilterMatchMode.In,
+                Value = new object?[] { null }
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["status"] = "status_id"
+            }));
+
+        Assert.Equal(true, payload["status_id__null"]);
+        Assert.DoesNotContain("g", payload.Keys);
+        Assert.DoesNotContain("or", payload.Keys);
     }
 
     [Fact]

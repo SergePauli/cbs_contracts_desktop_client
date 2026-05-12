@@ -44,6 +44,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _isViewportSubscribed;
         private bool _isHolidayRecalcInProgress;
         private bool _isFnsCompareInProgress;
+        private const int CommersDepartmentId = 2;
         private static readonly ReferenceDefinition StageEditDefinition = new()
         {
             Route = "/internal/Stage",
@@ -477,6 +478,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             await _viewModel.LoadMoreAsync();
         }
 
+        private void ReferenceTableView_RowSelectionChanged(object sender, CbsTableRowSelectionChangedEventArgs e)
+        {
+            if (!e.IsSelected)
+            {
+                _viewModel.SelectedRow = null;
+            }
+        }
+
         private async void ReferenceTableView_RowDoubleTapped(object sender, CbsTableRowDoubleTappedEventArgs e)
         {
             _viewModel.SelectedRow = e.Row;
@@ -678,6 +687,14 @@ namespace CbsContractsDesktopClient.Views.Shell
                 StringComparison.OrdinalIgnoreCase);
         }
 
+        private bool IsStagesTableActive()
+        {
+            return string.Equals(
+                _viewModel.CurrentTablePage?.Route,
+                "/stages",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         private bool IsContractDetailTableActive()
         {
             return string.Equals(
@@ -692,6 +709,12 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task ShowReferenceEditDialogAsync(bool isCreateMode)
         {
+            if (!isCreateMode && IsStagesTableActive())
+            {
+                await ShowStageEditDialogAsync();
+                return;
+            }
+
             if (_viewModel.CurrentReference is null)
             {
                 return;
@@ -824,6 +847,95 @@ namespace CbsContractsDesktopClient.Views.Shell
             ShowSuccessNotification(
                 "Ревизия сохранена",
                 BuildReferenceNotificationMessage(RevisionEditDefinition.Title, TryGetSelectedRowId(savedRow)));
+        }
+
+        private async Task ShowStageEditDialogAsync()
+        {
+            if (_viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            if (_userService.CurrentUser?.DepartmentId != CommersDepartmentId)
+            {
+                await ShowErrorDialogAsync(
+                    "Редактирование этапа",
+                    "Диалог редактирования этапа для вашего отдела пока не реализован.");
+                return;
+            }
+
+            await ShowStageCommerEditDialogAsync();
+        }
+
+        private async Task ShowStageCommerEditDialogAsync()
+        {
+            var sourceRow = await LoadStageEditRowAsync();
+            if (sourceRow is null)
+            {
+                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                return;
+            }
+
+            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
+            StageCommerEditDialog dialog;
+            try
+            {
+                dialog = new StageCommerEditDialog(
+                    sourceRow,
+                    _viewModel.SelectedRow,
+                    _contractWorkflowStore.Contract,
+                    statusOptions,
+                    taskKindItems,
+                    _userService.CurrentUser?.ProfileId)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            ReferenceDataRow? savedRow = null;
+            dialog.PrimaryButtonClick += async (_, args) =>
+            {
+                var deferral = args.GetDeferral();
+                try
+                {
+                    if (!dialog.Validate())
+                    {
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    savedRow = await _referenceCrudService.UpdateAsync(
+                        StageEditDefinition,
+                        dialog.BuildPayload());
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+                finally
+                {
+                    deferral.Complete();
+                }
+            };
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary || savedRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
+            await _viewModel.ReloadCurrentReferenceAsync();
+            ShowSuccessNotification(
+                "Этап сохранён",
+                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
         }
 
         private async Task DeleteSelectedRowAsync()
@@ -2403,6 +2515,35 @@ namespace CbsContractsDesktopClient.Views.Shell
                 new DataQueryRequest
                 {
                     Model = "Employee",
+                    Preset = "edit",
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["id__eq"] = id.Value
+                    },
+                    Limit = 1
+                },
+                cancellationToken);
+
+            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
+        }
+
+        private async Task<ReferenceDataRow?> LoadStageEditRowAsync(CancellationToken cancellationToken = default)
+        {
+            if (_viewModel.SelectedRow is null)
+            {
+                return null;
+            }
+
+            var id = TryGetSelectedRowId(_viewModel.SelectedRow);
+            if (id is null)
+            {
+                return null;
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "Stage",
                     Preset = "edit",
                     Filters = new Dictionary<string, object?>
                     {

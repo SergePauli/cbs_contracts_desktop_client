@@ -39,6 +39,7 @@ public sealed class ContentHostViewTests
 
         Assert.Contains("MultiSelectOptionsSources=\"{Binding CurrentFilterOptionsSources}\"", xaml);
         Assert.Contains("RowDoubleTapped=\"ReferenceTableView_RowDoubleTapped\"", xaml);
+        Assert.Contains("RowSelectionChanged=\"ReferenceTableView_RowSelectionChanged\"", xaml);
     }
 
     [Fact]
@@ -281,11 +282,34 @@ public sealed class ContentHostViewTests
         var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
 
         Assert.Contains("private async void ReferenceTableView_RowDoubleTapped(object sender, CbsTableRowDoubleTappedEventArgs e)", codeBehind);
+        Assert.Contains("private void ReferenceTableView_RowSelectionChanged(object sender, CbsTableRowSelectionChangedEventArgs e)", codeBehind);
+        Assert.Contains("_viewModel.SelectedRow = null;", codeBehind);
         Assert.Contains("_viewModel.SelectedRow = e.Row;", codeBehind);
         Assert.Contains("if (IsInternEditBlocked())", codeBehind);
         Assert.Contains("await ShowReferenceEditDialogAsync(isCreateMode: false);", codeBehind);
         Assert.Contains("private bool IsInternEditBlocked()", codeBehind);
         Assert.Contains("string.Equals(role, \"intern\", System.StringComparison.OrdinalIgnoreCase)", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_OpensCommercialStageEditDialog_ForStagesTable()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("private const int CommersDepartmentId = 2;", codeBehind);
+        Assert.Contains("private bool IsStagesTableActive()", codeBehind);
+        Assert.Contains("if (!isCreateMode && IsStagesTableActive())", codeBehind);
+        Assert.Contains("await ShowStageEditDialogAsync();", codeBehind);
+        Assert.Contains("_userService.CurrentUser?.DepartmentId != CommersDepartmentId", codeBehind);
+        Assert.Contains("await ShowStageCommerEditDialogAsync();", codeBehind);
+        Assert.Contains("new StageCommerEditDialog(", codeBehind);
+        Assert.Contains("_viewModel.SelectedRow,", codeBehind);
+        Assert.Contains("_contractWorkflowStore.Contract,", codeBehind);
+        Assert.Contains("LoadStageEditRowAsync", codeBehind);
+        Assert.Contains("Model = \"Stage\"", codeBehind);
+        Assert.Contains("Preset = \"edit\"", codeBehind);
+        Assert.Contains("_referenceCrudService.UpdateAsync(", codeBehind);
+        Assert.Contains("StageEditDefinition", codeBehind);
     }
 
     [Fact]

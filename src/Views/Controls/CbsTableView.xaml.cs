@@ -195,6 +195,8 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         public event EventHandler<CbsTableFilterRequestedEventArgs>? FilterRequested;
 
+        public event EventHandler<CbsTableRowSelectionChangedEventArgs>? RowSelectionChanged;
+
         public event EventHandler<CbsTableRowDoubleTappedEventArgs>? RowDoubleTapped;
 
         public void ClearFilterInputs()
@@ -803,12 +805,30 @@ namespace CbsContractsDesktopClient.Views.Controls
                 {
                     _selectedIndexes.Remove(rowIndex);
                 }
+
+                RowSelectionChanged?.Invoke(
+                    this,
+                    new CbsTableRowSelectionChangedEventArgs(rowView.Row, rowIndex, isSelected: _selectedIndexes.Contains(rowIndex)));
             }
             else
             {
+                if (_selectedIndexes.Contains(rowIndex))
+                {
+                    _selectedIndexes.Clear();
+                    SelectedItem = null;
+                    RowSelectionChanged?.Invoke(
+                        this,
+                        new CbsTableRowSelectionChangedEventArgs(null, rowIndex, isSelected: false));
+                    UpdateVisibleRowSelectionStates();
+                    return;
+                }
+
                 _selectedIndexes.Clear();
                 _selectedIndexes.Add(rowIndex);
                 SelectedItem = rowView.Row;
+                RowSelectionChanged?.Invoke(
+                    this,
+                    new CbsTableRowSelectionChangedEventArgs(rowView.Row, rowIndex, isSelected: true));
             }
 
             UpdateVisibleRowSelectionStates();
@@ -830,6 +850,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             _selectedIndexes.Add(rowIndex);
             SelectedItem = rowView.Row;
             UpdateVisibleRowSelectionStates();
+            RowSelectionChanged?.Invoke(
+                this,
+                new CbsTableRowSelectionChangedEventArgs(rowView.Row, rowIndex, isSelected: true));
 
             RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));
         }
@@ -2226,5 +2249,21 @@ namespace CbsContractsDesktopClient.Views.Controls
         public ReferenceDataRow Row { get; }
 
         public int RowIndex { get; }
+    }
+
+    public sealed class CbsTableRowSelectionChangedEventArgs : EventArgs
+    {
+        public CbsTableRowSelectionChangedEventArgs(ReferenceDataRow? row, int rowIndex, bool isSelected)
+        {
+            Row = row;
+            RowIndex = rowIndex;
+            IsSelected = isSelected;
+        }
+
+        public ReferenceDataRow? Row { get; }
+
+        public int RowIndex { get; }
+
+        public bool IsSelected { get; }
     }
 }

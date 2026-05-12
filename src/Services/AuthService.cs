@@ -61,6 +61,7 @@ namespace CbsContractsDesktopClient.Services
                     User = new User
                     {
                         Id = authResponse.User.Id,
+                        ProfileId = authResponse.User.GetProfileId(),
                         Username = authResponse.User.Name ?? username,
                         FullName = authResponse.User.Name ?? username,
                         Role = authResponse.User.Role ?? string.Empty,
@@ -182,6 +183,26 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return string.Empty;
+        }
+
+        public int? GetProfileId()
+        {
+            if (TryGetInt32("profile_id", out var profileId))
+            {
+                return profileId;
+            }
+
+            if (TryGetNestedProperty("profile", "id", out profileId))
+            {
+                return profileId;
+            }
+
+            if (TryGetFirstArrayNestedProperty("profiles", "id", out profileId))
+            {
+                return profileId;
+            }
+
+            return null;
         }
 
         private bool TryGetInt32(string key, out int value)
