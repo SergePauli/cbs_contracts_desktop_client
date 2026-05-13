@@ -21,31 +21,37 @@
     <Compile Remove="tmpbuild_*\**\*.cs" />
     <Compile Remove="tmpverify\**\*.cs" />
     <Compile Remove="obj_verify*\**\*.cs" />
+    <Compile Remove="src\Pauli.WinUiKit\**\*.cs" />
     <EmbeddedResource Remove="tests\**\*" />
     <EmbeddedResource Remove="tempobj\**\*" />
     <EmbeddedResource Remove="tmpbuild_*\**\*" />
     <EmbeddedResource Remove="tmpverify\**\*" />
     <EmbeddedResource Remove="obj_verify*\**\*" />
+    <EmbeddedResource Remove="src\Pauli.WinUiKit\**\*" />
     <None Remove="tests\**\*" />
     <None Remove="tempobj\**\*" />
     <None Remove="tmpbuild_*\**\*" />
     <None Remove="tmpverify\**\*" />
     <None Remove="obj_verify*\**\*" />
+    <None Remove="src\Pauli.WinUiKit\**\*" />
     <Page Remove="tests\**\*" />
     <Page Remove="tempobj\**\*" />
     <Page Remove="tmpbuild_*\**\*" />
     <Page Remove="tmpverify\**\*" />
     <Page Remove="obj_verify*\**\*" />
+    <Page Remove="src\Pauli.WinUiKit\**\*" />
     <Content Remove="tests\**\*" />
     <Content Remove="tempobj\**\*" />
     <Content Remove="tmpbuild_*\**\*" />
     <Content Remove="tmpverify\**\*" />
     <Content Remove="obj_verify*\**\*" />
+    <Content Remove="src\Pauli.WinUiKit\**\*" />
     <PRIResource Remove="tests\**\*" />
     <PRIResource Remove="tempobj\**\*" />
     <PRIResource Remove="tmpbuild_*\**\*" />
     <PRIResource Remove="tmpverify\**\*" />
     <PRIResource Remove="obj_verify*\**\*" />
+    <PRIResource Remove="src\Pauli.WinUiKit\**\*" />
   </ItemGroup>
 
   <ItemGroup>
@@ -63,5 +69,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
     <PackageReference Include="WinUI.TableView" Version="1.4.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="src\Pauli.WinUiKit\Pauli.WinUiKit.csproj" />
   </ItemGroup>
 </Project>

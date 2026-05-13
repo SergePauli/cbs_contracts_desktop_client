@@ -9,7 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
-using Windows.System;
+using Pauli.WinUiKit.Controls;
 using Windows.UI;
 
 namespace CbsContractsDesktopClient.Views.Functional
@@ -26,18 +26,16 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly IReadOnlyList<StageTaskOption> _taskOptions;
         private readonly List<StageTaskRecord> _originalTasks;
         private readonly int? _profileId;
-        private readonly DialogDateEditor _startAtEditor = new();
-        private readonly DialogDateEditor _deadlineAtEditor = new();
-        private readonly DialogDateEditor _paymentDeadlineAtEditor = new();
-        private readonly DialogDateEditor _closedAtEditor = new();
+        private readonly CalendarInput _startAtEditor = new();
+        private readonly CalendarInput _deadlineAtEditor = new();
+        private readonly CalendarInput _paymentDeadlineAtEditor = new();
+        private readonly CalendarInput _closedAtEditor = new();
         private readonly TextBox _durationBox = BuildNumberTextBox();
         private readonly TextBox _paymentDurationBox = BuildNumberTextBox();
         private readonly ComboBox _deadlineKindBox = new();
         private readonly ComboBox _paymentDeadlineKindBox = new();
         private readonly ComboBox _statusBox = new();
-        private readonly Button _tasksButton = new();
-        private readonly TextBox _tasksSearchBox = new();
-        private readonly StackPanel _tasksOptionsHost = new();
+        private readonly MultiSelect _tasksMultiSelect = new();
         private readonly HashSet<long> _selectedTaskKindIds = [];
         private readonly TextBox _commentBox = new();
         private readonly TextBlock _errorText = new();
@@ -288,10 +286,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            _startAtEditor.SetDate(ParseDate(_sourceRow.GetValue("start_at")), notify: false);
-            _deadlineAtEditor.SetDate(ParseDate(_sourceRow.GetValue("deadline_at")), notify: false);
-            _paymentDeadlineAtEditor.SetDate(ParseDate(_sourceRow.GetValue("payment_deadline_at")), notify: false);
-            _closedAtEditor.SetDate(ParseDate(_sourceRow.GetValue("closed_at")), notify: false);
+            _startAtEditor.Date = ParseDate(_sourceRow.GetValue("start_at"));
+            _deadlineAtEditor.Date = ParseDate(_sourceRow.GetValue("deadline_at"));
+            _paymentDeadlineAtEditor.Date = ParseDate(_sourceRow.GetValue("payment_deadline_at"));
+            _closedAtEditor.Date = ParseDate(_sourceRow.GetValue("closed_at"));
             _durationBox.Text = _sourceRow.GetValue("duration")?.ToString() ?? string.Empty;
             _paymentDurationBox.Text = _sourceRow.GetValue("payment_duration")?.ToString() ?? string.Empty;
 
@@ -400,7 +398,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            _startAtEditor.SetDate(nextStart);
+            _startAtEditor.Date = nextStart;
             if (GetSelectedStatusOption()?.Value is null)
             {
                 SelectStatus(StatusPending);
@@ -415,15 +413,15 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             if (deadlineKind == "calendar_days" && duration is int calendarDuration && startAt is not null)
             {
-                _deadlineAtEditor.SetDate(startAt.Value.Date.AddDays(calendarDuration));
+                _deadlineAtEditor.Date = startAt.Value.Date.AddDays(calendarDuration);
             }
             else if (deadlineKind == "working_days" && duration is int workingDuration && startAt is not null)
             {
-                _deadlineAtEditor.SetDate(AddWorkingDaysToDate(startAt.Value.Date, workingDuration));
+                _deadlineAtEditor.Date = AddWorkingDaysToDate(startAt.Value.Date, workingDuration);
             }
             else if ((duration is null || startAt is null) && deadlineKind != "calendar_plan")
             {
-                _deadlineAtEditor.SetDate(null);
+                _deadlineAtEditor.Date = null;
             }
         }
 
@@ -435,11 +433,11 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             if (paymentKind == "c_days" && paymentDuration is int calendarDuration && fundedAt is not null)
             {
-                _paymentDeadlineAtEditor.SetDate(fundedAt.Value.Date.AddDays(calendarDuration));
+                _paymentDeadlineAtEditor.Date = fundedAt.Value.Date.AddDays(calendarDuration);
             }
             else if (paymentKind == "w_days" && paymentDuration is int workingDuration && fundedAt is not null)
             {
-                _paymentDeadlineAtEditor.SetDate(AddWorkingDaysToDate(fundedAt.Value.Date, workingDuration));
+                _paymentDeadlineAtEditor.Date = AddWorkingDaysToDate(fundedAt.Value.Date, workingDuration);
             }
             else if (string.IsNullOrWhiteSpace(paymentKind) || paymentKind == "c_plan")
             {
@@ -452,7 +450,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 && fundedAt is not null
                 && string.IsNullOrWhiteSpace(_sourceRow.GetValue("payment_deadline_at")?.ToString()))
             {
-                _paymentDeadlineAtEditor.SetDate(null);
+                _paymentDeadlineAtEditor.Date = null;
             }
         }
 
@@ -460,7 +458,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         {
             if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtEditor.Date is null)
             {
-                _closedAtEditor.SetDate(DateTimeOffset.Now);
+                _closedAtEditor.Date = DateTimeOffset.Now;
             }
         }
 
@@ -526,123 +524,25 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private UIElement BuildTasksMultiSelectEditor()
         {
-            _tasksButton.HorizontalAlignment = HorizontalAlignment.Stretch;
-            _tasksButton.MinHeight = 32;
-            _tasksButton.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-            UpdateTasksButtonContent();
-
-            _tasksSearchBox.PlaceholderText = "Поиск";
-            _tasksSearchBox.Margin = new Thickness(8, 8, 8, 4);
-            _tasksSearchBox.TextChanged += (_, _) => RebuildTasksMultiSelectOptions();
-
-            _tasksOptionsHost.Spacing = 1;
-
-            var flyoutContent = new StackPanel
-            {
-                Width = 420,
-                Spacing = 2
-            };
-            flyoutContent.Children.Add(_tasksSearchBox);
-            flyoutContent.Children.Add(new ScrollViewer
-            {
-                MaxHeight = 220,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = _tasksOptionsHost
-            });
-
-            _tasksButton.Flyout = new Flyout
-            {
-                Content = flyoutContent
-            };
-            RebuildTasksMultiSelectOptions();
-            return _tasksButton;
-        }
-
-        private void RebuildTasksMultiSelectOptions()
-        {
-            _tasksOptionsHost.Children.Clear();
-
-            var searchText = _tasksSearchBox.Text?.Trim() ?? string.Empty;
-            var options = _taskOptions
-                .Where(option => string.IsNullOrWhiteSpace(searchText)
-                    || option.Name.Contains(searchText, StringComparison.CurrentCultureIgnoreCase))
+            _tasksMultiSelect.Options = _taskOptions;
+            _tasksMultiSelect.Value = _taskOptions
+                .Where(option => _selectedTaskKindIds.Contains(option.TaskKindId))
                 .ToList();
-
-            if (options.Count == 0)
-            {
-                _tasksOptionsHost.Children.Add(new TextBlock
-                {
-                    Text = _taskOptions.Count == 0 ? "Нет доступных опций" : "Ничего не найдено",
-                    Margin = new Thickness(8, 4, 8, 6),
-                    Foreground = Application.Current.Resources["ShellSecondaryTextBrush"] as Brush,
-                    TextWrapping = TextWrapping.Wrap
-                });
-                return;
-            }
-
-            foreach (var option in options)
-            {
-                var checkBox = new CheckBox
-                {
-                    Tag = option,
-                    IsChecked = _selectedTaskKindIds.Contains(option.TaskKindId),
-                    MinHeight = 24,
-                    Padding = new Thickness(0),
-                    Margin = new Thickness(8, 1, 8, 1)
-                };
-                checkBox.Content = new TextBlock
-                {
-                    Text = option.Name,
-                    Margin = new Thickness(2, 0, 0, 0),
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                };
-                checkBox.Checked += OnTaskOptionChanged;
-                checkBox.Unchecked += OnTaskOptionChanged;
-                _tasksOptionsHost.Children.Add(checkBox);
-            }
+            _tasksMultiSelect.Display = "chip";
+            _tasksMultiSelect.MaxSelectedLabels = 4;
+            _tasksMultiSelect.Placeholder = "Выбрать";
+            _tasksMultiSelect.Tooltip = "Прочие задачи";
+            _tasksMultiSelect.SelectionChanged += OnTaskSelectionChanged;
+            return _tasksMultiSelect;
         }
 
-        private void OnTaskOptionChanged(object sender, RoutedEventArgs e)
+        private void OnTaskSelectionChanged(object? sender, MultiSelectChangedEventArgs e)
         {
-            if (sender is not CheckBox { Tag: StageTaskOption option } checkBox)
-            {
-                return;
-            }
-
-            if (checkBox.IsChecked == true)
+            _selectedTaskKindIds.Clear();
+            foreach (var option in e.Value.OfType<StageTaskOption>())
             {
                 _selectedTaskKindIds.Add(option.TaskKindId);
             }
-            else
-            {
-                _selectedTaskKindIds.Remove(option.TaskKindId);
-            }
-
-            UpdateTasksButtonContent();
-        }
-
-        private void UpdateTasksButtonContent()
-        {
-            var selectedText = string.Join(
-                "; ",
-                _taskOptions
-                    .Where(option => _selectedTaskKindIds.Contains(option.TaskKindId))
-                    .Select(static option => option.Name));
-
-            _tasksButton.Content = new Grid
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = string.IsNullOrWhiteSpace(selectedText) ? "Выбрать" : selectedText,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        TextWrapping = TextWrapping.NoWrap,
-                        HorizontalAlignment = HorizontalAlignment.Stretch
-                    }
-                }
-            };
         }
 
         private IReadOnlyList<Dictionary<string, object?>> BuildTaskAttributesDelta()
@@ -804,14 +704,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             return (_statusBox.SelectedItem as ComboBoxItem)?.Tag as StageSelectOption;
         }
 
-        private static void ConfigureCombo(ComboBox comboBox, IReadOnlyList<StageSelectOption> options, long? value)
-        {
-            comboBox.DisplayMemberPath = nameof(StageSelectOption.Label);
-            comboBox.ItemsSource = options;
-            comboBox.SelectedItem = options.FirstOrDefault(option => option.Value == value)
-                ?? options.FirstOrDefault(static option => option.Value is null);
-            comboBox.HorizontalAlignment = HorizontalAlignment.Stretch;
-        }
+        
 
         private static UIElement BuildLabeledControl(string label, UIElement control)
         {
@@ -1211,239 +1104,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             Neutral,
             Accent,
             Muted
-        }
-
-        private sealed class DialogDateEditor : Grid
-        {
-            private readonly TextBox _textBox;
-            private readonly Button _clearButton;
-            private readonly Button _calendarButton;
-            private readonly CalendarView _calendarView;
-            private bool _isSyncing;
-
-            public DialogDateEditor()
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch;
-
-                _textBox = new TextBox
-                {
-                    PlaceholderText = "дд.мм.гггг",
-                    HorizontalAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(11, 5, 54, 5),
-                    InputScope = new InputScope
-                    {
-                        Names =
-                        {
-                            new InputScopeName(InputScopeNameValue.Number)
-                        }
-                    }
-                };
-                _textBox.LostFocus += (_, _) => CommitText();
-                _textBox.KeyDown += (_, args) =>
-                {
-                    if (args.Key != VirtualKey.Enter)
-                    {
-                        return;
-                    }
-
-                    CommitText();
-                    args.Handled = true;
-                };
-
-                _calendarView = new CalendarView
-                {
-                    SelectionMode = CalendarViewSelectionMode.Single,
-                    MinWidth = 280,
-                    MinHeight = 300
-                };
-
-                var calendarFlyout = new Flyout
-                {
-                    Content = _calendarView
-                };
-                _calendarView.SelectedDatesChanged += (_, _) =>
-                {
-                    if (_isSyncing)
-                    {
-                        return;
-                    }
-
-                    var selectedDate = _calendarView.SelectedDates.FirstOrDefault();
-                    if (selectedDate == default)
-                    {
-                        return;
-                    }
-
-                    SetDate(selectedDate);
-                    calendarFlyout.Hide();
-                };
-
-                _calendarButton = BuildIconButton("\uE787", 10);
-                FlyoutBase.SetAttachedFlyout(_calendarButton, calendarFlyout);
-                _calendarButton.Click += (_, _) =>
-                {
-                    SyncCalendarViewSelection();
-                    FlyoutBase.ShowAttachedFlyout(_calendarButton);
-                };
-
-                _clearButton = BuildIconButton("\uE711", 10);
-                _clearButton.Click += (_, _) => SetDate(null);
-
-                SuppressChrome(_clearButton);
-                SuppressChrome(_calendarButton);
-
-                var buttonsHost = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Margin = new Thickness(0, 0, 2, 0),
-                    Spacing = 0
-                };
-                buttonsHost.Children.Add(_clearButton);
-                buttonsHost.Children.Add(_calendarButton);
-
-                Children.Add(_textBox);
-                Children.Add(buttonsHost);
-
-                SyncEditorState();
-            }
-
-            public event EventHandler? DateChanged;
-
-            public DateTimeOffset? Date { get; private set; }
-
-            public void SetDate(DateTimeOffset? value, bool notify = true)
-            {
-                var normalized = NormalizeDate(value);
-                var changed = Date != normalized;
-                Date = normalized;
-                SyncEditorState();
-
-                if (changed && notify)
-                {
-                    DateChanged?.Invoke(this, EventArgs.Empty);
-                }
-            }
-
-            private void CommitText()
-            {
-                if (_isSyncing)
-                {
-                    return;
-                }
-
-                var text = _textBox.Text?.Trim();
-                if (string.IsNullOrWhiteSpace(text))
-                {
-                    SetDate(null);
-                    return;
-                }
-
-                if (TryParseEditorDate(text, out var date))
-                {
-                    SetDate(date);
-                    return;
-                }
-
-                SyncEditorState();
-            }
-
-            private void SyncEditorState()
-            {
-                _isSyncing = true;
-                try
-                {
-                    _textBox.Text = Date?.ToString("dd.MM.yyyy", CultureInfo.CurrentCulture) ?? string.Empty;
-                    SyncCalendarViewSelection();
-                    _clearButton.Visibility = Date is null ? Visibility.Collapsed : Visibility.Visible;
-                }
-                finally
-                {
-                    _isSyncing = false;
-                }
-            }
-
-            private static DateTimeOffset? NormalizeDate(DateTimeOffset? value)
-            {
-                return value is null
-                    ? null
-                    : new DateTimeOffset(value.Value.Date);
-            }
-
-            private static bool TryParseEditorDate(string text, out DateTimeOffset? date)
-            {
-                var formats = new[]
-                {
-                    "d.M.yyyy",
-                    "dd.MM.yyyy",
-                    "d.M.yy",
-                    "dd.MM.yy",
-                    "yyyy-MM-dd"
-                };
-
-                if (DateTime.TryParseExact(
-                    text,
-                    formats,
-                    CultureInfo.CurrentCulture,
-                    DateTimeStyles.None,
-                    out var exactDate))
-                {
-                    date = new DateTimeOffset(exactDate.Date);
-                    return true;
-                }
-
-                if (DateTime.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.None, out var parsedDate))
-                {
-                    date = new DateTimeOffset(parsedDate.Date);
-                    return true;
-                }
-
-                date = null;
-                return false;
-            }
-
-            private void SyncCalendarViewSelection()
-            {
-                _calendarView.SelectedDates.Clear();
-                if (Date is not null)
-                {
-                    _calendarView.SelectedDates.Add(Date.Value);
-                }
-
-                _calendarView.SetDisplayDate(Date ?? DateTimeOffset.Now);
-            }
-
-            private static Button BuildIconButton(string glyph, double fontSize = 14)
-            {
-                return new Button
-                {
-                    Width = 16,                    
-                    Height = 28,
-                    MinHeight = 28,
-                    Padding = new Thickness(2, 0, 2, 0),
-                    Margin = new Thickness(0),
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Background = new SolidColorBrush(Colors.Transparent),
-                    BorderBrush = new SolidColorBrush(Colors.Transparent),
-                    BorderThickness = new Thickness(0),
-                    Content = new FontIcon
-                    {
-                        Glyph = glyph,
-                        FontSize = fontSize
-                    }
-                };
-            }
-
-            private static void SuppressChrome(Button button)
-            {
-                var transparent = new SolidColorBrush(Colors.Transparent);
-                button.Resources["ButtonBackgroundPointerOver"] = transparent;
-                button.Resources["ButtonBorderBrushPointerOver"] = transparent;
-                button.Resources["ButtonBackgroundPressed"] = transparent;
-                button.Resources["ButtonBorderBrushPressed"] = transparent;
-            }
         }
     }
 }
