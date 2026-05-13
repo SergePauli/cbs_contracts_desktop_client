@@ -9,12 +9,14 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.System;
 using Windows.UI;
 
 namespace CbsContractsDesktopClient.Views.Functional
 {
     public sealed class StageCommerEditDialog : ContentDialog
     {
+        private const long StatusPending = 2;
         private const long StatusClosed = 5;
 
         private readonly ReferenceDataRow _sourceRow;
@@ -24,10 +26,10 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly IReadOnlyList<StageTaskOption> _taskOptions;
         private readonly List<StageTaskRecord> _originalTasks;
         private readonly int? _profileId;
-        private readonly CalendarDatePicker _startAtPicker = BuildDatePicker();
-        private readonly CalendarDatePicker _deadlineAtPicker = BuildDatePicker();
-        private readonly CalendarDatePicker _paymentDeadlineAtPicker = BuildDatePicker();
-        private readonly CalendarDatePicker _closedAtPicker = BuildDatePicker();
+        private readonly DialogDateEditor _startAtEditor = new();
+        private readonly DialogDateEditor _deadlineAtEditor = new();
+        private readonly DialogDateEditor _paymentDeadlineAtEditor = new();
+        private readonly DialogDateEditor _closedAtEditor = new();
         private readonly TextBox _durationBox = BuildNumberTextBox();
         private readonly TextBox _paymentDurationBox = BuildNumberTextBox();
         private readonly ComboBox _deadlineKindBox = new();
@@ -40,6 +42,8 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _commentBox = new();
         private readonly TextBlock _errorText = new();
         private readonly string? _listKey;
+        private bool _isApplyingBusinessLogic;
+        private bool _businessLogicHandlersAttached;
 
         public StageCommerEditDialog(
             ReferenceDataRow sourceRow,
@@ -86,13 +90,13 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ["id"] = Id,
                 ["status_id"] = GetSelectedStatusOption()?.Value,
                 ["deadline_kind"] = (_deadlineKindBox.SelectedItem as StageSelectOption)?.Key,
-                ["deadline_at"] = FormatDate(_deadlineAtPicker.Date),
-                ["start_at"] = FormatDate(_startAtPicker.Date),
+                ["deadline_at"] = FormatDate(_deadlineAtEditor.Date),
+                ["start_at"] = FormatDate(_startAtEditor.Date),
                 ["payment_deadline_kind"] = (_paymentDeadlineKindBox.SelectedItem as StageSelectOption)?.Key,
-                ["payment_deadline_at"] = FormatDate(_paymentDeadlineAtPicker.Date),
+                ["payment_deadline_at"] = FormatDate(_paymentDeadlineAtEditor.Date),
                 ["duration"] = TryGetInt(_durationBox.Text),
                 ["payment_duration"] = TryGetInt(_paymentDurationBox.Text),
-                ["closed_at"] = FormatDate(_closedAtPicker.Date)
+                ["closed_at"] = FormatDate(_closedAtEditor.Date)
             };
 
             if (!string.IsNullOrWhiteSpace(_listKey))
@@ -134,7 +138,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             if ((_paymentDeadlineKindBox.SelectedItem as StageSelectOption)?.Key == "c_plan"
-                && _paymentDeadlineAtPicker.Date is null)
+                && _paymentDeadlineAtEditor.Date is null)
             {
                 ShowErrorInfo("Для календарного плана укажите срок оплаты.");
                 return false;
@@ -284,10 +288,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            _startAtPicker.Date = ParseDate(_sourceRow.GetValue("start_at"));
-            _deadlineAtPicker.Date = ParseDate(_sourceRow.GetValue("deadline_at"));
-            _paymentDeadlineAtPicker.Date = ParseDate(_sourceRow.GetValue("payment_deadline_at"));
-            _closedAtPicker.Date = ParseDate(_sourceRow.GetValue("closed_at"));
+            _startAtEditor.SetDate(ParseDate(_sourceRow.GetValue("start_at")), notify: false);
+            _deadlineAtEditor.SetDate(ParseDate(_sourceRow.GetValue("deadline_at")), notify: false);
+            _paymentDeadlineAtEditor.SetDate(ParseDate(_sourceRow.GetValue("payment_deadline_at")), notify: false);
+            _closedAtEditor.SetDate(ParseDate(_sourceRow.GetValue("closed_at")), notify: false);
             _durationBox.Text = _sourceRow.GetValue("duration")?.ToString() ?? string.Empty;
             _paymentDurationBox.Text = _sourceRow.GetValue("payment_duration")?.ToString() ?? string.Empty;
 
@@ -295,31 +299,26 @@ namespace CbsContractsDesktopClient.Views.Functional
             ConfigureCombo(_paymentDeadlineKindBox, PaymentDeadlineKindOptions(), _sourceRow.GetValue("payment_deadline_kind")?.ToString());
             ConfigureStatusCombo(_statusBox, BuildStatusOptions(statusOptions), TryGetLong(_sourceRow.GetValue("status.id") ?? _sourceRow.GetValue("status_id")));
 
-            _statusBox.SelectionChanged += (_, _) =>
-            {
-                if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtPicker.Date is null)
-                {
-                    _closedAtPicker.Date = DateTimeOffset.Now;
-                }
-            };
+            AttachBusinessLogicHandlers();
+            ApplyBusinessLogicAfterFieldChange(applyInitialStart: true);
 
             var left = new StackPanel { Spacing = 10 };
             left.Children.Add(BuildSectionTitle("Срок выполнения"));
             left.Children.Add(BuildLabeledControl("Режим срока", _deadlineKindBox));
             left.Children.Add(BuildLabeledControl("Дней", _durationBox));
-            left.Children.Add(BuildLabeledControl("Срок выполнения", _deadlineAtPicker));
+            left.Children.Add(BuildLabeledControl("Срок выполнения", _deadlineAtEditor));
 
             var middle = new StackPanel { Spacing = 10 };
             middle.Children.Add(BuildSectionTitle("Оплата"));
             middle.Children.Add(BuildLabeledControl("Режим оплаты", _paymentDeadlineKindBox));
             middle.Children.Add(BuildLabeledControl("Дней", _paymentDurationBox));
-            middle.Children.Add(BuildLabeledControl("Срок оплаты", _paymentDeadlineAtPicker));
+            middle.Children.Add(BuildLabeledControl("Срок оплаты", _paymentDeadlineAtEditor));
 
             var right = new StackPanel { Spacing = 10 };
             right.Children.Add(BuildSectionTitle("Состояние"));
             right.Children.Add(BuildLabeledControl("Статус этапа", _statusBox));
-            right.Children.Add(BuildLabeledControl("Дата начала", _startAtPicker));
-            right.Children.Add(BuildLabeledControl("Закрыт", _closedAtPicker));
+            right.Children.Add(BuildLabeledControl("Дата начала", _startAtEditor));
+            right.Children.Add(BuildLabeledControl("Закрыт", _closedAtEditor));
 
             var deadlinePanel = BuildEditorGroupPanel(left, EditorGroupTone.Neutral);
             var paymentPanel = BuildEditorGroupPanel(middle, EditorGroupTone.Accent);
@@ -331,6 +330,183 @@ namespace CbsContractsDesktopClient.Views.Functional
             Grid.SetColumn(statePanel, 2);
             grid.Children.Add(statePanel);
             return grid;
+        }
+
+        private void AttachBusinessLogicHandlers()
+        {
+            if (_businessLogicHandlersAttached)
+            {
+                return;
+            }
+
+            _businessLogicHandlersAttached = true;
+            _deadlineKindBox.SelectionChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: true);
+            _paymentDeadlineKindBox.SelectionChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
+            _statusBox.SelectionChanged += (_, _) => ApplyStatusBusinessLogic();
+            _startAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
+            _durationBox.TextChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
+            _paymentDurationBox.TextChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
+        }
+
+        private void ApplyBusinessLogicAfterFieldChange(bool applyInitialStart)
+        {
+            if (_isApplyingBusinessLogic)
+            {
+                return;
+            }
+
+            _isApplyingBusinessLogic = true;
+            try
+            {
+                if (applyInitialStart)
+                {
+                    ApplyInitialStartBusinessLogic();
+                }
+
+                ApplyDeadlineBusinessLogic();
+                ApplyPaymentDeadlineBusinessLogic();
+                ApplyStatusBusinessLogic();
+            }
+            finally
+            {
+                _isApplyingBusinessLogic = false;
+            }
+        }
+
+        private void ApplyInitialStartBusinessLogic()
+        {
+            if (IsMultiStageContract() || _startAtEditor.Date is not null)
+            {
+                return;
+            }
+
+            var deadlineKind = GetSelectedDeadlineKind();
+            DateTimeOffset? nextStart = null;
+
+            if (deadlineKind is "calendar_plan" or "calendar_days" or "working_days")
+            {
+                nextStart = ParseDate(
+                    _contractRow?.GetValue("signed_at")
+                    ?? _displayRow.GetValue("contract.signed_at")
+                    ?? _sourceRow.GetValue("contract.signed_at"));
+            }
+            else if (deadlineKind is "calendar_prepayment" or "working_prepayment")
+            {
+                nextStart = GetPaymentBaseDate();
+            }
+
+            if (nextStart is null)
+            {
+                return;
+            }
+
+            _startAtEditor.SetDate(nextStart);
+            if (GetSelectedStatusOption()?.Value is null)
+            {
+                SelectStatus(StatusPending);
+            }
+        }
+
+        private void ApplyDeadlineBusinessLogic()
+        {
+            var deadlineKind = GetSelectedDeadlineKind();
+            var startAt = _startAtEditor.Date;
+            var duration = TryGetInt(_durationBox.Text);
+
+            if (deadlineKind == "calendar_days" && duration is int calendarDuration && startAt is not null)
+            {
+                _deadlineAtEditor.SetDate(startAt.Value.Date.AddDays(calendarDuration));
+            }
+            else if (deadlineKind == "working_days" && duration is int workingDuration && startAt is not null)
+            {
+                _deadlineAtEditor.SetDate(AddWorkingDaysToDate(startAt.Value.Date, workingDuration));
+            }
+            else if ((duration is null || startAt is null) && deadlineKind != "calendar_plan")
+            {
+                _deadlineAtEditor.SetDate(null);
+            }
+        }
+
+        private void ApplyPaymentDeadlineBusinessLogic()
+        {
+            var paymentKind = GetSelectedPaymentDeadlineKind();
+            var paymentDuration = TryGetInt(_paymentDurationBox.Text);
+            var fundedAt = ParseDate(_sourceRow.GetValue("funded_at"));
+
+            if (paymentKind == "c_days" && paymentDuration is int calendarDuration && fundedAt is not null)
+            {
+                _paymentDeadlineAtEditor.SetDate(fundedAt.Value.Date.AddDays(calendarDuration));
+            }
+            else if (paymentKind == "w_days" && paymentDuration is int workingDuration && fundedAt is not null)
+            {
+                _paymentDeadlineAtEditor.SetDate(AddWorkingDaysToDate(fundedAt.Value.Date, workingDuration));
+            }
+            else if (string.IsNullOrWhiteSpace(paymentKind) || paymentKind == "c_plan")
+            {
+                if (!string.IsNullOrWhiteSpace(_paymentDurationBox.Text))
+                {
+                    _paymentDurationBox.Text = string.Empty;
+                }
+            }
+            else if (paymentDuration is null
+                && fundedAt is not null
+                && string.IsNullOrWhiteSpace(_sourceRow.GetValue("payment_deadline_at")?.ToString()))
+            {
+                _paymentDeadlineAtEditor.SetDate(null);
+            }
+        }
+
+        private void ApplyStatusBusinessLogic()
+        {
+            if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtEditor.Date is null)
+            {
+                _closedAtEditor.SetDate(DateTimeOffset.Now);
+            }
+        }
+
+        private string? GetSelectedDeadlineKind()
+        {
+            return (_deadlineKindBox.SelectedItem as StageSelectOption)?.Key;
+        }
+
+        private string? GetSelectedPaymentDeadlineKind()
+        {
+            return (_paymentDeadlineKindBox.SelectedItem as StageSelectOption)?.Key;
+        }
+
+        private void SelectStatus(long statusId)
+        {
+            foreach (var item in _statusBox.Items.OfType<ComboBoxItem>())
+            {
+                if (item.Tag is StageSelectOption option && option.Value == statusId)
+                {
+                    _statusBox.SelectedItem = item;
+                    return;
+                }
+            }
+        }
+
+        private bool IsMultiStageContract()
+        {
+            if (TryGetBool(_contractRow?.GetValue("multyStage"))
+                ?? TryGetBool(_contractRow?.GetValue("multiStage"))
+                ?? TryGetBool(_contractRow?.GetValue("is_multistage"))
+                ?? TryGetBool(_displayRow.GetValue("contract.multyStage"))
+                ?? TryGetBool(_displayRow.GetValue("contract.multiStage"))
+                ?? TryGetBool(_sourceRow.GetValue("contract.multyStage"))
+                ?? TryGetBool(_sourceRow.GetValue("contract.multiStage"))
+                ?? false)
+            {
+                return true;
+            }
+
+            return TryGetArrayCount(_contractRow, "stages") is int contractStagesCount && contractStagesCount > 1;
+        }
+
+        private DateTimeOffset? GetPaymentBaseDate()
+        {
+            return ParseDate(_sourceRow.GetValue("prepayment_at"))
+                ?? ParseDate(_sourceRow.GetValue("payment_at"));
         }
 
         private UIElement BuildWideEditorsColumn()
@@ -759,16 +935,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
         }
 
-        private static CalendarDatePicker BuildDatePicker()
-        {
-            return new CalendarDatePicker
-            {
-                DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
-                IsTodayHighlighted = true,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-        }
-
         private static TextBox BuildNumberTextBox()
         {
             return new TextBox
@@ -947,6 +1113,36 @@ namespace CbsContractsDesktopClient.Views.Functional
             return null;
         }
 
+        private static DateTimeOffset AddWorkingDaysToDate(DateTimeOffset current, int days)
+        {
+            var result = current.Date.AddDays(-1);
+            var addedDays = 0;
+            while (addedDays < days)
+            {
+                result = result.AddDays(1);
+                if (result.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+                {
+                    continue;
+                }
+
+                addedDays++;
+            }
+
+            return result;
+        }
+
+        private static int? TryGetArrayCount(ReferenceDataRow? row, string fieldKey)
+        {
+            if (row is null
+                || !row.Values.TryGetValue(fieldKey, out var value)
+                || value.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            return value.GetArrayLength();
+        }
+
         private static long? TryGetLong(object? value)
         {
             return value switch
@@ -1015,6 +1211,239 @@ namespace CbsContractsDesktopClient.Views.Functional
             Neutral,
             Accent,
             Muted
+        }
+
+        private sealed class DialogDateEditor : Grid
+        {
+            private readonly TextBox _textBox;
+            private readonly Button _clearButton;
+            private readonly Button _calendarButton;
+            private readonly CalendarView _calendarView;
+            private bool _isSyncing;
+
+            public DialogDateEditor()
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch;
+
+                _textBox = new TextBox
+                {
+                    PlaceholderText = "дд.мм.гггг",
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    Padding = new Thickness(11, 5, 54, 5),
+                    InputScope = new InputScope
+                    {
+                        Names =
+                        {
+                            new InputScopeName(InputScopeNameValue.Number)
+                        }
+                    }
+                };
+                _textBox.LostFocus += (_, _) => CommitText();
+                _textBox.KeyDown += (_, args) =>
+                {
+                    if (args.Key != VirtualKey.Enter)
+                    {
+                        return;
+                    }
+
+                    CommitText();
+                    args.Handled = true;
+                };
+
+                _calendarView = new CalendarView
+                {
+                    SelectionMode = CalendarViewSelectionMode.Single,
+                    MinWidth = 280,
+                    MinHeight = 300
+                };
+
+                var calendarFlyout = new Flyout
+                {
+                    Content = _calendarView
+                };
+                _calendarView.SelectedDatesChanged += (_, _) =>
+                {
+                    if (_isSyncing)
+                    {
+                        return;
+                    }
+
+                    var selectedDate = _calendarView.SelectedDates.FirstOrDefault();
+                    if (selectedDate == default)
+                    {
+                        return;
+                    }
+
+                    SetDate(selectedDate);
+                    calendarFlyout.Hide();
+                };
+
+                _calendarButton = BuildIconButton("\uE787", 10);
+                FlyoutBase.SetAttachedFlyout(_calendarButton, calendarFlyout);
+                _calendarButton.Click += (_, _) =>
+                {
+                    SyncCalendarViewSelection();
+                    FlyoutBase.ShowAttachedFlyout(_calendarButton);
+                };
+
+                _clearButton = BuildIconButton("\uE711", 10);
+                _clearButton.Click += (_, _) => SetDate(null);
+
+                SuppressChrome(_clearButton);
+                SuppressChrome(_calendarButton);
+
+                var buttonsHost = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(0, 0, 2, 0),
+                    Spacing = 0
+                };
+                buttonsHost.Children.Add(_clearButton);
+                buttonsHost.Children.Add(_calendarButton);
+
+                Children.Add(_textBox);
+                Children.Add(buttonsHost);
+
+                SyncEditorState();
+            }
+
+            public event EventHandler? DateChanged;
+
+            public DateTimeOffset? Date { get; private set; }
+
+            public void SetDate(DateTimeOffset? value, bool notify = true)
+            {
+                var normalized = NormalizeDate(value);
+                var changed = Date != normalized;
+                Date = normalized;
+                SyncEditorState();
+
+                if (changed && notify)
+                {
+                    DateChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+
+            private void CommitText()
+            {
+                if (_isSyncing)
+                {
+                    return;
+                }
+
+                var text = _textBox.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    SetDate(null);
+                    return;
+                }
+
+                if (TryParseEditorDate(text, out var date))
+                {
+                    SetDate(date);
+                    return;
+                }
+
+                SyncEditorState();
+            }
+
+            private void SyncEditorState()
+            {
+                _isSyncing = true;
+                try
+                {
+                    _textBox.Text = Date?.ToString("dd.MM.yyyy", CultureInfo.CurrentCulture) ?? string.Empty;
+                    SyncCalendarViewSelection();
+                    _clearButton.Visibility = Date is null ? Visibility.Collapsed : Visibility.Visible;
+                }
+                finally
+                {
+                    _isSyncing = false;
+                }
+            }
+
+            private static DateTimeOffset? NormalizeDate(DateTimeOffset? value)
+            {
+                return value is null
+                    ? null
+                    : new DateTimeOffset(value.Value.Date);
+            }
+
+            private static bool TryParseEditorDate(string text, out DateTimeOffset? date)
+            {
+                var formats = new[]
+                {
+                    "d.M.yyyy",
+                    "dd.MM.yyyy",
+                    "d.M.yy",
+                    "dd.MM.yy",
+                    "yyyy-MM-dd"
+                };
+
+                if (DateTime.TryParseExact(
+                    text,
+                    formats,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.None,
+                    out var exactDate))
+                {
+                    date = new DateTimeOffset(exactDate.Date);
+                    return true;
+                }
+
+                if (DateTime.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.None, out var parsedDate))
+                {
+                    date = new DateTimeOffset(parsedDate.Date);
+                    return true;
+                }
+
+                date = null;
+                return false;
+            }
+
+            private void SyncCalendarViewSelection()
+            {
+                _calendarView.SelectedDates.Clear();
+                if (Date is not null)
+                {
+                    _calendarView.SelectedDates.Add(Date.Value);
+                }
+
+                _calendarView.SetDisplayDate(Date ?? DateTimeOffset.Now);
+            }
+
+            private static Button BuildIconButton(string glyph, double fontSize = 14)
+            {
+                return new Button
+                {
+                    Width = 16,                    
+                    Height = 28,
+                    MinHeight = 28,
+                    Padding = new Thickness(2, 0, 2, 0),
+                    Margin = new Thickness(0),
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = new SolidColorBrush(Colors.Transparent),
+                    BorderBrush = new SolidColorBrush(Colors.Transparent),
+                    BorderThickness = new Thickness(0),
+                    Content = new FontIcon
+                    {
+                        Glyph = glyph,
+                        FontSize = fontSize
+                    }
+                };
+            }
+
+            private static void SuppressChrome(Button button)
+            {
+                var transparent = new SolidColorBrush(Colors.Transparent);
+                button.Resources["ButtonBackgroundPointerOver"] = transparent;
+                button.Resources["ButtonBorderBrushPointerOver"] = transparent;
+                button.Resources["ButtonBackgroundPressed"] = transparent;
+                button.Resources["ButtonBorderBrushPressed"] = transparent;
+            }
         }
     }
 }
