@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.ViewModels.References;
+using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -72,17 +73,17 @@ namespace CbsContractsDesktopClient.Views.References
 
             if (!ViewModel.State.IsCreateMode)
             {
-                AddRow(grid, "ID", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Id)));
+                AddFormRow(grid, "ID", BuildReadOnlyTextBox(nameof(ProfileEditViewModel.Id)));
             }
 
-            AddRow(grid, "Логин", BuildTextBoxEditor(nameof(ProfileEditViewModel.Login)));
-            AddRow(grid, "Email", BuildTextBoxEditor(nameof(ProfileEditViewModel.Email)));
-            AddRow(grid, "ФИО", BuildTextBoxEditor(nameof(ProfileEditViewModel.PersonName)));
-            AddRow(grid, "Роль", BuildRoleEditor());
-            AddRow(grid, "Должность", BuildPositionEditor());
-            AddRow(grid, "Отдел", BuildDepartmentEditor());
-            AddRow(grid, "Пароль", BuildPasswordEditor());
-            AddRow(grid, "Активирован", BuildActivatedEditor());
+            AddFormRow(grid, "Логин", BuildTextBoxEditor(nameof(ProfileEditViewModel.Login)));
+            AddFormRow(grid, "Email", BuildTextBoxEditor(nameof(ProfileEditViewModel.Email)));
+            AddFormRow(grid, "ФИО", BuildTextBoxEditor(nameof(ProfileEditViewModel.PersonName)));
+            AddFormRow(grid, "Роль", BuildRoleEditor());
+            AddFormRow(grid, "Должность", BuildPositionEditor());
+            AddFormRow(grid, "Отдел", BuildDepartmentEditor());
+            AddFormRow(grid, "Пароль", BuildPasswordEditor());
+            AddFormRow(grid, "Активирован", BuildActivatedEditor());
 
             return grid;
         }
@@ -106,35 +107,6 @@ namespace CbsContractsDesktopClient.Views.References
                 Path = new PropertyPath(nameof(ProfileEditViewModel.IsErrorInfoVisible))
             });
             return infoBar;
-        }
-
-        private static void AddRow(Grid grid, string labelText, FrameworkElement editor)
-        {
-            var rowIndex = grid.RowDefinitions.Count;
-            grid.RowDefinitions.Add(new RowDefinition
-            {
-                Height = GridLength.Auto
-            });
-
-            var label = new TextBlock
-            {
-                Text = labelText,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
-                TextAlignment = TextAlignment.Right,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
-            };
-            Grid.SetRow(label, rowIndex);
-            Grid.SetColumn(label, 0);
-            grid.Children.Add(label);
-
-            editor.HorizontalAlignment = HorizontalAlignment.Left;
-            editor.VerticalAlignment = VerticalAlignment.Center;
-
-            Grid.SetRow(editor, rowIndex);
-            Grid.SetColumn(editor, 1);
-            grid.Children.Add(editor);
         }
 
         private static TextBox BuildReadOnlyTextBox(string bindingPath)

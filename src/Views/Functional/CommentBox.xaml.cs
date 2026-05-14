@@ -1,6 +1,6 @@
-using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -164,17 +164,5 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : $"{author} | {when}";
         }
 
-        private static int? TryGetInt(object? value)
-        {
-            return value switch
-            {
-                int intValue => intValue,
-                long longValue => checked((int)longValue),
-                decimal decimalValue => checked((int)decimalValue),
-                string text when int.TryParse(text, out var parsedValue) => parsedValue,
-                JsonElement element when element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
     }
 }

@@ -5,11 +5,13 @@ using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using Windows.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.Controls
 {
@@ -373,36 +375,10 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             var statusId = TryGetLong(row?.GetValue("status.id")) ?? TryGetLong(row?.GetValue("status_id"));
-            var colors = ResolveStatusBadgeColors(statusId);
+            var colors = StageContractStatusDialogControls.ResolveStatusBadgeColors(statusId);
             badgeText.Text = statusName;
             badgeText.Foreground = new SolidColorBrush(colors.Foreground);
             badgeCell.Background = new SolidColorBrush(colors.Background);
-        }
-
-        private static (Color Background, Color Foreground) ResolveStatusBadgeColors(long? statusId)
-        {
-            return statusId switch
-            {
-                4 or 5 => (Color.FromArgb(255, 201, 233, 212), Color.FromArgb(255, 64, 64, 64)),
-                6 => (Color.FromArgb(255, 255, 205, 210), Color.FromArgb(255, 64, 64, 64)),
-                1 or 2 => (Color.FromArgb(254, 194, 237, 246), Color.FromArgb(255, 64, 64, 64)),
-                3 => (Color.FromArgb(254, 246, 227, 194), Color.FromArgb(255, 64, 64, 64)),
-                _ => (Color.FromArgb(255, 222, 226, 230), Color.FromArgb(255, 64, 64, 64))
-            };
-        }
-
-        private static string FirstText(params object?[] values)
-        {
-            foreach (var value in values)
-            {
-                var text = value?.ToString();
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    return text;
-                }
-            }
-
-            return string.Empty;
         }
 
         private static string FormatStageRegister(ReferenceDataRow row)

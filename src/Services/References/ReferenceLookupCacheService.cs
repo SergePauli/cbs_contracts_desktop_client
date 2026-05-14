@@ -2,6 +2,7 @@ using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -235,20 +236,6 @@ namespace CbsContractsDesktopClient.Services.References
         private static string BuildCacheKey(string model, string preset)
         {
             return $"{model.Trim()}:{preset.Trim()}";
-        }
-
-        private static string? GetText(ReferenceDataRow row, params string[] fieldKeys)
-        {
-            foreach (var fieldKey in fieldKeys)
-            {
-                var value = row.GetValue(fieldKey)?.ToString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    return value;
-                }
-            }
-
-            return null;
         }
 
         private static string? NormalizeLookupValue(object? value)

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -48,28 +49,27 @@ namespace CbsContractsDesktopClient.Services.References
 
         private static IReadOnlyList<EmployeeContactEditItem> ReadContacts(ReferenceDataRow row)
         {
-            if (!row.Values.TryGetValue("person", out var personElement)
-                || personElement.ValueKind != JsonValueKind.Object)
+            var personElement = row.Values.TryGetValue("person", out var person)
+                && person.ValueKind == JsonValueKind.Object
+                ? person
+                : (JsonElement?)null;
+            if (personElement is null)
             {
                 return [];
             }
 
-            if (personElement.TryGetProperty("contacts", out var contactsElement)
-                && contactsElement.ValueKind == JsonValueKind.Array)
+            if (TryGetArray(personElement.Value, "contacts") is JsonElement contactsElement)
             {
-                return contactsElement
-                    .EnumerateArray()
+                return EnumerateObjectArray(contactsElement)
                     .Select(ReadContact)
                     .Where(static contact => contact is not null)
                     .Cast<EmployeeContactEditItem>()
                     .ToList();
             }
 
-            if (personElement.TryGetProperty("person_contacts_attributes", out var attributesElement)
-                && attributesElement.ValueKind == JsonValueKind.Array)
+            if (TryGetArray(personElement.Value, "person_contacts_attributes") is JsonElement attributesElement)
             {
-                return attributesElement
-                    .EnumerateArray()
+                return EnumerateObjectArray(attributesElement)
                     .Select(ReadContact)
                     .Where(static contact => contact is not null)
                     .Cast<EmployeeContactEditItem>()
@@ -107,73 +107,6 @@ namespace CbsContractsDesktopClient.Services.References
                 ListKey = TryGetString(item, "list_key"),
                 Value = value.Trim(),
                 Type = TryGetString(contactElement, "type") ?? TryGetString(item, "type") ?? InferContactType(value)
-            };
-        }
-
-        private static JsonElement? TryGetValue(JsonElement element, string propertyName)
-        {
-            return element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var value)
-                ? value
-                : null;
-        }
-
-        private static string? TryGetString(JsonElement element, string propertyName)
-        {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            return value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
-        }
-
-        private static long? TryGetLong(JsonElement? element)
-        {
-            if (element is null)
-            {
-                return null;
-            }
-
-            var value = element.Value;
-            return value.ValueKind switch
-            {
-                JsonValueKind.Number when value.TryGetInt64(out var int64Value) => int64Value,
-                JsonValueKind.String when long.TryParse(value.GetString(), out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static long? TryGetLong(object? value)
-        {
-            return value switch
-            {
-                long int64Value => int64Value,
-                int int32Value => int32Value,
-                decimal decimalValue => (long)decimalValue,
-                string text when long.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static int? TryGetInt(object? value)
-        {
-            return value switch
-            {
-                int int32Value => int32Value,
-                long int64Value => (int)int64Value,
-                decimal decimalValue => (int)decimalValue,
-                string text when int.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static bool? TryGetBool(object? value)
-        {
-            return value switch
-            {
-                bool boolValue => boolValue,
-                string text when bool.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
             };
         }
 

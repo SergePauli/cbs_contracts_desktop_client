@@ -2,6 +2,7 @@ using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services.References;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.References
 {
@@ -47,7 +48,7 @@ namespace CbsContractsDesktopClient.Views.References
 
             var employeeName = GetText(row, "person.full_name", "name", "head");
             var id = GetText(row, "id");
-            var used = TryGetBoolean(row.GetValue("used"));
+            var used = TryGetBool(row.GetValue("used"));
 
             EmployeeNameTextBlock.Text = string.IsNullOrWhiteSpace(employeeName)
                 ? "Сотрудник"
@@ -103,28 +104,5 @@ namespace CbsContractsDesktopClient.Views.References
             }
         }
 
-        private static string? GetText(ReferenceDataRow row, params string[] fieldKeys)
-        {
-            foreach (var fieldKey in fieldKeys)
-            {
-                var value = row.GetValue(fieldKey)?.ToString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    return value;
-                }
-            }
-
-            return null;
-        }
-
-        private static bool? TryGetBoolean(object? value)
-        {
-            return value switch
-            {
-                bool booleanValue => booleanValue,
-                string text when bool.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
     }
 }

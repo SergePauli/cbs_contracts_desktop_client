@@ -1,5 +1,6 @@
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.ViewModels.References;
+using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -182,36 +183,36 @@ namespace CbsContractsDesktopClient.Views.References
             var grid = BuildFieldsGrid();
             if (!ViewModel.State.IsCreateMode)
             {
-                AddRow(grid, "ID", BuildReadOnlyTextBox(nameof(ContragentEditViewModel.Id)));
+                AddFormRow(grid, "ID", BuildReadOnlyTextBox(nameof(ContragentEditViewModel.Id)));
             }
 
-            AddRow(grid, "ИНН", BuildTextBoxEditor(nameof(ContragentEditViewModel.Inn), minWidth: 240), isRequired: true);
-            AddRow(grid, "КПП", BuildTextBoxEditor(nameof(ContragentEditViewModel.Kpp), minWidth: 240));
-            AddRow(grid, "КодПодр.", BuildTextBoxEditor(nameof(ContragentEditViewModel.Division), minWidth: 160));
-            AddRow(grid, "Форма", BuildOwnershipEditor(), isRequired: true);
-            AddRow(grid, "Наименование", BuildTextBoxEditor(nameof(ContragentEditViewModel.Name)), isRequired: true);
-            AddRow(grid, "Регион", BuildRegionEditor());
-            AddRow(grid, "Адрес фактический", BuildAddressEditor());
-            AddRow(grid, "Полное наименование", BuildTextBoxEditor(nameof(ContragentEditViewModel.FullName)));
-            AddRow(grid, "Контакты", BuildContactsEditor());
-            AddRow(grid, "Описание", BuildMultilineTextBox(nameof(ContragentEditViewModel.Description), minHeight: 74));
+            AddFormRow(grid, "ИНН", BuildTextBoxEditor(nameof(ContragentEditViewModel.Inn), minWidth: 240), isRequired: true);
+            AddFormRow(grid, "КПП", BuildTextBoxEditor(nameof(ContragentEditViewModel.Kpp), minWidth: 240));
+            AddFormRow(grid, "КодПодр.", BuildTextBoxEditor(nameof(ContragentEditViewModel.Division), minWidth: 160));
+            AddFormRow(grid, "Форма", BuildOwnershipEditor(), isRequired: true);
+            AddFormRow(grid, "Наименование", BuildTextBoxEditor(nameof(ContragentEditViewModel.Name)), isRequired: true);
+            AddFormRow(grid, "Регион", BuildRegionEditor());
+            AddFormRow(grid, "Адрес фактический", BuildAddressEditor());
+            AddFormRow(grid, "Полное наименование", BuildTextBoxEditor(nameof(ContragentEditViewModel.FullName)));
+            AddFormRow(grid, "Контакты", BuildContactsEditor());
+            AddFormRow(grid, "Описание", BuildMultilineTextBox(nameof(ContragentEditViewModel.Description), minHeight: 74));
             return grid;
         }
 
         private Grid BuildCodesGrid()
         {
             var grid = BuildFieldsGrid();
-            AddRow(grid, "ОГРН", BuildTextBoxEditor(nameof(ContragentEditViewModel.Ogrn), minWidth: 240));
-            AddRow(grid, "ОКФС", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okfc), minWidth: 160));
-            AddRow(grid, "ОКОПФ", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okopf), minWidth: 160));
-            AddRow(grid, "ОКПО", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okpo), minWidth: 180));
-            AddRow(grid, "ОКОГУ", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okogu), minWidth: 180));
-            AddRow(grid, "ОКВЭД", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okved), minWidth: 180));
-            AddRow(grid, "ОКТМО", BuildTextBoxEditor(nameof(ContragentEditViewModel.Oktmo), minWidth: 180));
-            AddRow(grid, "Наименование банка", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankName)));
-            AddRow(grid, "БИК банка", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankBik), minWidth: 180));
-            AddRow(grid, "Номер счета", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankAccount)));
-            AddRow(grid, "Номер кор.счета", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankCorAccount)));
+            AddFormRow(grid, "ОГРН", BuildTextBoxEditor(nameof(ContragentEditViewModel.Ogrn), minWidth: 240));
+            AddFormRow(grid, "ОКФС", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okfc), minWidth: 160));
+            AddFormRow(grid, "ОКОПФ", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okopf), minWidth: 160));
+            AddFormRow(grid, "ОКПО", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okpo), minWidth: 180));
+            AddFormRow(grid, "ОКОГУ", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okogu), minWidth: 180));
+            AddFormRow(grid, "ОКВЭД", BuildTextBoxEditor(nameof(ContragentEditViewModel.Okved), minWidth: 180));
+            AddFormRow(grid, "ОКТМО", BuildTextBoxEditor(nameof(ContragentEditViewModel.Oktmo), minWidth: 180));
+            AddFormRow(grid, "Наименование банка", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankName)));
+            AddFormRow(grid, "БИК банка", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankBik), minWidth: 180));
+            AddFormRow(grid, "Номер счета", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankAccount)));
+            AddFormRow(grid, "Номер кор.счета", BuildTextBoxEditor(nameof(ContragentEditViewModel.BankCorAccount)));
             return grid;
         }
 
@@ -457,67 +458,6 @@ namespace CbsContractsDesktopClient.Views.References
             {
                 RenderRegistrationTimeline();
             }
-        }
-
-        private static Grid BuildFieldsGrid()
-        {
-            var grid = new Grid
-            {
-                Padding = new Thickness(0, 4, 0, 0),
-                ColumnSpacing = 8,
-                RowSpacing = 8
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(160) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            return grid;
-        }
-
-        private static void AddRow(Grid grid, string labelText, FrameworkElement editor, bool isRequired = false)
-        {
-            var rowIndex = grid.RowDefinitions.Count;
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var label = BuildLabel(labelText, isRequired);
-            Grid.SetRow(label, rowIndex);
-            Grid.SetColumn(label, 0);
-            grid.Children.Add(label);
-
-            editor.HorizontalAlignment = HorizontalAlignment.Left;
-            editor.VerticalAlignment = VerticalAlignment.Center;
-
-            Grid.SetRow(editor, rowIndex);
-            Grid.SetColumn(editor, 1);
-            grid.Children.Add(editor);
-        }
-
-        private static FrameworkElement BuildLabel(string labelText, bool isRequired)
-        {
-            var panel = new StackPanel
-            {
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
-                Orientation = Orientation.Horizontal,
-                Spacing = 2
-            };
-            panel.Children.Add(new TextBlock
-            {
-                Text = labelText,
-                TextAlignment = TextAlignment.Right,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
-            });
-
-            if (isRequired)
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = "*",
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Microsoft.UI.Colors.Firebrick)
-                });
-            }
-
-            return panel;
         }
 
         private static TextBox BuildReadOnlyTextBox(string bindingPath)

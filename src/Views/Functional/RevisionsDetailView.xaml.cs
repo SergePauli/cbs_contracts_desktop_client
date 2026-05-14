@@ -9,6 +9,7 @@ using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.Functional
 {
@@ -77,8 +78,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             var stage = ReadUsedStage(contract);
             var startAt = stage is null ? null : ReadStringProperty(stage.Value, "start_at");
             var deadlineAt = stage is null ? null : ReadStringProperty(stage.Value, "deadline_at");
-            var contragentName = GetText(contragent, "name", "requisites.organization.name") ?? string.Empty;
-            var contractTitle = GetText(contract, "external_number") ?? GetText(contract, "name") ?? string.Empty;
+            var contragentName = TryGetText(contragent, "name", "requisites.organization.name") ?? string.Empty;
+            var contractTitle = TryGetText(contract, "external_number") ?? TryGetText(contract, "name") ?? string.Empty;
 
             return $"{FormatClipboardDate(startAt)}-{FormatClipboardDate(deadlineAt)} | {contragentName} | {contractTitle}";
         }
@@ -138,11 +139,11 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            ContractNameTextBlock.Text = GetText(contract, "name")
-                ?? GetText(revision, "contract.name")
+            ContractNameTextBlock.Text = TryGetText(contract, "name")
+                ?? TryGetText(revision, "contract.name")
                 ?? "Контракт не выбран";
-            ContragentNameTextBlock.Text = GetText(contragent, "name", "requisites.organization.name")
-                ?? GetText(revision, "contract.contragent.name")
+            ContragentNameTextBlock.Text = TryGetText(contragent, "name", "requisites.organization.name")
+                ?? TryGetText(revision, "contract.contragent.name")
                 ?? string.Empty;
 
             RenderContacts(ReadContragentContacts(contragent));
@@ -240,12 +241,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(ReferenceDataRow? row)
         {
-            if (!TryGetArray(row, out var employees, "employees", "emploees"))
+            var employees = TryGetFirstArray(row, "employees", "emploees");
+            if (employees is null)
             {
                 return [];
             }
 
-            return employees
+            return employees.Value
                 .EnumerateArray()
                 .Where(static item => item.ValueKind == JsonValueKind.Object)
                 .Select(ReadEmployee)
@@ -271,12 +273,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private static IReadOnlyList<string> ReadContragentContacts(ReferenceDataRow? row)
         {
-            if (!TryGetArray(row, out var contacts, "contacts"))
+            var contacts = TryGetArray(row, "contacts");
+            if (contacts is null)
             {
                 return [];
             }
 
-            return ReadContactValues(contacts);
+            return ReadContactValues(contacts.Value);
         }
 
         private static IReadOnlyList<string> ReadContacts(JsonElement item)
@@ -331,32 +334,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : null;
         }
 
-        private static JsonElement? TryGetArray(ReferenceDataRow? row, string fieldKey)
-        {
-            return TryGetArray(row, out var array, fieldKey) ? array : null;
-        }
-
-        private static bool TryGetArray(ReferenceDataRow? row, out JsonElement array, params string[] fieldKeys)
-        {
-            if (row is null || row.IsPlaceholder)
-            {
-                array = default;
-                return false;
-            }
-
-            foreach (var fieldKey in fieldKeys)
-            {
-                if (row.Values.TryGetValue(fieldKey, out array)
-                    && array.ValueKind == JsonValueKind.Array)
-                {
-                    return true;
-                }
-            }
-
-            array = default;
-            return false;
-        }
-
         private static string? ReadDisplayName(JsonElement item)
         {
             return ReadStringProperty(item, "name")
@@ -368,25 +345,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ?? ReadNestedStringProperty(item, "person", "name")
                 ?? ReadDoubleNestedStringProperty(item, "employee", "person", "full_name")
                 ?? ReadDoubleNestedStringProperty(item, "employee", "person", "name");
-        }
-
-        private static string? GetText(ReferenceDataRow? row, params string[] fieldKeys)
-        {
-            if (row is null || row.IsPlaceholder)
-            {
-                return null;
-            }
-
-            foreach (var fieldKey in fieldKeys)
-            {
-                var value = row.GetValue(fieldKey)?.ToString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    return value;
-                }
-            }
-
-            return null;
         }
 
         private static string? ReadStringProperty(JsonElement item, string propertyName)

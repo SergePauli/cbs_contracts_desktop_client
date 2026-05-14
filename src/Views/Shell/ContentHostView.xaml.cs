@@ -11,6 +11,8 @@ using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Shared.Data;
+using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
@@ -23,6 +25,8 @@ using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
+using static CbsContractsDesktopClient.Shared.Dates.BusinessCalendar;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
@@ -1961,14 +1965,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task<IReadOnlyList<HolidayCalendarDay>> LoadHolidayCalendarAsync(CancellationToken cancellationToken = default)
         {
-            var rows = await _holidayRecalculationService.GetHolidayCalendarAsync(cancellationToken);
-
-            return rows
-                .Where(static row => !row.IsPlaceholder)
-                .Select(TryCreateHolidayCalendarDay)
-                .Where(static item => item is not null)
-                .Cast<HolidayCalendarDay>()
-                .ToList();
+            return await _holidayRecalculationService.GetHolidayCalendarDaysAsync(cancellationToken);
         }
 
         private async Task<IReadOnlyList<StageRecalcCandidate>> LoadAffectedStagesAsync(
@@ -2003,23 +2000,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                 IntervalEnd: FormatRailsDate(endAt),
                 StartDate: beginAt.Value,
                 EndDate: endAt);
-        }
-
-        private static HolidayCalendarDay? TryCreateHolidayCalendarDay(ReferenceDataRow row)
-        {
-            var beginAt = TryParseDate(row.GetValue("begin_at"));
-            if (beginAt is null)
-            {
-                return null;
-            }
-
-            var endAt = TryParseDate(row.GetValue("end_at"));
-            return new HolidayCalendarDay(
-                BeginAt: FormatRailsDate(beginAt.Value),
-                BeginDate: beginAt.Value.Date,
-                EndAt: endAt is null ? null : FormatRailsDate(endAt.Value),
-                EndDate: endAt?.Date,
-                IsWorkingDay: TryGetBool(row.GetValue("work")) ?? false);
         }
 
         private static StageRecalcCandidate? TryCreateStageCandidate(ReferenceDataRow row)
@@ -2146,36 +2126,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             return FormatRailsDate(AddWorkingDaysToDate(baseDate.Value, stage.PaymentDuration.Value, holidays));
         }
 
-        private static DateTime AddWorkingDaysToDate(
-            DateTime current,
-            int days,
-            IReadOnlyList<HolidayCalendarDay> holidays)
-        {
-            var result = current.Date.AddDays(-1);
-            var daysCount = 0;
-
-            while (daysCount < days)
-            {
-                result = result.AddDays(1);
-                var calendarDay = holidays.FirstOrDefault(day =>
-                    day.BeginAt == FormatRailsDate(result)
-                    || day.EndAt == FormatRailsDate(result)
-                    || (day.EndDate is DateTime endDate && endDate > result && day.BeginDate < result));
-
-                var dayOfWeek = result.DayOfWeek;
-                var isWeekend = dayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
-                var isWorkingDay = (!isWeekend || calendarDay?.IsWorkingDay == true)
-                    && (calendarDay is null || calendarDay.IsWorkingDay);
-
-                if (isWorkingDay)
-                {
-                    daysCount++;
-                }
-            }
-
-            return result;
-        }
-
         private static bool IntersectsRange(string? itemStart, string? itemEnd, DateTime? intervalStart, DateTime? intervalEnd)
         {
             var start = TryParseDate(itemStart);
@@ -2227,40 +2177,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private static string FormatRailsDate(DateTime value)
         {
             return value.ToString("ddd MMM dd yyyy", CultureInfo.InvariantCulture);
-        }
-
-        private static long? TryGetLong(object? value)
-        {
-            return value switch
-            {
-                long int64Value => int64Value,
-                int int32Value => int32Value,
-                decimal decimalValue => (long)decimalValue,
-                string text when long.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static int? TryGetInt(object? value)
-        {
-            return value switch
-            {
-                int int32Value => int32Value,
-                long int64Value => (int)int64Value,
-                decimal decimalValue => (int)decimalValue,
-                string text when int.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static bool? TryGetBool(object? value)
-        {
-            return value switch
-            {
-                bool boolValue => boolValue,
-                string text when bool.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
         }
 
         private ProfileEditDialogState CreateProfileEditDialogState(bool isCreateMode)
@@ -2936,13 +2852,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         }
 
         private sealed record HolidayInterval(string IntervalStart, string IntervalEnd, DateTime StartDate, DateTime EndDate);
-
-        private sealed record HolidayCalendarDay(
-            string BeginAt,
-            DateTime BeginDate,
-            string? EndAt,
-            DateTime? EndDate,
-            bool IsWorkingDay);
 
         private sealed record StageRecalcCandidate(
             long Id,

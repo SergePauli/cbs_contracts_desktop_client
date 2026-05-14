@@ -134,9 +134,9 @@ public sealed class ContentHostViewTests
         Assert.Contains("код: {code}", detailCode);
         Assert.DoesNotContain("ID: {id}", detailCode);
         Assert.Contains("\"requisites.organization.full_name\"", detailCode);
-        Assert.Contains("FormatPart(\"ИНН\", GetText(row, \"requisites.organization.inn\", \"inn\"))", detailCode);
-        Assert.Contains("FormatPart(\"КПП\", GetText(row, \"requisites.organization.kpp\", \"kpp\"))", detailCode);
-        Assert.Contains("FormatPart(\"Подразделение\", GetText(row, \"requisites.organization.division\", \"division\", \"contragent.division\"))", detailCode);
+        Assert.Contains("FormatPart(\"ИНН\", TryGetText(row, \"requisites.organization.inn\", \"inn\"))", detailCode);
+        Assert.Contains("FormatPart(\"КПП\", TryGetText(row, \"requisites.organization.kpp\", \"kpp\"))", detailCode);
+        Assert.Contains("FormatPart(\"Подразделение\", TryGetText(row, \"requisites.organization.division\", \"division\", \"contragent.division\"))", detailCode);
         Assert.DoesNotContain("FormatPart(\"ОГРН\"", detailCode);
         Assert.DoesNotContain("FormatPart(\"ОКПО\"", detailCode);
         Assert.Contains("\"contacts.contact_attributes.value\"", detailCode);

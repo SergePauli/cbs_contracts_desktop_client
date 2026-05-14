@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CbsContractsDesktopClient.Models.References;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow
 {
@@ -57,8 +58,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             {
                 foreach (var stage in stages.Value.EnumerateArray())
                 {
-                    if (stage.ValueKind == JsonValueKind.Object
-                        && stage.TryGetProperty("comments", out var stageComments))
+                    if (TryGetArray(stage, "comments") is JsonElement stageComments)
                     {
                         AddComments(comments, stageComments);
                     }
@@ -84,48 +84,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                     continue;
                 }
 
-                target.Add(new ReferenceDataRow
-                {
-                    Values = comment
-                        .EnumerateObject()
-                        .ToDictionary(
-                            static property => property.Name,
-                            static property => property.Value,
-                            StringComparer.OrdinalIgnoreCase)
-                });
+                target.Add(ToReferenceDataRow(comment));
             }
-        }
-
-        private static JsonElement? TryGetArray(ReferenceDataRow row, string fieldKey)
-        {
-            return row.Values.TryGetValue(fieldKey, out var value)
-                && value.ValueKind == JsonValueKind.Array
-                ? value
-                : null;
-        }
-
-        private static int? TryGetInt(object? value)
-        {
-            return value switch
-            {
-                int intValue => intValue,
-                long longValue => checked((int)longValue),
-                decimal decimalValue => checked((int)decimalValue),
-                string text when int.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static long? TryGetLong(object? value)
-        {
-            return value switch
-            {
-                long longValue => longValue,
-                int intValue => intValue,
-                decimal decimalValue => (long)decimalValue,
-                string text when long.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
         }
     }
 }

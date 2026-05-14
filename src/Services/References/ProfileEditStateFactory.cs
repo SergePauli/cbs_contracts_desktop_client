@@ -1,6 +1,7 @@
 using System.Globalization;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -18,52 +19,27 @@ namespace CbsContractsDesktopClient.Services.References
             {
                 Definition = definition,
                 IsCreateMode = isCreateMode,
-                Id = TryGetInt64(sourceRow?.GetValue("id")),
-                UserId = TryGetInt64(sourceRow?.GetValue("user.id")),
-                PersonId = TryGetInt64(sourceRow?.GetValue("user.person.id")),
+                Id = TryGetLong(sourceRow?.GetValue("id")),
+                UserId = TryGetLong(sourceRow?.GetValue("user.id")),
+                PersonId = TryGetLong(sourceRow?.GetValue("user.person.id")),
                 Login = sourceRow?.GetValue("user.name")?.ToString() ?? string.Empty,
-                Email = GetFirstTextValue(
+                Email = TryGetText(
                     sourceRow,
                     "user.email.name",
-                    "user.person.person_contacts.contact.value"),
-                PersonName = GetFirstTextValue(
+                    "user.person.person_contacts.contact.value") ?? string.Empty,
+                PersonName = TryGetText(
                     sourceRow,
                     "user.person.full_name",
-                    "user.person.person_name.naming.fio"),
+                    "user.person.person_name.naming.fio") ?? string.Empty,
                 Role = sourceRow?.GetValue("user.role")?.ToString() ?? string.Empty,
-                PositionId = TryGetInt64(sourceRow?.GetValue("position.id") ?? sourceRow?.GetValue("position_id")),
+                PositionId = TryGetLong(sourceRow?.GetValue("position.id") ?? sourceRow?.GetValue("position_id")),
                 PositionName = sourceRow?.GetValue("position.name")?.ToString() ?? string.Empty,
-                DepartmentId = TryGetInt64(sourceRow?.GetValue("department.id") ?? sourceRow?.GetValue("department_id")),
+                DepartmentId = TryGetLong(sourceRow?.GetValue("department.id") ?? sourceRow?.GetValue("department_id")),
                 DepartmentName = sourceRow?.GetValue("department.name")?.ToString() ?? string.Empty,
                 Password = sourceRow?.GetValue("user.password")?.ToString() ?? string.Empty,
-                IsActive = TryGetBoolean(sourceRow?.GetValue("user.activated")),
+                IsActive = TryGetBool(sourceRow?.GetValue("user.activated")) == true,
                 LastLoginText = FormatDateTime(sourceRow?.GetValue("user.last_login")),
                 DepartmentOptions = departmentOptions ?? []
-            };
-        }
-
-        private static long? TryGetInt64(object? value)
-        {
-            return value switch
-            {
-                null => null,
-                long longValue => longValue,
-                int intValue => intValue,
-                decimal decimalValue => (long)decimalValue,
-                _ when long.TryParse(value.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                    => parsed,
-                _ => null
-            };
-        }
-
-        private static bool TryGetBoolean(object? value)
-        {
-            return value switch
-            {
-                true => true,
-                false => false,
-                string text when bool.TryParse(text, out var parsed) => parsed,
-                _ => false
             };
         }
 
@@ -78,23 +54,5 @@ namespace CbsContractsDesktopClient.Services.References
             };
         }
 
-        private static string GetFirstTextValue(ReferenceDataRow? sourceRow, params string[] fieldKeys)
-        {
-            if (sourceRow is null)
-            {
-                return string.Empty;
-            }
-
-            foreach (var fieldKey in fieldKeys)
-            {
-                var text = sourceRow.GetValue(fieldKey)?.ToString();
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    return text;
-                }
-            }
-
-            return string.Empty;
-        }
     }
 }

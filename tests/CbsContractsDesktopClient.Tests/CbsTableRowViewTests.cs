@@ -56,10 +56,6 @@ public sealed class CbsTableRowViewTests
 
         Assert.Contains("IsStatusBadgeTemplate", code);
         Assert.Contains("ApplyStatusBadgeContent", code);
-        Assert.Contains("ResolveStatusBadgeColors", code);
-        Assert.Contains("4 or 5 => (Color.FromArgb(255, 201, 233, 212)", code);
-        Assert.Contains("1 or 2 => (Color.FromArgb(254, 194, 237, 246)", code);
-        Assert.Contains("3 => (Color.FromArgb(254, 246, 227, 194)", code);
-        Assert.Contains("6 => (Color.FromArgb(255, 255, 205, 210)", code);
+        Assert.Contains("StageContractStatusDialogControls.ResolveStatusBadgeColors(statusId)", code);
     }
 }

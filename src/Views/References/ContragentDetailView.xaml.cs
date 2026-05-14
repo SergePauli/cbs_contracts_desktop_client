@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System.Text.Json;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.References
 {
@@ -98,14 +99,14 @@ namespace CbsContractsDesktopClient.Views.References
                 return;
             }
 
-            var fullName = GetText(row, "requisites.organization.full_name", "full_name");
+            var fullName = TryGetText(row, "requisites.organization.full_name", "full_name");
 
             OwnershipFullNameTextBlock.Text = BuildOwnershipFullNameText(row);
             OwnershipCodeTextBlock.Text = BuildOwnershipCodeText(row);
             _ = RefreshOwnershipFromReferenceAsync(row, refreshVersion);
             FullNameTextBlock.Text = fullName ?? string.Empty;
             RequisitesTextBlock.Text = BuildRequisitesText(row);
-            DescriptionTextBlock.Text = GetText(row, "description") ?? string.Empty;
+            DescriptionTextBlock.Text = TryGetText(row, "description") ?? string.Empty;
             AddressesTextBlock.Text = BuildAddressesText(row);
             RenderContacts(BuildContactsText(row));
             RefreshContractLinks();
@@ -153,7 +154,7 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static string BuildOwnershipFullNameText(ReferenceDataRow row)
         {
-            return GetText(
+            return TryGetText(
                 row,
                 "requisites.organization.ownership.full_name",
                 "ownership.full_name",
@@ -163,7 +164,7 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static string BuildOwnershipCodeText(ReferenceDataRow row)
         {
-            var code = GetText(
+            var code = TryGetText(
                 row,
                 "requisites.organization.ownership.code",
                 "ownership.code",
@@ -233,7 +234,7 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static object? GetOwnershipId(ReferenceDataRow row)
         {
-            return GetText(
+            return TryGetText(
                 row,
                 "requisites.organization.ownership.id",
                 "ownership.id");
@@ -241,7 +242,7 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static string? GetOwnershipCode(ReferenceDataRow row)
         {
-            return GetText(
+            return TryGetText(
                 row,
                 "requisites.organization.ownership.okopf",
                 "ownership.okopf",
@@ -295,9 +296,9 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var parts = new[]
             {
-                FormatPart("ИНН", GetText(row, "requisites.organization.inn", "inn")),
-                FormatPart("КПП", GetText(row, "requisites.organization.kpp", "kpp")),
-                FormatPart("Подразделение", GetText(row, "requisites.organization.division", "division", "contragent.division"))
+                FormatPart("ИНН", TryGetText(row, "requisites.organization.inn", "inn")),
+                FormatPart("КПП", TryGetText(row, "requisites.organization.kpp", "kpp")),
+                FormatPart("Подразделение", TryGetText(row, "requisites.organization.division", "division", "contragent.division"))
             };
 
             return string.Join("; ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
@@ -305,11 +306,11 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static string BuildAddressesText(ReferenceDataRow row)
         {
-            var registered = GetText(
+            var registered = TryGetText(
                 row,
                 "registred_addr.address.value",
                 "registered_addr.address.value");
-            var real = GetText(row, "real_addr.address.value", "address");
+            var real = TryGetText(row, "real_addr.address.value", "address");
 
             if (!string.IsNullOrWhiteSpace(registered) && !string.IsNullOrWhiteSpace(real))
             {
@@ -323,7 +324,7 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static string BuildContactsText(ReferenceDataRow row)
         {
-            var directText = GetText(
+            var directText = TryGetText(
                 row,
                 "contacts.contact_attributes.value",
                 "contacts.contact_attributes.name",
@@ -392,8 +393,7 @@ namespace CbsContractsDesktopClient.Views.References
                 return [];
             }
 
-            return contractsElement.Value
-                .EnumerateArray()
+            return EnumerateObjectArray(contractsElement)
                 .Select(ReadContractLink)
                 .Where(static contract => contract is not null)
                 .Cast<ContractLinkItem>()
@@ -415,32 +415,6 @@ namespace CbsContractsDesktopClient.Views.References
             }
 
             return new ContractLinkItem(id, title);
-        }
-
-        private static JsonElement? TryGetArray(ReferenceDataRow row, string fieldKey)
-        {
-            if (row.Values.TryGetValue(fieldKey, out var directValue)
-                && directValue.ValueKind == JsonValueKind.Array)
-            {
-                return directValue;
-            }
-
-            if (!fieldKey.Contains('.', StringComparison.Ordinal))
-            {
-                return null;
-            }
-
-            var segments = fieldKey.Split('.', StringSplitOptions.RemoveEmptyEntries);
-            if (segments.Length != 2
-                || !row.Values.TryGetValue(segments[0], out var root)
-                || root.ValueKind != JsonValueKind.Object
-                || !root.TryGetProperty(segments[1], out var nested)
-                || nested.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            return nested;
         }
 
         private static string? ReadContactValue(JsonElement item)
@@ -476,15 +450,13 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(ReferenceDataRow row)
         {
-            if (!row.Values.TryGetValue("employees", out var employeesElement)
-                || employeesElement.ValueKind != JsonValueKind.Array)
+            var employeesElement = TryGetArray(row, "employees");
+            if (employeesElement is null)
             {
                 return [];
             }
 
-            return employeesElement
-                .EnumerateArray()
-                .Where(static item => item.ValueKind == JsonValueKind.Object)
+            return EnumerateObjectArray(employeesElement)
                 .Select(ReadEmployee)
                 .Where(static employee => !string.IsNullOrWhiteSpace(employee.FullName) || employee.Id is not null)
                 .ToList();
@@ -572,20 +544,6 @@ namespace CbsContractsDesktopClient.Views.References
             return string.IsNullOrWhiteSpace(value)
                 ? null
                 : $"{label}: {value}";
-        }
-
-        private static string? GetText(ReferenceDataRow row, params string[] fieldKeys)
-        {
-            foreach (var fieldKey in fieldKeys)
-            {
-                var value = row.GetValue(fieldKey)?.ToString();
-                if (!string.IsNullOrWhiteSpace(value))
-                {
-                    return value;
-                }
-            }
-
-            return null;
         }
 
         private sealed record ContractLinkItem(long? Id, string Title);

@@ -1,4 +1,6 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Shared.Dates;
+using static CbsContractsDesktopClient.Shared.Formatting.AppFormatters;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -25,6 +27,18 @@ namespace CbsContractsDesktopClient.Services.References
                 "model/Holiday",
                 request,
                 cancellationToken);
+        }
+
+        public async Task<IReadOnlyList<HolidayCalendarDay>> GetHolidayCalendarDaysAsync(CancellationToken cancellationToken = default)
+        {
+            var rows = await GetHolidayCalendarAsync(cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(TryCreateHolidayCalendarDay)
+                .Where(static item => item is not null)
+                .Cast<HolidayCalendarDay>()
+                .ToList();
         }
 
         public Task<IReadOnlyList<ReferenceDataRow>> GetAffectedStagesAsync(
@@ -75,6 +89,21 @@ namespace CbsContractsDesktopClient.Services.References
                 "model/Stage",
                 request,
                 cancellationToken);
+        }
+
+        private static HolidayCalendarDay? TryCreateHolidayCalendarDay(ReferenceDataRow row)
+        {
+            var beginAt = ParseDate(row.GetValue("begin_at"));
+            if (beginAt is null)
+            {
+                return null;
+            }
+
+            var endAt = ParseDate(row.GetValue("end_at"));
+            return new HolidayCalendarDay(
+                beginAt.Value.Date,
+                endAt?.Date,
+                TryGetBool(row.GetValue("work")) ?? false);
         }
     }
 }

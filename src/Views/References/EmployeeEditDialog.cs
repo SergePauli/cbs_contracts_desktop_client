@@ -1,10 +1,10 @@
 using CbsContractsDesktopClient.ViewModels.References;
+using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.References
 {
@@ -85,16 +85,16 @@ namespace CbsContractsDesktopClient.Views.References
 
             if (!ViewModel.State.IsCreateMode)
             {
-                AddRow(grid, "ID", BuildReadOnlyTextBox(nameof(EmployeeEditViewModel.Id)));
+                AddFormRow(grid, "ID", BuildReadOnlyTextBox(nameof(EmployeeEditViewModel.Id)));
             }
 
-            AddRow(grid, "ФИО", BuildTextBoxEditor(nameof(EmployeeEditViewModel.PersonName)), isRequired: true);
-            AddRow(grid, "Должность", BuildPositionEditor(), isRequired: true);
-            AddRow(grid, "Контрагент", BuildContragentEditor(), isRequired: true);
-            AddRow(grid, "Контакты", BuildContactsEditor(), isRequired: true);
-            AddRow(grid, "Актуален", BuildUsedEditor());
-            AddRow(grid, "Пор.", BuildTextBoxEditor(nameof(EmployeeEditViewModel.PriorityText), minWidth: 80));
-            AddRow(grid, "Описание", BuildDescriptionEditor());
+            AddFormRow(grid, "ФИО", BuildTextBoxEditor(nameof(EmployeeEditViewModel.PersonName)), isRequired: true);
+            AddFormRow(grid, "Должность", BuildPositionEditor(), isRequired: true);
+            AddFormRow(grid, "Контрагент", BuildContragentEditor(), isRequired: true);
+            AddFormRow(grid, "Контакты", BuildContactsEditor(), isRequired: true);
+            AddFormRow(grid, "Актуален", BuildUsedEditor());
+            AddFormRow(grid, "Пор.", BuildTextBoxEditor(nameof(EmployeeEditViewModel.PriorityText), minWidth: 80));
+            AddFormRow(grid, "Описание", BuildDescriptionEditor());
 
             return grid;
         }
@@ -118,66 +118,6 @@ namespace CbsContractsDesktopClient.Views.References
                 Path = new PropertyPath(nameof(EmployeeEditViewModel.IsErrorInfoVisible))
             });
             return infoBar;
-        }
-
-        private static void AddRow(Grid grid, string labelText, FrameworkElement editor, bool isRequired = false)
-        {
-            var rowIndex = grid.RowDefinitions.Count;
-            grid.RowDefinitions.Add(new RowDefinition
-            {
-                Height = GridLength.Auto
-            });
-
-            var label = BuildLabel(labelText, isRequired);
-            Grid.SetRow(label, rowIndex);
-            Grid.SetColumn(label, 0);
-            grid.Children.Add(label);
-
-            editor.HorizontalAlignment = HorizontalAlignment.Left;
-            editor.VerticalAlignment = VerticalAlignment.Center;
-
-            Grid.SetRow(editor, rowIndex);
-            Grid.SetColumn(editor, 1);
-            grid.Children.Add(editor);
-        }
-
-        private static FrameworkElement BuildLabel(string labelText, bool isRequired)
-        {
-            if (!isRequired)
-            {
-                return new TextBlock
-                {
-                    Text = labelText,
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    VerticalAlignment = VerticalAlignment.Center,
-                    TextAlignment = TextAlignment.Right,
-                    FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                    Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
-                };
-            }
-
-            var labelPanel = new StackPanel
-            {
-                HorizontalAlignment = HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Center,
-                Orientation = Orientation.Horizontal,
-                Spacing = 2
-            };
-            labelPanel.Children.Add(new TextBlock
-            {
-                Text = labelText,
-                TextAlignment = TextAlignment.Right,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
-            });
-            labelPanel.Children.Add(new TextBlock
-            {
-                Text = "*",
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Firebrick)
-            });
-
-            return labelPanel;
         }
 
         private static TextBox BuildReadOnlyTextBox(string bindingPath)

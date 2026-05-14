@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using CbsContractsDesktopClient.Models.References;
+using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -147,21 +149,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return root;
         }
 
-        private static UIElement BuildLabeledControl(string label, UIElement control)
-        {
-            var stack = new StackPanel
-            {
-                Spacing = 6
-            };
-            stack.Children.Add(new TextBlock
-            {
-                Text = label,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-            });
-            stack.Children.Add(control);
-            return stack;
-        }
-
         private UIElement BuildFileLinkEditor(string label, TextBox editor)
         {
             var grid = new Grid
@@ -258,29 +245,5 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : value?.ToString() ?? string.Empty;
         }
 
-        private static bool? TryGetBool(object? value)
-        {
-            return value switch
-            {
-                bool boolValue => boolValue,
-                string text when bool.TryParse(text, out var parsedValue) => parsedValue,
-                string text when long.TryParse(text, out var numericValue) => numericValue != 0,
-                long int64Value => int64Value != 0,
-                int int32Value => int32Value != 0,
-                _ => null
-            };
-        }
-
-        private static long? TryGetLong(object? value)
-        {
-            return value switch
-            {
-                long int64Value => int64Value,
-                int int32Value => int32Value,
-                decimal decimalValue => (long)decimalValue,
-                string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
     }
 }

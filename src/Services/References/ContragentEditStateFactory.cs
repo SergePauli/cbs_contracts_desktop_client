@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -34,35 +35,35 @@ namespace CbsContractsDesktopClient.Services.References
                 Definition = definition,
                 IsCreateMode = false,
                 Id = TryGetLong(sourceRow.GetValue("id")),
-                ObjUuid = GetText(sourceRow, "obj_uuid"),
+                ObjUuid = GetSingleLineText(sourceRow, "obj_uuid"),
                 RequisitesId = TryGetLong(sourceRow.GetValue("requisites.id")),
-                RequisitesListKey = GetText(sourceRow, "requisites.list_key"),
+                RequisitesListKey = GetSingleLineText(sourceRow, "requisites.list_key"),
                 OrganizationId = TryGetLong(sourceRow.GetValue("requisites.organization.id")),
-                Inn = GetText(sourceRow, "requisites.organization.inn"),
-                Kpp = GetText(sourceRow, "requisites.organization.kpp"),
-                Division = GetText(sourceRow, "requisites.organization.division"),
+                Inn = GetSingleLineText(sourceRow, "requisites.organization.inn"),
+                Kpp = GetSingleLineText(sourceRow, "requisites.organization.kpp"),
+                Division = GetSingleLineText(sourceRow, "requisites.organization.division"),
                 OwnershipId = TryGetLong(sourceRow.GetValue("requisites.organization.ownership.id")),
-                OwnershipName = GetText(sourceRow, "requisites.organization.ownership.name"),
-                Name = GetText(sourceRow, "requisites.organization.name"),
+                OwnershipName = GetSingleLineText(sourceRow, "requisites.organization.ownership.name"),
+                Name = GetSingleLineText(sourceRow, "requisites.organization.name"),
                 RegionId = TryGetLong(sourceRow.GetValue("region.id") ?? sourceRow.GetValue("real_addr.address.area_id")),
-                RegionName = GetText(sourceRow, "region.name"),
+                RegionName = GetSingleLineText(sourceRow, "region.name"),
                 RealAddressId = TryGetLong(sourceRow.GetValue("real_addr.id")),
-                RealAddressListKey = GetText(sourceRow, "real_addr.list_key"),
+                RealAddressListKey = GetSingleLineText(sourceRow, "real_addr.list_key"),
                 AddressRealAddressId = TryGetLong(sourceRow.GetValue("real_addr.address.id") ?? sourceRow.GetValue("real_addr.address_id")),
-                AddressReal = GetText(sourceRow, "real_addr.address.value"),
-                FullName = GetText(sourceRow, "requisites.organization.full_name"),
+                AddressReal = GetSingleLineText(sourceRow, "real_addr.address.value"),
+                FullName = GetSingleLineText(sourceRow, "requisites.organization.full_name"),
                 Description = GetRawText(sourceRow, "description"),
-                Ogrn = GetText(sourceRow, "requisites.organization.ogrn"),
-                Okfc = GetText(sourceRow, "requisites.organization.okfc"),
-                Okopf = GetText(sourceRow, "requisites.organization.okopf"),
-                Okpo = GetText(sourceRow, "requisites.organization.okpo"),
-                Okogu = GetText(sourceRow, "requisites.organization.okogu"),
-                Okved = GetText(sourceRow, "requisites.organization.okved"),
-                Oktmo = GetText(sourceRow, "requisites.organization.oktmo"),
-                BankName = GetText(sourceRow, "bank_name"),
-                BankBik = GetText(sourceRow, "bank_bik"),
-                BankAccount = GetText(sourceRow, "bank_account"),
-                BankCorAccount = GetText(sourceRow, "bank_cor_account"),
+                Ogrn = GetSingleLineText(sourceRow, "requisites.organization.ogrn"),
+                Okfc = GetSingleLineText(sourceRow, "requisites.organization.okfc"),
+                Okopf = GetSingleLineText(sourceRow, "requisites.organization.okopf"),
+                Okpo = GetSingleLineText(sourceRow, "requisites.organization.okpo"),
+                Okogu = GetSingleLineText(sourceRow, "requisites.organization.okogu"),
+                Okved = GetSingleLineText(sourceRow, "requisites.organization.okved"),
+                Oktmo = GetSingleLineText(sourceRow, "requisites.organization.oktmo"),
+                BankName = GetSingleLineText(sourceRow, "bank_name"),
+                BankBik = GetSingleLineText(sourceRow, "bank_bik"),
+                BankAccount = GetSingleLineText(sourceRow, "bank_account"),
+                BankCorAccount = GetSingleLineText(sourceRow, "bank_cor_account"),
                 Contacts = contacts,
                 ContactsText = string.Join(Environment.NewLine, contacts.Select(static contact => contact.Value)),
                 OrganizationHistory = organizationHistory,
@@ -70,7 +71,7 @@ namespace CbsContractsDesktopClient.Services.References
                 RegionOptions = regionOptions ?? [],
                 InitialAddressOption = CreateInitialAddressOption(
                     TryGetLong(sourceRow.GetValue("real_addr.address.id") ?? sourceRow.GetValue("real_addr.address_id")),
-                    GetText(sourceRow, "real_addr.address.value"))
+                    GetSingleLineText(sourceRow, "real_addr.address.value"))
             };
         }
 
@@ -101,9 +102,7 @@ namespace CbsContractsDesktopClient.Services.References
                     : [currentOrganization];
             }
 
-            return organizationsElement.Value
-                .EnumerateArray()
-                .Where(static item => item.ValueKind == JsonValueKind.Object)
+            return EnumerateObjectArray(organizationsElement)
                 .Select(ReadOrganizationHistoryItem)
                 .OrderByDescending(static item => item.IsActive)
                 .ThenByDescending(static item => item.UpdatedAt)
@@ -114,8 +113,8 @@ namespace CbsContractsDesktopClient.Services.References
         private static ContragentOrganizationHistoryItem? ReadCurrentOrganizationHistoryItem(ReferenceDataRow row)
         {
             var id = TryGetLong(row.GetValue("requisites.organization.id"));
-            var name = GetText(row, "requisites.organization.name");
-            var fullName = GetText(row, "requisites.organization.full_name");
+            var name = GetSingleLineText(row, "requisites.organization.name");
+            var fullName = GetSingleLineText(row, "requisites.organization.full_name");
             if (id is null && string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(fullName))
             {
                 return null;
@@ -127,24 +126,24 @@ namespace CbsContractsDesktopClient.Services.References
                 OrganizationId = id,
                 Name = name,
                 FullName = fullName,
-                Inn = GetText(row, "requisites.organization.inn"),
-                Kpp = GetText(row, "requisites.organization.kpp"),
-                Division = GetText(row, "requisites.organization.division"),
+                Inn = GetSingleLineText(row, "requisites.organization.inn"),
+                Kpp = GetSingleLineText(row, "requisites.organization.kpp"),
+                Division = GetSingleLineText(row, "requisites.organization.division"),
                 OwnershipId = TryGetLong(row.GetValue("requisites.organization.ownership.id")),
-                OwnershipName = GetText(row, "requisites.organization.ownership.name"),
+                OwnershipName = GetSingleLineText(row, "requisites.organization.ownership.name"),
                 OwnershipCode =
-                    GetTextOrNull(row, "requisites.organization.ownership.code")
-                    ?? GetTextOrNull(row, "requisites.organization.ownership.okopf")
-                    ?? GetTextOrNull(row, "requisites.organization.okopf")
+                    TryGetSingleLineText(row, "requisites.organization.ownership.code")
+                    ?? TryGetSingleLineText(row, "requisites.organization.ownership.okopf")
+                    ?? TryGetSingleLineText(row, "requisites.organization.okopf")
                     ?? string.Empty,
-                Ogrn = GetText(row, "requisites.organization.ogrn"),
-                Okfc = GetText(row, "requisites.organization.okfc"),
-                Okopf = GetText(row, "requisites.organization.okopf"),
-                Okpo = GetText(row, "requisites.organization.okpo"),
-                Okogu = GetText(row, "requisites.organization.okogu"),
-                Okved = GetText(row, "requisites.organization.okved"),
-                Oktmo = GetText(row, "requisites.organization.oktmo"),
-                ListKey = GetText(row, "requisites.list_key"),
+                Ogrn = GetSingleLineText(row, "requisites.organization.ogrn"),
+                Okfc = GetSingleLineText(row, "requisites.organization.okfc"),
+                Okopf = GetSingleLineText(row, "requisites.organization.okopf"),
+                Okpo = GetSingleLineText(row, "requisites.organization.okpo"),
+                Okogu = GetSingleLineText(row, "requisites.organization.okogu"),
+                Okved = GetSingleLineText(row, "requisites.organization.okved"),
+                Oktmo = GetSingleLineText(row, "requisites.organization.oktmo"),
+                ListKey = GetSingleLineText(row, "requisites.list_key"),
                 OriginalIsActive = true,
                 IsActive = true
             };
@@ -152,77 +151,41 @@ namespace CbsContractsDesktopClient.Services.References
 
         private static ContragentOrganizationHistoryItem ReadOrganizationHistoryItem(JsonElement item)
         {
-            var organization = GetObjectProperty(item, "organization")
-                ?? GetObjectProperty(item, "organization_attributes")
+            var organization = TryGetObject(item, "organization")
+                ?? TryGetObject(item, "organization_attributes")
                 ?? item;
-            var ownership = GetObjectProperty(organization, "ownership");
+            var ownership = TryGetObject(organization, "ownership");
 
             return new ContragentOrganizationHistoryItem
             {
                 Id = TryGetLong(TryGetValue(item, "id")),
                 OrganizationId = TryGetLong(TryGetValue(organization, "id")) ?? TryGetLong(TryGetValue(item, "organization_id")),
-                Name = TryGetString(organization, "name") ?? string.Empty,
-                FullName = TryGetString(organization, "full_name") ?? string.Empty,
-                Inn = TryGetString(organization, "inn") ?? string.Empty,
-                Kpp = TryGetString(organization, "kpp") ?? string.Empty,
-                Division = TryGetString(organization, "division") ?? string.Empty,
+                Name = TryGetSingleLineString(organization, "name") ?? string.Empty,
+                FullName = TryGetSingleLineString(organization, "full_name") ?? string.Empty,
+                Inn = TryGetSingleLineString(organization, "inn") ?? string.Empty,
+                Kpp = TryGetSingleLineString(organization, "kpp") ?? string.Empty,
+                Division = TryGetSingleLineString(organization, "division") ?? string.Empty,
                 OwnershipId = TryGetLong(TryGetValue(organization, "ownership_id")) ?? (ownership is null ? null : TryGetLong(TryGetValue(ownership.Value, "id"))),
-                OwnershipName = ownership is null ? string.Empty : TryGetString(ownership.Value, "name") ?? TryGetString(ownership.Value, "full_name") ?? string.Empty,
-                OwnershipCode = ownership is null ? TryGetString(organization, "okopf") ?? string.Empty : TryGetString(ownership.Value, "code") ?? TryGetString(ownership.Value, "okopf") ?? TryGetString(organization, "okopf") ?? string.Empty,
-                Ogrn = TryGetString(organization, "ogrn") ?? string.Empty,
-                Okfc = TryGetString(organization, "okfc") ?? string.Empty,
-                Okopf = TryGetString(organization, "okopf") ?? string.Empty,
-                Okpo = TryGetString(organization, "okpo") ?? string.Empty,
-                Okogu = TryGetString(organization, "okogu") ?? string.Empty,
-                Okved = TryGetString(organization, "okved") ?? string.Empty,
-                Oktmo = TryGetString(organization, "oktmo") ?? string.Empty,
-                ListKey = TryGetString(item, "list_key") ?? string.Empty,
-                CreatedAt = TryGetString(item, "created_at") ?? TryGetString(organization, "created_at") ?? string.Empty,
-                UpdatedAt = TryGetString(item, "updated_at") ?? TryGetString(organization, "updated_at") ?? string.Empty,
+                OwnershipName = ownership is null ? string.Empty : TryGetSingleLineString(ownership.Value, "name") ?? TryGetSingleLineString(ownership.Value, "full_name") ?? string.Empty,
+                OwnershipCode = ownership is null ? TryGetSingleLineString(organization, "okopf") ?? string.Empty : TryGetSingleLineString(ownership.Value, "code") ?? TryGetSingleLineString(ownership.Value, "okopf") ?? TryGetSingleLineString(organization, "okopf") ?? string.Empty,
+                Ogrn = TryGetSingleLineString(organization, "ogrn") ?? string.Empty,
+                Okfc = TryGetSingleLineString(organization, "okfc") ?? string.Empty,
+                Okopf = TryGetSingleLineString(organization, "okopf") ?? string.Empty,
+                Okpo = TryGetSingleLineString(organization, "okpo") ?? string.Empty,
+                Okogu = TryGetSingleLineString(organization, "okogu") ?? string.Empty,
+                Okved = TryGetSingleLineString(organization, "okved") ?? string.Empty,
+                Oktmo = TryGetSingleLineString(organization, "oktmo") ?? string.Empty,
+                ListKey = TryGetSingleLineString(item, "list_key") ?? string.Empty,
+                CreatedAt = TryGetSingleLineString(item, "created_at") ?? TryGetSingleLineString(organization, "created_at") ?? string.Empty,
+                UpdatedAt = TryGetSingleLineString(item, "updated_at") ?? TryGetSingleLineString(organization, "updated_at") ?? string.Empty,
                 OriginalIsActive = TryGetBool(item, "used") ?? TryGetBool(item, "active") ?? true,
                 IsActive = TryGetBool(item, "used") ?? TryGetBool(item, "active") ?? true
             };
         }
 
-        private static JsonElement? TryGetArray(ReferenceDataRow row, string propertyName)
-        {
-            return row.Values.TryGetValue(propertyName, out var value) && value.ValueKind == JsonValueKind.Array
-                ? value
-                : null;
-        }
-
-        private static JsonElement? TryGetNestedArray(ReferenceDataRow row, string propertyName, string nestedPropertyName)
-        {
-            if (!row.Values.TryGetValue(propertyName, out var value)
-                || value.ValueKind != JsonValueKind.Object
-                || !value.TryGetProperty(nestedPropertyName, out var nested)
-                || nested.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            return nested;
-        }
-
-        private static JsonElement? GetObjectProperty(JsonElement element, string propertyName)
-        {
-            return element.ValueKind == JsonValueKind.Object
-                && element.TryGetProperty(propertyName, out var value)
-                && value.ValueKind == JsonValueKind.Object
-                ? value
-                : null;
-        }
-
         private static IReadOnlyList<EmployeeContactEditItem> ReadContacts(ReferenceDataRow row)
         {
-            if (!row.Values.TryGetValue("contacts", out var contactsElement)
-                || contactsElement.ValueKind != JsonValueKind.Array)
-            {
-                return [];
-            }
-
-            return contactsElement
-                .EnumerateArray()
+            return EnumerateObjectArray(row, "contacts")
                 .Select(ReadContact)
                 .Where(static contact => contact is not null)
                 .Cast<EmployeeContactEditItem>()
@@ -236,16 +199,15 @@ namespace CbsContractsDesktopClient.Services.References
                 return null;
             }
 
-            var contactElement = default(JsonElement);
-            var hasContact =
-                item.TryGetProperty("contact_attributes", out contactElement)
-                || item.TryGetProperty("contact", out contactElement);
+            var contactElement = TryGetObject(item, "contact_attributes")
+                ?? TryGetObject(item, "contact")
+                ?? default(JsonElement);
 
             var value =
-                TryGetString(contactElement, "value")
-                ?? TryGetString(contactElement, "name")
-                ?? TryGetString(item, "value")
-                ?? TryGetString(item, "name");
+                TryGetSingleLineString(contactElement, "value")
+                ?? TryGetSingleLineString(contactElement, "name")
+                ?? TryGetSingleLineString(item, "value")
+                ?? TryGetSingleLineString(item, "name");
             if (string.IsNullOrWhiteSpace(value))
             {
                 return null;
@@ -254,42 +216,10 @@ namespace CbsContractsDesktopClient.Services.References
             return new EmployeeContactEditItem
             {
                 Id = TryGetLong(TryGetValue(item, "id")),
-                ListKey = TryGetString(item, "list_key"),
+                ListKey = TryGetSingleLineString(item, "list_key"),
                 Value = value.Trim(),
-                Type = TryGetString(contactElement, "type") ?? TryGetString(item, "type") ?? InferContactType(value)
+                Type = TryGetSingleLineString(contactElement, "type") ?? TryGetSingleLineString(item, "type") ?? InferContactType(value)
             };
-        }
-
-        private static JsonElement? TryGetValue(JsonElement element, string propertyName)
-        {
-            return element.ValueKind == JsonValueKind.Object && element.TryGetProperty(propertyName, out var value)
-                ? value
-                : null;
-        }
-
-        private static string? TryGetString(JsonElement element, string propertyName)
-        {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            return NormalizeSingleLine(value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString());
-        }
-
-        private static string GetText(ReferenceDataRow row, string fieldKey)
-        {
-            return GetTextOrNull(row, fieldKey) ?? string.Empty;
-        }
-
-        private static string GetRawText(ReferenceDataRow row, string fieldKey)
-        {
-            return row.GetValue(fieldKey)?.ToString() ?? string.Empty;
-        }
-
-        private static string? GetTextOrNull(ReferenceDataRow row, string fieldKey)
-        {
-            return NormalizeSingleLine(row.GetValue(fieldKey)?.ToString());
         }
 
         private static string? NormalizeSingleLine(string? value)
@@ -302,50 +232,6 @@ namespace CbsContractsDesktopClient.Services.References
             return string.Join(
                 " ",
                 value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
-        }
-
-        private static bool? TryGetBool(JsonElement element, string propertyName)
-        {
-            if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            return value.ValueKind switch
-            {
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.String when bool.TryParse(value.GetString(), out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static long? TryGetLong(JsonElement? element)
-        {
-            if (element is null)
-            {
-                return null;
-            }
-
-            var value = element.Value;
-            return value.ValueKind switch
-            {
-                JsonValueKind.Number when value.TryGetInt64(out var int64Value) => int64Value,
-                JsonValueKind.String when long.TryParse(value.GetString(), out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
-        private static long? TryGetLong(object? value)
-        {
-            return value switch
-            {
-                long int64Value => int64Value,
-                int int32Value => int32Value,
-                decimal decimalValue => (long)decimalValue,
-                string text when long.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
         }
 
         private static string InferContactType(string value)
