@@ -14,6 +14,7 @@ namespace CbsContractsDesktopClient.Services
         {
             ArgumentNullException.ThrowIfNull(request);
 
+            EmitTrace(FormatQueryTrace("DATA QUERY INDEX", request));
             EmitTrace($"Page payload:{Environment.NewLine}{SerializeForTrace(request)}");
             var items = await PostAsync<DataQueryRequest, List<TItem>>("api/index", request, cancellationToken);
             return items;
@@ -24,6 +25,7 @@ namespace CbsContractsDesktopClient.Services
             ArgumentNullException.ThrowIfNull(request);
 
             var countRequest = BuildCountRequest(request);
+            EmitTrace(FormatQueryTrace("DATA QUERY COUNT", countRequest));
             EmitTrace($"Count payload:{Environment.NewLine}{SerializeForTrace(countRequest)}");
             var payload = await PostForJsonAsync("api/count", countRequest, cancellationToken);
             return NormalizeCount(payload);
@@ -69,6 +71,15 @@ namespace CbsContractsDesktopClient.Services
         private string SerializeForTrace(DataQueryRequest request)
         {
             return JsonSerializer.Serialize(request, SerializerOptions);
+        }
+
+        private static string FormatQueryTrace(string title, DataQueryRequest request)
+        {
+            var sorts = request.Sorts is null || request.Sorts.Count == 0
+                ? "<none>"
+                : string.Join(", ", request.Sorts);
+            var filters = request.Filters is null ? "<none>" : "set";
+            return $"{title} model={request.Model} preset={request.Preset ?? "<null>"} offset={request.Offset?.ToString() ?? "<null>"} limit={request.Limit?.ToString() ?? "<null>"} filters={filters} sorts={sorts}";
         }
     }
 }

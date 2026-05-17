@@ -109,6 +109,102 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         Assert.Contains(options, static option => Equals(option.Value, 11L) && option.Label == "11 - Поставка ПО");
     }
 
+    [Fact]
+    public async Task ApplySavedRowUpdate_ReplacesLoadedRowWithoutReloading()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] =
+                [
+                    CreateRow(("id", 1), ("name", "Old"), ("description", "Keep"))
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+        viewModel.SelectedRow = viewModel.Items[0];
+        var dataRequestCount = dataQueryService.DataRequestCount;
+        var countRequestCount = dataQueryService.CountRequestCount;
+
+        var applied = viewModel.ApplySavedRowUpdate(
+            CreateRow(("id", 1), ("name", "Server")),
+            new Dictionary<string, object?>
+            {
+                ["id"] = 1L,
+                ["name"] = "Local",
+                ["person_attributes"] = new Dictionary<string, object?>()
+            });
+
+        Assert.True(applied);
+        Assert.Equal(dataRequestCount, dataQueryService.DataRequestCount);
+        Assert.Equal(countRequestCount, dataQueryService.CountRequestCount);
+        Assert.Equal("Server", viewModel.Items[0].GetValue("name"));
+        Assert.Equal("Keep", viewModel.Items[0].GetValue("description"));
+        Assert.Null(viewModel.Items[0].GetValue("person_attributes"));
+        Assert.Same(viewModel.Items[0], viewModel.SelectedRow);
+    }
+
+    [Fact]
+    public async Task ApplySavedRowUpdate_UsesPayloadWhenResponseOmitsChangedField()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] =
+                [
+                    CreateRow(("id", 2), ("name", "Old"))
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+
+        var applied = viewModel.ApplySavedRowUpdate(
+            CreateRow(("id", 2)),
+            new Dictionary<string, object?>
+            {
+                ["id"] = 2L,
+                ["name"] = "Local"
+            });
+
+        Assert.True(applied);
+        Assert.Equal("Local", viewModel.Items[0].GetValue("name"));
+    }
+
+    [Fact]
+    public async Task ApplySavedRowUpdate_ReturnsFalseWhenRowIsNotLoaded()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] =
+                [
+                    CreateRow(("id", 1), ("name", "Old"))
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+
+        var applied = viewModel.ApplySavedRowUpdate(
+            CreateRow(("id", 99), ("name", "Missing")),
+            new Dictionary<string, object?>
+            {
+                ["id"] = 99L,
+                ["name"] = "Missing"
+            });
+
+        Assert.False(applied);
+        Assert.Equal("Old", viewModel.Items[0].GetValue("name"));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
@@ -127,20 +223,46 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         };
     }
 
+    private ReferencesContentViewModel CreateViewModel(
+        FakeDataQueryService dataQueryService,
+        string route)
+    {
+        var settingsService = new LocalUserSettingsService(_settingsFilePath);
+        var referenceDefinitionService = new ReferenceDefinitionService(settingsService);
+        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, settingsService);
+        var shellViewModel = new AppShellViewModel(new FakeUserService())
+        {
+            CurrentRoute = route
+        };
+
+        return new ReferencesContentViewModel(
+            shellViewModel,
+            dataQueryService,
+            referenceDefinitionService,
+            tablePageDefinitionService,
+            new ReferenceLookupCacheService(dataQueryService));
+    }
+
     private sealed class FakeDataQueryService : IDataQueryService
     {
         public Dictionary<string, IReadOnlyList<ReferenceDataRow>> RowsByModel { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public int DataRequestCount { get; private set; }
+
+        public int CountRequestCount { get; private set; }
 
         public Task<IReadOnlyList<TItem>> GetDataAsync<TItem>(
             DataQueryRequest request,
             CancellationToken cancellationToken = default)
         {
+            DataRequestCount++;
             var rows = RowsByModel.GetValueOrDefault(request.Model) ?? [];
             return Task.FromResult<IReadOnlyList<TItem>>(rows.Cast<TItem>().ToList());
         }
 
         public Task<int> GetCountAsync(DataQueryRequest request, CancellationToken cancellationToken = default)
         {
+            CountRequestCount++;
             var rows = RowsByModel.GetValueOrDefault(request.Model) ?? [];
             return Task.FromResult(rows.Count);
         }

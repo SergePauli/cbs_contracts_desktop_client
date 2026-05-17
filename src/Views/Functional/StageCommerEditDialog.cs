@@ -5,6 +5,7 @@ using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.Shared.Dialogs;
+using CbsContractsDesktopClient.ViewModels.Workflow;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
@@ -52,6 +53,8 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly string? _listKey;
         private bool _isApplyingBusinessLogic;
         private bool _businessLogicHandlersAttached;
+        private bool _deadlineAtEditedManually;
+        private bool _paymentDeadlineAtEditedManually;
 
         public StageCommerEditDialog(
             ReferenceDataRow sourceRow,
@@ -93,6 +96,22 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         public long Id { get; }
 
+        public bool ShouldCloseContract()
+        {
+            return IsStageStatusChangedToClosed()
+                && _closedAtEditor.Date is not null
+                && !IsContractAlreadyClosed()
+                && IsLastOpenStageInContract();
+        }
+
+        public IReadOnlyDictionary<string, object?> BuildContractClosePayload()
+        {
+            var contractId = ResolveContractId()
+                ?? throw new InvalidOperationException("Не удалось определить ID контракта для автоматического закрытия.");
+
+            return StageCommerEditPayloadBuilder.BuildContractClosePayload(contractId, _closedAtEditor.Date);
+        }
+
         private async void StageCommerEditDialog_Loaded(object sender, RoutedEventArgs e)
         {
             Loaded -= StageCommerEditDialog_Loaded;
@@ -110,49 +129,80 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         public IReadOnlyDictionary<string, object?> BuildPayload()
         {
-            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = Id,
-                ["status_id"] = GetSelectedStatusOption()?.Value,
-                ["deadline_kind"] = GetSelectedKey(_deadlineKindBox),
-                ["deadline_at"] = FormatDate(_deadlineAtEditor.Date),
-                ["start_at"] = FormatDate(_startAtEditor.Date),
-                ["payment_deadline_kind"] = GetSelectedKey(_paymentDeadlineKindBox),
-                ["payment_deadline_at"] = FormatDate(_paymentDeadlineAtEditor.Date),
-                ["duration"] = TryGetInt(_durationBox.Text),
-                ["payment_duration"] = TryGetInt(_paymentDurationBox.Text),
-                ["closed_at"] = FormatDate(_closedAtEditor.Date)
-            };
+            return StageCommerEditPayloadBuilder.BuildForUpdate(
+                _sourceRow,
+                new StageCommerEditPayloadInput(
+                    Id,
+                    _listKey,
+                    GetSelectedStatusOption()?.Value,
+                    GetSelectedKey(_deadlineKindBox),
+                    _deadlineAtEditor.Date,
+                    _startAtEditor.Date,
+                    GetSelectedKey(_paymentDeadlineKindBox),
+                    _paymentDeadlineAtEditor.Date,
+                    TryGetInt(_durationBox.Text),
+                    TryGetInt(_paymentDurationBox.Text),
+                    _closedAtEditor.Date,
+                    _selectedTaskKindIds,
+                    _commentBox.Text,
+                    _profileId));
+        }
 
-            if (!string.IsNullOrWhiteSpace(_listKey))
-            {
-                payload["list_key"] = _listKey;
-            }
+        public IReadOnlyDictionary<string, object?> BuildTablePatch()
+        {
+            var patch = new Dictionary<string, object?>(StageCommerEditPayloadBuilder.BuildForUpdate(
+                _sourceRow,
+                new StageCommerEditPayloadInput(
+                    Id,
+                    _listKey,
+                    GetSelectedStatusOption()?.Value,
+                    GetSelectedKey(_deadlineKindBox),
+                    _deadlineAtEditor.Date,
+                    _startAtEditor.Date,
+                    GetSelectedKey(_paymentDeadlineKindBox),
+                    _paymentDeadlineAtEditor.Date,
+                    TryGetInt(_durationBox.Text),
+                    TryGetInt(_paymentDurationBox.Text),
+                    _closedAtEditor.Date,
+                    _selectedTaskKindIds,
+                    _commentBox.Text,
+                    _profileId)),
+                StringComparer.OrdinalIgnoreCase);
 
-            var tasksDelta = BuildTaskAttributesDelta();
-            if (tasksDelta.Count > 0)
-            {
-                payload["tasks_attributes"] = tasksDelta;
-            }
+            patch.Remove("comments_attributes");
+            patch.Remove("tasks_attributes");
 
-            var comment = _commentBox.Text?.Trim();
-            if (!string.IsNullOrWhiteSpace(comment) && _profileId is int profileId)
+            var selectedStatus = GetSelectedStatusOption();
+            if (patch.ContainsKey("status_id") && selectedStatus?.Value is long statusId)
             {
-                payload["comments_attributes"] = new[]
+                patch["status"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
-                    new Dictionary<string, object?>
-                    {
-                        ["content"] = comment,
-                        ["profile_id"] = profileId
-                    }
+                    ["id"] = statusId,
+                    ["name"] = selectedStatus.Label
                 };
             }
 
-            return payload;
+            var tasks = BuildSelectedTaskReadModels();
+            if (tasks is not null)
+            {
+                patch["tasks"] = tasks;
+            }
+
+            return patch;
         }
 
         public bool Validate()
         {
+            if (_deadlineAtEditedManually
+                && IsDeadlineManualMode(GetSelectedDeadlineKind())
+                && _deadlineAtEditor.Date is DateTimeOffset deadlineAt
+                && _startAtEditor.Date is DateTimeOffset startAt
+                && deadlineAt.Date < startAt.Date)
+            {
+                ShowErrorInfo("Срок выполнения не может быть раньше даты начала этапа.");
+                return false;
+            }
+
             if (GetSelectedKey(_paymentDeadlineKindBox) is string paymentKind
                 && paymentKind != "c_plan"
                 && paymentKind.Length > 0
@@ -166,6 +216,17 @@ namespace CbsContractsDesktopClient.Views.Functional
                 && _paymentDeadlineAtEditor.Date is null)
             {
                 ShowErrorInfo("Для календарного плана укажите срок оплаты.");
+                return false;
+            }
+
+            var fundedAt = ParseDate(_sourceRow.GetValue("funded_at"));
+            if (_paymentDeadlineAtEditedManually
+                && IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind())
+                && _paymentDeadlineAtEditor.Date is DateTimeOffset paymentDeadlineAt
+                && fundedAt is not null
+                && paymentDeadlineAt.Date < fundedAt.Value.Date)
+            {
+                ShowErrorInfo("Срок оплаты не может быть раньше даты бухзакрытия.");
                 return false;
             }
 
@@ -369,6 +430,20 @@ namespace CbsContractsDesktopClient.Views.Functional
             _paymentDeadlineKindBox.SelectionChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
             _statusBox.SelectionChanged += (_, _) => ApplyStatusBusinessLogic();
             _startAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
+            _deadlineAtEditor.DateChanged += (_, _) =>
+            {
+                if (!_isApplyingBusinessLogic && IsDeadlineManualMode(GetSelectedDeadlineKind()))
+                {
+                    _deadlineAtEditedManually = true;
+                }
+            };
+            _paymentDeadlineAtEditor.DateChanged += (_, _) =>
+            {
+                if (!_isApplyingBusinessLogic && IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind()))
+                {
+                    _paymentDeadlineAtEditedManually = true;
+                }
+            };
             _durationBox.TextChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
             _paymentDurationBox.TextChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
         }
@@ -388,6 +463,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                     ApplyInitialStartBusinessLogic();
                 }
 
+                UpdateDeadlineEditorState();
                 ApplyDeadlineBusinessLogic();
                 ApplyPaymentDeadlineBusinessLogic();
                 ApplyStatusBusinessLogic();
@@ -481,6 +557,23 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
+        private void UpdateDeadlineEditorState()
+        {
+            var deadlineManual = IsDeadlineManualMode(GetSelectedDeadlineKind());
+            _deadlineAtEditor.IsReadOnly = !deadlineManual;
+            if (!deadlineManual)
+            {
+                _deadlineAtEditedManually = false;
+            }
+
+            var paymentDeadlineManual = IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind());
+            _paymentDeadlineAtEditor.IsReadOnly = !paymentDeadlineManual;
+            if (!paymentDeadlineManual)
+            {
+                _paymentDeadlineAtEditedManually = false;
+            }
+        }
+
         private void ApplyStatusBusinessLogic()
         {
             if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtEditor.Date is null)
@@ -497,6 +590,16 @@ namespace CbsContractsDesktopClient.Views.Functional
         private string? GetSelectedPaymentDeadlineKind()
         {
             return GetSelectedKey(_paymentDeadlineKindBox);
+        }
+
+        private static bool IsDeadlineManualMode(string? deadlineKind)
+        {
+            return string.Equals(deadlineKind, "calendar_plan", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsPaymentDeadlineManualMode(string? paymentDeadlineKind)
+        {
+            return string.Equals(paymentDeadlineKind, "c_plan", StringComparison.OrdinalIgnoreCase);
         }
 
         private void SelectStatus(long statusId)
@@ -526,6 +629,59 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             return JsonDataReader.TryGetArrayCount(_contractRow, "stages") is int contractStagesCount && contractStagesCount > 1;
+        }
+
+        private bool IsLastOpenStageInContract()
+        {
+            var stages = JsonDataReader.TryGetArray(_contractRow, "stages");
+            if (stages is null)
+            {
+                return false;
+            }
+
+            foreach (var stage in JsonDataReader.EnumerateObjectArray(stages))
+            {
+                var stageId = JsonDataReader.TryGetLong(stage, "id");
+                if (stageId == Id)
+                {
+                    continue;
+                }
+
+                var status = JsonDataReader.TryGetObject(stage, "status");
+                var statusId = JsonDataReader.TryGetLong(JsonDataReader.TryGetValue(stage, "status_id"))
+                    ?? (status is null ? null : JsonDataReader.TryGetLong(status.Value, "id"));
+
+                if (statusId != StatusClosed)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private bool IsStageStatusChangedToClosed()
+        {
+            return GetSelectedStatusOption()?.Value == StatusClosed
+                && ResolveOriginalStageStatusId() != StatusClosed;
+        }
+
+        private long? ResolveOriginalStageStatusId()
+        {
+            return TryGetLong(_sourceRow.GetValue("status_id"))
+                ?? TryGetLong(_sourceRow.GetValue("status.id"));
+        }
+
+        private bool IsContractAlreadyClosed()
+        {
+            return ResolveContractStatusId() == StatusClosed;
+        }
+
+        private long? ResolveContractId()
+        {
+            return TryGetLong(_contractRow?.GetValue("id"))
+                ?? TryGetLong(_displayRow.GetValue("contract.id"))
+                ?? TryGetLong(_sourceRow.GetValue("contract.id"));
         }
 
         private DateTimeOffset? GetPaymentBaseDate()
@@ -572,46 +728,26 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private IReadOnlyList<Dictionary<string, object?>> BuildTaskAttributesDelta()
+        private IReadOnlyList<Dictionary<string, object?>>? BuildSelectedTaskReadModels()
         {
-            var selectedKinds = _selectedTaskKindIds.ToHashSet();
-
             var originalKinds = _originalTasks
                 .Select(static item => item.TaskKindId)
                 .Where(static id => id is not null)
                 .Select(static id => id!.Value)
                 .ToHashSet();
+            if (_selectedTaskKindIds.SetEquals(originalKinds))
+            {
+                return null;
+            }
 
-            var added = selectedKinds
-                .Where(kind => !originalKinds.Contains(kind))
-                .Select(kind => new Dictionary<string, object?>
+            return _taskOptions
+                .Where(option => _selectedTaskKindIds.Contains(option.TaskKindId))
+                .Select(option => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["list_key"] = Guid.NewGuid().ToString(),
-                    ["task_kind_id"] = kind
-                });
-
-            var removed = _originalTasks
-                .Where(task => task.TaskKindId is long kind && !selectedKinds.Contains(kind))
-                .Select(task =>
-                {
-                    var payload = new Dictionary<string, object?>
-                    {
-                        ["_destroy"] = "1"
-                    };
-                    if (task.Id is not null)
-                    {
-                        payload["id"] = task.Id;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(task.ListKey))
-                    {
-                        payload["list_key"] = task.ListKey;
-                    }
-
-                    return payload;
-                });
-
-            return added.Concat(removed).ToList();
+                    ["task_kind_id"] = option.TaskKindId,
+                    ["name"] = option.Name
+                })
+                .ToList();
         }
 
         private static IReadOnlyList<StageTaskOption> CreateTaskOptions(

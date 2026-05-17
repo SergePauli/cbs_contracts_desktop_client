@@ -6,12 +6,60 @@ namespace CbsContractsDesktopClient.Services.References
 {
     public sealed class HolidayRecalculationService : ApiServiceBase, IHolidayRecalculationService
     {
+        private readonly SemaphoreSlim _holidayCalendarGate = new(1, 1);
+        private IReadOnlyList<ReferenceDataRow>? _holidayCalendarCache;
+        private IReadOnlyList<HolidayCalendarDay>? _holidayCalendarDaysCache;
+
         public HolidayRecalculationService(HttpClient httpClient, IUserService userService)
             : base(httpClient, userService)
         {
         }
 
-        public Task<IReadOnlyList<ReferenceDataRow>> GetHolidayCalendarAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<ReferenceDataRow>> GetHolidayCalendarAsync(CancellationToken cancellationToken = default)
+        {
+            await EnsureHolidayCalendarCacheAsync(cancellationToken);
+            return _holidayCalendarCache ?? [];
+        }
+
+        public async Task<IReadOnlyList<HolidayCalendarDay>> GetHolidayCalendarDaysAsync(CancellationToken cancellationToken = default)
+        {
+            await EnsureHolidayCalendarCacheAsync(cancellationToken);
+            return _holidayCalendarDaysCache ?? [];
+        }
+
+        private async Task EnsureHolidayCalendarCacheAsync(CancellationToken cancellationToken)
+        {
+            if (_holidayCalendarCache is not null && _holidayCalendarDaysCache is not null)
+            {
+                return;
+            }
+
+            await _holidayCalendarGate.WaitAsync(cancellationToken);
+            try
+            {
+                if (_holidayCalendarCache is not null && _holidayCalendarDaysCache is not null)
+                {
+                    return;
+                }
+
+                var rows = await LoadHolidayCalendarAsync(cancellationToken);
+                var days = rows
+                    .Where(static row => !row.IsPlaceholder)
+                    .Select(TryCreateHolidayCalendarDay)
+                    .Where(static item => item is not null)
+                    .Cast<HolidayCalendarDay>()
+                    .ToList();
+
+                _holidayCalendarCache = rows;
+                _holidayCalendarDaysCache = days;
+            }
+            finally
+            {
+                _holidayCalendarGate.Release();
+            }
+        }
+
+        private Task<IReadOnlyList<ReferenceDataRow>> LoadHolidayCalendarAsync(CancellationToken cancellationToken)
         {
             var request = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             {
@@ -27,18 +75,6 @@ namespace CbsContractsDesktopClient.Services.References
                 "model/Holiday",
                 request,
                 cancellationToken);
-        }
-
-        public async Task<IReadOnlyList<HolidayCalendarDay>> GetHolidayCalendarDaysAsync(CancellationToken cancellationToken = default)
-        {
-            var rows = await GetHolidayCalendarAsync(cancellationToken);
-
-            return rows
-                .Where(static row => !row.IsPlaceholder)
-                .Select(TryCreateHolidayCalendarDay)
-                .Where(static item => item is not null)
-                .Cast<HolidayCalendarDay>()
-                .ToList();
         }
 
         public Task<IReadOnlyList<ReferenceDataRow>> GetAffectedStagesAsync(

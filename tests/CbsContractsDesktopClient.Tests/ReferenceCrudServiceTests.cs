@@ -78,6 +78,32 @@ public sealed class ReferenceCrudServiceTests
     }
 
     [Fact]
+    public void BuildRequest_KeepsCommentsAttributesInsideModelPayload()
+    {
+        var comments = new[]
+        {
+            new Dictionary<string, object?>
+            {
+                ["content"] = "comment",
+                ["profile_id"] = 7
+            }
+        };
+
+        var request = BuildRequest(
+            CreateDefinition(),
+            new Dictionary<string, object?>
+            {
+                ["id"] = 15L,
+                ["name"] = "РќРѕРІРѕРµ РёРјСЏ",
+                ["comments_attributes"] = comments
+            });
+
+        Assert.False(request.ContainsKey("comments"));
+        var payload = Assert.IsType<Dictionary<string, object?>>(request["Status"]);
+        Assert.Same(comments, payload["comments_attributes"]);
+    }
+
+    [Fact]
     public async Task UpdateAsync_PutsRailsStyleEnvelope_ToRecordEndpoint()
     {
         HttpRequestMessage? capturedRequest = null;
@@ -106,6 +132,32 @@ public sealed class ReferenceCrudServiceTests
         Assert.Equal("http://localhost/model/Status/15", capturedRequest.RequestUri!.ToString());
         Assert.False((bool?)result.GetValue("used") ?? true);
         Assert.Equal("Новое имя", result.GetValue("name"));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_StagePayloadRejectsReadModelComments()
+    {
+        var service = CreateService(new StubHttpMessageHandler(_ =>
+            throw new InvalidOperationException("HTTP should not be called.")));
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateAsync(
+                CreateStageDefinition(),
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 15L,
+                    ["comments"] = new[]
+                    {
+                        new Dictionary<string, object?>
+                        {
+                            ["id"] = 35194L,
+                            ["content"] = "comment"
+                        }
+                    }
+                }));
+
+        Assert.Contains("comments", exception.Message);
+        Assert.Contains("comments_attributes", exception.Message);
     }
 
     [Fact]
@@ -163,6 +215,17 @@ public sealed class ReferenceCrudServiceTests
             Model = "Status",
             Title = "Статусы",
             Preset = "card"
+        };
+    }
+
+    private static ReferenceDefinition CreateStageDefinition()
+    {
+        return new ReferenceDefinition
+        {
+            Route = "/internal/Stage",
+            Model = "Stage",
+            Title = "Stage",
+            Preset = "edit"
         };
     }
 

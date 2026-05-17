@@ -44,7 +44,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private CancellationTokenSource? _contragentDetailCts;
-        private CancellationTokenSource? _revisionDetailCts;
+        private CancellationTokenSource? _rowDetailCts;
         private bool _isViewportSubscribed;
         private bool _isHolidayRecalcInProgress;
         private bool _isFnsCompareInProgress;
@@ -70,6 +70,19 @@ namespace CbsContractsDesktopClient.Views.Shell
             Title = "Дополнительное соглашение",
             Preset = "edit"
         };
+        private static readonly ReferenceDefinition ContractEditDefinition = new()
+        {
+            Route = "/contracts",
+            Model = "Contract",
+            Title = "Contract",
+            Preset = "edit"
+        };
+        private static readonly IReadOnlyList<ContractRowDetailStrategy> RowDetailStrategies =
+        [
+            new RevisionRowDetailStrategy(),
+            new StageRowDetailStrategy(),
+            new ContractTableRowDetailStrategy()
+        ];
 
         public ContentHostView()
         {
@@ -104,7 +117,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _filterDebounceCts?.Cancel();
             _viewportCts?.Cancel();
             _contragentDetailCts?.Cancel();
-            _revisionDetailCts?.Cancel();
+            _rowDetailCts?.Cancel();
             _contractWorkflowStore.PropertyChanged -= OnContractWorkflowStorePropertyChanged;
             RemoveViewportSubscription();
         }
@@ -135,7 +148,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow))
             {
-                _ = RefreshRevisionDetailAsync();
+                _ = RefreshRowDetailAsync();
             }
         }
 
@@ -198,38 +211,39 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        private async Task RefreshRevisionDetailAsync()
+        private async Task RefreshRowDetailAsync()
         {
-            _revisionDetailCts?.Cancel();
+            _rowDetailCts?.Cancel();
             RevisionsDetailView.ContractRow = null;
             RevisionsDetailView.ContragentRow = null;
-            _contractWorkflowStore.ClearRevisionSelection();
+            _contractWorkflowStore.ClearRowDetailSelection();
 
-            if (!_viewModel.ShowContractDetailView || _viewModel.SelectedRow is null)
+            var strategy = ResolveRowDetailStrategy();
+            if (strategy is null || !_viewModel.ShowContractDetailView || _viewModel.SelectedRow is null)
             {
                 return;
             }
 
-            var contractId = TryGetLongValue(_viewModel.SelectedRow, "contract.id");
-            var listContragentId = TryGetLongValue(_viewModel.SelectedRow, "contract.contragent.id");
+            var contractId = strategy.ResolveContractId(_viewModel.SelectedRow);
+            var listContragentId = strategy.ResolveContragentId(_viewModel.SelectedRow);
             if (contractId is null && listContragentId is null)
             {
                 return;
             }
 
             var cancellationTokenSource = new CancellationTokenSource();
-            _revisionDetailCts = cancellationTokenSource;
+            _rowDetailCts = cancellationTokenSource;
 
             try
             {
                 var contractTask = contractId is long selectedContractId
-                    ? LoadRevisionDetailRowSafelyAsync(
+                    ? LoadRowDetailRowSafelyAsync(
                         "Contract/edit",
                         () => LoadRevisionContractCardAsync(selectedContractId, cancellationTokenSource.Token),
                         cancellationTokenSource.Token)
                     : Task.FromResult<ReferenceDataRow?>(null);
                 var contragentTask = listContragentId is long selectedContragentId
-                    ? LoadRevisionDetailRowSafelyAsync(
+                    ? LoadRowDetailRowSafelyAsync(
                         "Contragent/card",
                         () => LoadRevisionContragentCardAsync(selectedContragentId, cancellationTokenSource.Token),
                         cancellationTokenSource.Token)
@@ -243,7 +257,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 }
 
                 if (_viewModel.SelectedRow is null
-                    || (contractId is not null && TryGetLongValue(_viewModel.SelectedRow, "contract.id") != contractId))
+                    || !strategy.IsSameSelection(_viewModel.SelectedRow, contractId))
                 {
                     return;
                 }
@@ -253,13 +267,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                     : TryGetLongValue(contract, "contragent.id");
                 if (contragent is null && contractContragentId is long loadedContragentId)
                 {
-                    contragent = await LoadRevisionDetailRowSafelyAsync(
+                    contragent = await LoadRowDetailRowSafelyAsync(
                         "Contragent/card from Contract/card",
                         () => LoadRevisionContragentCardAsync(loadedContragentId, cancellationTokenSource.Token),
                         cancellationTokenSource.Token);
                 }
 
-                _contractWorkflowStore.SetRevisionSelection(_viewModel.SelectedRow, contract, contragent);
+                strategy.ApplySelection(_contractWorkflowStore, _viewModel.SelectedRow, contract, contragent);
             }
             catch (OperationCanceledException)
             {
@@ -268,12 +282,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
-                    _contractWorkflowStore.ClearRevisionSelection();
+                    _contractWorkflowStore.ClearRowDetailSelection();
                 }
             }
         }
 
-        private static async Task<ReferenceDataRow?> LoadRevisionDetailRowSafelyAsync(
+        private static async Task<ReferenceDataRow?> LoadRowDetailRowSafelyAsync(
             string title,
             Func<Task<ReferenceDataRow?>> loadAsync,
             CancellationToken cancellationToken)
@@ -708,7 +722,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 || string.Equals(
                     _viewModel.CurrentTablePage?.Route,
                     "/stages",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    _viewModel.CurrentTablePage?.Route,
+                    "/contracts",
                     StringComparison.OrdinalIgnoreCase);
+        }
+
+        private ContractRowDetailStrategy? ResolveRowDetailStrategy()
+        {
+            var route = _viewModel.CurrentTablePage?.Route;
+            return RowDetailStrategies.FirstOrDefault(strategy =>
+                string.Equals(strategy.Route, route, StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task ShowReferenceEditDialogAsync(bool isCreateMode)
@@ -785,7 +810,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 }
 
                 _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-                await _viewModel.ReloadCurrentReferenceAsync();
+                await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, values);
                 ShowSuccessNotification(
                     isCreateMode ? "Запись создана" : "Изменения сохранены",
                     BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
@@ -820,14 +845,16 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             ReferenceDataRow? savedRow = null;
+            IReadOnlyDictionary<string, object?>? revisionPayload = null;
             dialog.PrimaryButtonClick += async (_, args) =>
             {
                 var deferral = args.GetDeferral();
                 try
                 {
+                    revisionPayload = dialog.BuildPayload();
                     savedRow = await _referenceCrudService.UpdateAsync(
                         RevisionEditDefinition,
-                        dialog.BuildPayload());
+                        revisionPayload);
                 }
                 catch (Exception ex)
                 {
@@ -847,7 +874,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(RevisionEditDefinition.Model);
-            await _viewModel.ReloadCurrentReferenceAsync();
+            await RefreshReferenceAfterSaveAsync(false, savedRow, revisionPayload);
             ShowSuccessNotification(
                 "Ревизия сохранена",
                 BuildReferenceNotificationMessage(RevisionEditDefinition.Title, TryGetSelectedRowId(savedRow)));
@@ -880,13 +907,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            _contractWorkflowStore.SetStageSelection(
+                sourceRow,
+                _contractWorkflowStore.Contract,
+                _contractWorkflowStore.Contragent);
+
             var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
             var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
             StageCommerEditDialog dialog;
             try
             {
                 dialog = new StageCommerEditDialog(
-                    sourceRow,
+                    _contractWorkflowStore.SelectedStage ?? sourceRow,
                     _viewModel.SelectedRow,
                     _contractWorkflowStore.Contract,
                     statusOptions,
@@ -903,6 +935,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             ReferenceDataRow? savedRow = null;
+            bool shouldRefreshSelectedRowDetails = false;
             dialog.PrimaryButtonClick += async (_, args) =>
             {
                 var deferral = args.GetDeferral();
@@ -914,9 +947,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                         return;
                     }
 
+                    var stagePayload = dialog.BuildPayload();
+                    shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
                     savedRow = await _referenceCrudService.UpdateAsync(
                         StageEditDefinition,
-                        dialog.BuildPayload());
+                        stagePayload);
+
+                    if (dialog.ShouldCloseContract())
+                    {
+                        await _referenceCrudService.UpdateAsync(
+                            ContractEditDefinition,
+                            dialog.BuildContractClosePayload());
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -936,10 +978,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
-            await _viewModel.ReloadCurrentReferenceAsync();
+            _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
                 "Этап сохранён",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+            if (shouldRefreshSelectedRowDetails)
+            {
+                await RefreshRowDetailAsync();
+            }
         }
 
         private async Task DeleteSelectedRowAsync()
@@ -1094,7 +1140,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                 var savedRow = await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference, payload);
                 _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-                await _viewModel.ReloadCurrentReferenceAsync();
+                await RefreshReferenceAfterSaveAsync(false, savedRow, payload);
                 ShowSuccessNotification(
                     "Данные обновлены",
                     BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
@@ -2202,6 +2248,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             ReferenceDataRow? savedRow = null;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.PrimaryButtonClick += async (_, args) =>
             {
@@ -2213,6 +2260,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var payload = isCreateMode
                         ? ProfileEditPayloadBuilder.BuildForCreate(viewModel)
                         : ProfileEditPayloadBuilder.BuildForUpdate(viewModel);
+                    savedPayload = payload;
 
                     if (!isCreateMode && payload.Count <= 1)
                     {
@@ -2243,7 +2291,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-            await _viewModel.ReloadCurrentReferenceAsync();
+            await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode ? "Запись создана" : "Изменения сохранены",
                 BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
@@ -2279,6 +2327,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             ReferenceDataRow? savedRow = null;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.PrimaryButtonClick += async (_, args) =>
             {
@@ -2290,6 +2339,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var payload = isCreateMode
                         ? EmployeeEditPayloadBuilder.BuildForCreate(viewModel)
                         : EmployeeEditPayloadBuilder.BuildForUpdate(viewModel);
+                    savedPayload = payload;
 
                     if (!isCreateMode && payload.Count <= 1)
                     {
@@ -2320,7 +2370,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(definition.Model);
-            await _viewModel.ReloadCurrentReferenceAsync();
+            await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode ? "Сотрудник создан" : "Изменения сотрудника сохранены",
                 BuildReferenceNotificationMessage(definition.Title, TryGetSelectedRowId(savedRow)));
@@ -2363,6 +2413,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             ReferenceDataRow? savedRow = null;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.PrimaryButtonClick += async (_, args) =>
             {
@@ -2377,6 +2428,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                         : isCreateMode
                             ? ContragentEditPayloadBuilder.BuildForCreate(viewModel)
                             : ContragentEditPayloadBuilder.BuildForUpdate(viewModel);
+                    savedPayload = payload;
 
                     if (!isCreateMode && !isLegalEntityChangeMode && payload.Count <= 1)
                     {
@@ -2407,7 +2459,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-            await _viewModel.ReloadCurrentReferenceAsync();
+            await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode
                     ? "Контрагент создан"
@@ -2823,6 +2875,24 @@ namespace CbsContractsDesktopClient.Views.Shell
                 string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
                 _ => null
             };
+        }
+
+        private static bool ContainsNestedAttributes(IReadOnlyDictionary<string, object?> payload)
+        {
+            return payload.Keys.Any(static key => key.EndsWith("_attributes", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private async Task RefreshReferenceAfterSaveAsync(
+            bool isCreateMode,
+            ReferenceDataRow savedRow,
+            IReadOnlyDictionary<string, object?>? payload)
+        {
+            if (isCreateMode
+                || payload is null
+                || !_viewModel.ApplySavedRowUpdate(savedRow, payload))
+            {
+                await _viewModel.ReloadCurrentReferenceAsync();
+            }
         }
 
         private static long? TryGetLongValue(ReferenceDataRow row, string fieldKey)

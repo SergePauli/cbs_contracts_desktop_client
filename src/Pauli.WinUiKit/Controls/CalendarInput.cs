@@ -109,6 +109,18 @@ public sealed class CalendarInput : Grid
         set => SetValue(DateProperty, NormalizeDate(value));
     }
 
+    public static readonly DependencyProperty IsReadOnlyProperty = DependencyProperty.Register(
+        nameof(IsReadOnly),
+        typeof(bool),
+        typeof(CalendarInput),
+        new PropertyMetadata(false, OnIsReadOnlyPropertyChanged));
+
+    public bool IsReadOnly
+    {
+        get => (bool)GetValue(IsReadOnlyProperty);
+        set => SetValue(IsReadOnlyProperty, value);
+    }
+
     public event EventHandler<CalendarInputDateChangedEventArgs>? DateChanged;
 
     private static void OnDatePropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
@@ -119,6 +131,11 @@ public sealed class CalendarInput : Grid
 
         editor.SyncEditorState();
         editor.DateChanged?.Invoke(editor, new CalendarInputDateChangedEventArgs(oldDate, newDate));
+    }
+
+    private static void OnIsReadOnlyPropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+    {
+        ((CalendarInput)dependencyObject).SyncReadOnlyState();
     }
 
     private void OnTextBoxPreviewKeyDown(object sender, KeyRoutedEventArgs args)
@@ -134,7 +151,7 @@ public sealed class CalendarInput : Grid
 
     private void CommitText()
     {
-        if (_isSyncing)
+        if (_isSyncing || IsReadOnly)
         {
             return;
         }
@@ -163,11 +180,20 @@ public sealed class CalendarInput : Grid
             _textBox.Text = Date?.ToString("dd.MM.yyyy", CultureInfo.CurrentCulture) ?? string.Empty;
             SyncCalendarViewSelection();
             _clearButton.Visibility = Date is null ? Visibility.Collapsed : Visibility.Visible;
+            SyncReadOnlyState();
         }
         finally
         {
             _isSyncing = false;
         }
+    }
+
+    private void SyncReadOnlyState()
+    {
+        _textBox.IsReadOnly = IsReadOnly;
+        _clearButton.IsEnabled = !IsReadOnly;
+        _calendarButton.IsEnabled = !IsReadOnly;
+        Opacity = IsReadOnly ? 0.72 : 1;
     }
 
     private void SyncCalendarViewSelection()

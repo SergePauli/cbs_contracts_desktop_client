@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -49,6 +50,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private DateTimeOffset? _auditFromDate;
         private DateTimeOffset? _auditToDate;
         private IReadOnlyList<string> _auditActions = [];
+        private string _lastDiagnosticsStateKey = string.Empty;
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
         private int _viewportMutationDepth;
@@ -156,7 +158,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public bool ShowContractDetailView =>
             (string.Equals(CurrentTablePage?.Route, "/revisions", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(CurrentTablePage?.Route, "/stages", StringComparison.OrdinalIgnoreCase))
+                || string.Equals(CurrentTablePage?.Route, "/stages", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(CurrentTablePage?.Route, "/contracts", StringComparison.OrdinalIgnoreCase))
             && HasSelectedRow;
 
         public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
@@ -318,6 +321,71 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             await NavigateAsync(CurrentTablePage.Route, cancellationToken);
+        }
+
+        public bool ApplyRowPatch(long id, IReadOnlyDictionary<string, object?> patch)
+        {
+            ArgumentNullException.ThrowIfNull(patch);
+            if (id <= 0 || patch.Count == 0)
+            {
+                return false;
+            }
+
+            var sourceRow = _itemsSnapshot.FirstOrDefault(row =>
+                !row.IsPlaceholder && TryGetSelectedRowId(row) == id);
+            if (sourceRow is null)
+            {
+                return false;
+            }
+
+            var patchedRow = CloneRowWithPatch(sourceRow, patch);
+            return ReplaceLoadedRow(id, patchedRow);
+        }
+
+        public bool ApplySavedRowUpdate(
+            ReferenceDataRow? savedRow,
+            IReadOnlyDictionary<string, object?> payload)
+        {
+            ArgumentNullException.ThrowIfNull(payload);
+
+            var id = TryGetSelectedRowId(savedRow)
+                ?? TryGetPayloadId(payload)
+                ?? (SelectedRow is null ? null : TryGetSelectedRowId(SelectedRow));
+            if (id is null || id.Value <= 0)
+            {
+                return false;
+            }
+
+            var sourceRow = _itemsSnapshot.FirstOrDefault(row =>
+                !row.IsPlaceholder && TryGetSelectedRowId(row) == id.Value);
+            if (sourceRow is null)
+            {
+                return false;
+            }
+
+            var patchedRow = CloneRowWithUpdate(sourceRow, savedRow, payload);
+            return ReplaceLoadedRow(id.Value, patchedRow);
+        }
+
+        private bool ReplaceLoadedRow(long id, ReferenceDataRow patchedRow)
+        {
+            var replaced = _state?.Items.TryReplaceLoadedItem(
+                row => !row.IsPlaceholder && TryGetSelectedRowId(row) == id,
+                patchedRow) == true;
+
+            if (SelectedRow is not null && TryGetSelectedRowId(SelectedRow) == id)
+            {
+                SelectedRow = patchedRow;
+            }
+
+            if (replaced)
+            {
+                RefreshItemsSnapshot();
+                OnPropertyChanged(nameof(Items));
+                UpdateStateProperties();
+            }
+
+            return replaced;
         }
 
         public async Task ApplyFilterAsync(
@@ -715,6 +783,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 SelectedRow = null;
                 UiTraceLog = string.Empty;
                 _lastDiagnosticsSnapshot = string.Empty;
+                _lastDiagnosticsStateKey = string.Empty;
                 ResetAuditPagingState();
                 _shellViewModel.SetFooterTableStats(string.Empty);
 
@@ -732,7 +801,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 BuildFilters(definition);
                 CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
-                _state = new LazyDataViewState<ReferenceDataRow>(
+                var state = new LazyDataViewState<ReferenceDataRow>(
                     _dataQueryService,
                     model: definition.Model,
                     preset: definition.Preset,
@@ -750,7 +819,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
                 AppendUiTrace($"STATE CREATED model={definition.Model} {GetDebugStateSnapshot()}");
 
-                AttachRows(_state, new CbsVirtualTableRows<ReferenceDataRow>(_state.Items));
+                AttachRows(state, new CbsVirtualTableRows<ReferenceDataRow>(state.Items));
                 AppendUiTrace($"NAVIGATE AFTER ATTACH model={definition.Model} {GetDebugStateSnapshot()}");
 
                 OnPropertyChanged(nameof(CurrentColumns));
@@ -1105,8 +1174,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             ICbsTableRows<ReferenceDataRow> rows)
         {
             AppendUiTrace($"ATTACH ROWS ENTER incoming={rows.GetType().Name} {GetDebugStateSnapshot()}");
-            DetachState();
-            AppendUiTrace($"ATTACH ROWS AFTER DETACH incoming={rows.GetType().Name} {GetDebugStateSnapshot()}");
+            if (_state is not null || _rows is not null || _rowsNotifier is not null)
+            {
+                DetachState();
+                AppendUiTrace($"ATTACH ROWS AFTER DETACH incoming={rows.GetType().Name} {GetDebugStateSnapshot()}");
+            }
+
             _lastViewportEnsureStart = -1;
             _lastViewportEnsureEnd = -1;
             _state = state;
@@ -1315,6 +1388,18 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 return;
             }
 
+            if (!force && IsLoading)
+            {
+                return;
+            }
+
+            var diagnosticsStateKey =
+                $"{_shellViewModel.CurrentRoute}|{CurrentTablePage?.Model}|{LoadedCount}|{TotalCount}|{ResidentCount}|{LastCountRequestJson}|{LastPageRequestJson}";
+            if (!force && string.Equals(_lastDiagnosticsStateKey, diagnosticsStateKey, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             var diagnosticsText =
                 $"Route: {_shellViewModel.CurrentRoute}{Environment.NewLine}" +
                 $"Table: {CurrentTablePage?.Model ?? "<none>"}{Environment.NewLine}" +
@@ -1330,6 +1415,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             _lastDiagnosticsSnapshot = diagnosticsText;
+            _lastDiagnosticsStateKey = diagnosticsStateKey;
             DiagnosticsFileLogger.AppendBlock("TABLE DIAGNOSTICS", diagnosticsText);
         }
 
@@ -1774,6 +1860,79 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _itemsSnapshot = _rows.Items.ToList();
         }
 
+        private static ReferenceDataRow CloneRowWithPatch(
+            ReferenceDataRow sourceRow,
+            IReadOnlyDictionary<string, object?> patch)
+        {
+            var values = new Dictionary<string, JsonElement>(sourceRow.Values, StringComparer.OrdinalIgnoreCase);
+            MergePayloadValues(values, patch);
+
+            return new ReferenceDataRow
+            {
+                Values = values
+            };
+        }
+
+        private static ReferenceDataRow CloneRowWithUpdate(
+            ReferenceDataRow sourceRow,
+            ReferenceDataRow? savedRow,
+            IReadOnlyDictionary<string, object?> payload)
+        {
+            var values = new Dictionary<string, JsonElement>(sourceRow.Values, StringComparer.OrdinalIgnoreCase);
+            MergePayloadValues(values, payload);
+
+            if (savedRow is not null && !savedRow.IsPlaceholder)
+            {
+                foreach (var item in savedRow.Values)
+                {
+                    values[item.Key] = item.Value;
+                }
+            }
+
+            return new ReferenceDataRow
+            {
+                Values = values
+            };
+        }
+
+        private static void MergePayloadValues(
+            IDictionary<string, JsonElement> values,
+            IReadOnlyDictionary<string, object?> payload)
+        {
+            foreach (var item in payload)
+            {
+                if (ShouldSkipReadModelPatchKey(item.Key))
+                {
+                    continue;
+                }
+
+                values[item.Key] = JsonSerializer.SerializeToElement(item.Value);
+            }
+        }
+
+        private static bool ShouldSkipReadModelPatchKey(string key)
+        {
+            return string.IsNullOrWhiteSpace(key)
+                || key.EndsWith("_attributes", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static long? TryGetPayloadId(IReadOnlyDictionary<string, object?> payload)
+        {
+            if (!payload.TryGetValue("id", out var id))
+            {
+                return null;
+            }
+
+            return id switch
+            {
+                long longValue => longValue,
+                int intValue => intValue,
+                decimal decimalValue => (long)decimalValue,
+                string text when long.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
+        }
+
         private static string TrimTrace(string trace)
         {
             var lines = trace
@@ -1839,6 +1998,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 || message.StartsWith("ATTACH ROWS", StringComparison.Ordinal)
                 || message.StartsWith("DETACH STATE", StringComparison.Ordinal)
                 || message.StartsWith("HTTP ", StringComparison.Ordinal)
+                || message.StartsWith("API SEND ", StringComparison.Ordinal)
+                || message.StartsWith("DATA QUERY ", StringComparison.Ordinal)
                 || message.StartsWith("STEP API ", StringComparison.Ordinal)
                 || message.StartsWith("STEP VM ", StringComparison.Ordinal)
                 || message.StartsWith("FILTER ", StringComparison.Ordinal)

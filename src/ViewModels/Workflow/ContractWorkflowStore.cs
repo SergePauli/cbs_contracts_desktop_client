@@ -11,6 +11,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         public partial ReferenceDataRow? SelectedRevision { get; set; }
 
         [ObservableProperty]
+        public partial ReferenceDataRow? SelectedStage { get; set; }
+
+        [ObservableProperty]
         public partial ReferenceDataRow? Contract { get; set; }
 
         [ObservableProperty]
@@ -20,26 +23,90 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         public partial int? FocusedRevisionPriority { get; set; }
 
         [ObservableProperty]
+        public partial string SelectedRowHeader { get; set; } = string.Empty;
+
+        [ObservableProperty]
         public partial IReadOnlyList<ReferenceDataRow> Comments { get; set; } = [];
 
         public void SetRevisionSelection(
             ReferenceDataRow revision,
             ReferenceDataRow? contract,
-            ReferenceDataRow? contragent)
+            ReferenceDataRow? contragent,
+            string? selectedRowHeader = null)
         {
-            SelectedRevision = revision;
-            Contract = contract;
-            Contragent = contragent;
-            FocusedRevisionPriority = TryGetInt(revision.GetValue("priority"));
-            Comments = ReadContractComments(contract);
+            SetRowDetailSelection(
+                ContractRowDetailSelectionKind.Revision,
+                revision,
+                contract,
+                contragent,
+                selectedRowHeader);
         }
 
-        public void ClearRevisionSelection()
+        public void SetStageSelection(
+            ReferenceDataRow stage,
+            ReferenceDataRow? contract,
+            ReferenceDataRow? contragent,
+            string? selectedRowHeader = null)
+        {
+            SetRowDetailSelection(
+                ContractRowDetailSelectionKind.Stage,
+                stage,
+                contract,
+                contragent,
+                selectedRowHeader);
+        }
+
+        public void SetContractSelection(
+            ReferenceDataRow selectedContract,
+            ReferenceDataRow? contract,
+            ReferenceDataRow? contragent,
+            string? selectedRowHeader = null)
+        {
+            SetRowDetailSelection(
+                ContractRowDetailSelectionKind.Contract,
+                selectedContract,
+                contract,
+                contragent,
+                selectedRowHeader);
+        }
+
+        public void SetRowDetailSelection(
+            ContractRowDetailSelectionKind selectionKind,
+            ReferenceDataRow selectedRow,
+            ReferenceDataRow? contract,
+            ReferenceDataRow? contragent,
+            string? selectedRowHeader = null)
         {
             SelectedRevision = null;
+            SelectedStage = null;
+            Contract = selectionKind == ContractRowDetailSelectionKind.Contract
+                ? contract ?? selectedRow
+                : contract;
+            Contragent = contragent;
+            FocusedRevisionPriority = null;
+
+            if (selectionKind == ContractRowDetailSelectionKind.Revision)
+            {
+                SelectedRevision = selectedRow;
+                FocusedRevisionPriority = TryGetInt(selectedRow.GetValue("priority"));
+            }
+            else if (selectionKind == ContractRowDetailSelectionKind.Stage)
+            {
+                SelectedStage = selectedRow;
+            }
+
+            SelectedRowHeader = selectedRowHeader ?? string.Empty;
+            Comments = ReadContractComments(Contract);
+        }
+
+        public void ClearRowDetailSelection()
+        {
+            SelectedRevision = null;
+            SelectedStage = null;
             Contract = null;
             Contragent = null;
             FocusedRevisionPriority = null;
+            SelectedRowHeader = string.Empty;
             Comments = [];
         }
 

@@ -116,6 +116,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             if (e.PropertyName == nameof(ContractWorkflowStore.Contract)
                 || e.PropertyName == nameof(ContractWorkflowStore.Contragent)
                 || e.PropertyName == nameof(ContractWorkflowStore.SelectedRevision)
+                || e.PropertyName == nameof(ContractWorkflowStore.SelectedStage)
+                || e.PropertyName == nameof(ContractWorkflowStore.SelectedRowHeader)
                 || e.PropertyName == nameof(ContractWorkflowStore.Comments))
             {
                 Refresh();
@@ -124,7 +126,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void Refresh()
         {
-            var revision = RevisionRow ?? _contractWorkflowStore.SelectedRevision;
+            var revision = RevisionRow ?? _contractWorkflowStore.SelectedRevision ?? _contractWorkflowStore.SelectedStage;
             var contract = ContractRow ?? _contractWorkflowStore.Contract;
             var contragent = ContragentRow ?? _contractWorkflowStore.Contragent;
 
@@ -147,7 +149,9 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ?? string.Empty;
 
             RenderContacts(ReadContragentContacts(contragent));
-            var performersText = BuildPerformersText(contract);
+            var performersText = string.IsNullOrWhiteSpace(_contractWorkflowStore.SelectedRowHeader)
+                ? BuildPerformersText(contract)
+                : _contractWorkflowStore.SelectedRowHeader;
             var employees = ReadEmployees(contragent);
             PerformersTextBlock.Text = performersText;
             EmployeesBox.Employees = employees;

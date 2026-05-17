@@ -48,12 +48,16 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ReferencesContentViewModel>();
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<StatusTableViewModel>();
-            services.AddHttpClient<IHolidayRecalculationService, HolidayRecalculationService>(client =>
+            services.AddHttpClient(nameof(HolidayRecalculationService), client =>
             {
                 client.BaseAddress = PrimaryApiUri;
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });
+            services.AddSingleton<IHolidayRecalculationService>(provider =>
+                new HolidayRecalculationService(
+                    provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HolidayRecalculationService)),
+                    provider.GetRequiredService<IUserService>()));
             services.AddHttpClient<IReferenceCrudService, ReferenceCrudService>(client =>
             {
                 client.BaseAddress = PrimaryApiUri;

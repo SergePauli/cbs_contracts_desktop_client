@@ -310,6 +310,9 @@ public sealed class ContentHostViewTests
         Assert.Contains("Preset = \"edit\"", codeBehind);
         Assert.Contains("_referenceCrudService.UpdateAsync(", codeBehind);
         Assert.Contains("StageEditDefinition", codeBehind);
+        Assert.Contains("ContractEditDefinition", codeBehind);
+        Assert.Contains("dialog.ShouldCloseContract()", codeBehind);
+        Assert.Contains("dialog.BuildContractClosePayload()", codeBehind);
     }
 
     [Fact]

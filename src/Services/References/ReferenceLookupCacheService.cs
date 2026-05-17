@@ -13,7 +13,9 @@ namespace CbsContractsDesktopClient.Services.References
         {
             "Area",
             "Department",
-            "Ownership"
+            "Ownership",
+            "Status",
+            "TaskKind"
         };
 
         private readonly IDataQueryService _dataQueryService;

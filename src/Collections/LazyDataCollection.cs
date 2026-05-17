@@ -107,6 +107,28 @@ namespace CbsContractsDesktopClient.Collections
 
         public bool HasMoreItems => LoadedCount < TotalCount;
 
+        public bool TryReplaceLoadedItem(Func<TItem, bool> predicate, TItem item)
+        {
+            ArgumentNullException.ThrowIfNull(predicate);
+            ArgumentNullException.ThrowIfNull(item);
+
+            for (var index = 0; index < Count; index++)
+            {
+                if (!_residentIndexes.Contains(index) || !predicate(this[index]))
+                {
+                    continue;
+                }
+
+                this[index] = item;
+                _residentIndexes.Add(index);
+                OnPropertyChanged(new PropertyChangedEventArgs(nameof(Items)));
+                OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
+                return true;
+            }
+
+            return false;
+        }
+
         public string LastCountRequestJson
         {
             get => _lastCountRequestJson;
