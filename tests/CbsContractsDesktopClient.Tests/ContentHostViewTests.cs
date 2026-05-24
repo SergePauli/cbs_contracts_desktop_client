@@ -300,11 +300,13 @@ public sealed class ContentHostViewTests
         Assert.Contains("private bool IsStagesTableActive()", codeBehind);
         Assert.Contains("if (!isCreateMode && IsStagesTableActive())", codeBehind);
         Assert.Contains("await ShowStageEditDialogAsync();", codeBehind);
-        Assert.Contains("_userService.CurrentUser?.DepartmentId != CommersDepartmentId", codeBehind);
+        Assert.Contains("_userService.CurrentUser?.DepartmentId == CommersDepartmentId", codeBehind);
         Assert.Contains("await ShowStageCommerEditDialogAsync();", codeBehind);
         Assert.Contains("new StageCommerEditDialog(", codeBehind);
-        Assert.Contains("_viewModel.SelectedRow,", codeBehind);
-        Assert.Contains("_contractWorkflowStore.Contract,", codeBehind);
+        Assert.Contains("_contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),", codeBehind);
+        Assert.Contains("_contractWorkflowStore.SelectedContractEditState,", codeBehind);
+        Assert.Contains("dialog.SaveRequestedAsync += async args =>", codeBehind);
+        Assert.Contains("if (!dialog.WasSaved || savedRow is null)", codeBehind);
         Assert.Contains("LoadStageEditRowAsync", codeBehind);
         Assert.Contains("Model = \"Stage\"", codeBehind);
         Assert.Contains("Preset = \"edit\"", codeBehind);
@@ -313,6 +315,21 @@ public sealed class ContentHostViewTests
         Assert.Contains("ContractEditDefinition", codeBehind);
         Assert.Contains("dialog.ShouldCloseContract()", codeBehind);
         Assert.Contains("dialog.BuildContractClosePayload()", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_OpensFinancialStageEditDialog_ForFinanceDepartment()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("private const int FinDepartmentId = 3;", codeBehind);
+        Assert.Contains("_userService.CurrentUser?.DepartmentId == FinDepartmentId", codeBehind);
+        Assert.Contains("await ShowStageFinEditDialogAsync();", codeBehind);
+        Assert.Contains("new StageFinEditDialog(", codeBehind);
+        Assert.Contains("dialog.SaveRequestedAsync += async args =>", codeBehind);
+        Assert.Contains("if (!dialog.WasSaved || savedRow is null)", codeBehind);
+        Assert.Contains("dialog.HasContractExternalNumberChanges()", codeBehind);
+        Assert.Contains("dialog.BuildContractExternalNumberPayload()", codeBehind);
     }
 
     [Fact]

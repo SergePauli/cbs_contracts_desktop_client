@@ -49,6 +49,18 @@ public static class AppFormatters
 
     public static DateTimeOffset? ParseDate(object? value)
     {
+        switch (value)
+        {
+            case null:
+                return null;
+            case DateTimeOffset offsetValue:
+                return offsetValue;
+            case DateTime dateTimeValue:
+                return new DateTimeOffset(dateTimeValue);
+            case DateOnly dateOnlyValue:
+                return new DateTimeOffset(dateOnlyValue.ToDateTime(TimeOnly.MinValue));
+        }
+
         var text = value?.ToString();
         if (string.IsNullOrWhiteSpace(text))
         {

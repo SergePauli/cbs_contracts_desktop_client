@@ -1,5 +1,6 @@
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Shared.Data;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using static CbsContractsDesktopClient.Shared.Formatting.AppFormatters;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow
@@ -22,6 +23,46 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
     public static class StageCommerEditPayloadBuilder
     {
+        public static IReadOnlyDictionary<string, object?> BuildForUpdate(
+            StageEditState state,
+            IReadOnlyCollection<long> selectedTaskKindIds,
+            string? comment,
+            int? profileId)
+        {
+            ArgumentNullException.ThrowIfNull(state);
+            ArgumentNullException.ThrowIfNull(selectedTaskKindIds);
+
+            var request = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["id"] = state.Id
+            };
+
+            if (!string.IsNullOrWhiteSpace(state.ListKey))
+            {
+                request["list_key"] = state.ListKey;
+            }
+
+            AppendChangedLong(request, "status_id", state.Original.Status.Id, state.Status.Id);
+            AppendChangedText(request, "deadline_kind", state.Original.DeadlineKind, state.DeadlineKind);
+            AppendChangedDate(request, "deadline_at", state.Original.DeadlineAt, state.DeadlineAt);
+            AppendChangedDate(request, "start_at", state.Original.StartAt, state.StartAt);
+            AppendChangedText(request, "payment_deadline_kind", state.Original.PaymentDeadlineKind, state.PaymentDeadlineKind);
+            AppendChangedDate(request, "payment_deadline_at", state.Original.PaymentDeadlineAt, state.PaymentDeadlineAt);
+            AppendChangedInt(request, "duration", state.Original.Duration, state.Duration);
+            AppendChangedInt(request, "payment_duration", state.Original.PaymentDuration, state.PaymentDuration);
+            AppendChangedDate(request, "closed_at", state.Original.ClosedAt, state.ClosedAt);
+
+            var tasksDelta = BuildTaskAttributesDelta(state, selectedTaskKindIds);
+            if (tasksDelta.Count > 0)
+            {
+                request["tasks_attributes"] = tasksDelta;
+            }
+
+            StageEditPayloadBuilderHelpers.AppendCommentAttributes(request, comment, profileId);
+
+            return request;
+        }
+
         public static IReadOnlyDictionary<string, object?> BuildForUpdate(
             ReferenceDataRow sourceRow,
             StageCommerEditPayloadInput input)
@@ -55,18 +96,10 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 request["tasks_attributes"] = tasksDelta;
             }
 
-            var comment = input.Comment?.Trim();
-            if (!string.IsNullOrWhiteSpace(comment) && input.ProfileId is int profileId)
-            {
-                request["comments_attributes"] = new[]
-                {
-                    new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        ["content"] = comment,
-                        ["profile_id"] = profileId
-                    }
-                };
-            }
+            StageEditPayloadBuilderHelpers.AppendCommentAttributes(
+                request,
+                input.Comment,
+                input.ProfileId);
 
             return request;
         }
@@ -98,6 +131,20 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
         }
 
+        private static void AppendChangedText(
+            IDictionary<string, object?> request,
+            string key,
+            string? originalValue,
+            string? value)
+        {
+            var normalizedOriginalValue = string.IsNullOrWhiteSpace(originalValue) ? null : originalValue;
+            var normalizedValue = string.IsNullOrWhiteSpace(value) ? null : value;
+            if (!string.Equals(normalizedOriginalValue, normalizedValue, StringComparison.Ordinal))
+            {
+                request[key] = normalizedValue;
+            }
+        }
+
         private static void AppendChangedInt(
             IDictionary<string, object?> request,
             ReferenceDataRow sourceRow,
@@ -105,6 +152,18 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             int? value)
         {
             var originalValue = TryGetLong(sourceRow.GetValue(key)) is long number ? (int?)number : null;
+            if (originalValue != value)
+            {
+                request[key] = value;
+            }
+        }
+
+        private static void AppendChangedInt(
+            IDictionary<string, object?> request,
+            string key,
+            int? originalValue,
+            int? value)
+        {
             if (originalValue != value)
             {
                 request[key] = value;
@@ -126,6 +185,18 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
         }
 
+        private static void AppendChangedLong(
+            IDictionary<string, object?> request,
+            string key,
+            long? originalValue,
+            long? value)
+        {
+            if (originalValue != value)
+            {
+                request[key] = value;
+            }
+        }
+
         private static void AppendChangedDate(
             IDictionary<string, object?> request,
             ReferenceDataRow sourceRow,
@@ -135,6 +206,20 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             var originalValue = ToDateOnly(ParseDate(sourceRow.GetValue(key)));
             var currentValue = ToDateOnly(value);
             if (originalValue != currentValue)
+            {
+                request[key] = FormatDate(value);
+            }
+        }
+
+        private static void AppendChangedDate(
+            IDictionary<string, object?> request,
+            string key,
+            DateTimeOffset? originalValue,
+            DateTimeOffset? value)
+        {
+            var originalDate = ToDateOnly(originalValue);
+            var currentDate = ToDateOnly(value);
+            if (originalDate != currentDate)
             {
                 request[key] = FormatDate(value);
             }
@@ -169,6 +254,50 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 });
 
             var removed = originalTasks
+                .Where(task => task.TaskKindId is long kind && !selectedKinds.Contains(kind))
+                .Select(task =>
+                {
+                    var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["_destroy"] = "1"
+                    };
+                    if (task.Id is not null)
+                    {
+                        payload["id"] = task.Id;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(task.ListKey))
+                    {
+                        payload["list_key"] = task.ListKey;
+                    }
+
+                    return payload;
+                });
+
+            return added.Concat(removed).ToList();
+        }
+
+        private static IReadOnlyList<Dictionary<string, object?>> BuildTaskAttributesDelta(
+            StageEditState state,
+            IReadOnlyCollection<long> selectedTaskKindIds)
+        {
+            var selectedKinds = selectedTaskKindIds.ToHashSet();
+
+            var originalKinds = state.Original.Tasks
+                .Select(static item => item.TaskKindId)
+                .Where(static id => id is not null)
+                .Select(static id => id!.Value)
+                .ToHashSet();
+
+            var added = selectedKinds
+                .Where(kind => !originalKinds.Contains(kind))
+                .Select(kind => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["list_key"] = Guid.NewGuid().ToString(),
+                    ["task_kind_id"] = kind
+                });
+
+            var removed = state.Original.Tasks
                 .Where(task => task.TaskKindId is long kind && !selectedKinds.Contains(kind))
                 .Select(task =>
                 {

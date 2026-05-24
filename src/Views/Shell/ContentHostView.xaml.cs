@@ -16,6 +16,7 @@ using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.Functional;
 using CbsContractsDesktopClient.Views.References;
@@ -49,6 +50,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _isHolidayRecalcInProgress;
         private bool _isFnsCompareInProgress;
         private const int CommersDepartmentId = 2;
+        private const int FinDepartmentId = 3;
         private static readonly ReferenceDefinition StageEditDefinition = new()
         {
             Route = "/internal/Stage",
@@ -887,6 +889,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            if (_userService.CurrentUser?.DepartmentId == CommersDepartmentId)
+            {
+                await ShowStageCommerEditDialogAsync();
+                return;
+            }
+
+            if (_userService.CurrentUser?.DepartmentId == FinDepartmentId)
+            {
+                await ShowStageFinEditDialogAsync();
+                return;
+            }
+
             if (_userService.CurrentUser?.DepartmentId != CommersDepartmentId)
             {
                 await ShowErrorDialogAsync(
@@ -894,8 +908,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     "Диалог редактирования этапа для вашего отдела пока не реализован.");
                 return;
             }
-
-            await ShowStageCommerEditDialogAsync();
         }
 
         private async Task ShowStageCommerEditDialogAsync()
@@ -918,9 +930,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 dialog = new StageCommerEditDialog(
-                    _contractWorkflowStore.SelectedStage ?? sourceRow,
-                    _viewModel.SelectedRow,
-                    _contractWorkflowStore.Contract,
+                    _contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),
+                    _contractWorkflowStore.SelectedContractEditState,
                     statusOptions,
                     taskKindItems,
                     _userService.CurrentUser?.ProfileId)
@@ -936,22 +947,20 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             ReferenceDataRow? savedRow = null;
             bool shouldRefreshSelectedRowDetails = false;
-            dialog.PrimaryButtonClick += async (_, args) =>
+            dialog.SaveRequestedAsync += async args =>
             {
-                var deferral = args.GetDeferral();
                 try
                 {
-                    if (!dialog.Validate())
+                    var stagePayload = dialog.BuildPayload();
+                    if (!HasUpdatePayloadChanges(stagePayload))
                     {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
                         return;
                     }
 
-                    var stagePayload = dialog.BuildPayload();
                     shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
-                    savedRow = await _referenceCrudService.UpdateAsync(
-                        StageEditDefinition,
-                        stagePayload);
+                    savedRow = await SaveStagePayloadAsync(stagePayload);
 
                     if (dialog.ShouldCloseContract())
                     {
@@ -965,14 +974,98 @@ namespace CbsContractsDesktopClient.Views.Shell
                     dialog.ShowErrorInfo(ex.Message);
                     args.Cancel = true;
                 }
-                finally
+            };
+
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
+            _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
+            ShowSuccessNotification(
+                "Этап сохранён",
+                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+            if (shouldRefreshSelectedRowDetails)
+            {
+                await RefreshRowDetailAsync();
+            }
+        }
+
+        private async Task ShowStageFinEditDialogAsync()
+        {
+            var sourceRow = await LoadStageEditRowAsync();
+            if (sourceRow is null)
+            {
+                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                return;
+            }
+
+            _contractWorkflowStore.SetStageSelection(
+                sourceRow,
+                _contractWorkflowStore.Contract,
+                _contractWorkflowStore.Contragent);
+
+            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            StageFinEditDialog dialog;
+            try
+            {
+                dialog = new StageFinEditDialog(
+                    _contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),
+                    _contractWorkflowStore.SelectedContractEditState,
+                    statusOptions,
+                    _userService.CurrentUser?.ProfileId)
                 {
-                    deferral.Complete();
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            ReferenceDataRow? savedRow = null;
+            bool shouldRefreshSelectedRowDetails = false;
+            dialog.SaveRequestedAsync += async args =>
+            {
+                try
+                {
+                    var stagePayload = dialog.BuildPayload();
+                    var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
+                    var hasContractChanges = dialog.HasContractExternalNumberChanges();
+                    if (!hasStageChanges && !hasContractChanges)
+                    {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    if (hasStageChanges)
+                    {
+                        shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
+                        savedRow = await SaveStagePayloadAsync(stagePayload);
+                    }
+
+                    if (hasContractChanges)
+                    {
+                        await _referenceCrudService.UpdateAsync(
+                            ContractEditDefinition,
+                            dialog.BuildContractExternalNumberPayload());
+                        shouldRefreshSelectedRowDetails = true;
+                        savedRow ??= sourceRow;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
                 }
             };
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary || savedRow is null)
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
             {
                 return;
             }
@@ -2880,6 +2973,18 @@ namespace CbsContractsDesktopClient.Views.Shell
         private static bool ContainsNestedAttributes(IReadOnlyDictionary<string, object?> payload)
         {
             return payload.Keys.Any(static key => key.EndsWith("_attributes", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private Task<ReferenceDataRow> SaveStagePayloadAsync(IReadOnlyDictionary<string, object?> payload)
+        {
+            return _referenceCrudService.UpdateAsync(StageEditDefinition, payload);
+        }
+
+        private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)
+        {
+            return payload.Keys.Any(static key =>
+                !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
         }
 
         private async Task RefreshReferenceAfterSaveAsync(

@@ -1,13 +1,11 @@
-using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services.References;
-using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.UI;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogControls;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractDeadlineDialogOptions;
@@ -23,14 +21,13 @@ using Pauli.WinUiKit.Controls;
 
 namespace CbsContractsDesktopClient.Views.Functional
 {
-    public sealed class StageCommerEditDialog : ContentDialog
+    public sealed class StageCommerEditDialog : AppEditDialog
     {
         private const long StatusPending = 2;
         private const long StatusClosed = 5;
 
-        private readonly ReferenceDataRow _sourceRow;
-        private readonly ReferenceDataRow _displayRow;
-        private readonly ReferenceDataRow? _contractRow;
+        private readonly StageEditState _stage;
+        private readonly ContractEditState? _contract;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
         private readonly IReadOnlyList<StageTaskOption> _taskOptions;
@@ -49,7 +46,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly MultiSelect _tasksMultiSelect = new();
         private readonly HashSet<long> _selectedTaskKindIds = [];
         private readonly TextBox _commentBox = new();
-        private readonly TextBlock _errorText = new();
         private readonly string? _listKey;
         private bool _isApplyingBusinessLogic;
         private bool _businessLogicHandlersAttached;
@@ -57,40 +53,36 @@ namespace CbsContractsDesktopClient.Views.Functional
         private bool _paymentDeadlineAtEditedManually;
 
         public StageCommerEditDialog(
-            ReferenceDataRow sourceRow,
-            ReferenceDataRow? displayRow,
-            ReferenceDataRow? contractRow,
+            StageEditState stage,
+            ContractEditState? contract,
             IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions,
             IReadOnlyList<ReferenceLookupItem> taskKindItems,
             int? profileId)
         {
-            ArgumentNullException.ThrowIfNull(sourceRow);
+            ArgumentNullException.ThrowIfNull(stage);
             ArgumentNullException.ThrowIfNull(statusOptions);
             ArgumentNullException.ThrowIfNull(taskKindItems);
 
-            _sourceRow = sourceRow;
-            _displayRow = displayRow ?? sourceRow;
-            _contractRow = contractRow;
+            _stage = stage;
+            _contract = contract;
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _statusOptions = statusOptions;
             _profileId = profileId;
-            Id = TryGetLong(sourceRow.GetValue("id"))
-                ?? throw new InvalidOperationException("У выбранного этапа отсутствует ID.");
-            _listKey = sourceRow.GetValue("list_key")?.ToString();
-            _originalTasks = ReadStageTasks(sourceRow).ToList();
+            Id = stage.Id;
+            _listKey = stage.ListKey;
+            _originalTasks = stage.Tasks
+                .Select(static task => new StageTaskRecord(task.Id, task.ListKey, task.TaskKindId, task.Name ?? string.Empty))
+                .ToList();
             _taskOptions = CreateTaskOptions(taskKindItems, _originalTasks);
             foreach (var option in _taskOptions.Where(static option => option.IsSelected))
             {
                 _selectedTaskKindIds.Add(option.TaskKindId);
             }
 
-            PrimaryButtonText = "Сохранить";
-            CloseButtonText = "Отмена";
-            DefaultButton = ContentDialogButton.Primary;
             Resources["ContentDialogMinWidth"] = 780d;
             Resources["ContentDialogMaxWidth"] = 980d;
             Content = BuildContent(statusOptions);
-            DialogChrome.Apply(this, BuildTitleText(_displayRow));
+            DialogChrome.Apply(this, _stage.GetEditDialogTitle());
             Loaded += StageCommerEditDialog_Loaded;
         }
 
@@ -98,18 +90,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         public bool ShouldCloseContract()
         {
-            return IsStageStatusChangedToClosed()
-                && _closedAtEditor.Date is not null
-                && !IsContractAlreadyClosed()
-                && IsLastOpenStageInContract();
+            SyncStageStateFromEditors();
+            return _stage.ShouldCloseContract(_contract, StatusClosed);
         }
 
         public IReadOnlyDictionary<string, object?> BuildContractClosePayload()
         {
-            var contractId = ResolveContractId()
-                ?? throw new InvalidOperationException("Не удалось определить ID контракта для автоматического закрытия.");
-
-            return StageCommerEditPayloadBuilder.BuildContractClosePayload(contractId, _closedAtEditor.Date);
+            return StageCommerEditPayloadBuilder.BuildContractClosePayload(RequireContract().Id, _closedAtEditor.Date);
         }
 
         private async void StageCommerEditDialog_Loaded(object sender, RoutedEventArgs e)
@@ -129,45 +116,17 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         public IReadOnlyDictionary<string, object?> BuildPayload()
         {
+            SyncStageStateFromEditors();
             return StageCommerEditPayloadBuilder.BuildForUpdate(
-                _sourceRow,
-                new StageCommerEditPayloadInput(
-                    Id,
-                    _listKey,
-                    GetSelectedStatusOption()?.Value,
-                    GetSelectedKey(_deadlineKindBox),
-                    _deadlineAtEditor.Date,
-                    _startAtEditor.Date,
-                    GetSelectedKey(_paymentDeadlineKindBox),
-                    _paymentDeadlineAtEditor.Date,
-                    TryGetInt(_durationBox.Text),
-                    TryGetInt(_paymentDurationBox.Text),
-                    _closedAtEditor.Date,
-                    _selectedTaskKindIds,
-                    _commentBox.Text,
-                    _profileId));
+                _stage,
+                _selectedTaskKindIds,
+                _commentBox.Text,
+                _profileId);
         }
 
         public IReadOnlyDictionary<string, object?> BuildTablePatch()
         {
-            var patch = new Dictionary<string, object?>(StageCommerEditPayloadBuilder.BuildForUpdate(
-                _sourceRow,
-                new StageCommerEditPayloadInput(
-                    Id,
-                    _listKey,
-                    GetSelectedStatusOption()?.Value,
-                    GetSelectedKey(_deadlineKindBox),
-                    _deadlineAtEditor.Date,
-                    _startAtEditor.Date,
-                    GetSelectedKey(_paymentDeadlineKindBox),
-                    _paymentDeadlineAtEditor.Date,
-                    TryGetInt(_durationBox.Text),
-                    TryGetInt(_paymentDurationBox.Text),
-                    _closedAtEditor.Date,
-                    _selectedTaskKindIds,
-                    _commentBox.Text,
-                    _profileId)),
-                StringComparer.OrdinalIgnoreCase);
+            var patch = new Dictionary<string, object?>(BuildPayload(), StringComparer.OrdinalIgnoreCase);
 
             patch.Remove("comments_attributes");
             patch.Remove("tasks_attributes");
@@ -191,7 +150,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             return patch;
         }
 
-        public bool Validate()
+        public override bool Validate()
         {
             if (_deadlineAtEditedManually
                 && IsDeadlineManualMode(GetSelectedDeadlineKind())
@@ -219,7 +178,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return false;
             }
 
-            var fundedAt = ParseDate(_sourceRow.GetValue("funded_at"));
+            var fundedAt = _stage.FundedAt;
             if (_paymentDeadlineAtEditedManually
                 && IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind())
                 && _paymentDeadlineAtEditor.Date is DateTimeOffset paymentDeadlineAt
@@ -234,10 +193,17 @@ namespace CbsContractsDesktopClient.Views.Functional
             return true;
         }
 
-        public void ShowErrorInfo(string message)
+        private void SyncStageStateFromEditors()
         {
-            _errorText.Text = message;
-            _errorText.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
+            _stage.Status = new StatusEditState(GetSelectedStatusOption()?.Value, GetSelectedStatusOption()?.Label);
+            _stage.DeadlineKind = GetSelectedKey(_deadlineKindBox);
+            _stage.DeadlineAt = _deadlineAtEditor.Date;
+            _stage.StartAt = _startAtEditor.Date;
+            _stage.PaymentDeadlineKind = GetSelectedKey(_paymentDeadlineKindBox);
+            _stage.PaymentDeadlineAt = _paymentDeadlineAtEditor.Date;
+            _stage.Duration = TryGetInt(_durationBox.Text);
+            _stage.PaymentDuration = TryGetInt(_paymentDurationBox.Text);
+            _stage.ClosedAt = _closedAtEditor.Date;
         }
 
         private UIElement BuildContent(IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
@@ -263,13 +229,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             stack.Children.Add(BuildSummaryPanel());
             stack.Children.Add(BuildEditorsArea(statusOptions));
 
-            _errorText.Foreground = new SolidColorBrush(Colors.IndianRed);
-            _errorText.TextWrapping = TextWrapping.Wrap;
-            _errorText.Visibility = Visibility.Collapsed;
-            stack.Children.Add(_errorText);
-
             root.Children.Add(scrollViewer);
-            return root;
+            return BuildEditContent(root);
         }
 
         private UIElement BuildSummaryPanel()
@@ -279,7 +240,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 Spacing = 12
             };
 
-            stack.Children.Add(BuildSectionTitle("Контракт"));
+            stack.Children.Add(BuildDialogSectionTitle(RequireContract().GetSectionTitle()));
 
             var contractGrid = new Grid
             {
@@ -290,26 +251,26 @@ namespace CbsContractsDesktopClient.Views.Functional
             contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var left = new StackPanel { Spacing = 6 };
-            left.Children.Add(BuildSummaryLine("Номер", JsonDataReader.GetDisplayText(_displayRow, _sourceRow, "contract.name", "contract.id")));
-            left.Children.Add(BuildSummaryLine("Внешний номер", JsonDataReader.GetDisplayText(_displayRow, _sourceRow, "contract.external_number")));
-            left.Children.Add(BuildSummaryLine("Контрагент", JsonDataReader.GetDisplayText(_displayRow, _sourceRow, "contract.contragent.name", "contragent.name")));
-            left.Children.Add(BuildSummaryLine("Стоимость", FormatMoney(_displayRow.GetValue("contract.cost") ?? _sourceRow.GetValue("contract.cost") ?? _sourceRow.GetValue("cost"))));
+            left.Children.Add(BuildSummaryLine("Внешний номер", _contract?.ExternalNumber ?? string.Empty));
+            left.Children.Add(BuildSummaryLine("Контрагент", _contract?.ContragentName ?? string.Empty));
+            left.Children.Add(BuildAccentSummaryLine("Стоимость", FormatMoney(_contract?.Cost)));
 
             var right = new StackPanel { Spacing = 6 };
             right.Children.Add(BuildSummaryElement("Статус", BuildStatusBadge(
-                ResolveContractStatusName(),
-                ResolveContractStatusId(),
+                RequireContract().Status.Name!,
+                RequireContract().Status.Id,
                 horizontalAlignment: HorizontalAlignment.Left)));
-            right.Children.Add(BuildSummaryLine("Дата подписания", FormatDisplayDate(_displayRow.GetValue("contract.signed_at") ?? _sourceRow.GetValue("contract.signed_at"))));
-            right.Children.Add(BuildSummaryLine("Госконтракт", FormatBoolean(_displayRow.GetValue("contract.governmental") ?? _sourceRow.GetValue("contract.governmental"))));
-            right.Children.Add(BuildSummaryLine("Основная работа", JsonDataReader.GetDisplayText(_displayRow, _sourceRow, "contract.task_kind.name", "task_kind.name")));
+            right.Children.Add(BuildSummaryLine("Дата подписания", FormatDisplayDate(_contract?.SignedAt)));
+            right.Children.Add(BuildSummaryLine("Госконтракт", FormatBoolean(_contract?.Governmental)));
 
             contractGrid.Children.Add(left);
             Grid.SetColumn(right, 1);
             contractGrid.Children.Add(right);
             stack.Children.Add(contractGrid);
 
-            stack.Children.Add(BuildSectionTitle("Этап"));
+            stack.Children.Add(BuildDialogSectionTitle(
+                _stage.GetSectionTitle(_contract),
+                _stage.GetSectionTitleAmount(_contract)));
 
             var stageGrid = new Grid
             {
@@ -321,19 +282,16 @@ namespace CbsContractsDesktopClient.Views.Functional
             stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
             var stageLeft = new StackPanel { Spacing = 6 };
-            stageLeft.Children.Add(BuildSummaryLine("Стоимость", FormatMoney(_sourceRow.GetValue("cost"))));
-            stageLeft.Children.Add(BuildSummaryLine("Предоплата", FormatDisplayDate(_sourceRow.GetValue("prepayment_at"))));
-            stageLeft.Children.Add(BuildSummaryLine("Оплата", FormatDisplayDate(_sourceRow.GetValue("payment_at"))));
+            stageLeft.Children.Add(BuildSummaryLine("Предоплата", FormatDisplayDate(_stage.PrepaymentAt)));
+            stageLeft.Children.Add(BuildSummaryLine("Оплата", FormatDisplayDate(_stage.PaymentAt)));
 
             var stageMiddle = new StackPanel { Spacing = 6 };
-            stageMiddle.Children.Add(BuildSummaryLine("Бух. закрытие", FormatDisplayDate(_sourceRow.GetValue("funded_at"))));
-            stageMiddle.Children.Add(BuildSummaryLine("Работа выполнена", FormatDisplayDate(_sourceRow.GetValue("completed_at"))));
-            stageMiddle.Children.Add(BuildSummaryLine("Счёт", FormatDisplayDate(_sourceRow.GetValue("invoice_at"))));
+            stageMiddle.Children.Add(BuildSummaryLine("Бух. закрытие", FormatDisplayDate(_stage.FundedAt)));
+            stageMiddle.Children.Add(BuildSummaryLine("Работа выполнена", FormatDisplayDate(_stage.CompletedAt)));
 
             var stageRight = new StackPanel { Spacing = 6 };
-            stageRight.Children.Add(BuildSummaryLine("Выезд", FormatFlagDate(_sourceRow.GetValue("is_ride_out"), _sourceRow.GetValue("ride_out_at"))));
-            stageRight.Children.Add(BuildSummaryLine("Отправка", FormatFlagDate(_sourceRow.GetValue("is_sended"), _sourceRow.GetValue("sended_at"))));
-            stageRight.Children.Add(BuildSummaryLine("Бух. закрыт", FormatBoolean(_sourceRow.GetValue("is_funded"))));
+            stageRight.Children.Add(BuildSummaryLine("Выезд", FormatFlagDate(_stage.IsRideOut, _stage.RideOutAt)));
+            stageRight.Children.Add(BuildSummaryLine("Отправка", FormatFlagDate(_stage.IsSended, _stage.SendedAt)));
 
             stageGrid.Children.Add(stageLeft);
             Grid.SetColumn(stageMiddle, 1);
@@ -374,16 +332,16 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            _startAtEditor.Date = ParseDate(_sourceRow.GetValue("start_at"));
-            _deadlineAtEditor.Date = ParseDate(_sourceRow.GetValue("deadline_at"));
-            _paymentDeadlineAtEditor.Date = ParseDate(_sourceRow.GetValue("payment_deadline_at"));
-            _closedAtEditor.Date = ParseDate(_sourceRow.GetValue("closed_at"));
-            _durationBox.Text = _sourceRow.GetValue("duration")?.ToString() ?? string.Empty;
-            _paymentDurationBox.Text = _sourceRow.GetValue("payment_duration")?.ToString() ?? string.Empty;
+            _startAtEditor.Date = _stage.StartAt;
+            _deadlineAtEditor.Date = _stage.DeadlineAt;
+            _paymentDeadlineAtEditor.Date = _stage.PaymentDeadlineAt;
+            _closedAtEditor.Date = _stage.ClosedAt;
+            _durationBox.Text = _stage.Duration?.ToString() ?? string.Empty;
+            _paymentDurationBox.Text = _stage.PaymentDuration?.ToString() ?? string.Empty;
 
-            ConfigureSelectCombo(_deadlineKindBox, DeadlineKindOptions(), _sourceRow.GetValue("deadline_kind")?.ToString());
-            ConfigureSelectCombo(_paymentDeadlineKindBox, PaymentDeadlineKindOptions(), _sourceRow.GetValue("payment_deadline_kind")?.ToString());
-            ConfigureStatusCombo(_statusBox, BuildStageStatusOptions(statusOptions), TryGetLong(_sourceRow.GetValue("status.id") ?? _sourceRow.GetValue("status_id")));
+            ConfigureSelectCombo(_deadlineKindBox, DeadlineKindOptions(), _stage.DeadlineKind);
+            ConfigureSelectCombo(_paymentDeadlineKindBox, PaymentDeadlineKindOptions(), _stage.PaymentDeadlineKind);
+            ConfigureStatusCombo(_statusBox, BuildStageStatusOptions(statusOptions), _stage.Status.Id);
 
             AttachBusinessLogicHandlers();
             ApplyBusinessLogicAfterFieldChange(applyInitialStart: true);
@@ -476,7 +434,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ApplyInitialStartBusinessLogic()
         {
-            if (IsMultiStageContract() || _startAtEditor.Date is not null)
+            if (_contract?.IsMultiStage == true || _startAtEditor.Date is not null)
             {
                 return;
             }
@@ -486,14 +444,11 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             if (deadlineKind is "calendar_plan" or "calendar_days" or "working_days")
             {
-                nextStart = ParseDate(
-                    _contractRow?.GetValue("signed_at")
-                    ?? _displayRow.GetValue("contract.signed_at")
-                    ?? _sourceRow.GetValue("contract.signed_at"));
+                nextStart = _contract?.SignedAt;
             }
             else if (deadlineKind is "calendar_prepayment" or "working_prepayment")
             {
-                nextStart = GetPaymentBaseDate();
+                nextStart = _stage.PaymentBaseDate;
             }
 
             if (nextStart is null)
@@ -532,7 +487,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         {
             var paymentKind = GetSelectedPaymentDeadlineKind();
             var paymentDuration = TryGetInt(_paymentDurationBox.Text);
-            var fundedAt = ParseDate(_sourceRow.GetValue("funded_at"));
+            var fundedAt = _stage.FundedAt;
 
             if (paymentKind == "c_days" && paymentDuration is int calendarDuration && fundedAt is not null)
             {
@@ -551,7 +506,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
             else if (paymentDuration is null
                 && fundedAt is not null
-                && string.IsNullOrWhiteSpace(_sourceRow.GetValue("payment_deadline_at")?.ToString()))
+                && _stage.Original.PaymentDeadlineAt is null)
             {
                 _paymentDeadlineAtEditor.Date = null;
             }
@@ -614,80 +569,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private bool IsMultiStageContract()
+        private ContractEditState RequireContract()
         {
-            if (TryGetBool(_contractRow?.GetValue("multyStage"))
-                ?? TryGetBool(_contractRow?.GetValue("multiStage"))
-                ?? TryGetBool(_contractRow?.GetValue("is_multistage"))
-                ?? TryGetBool(_displayRow.GetValue("contract.multyStage"))
-                ?? TryGetBool(_displayRow.GetValue("contract.multiStage"))
-                ?? TryGetBool(_sourceRow.GetValue("contract.multyStage"))
-                ?? TryGetBool(_sourceRow.GetValue("contract.multiStage"))
-                ?? false)
-            {
-                return true;
-            }
-
-            return JsonDataReader.TryGetArrayCount(_contractRow, "stages") is int contractStagesCount && contractStagesCount > 1;
-        }
-
-        private bool IsLastOpenStageInContract()
-        {
-            var stages = JsonDataReader.TryGetArray(_contractRow, "stages");
-            if (stages is null)
-            {
-                return false;
-            }
-
-            foreach (var stage in JsonDataReader.EnumerateObjectArray(stages))
-            {
-                var stageId = JsonDataReader.TryGetLong(stage, "id");
-                if (stageId == Id)
-                {
-                    continue;
-                }
-
-                var status = JsonDataReader.TryGetObject(stage, "status");
-                var statusId = JsonDataReader.TryGetLong(JsonDataReader.TryGetValue(stage, "status_id"))
-                    ?? (status is null ? null : JsonDataReader.TryGetLong(status.Value, "id"));
-
-                if (statusId != StatusClosed)
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private bool IsStageStatusChangedToClosed()
-        {
-            return GetSelectedStatusOption()?.Value == StatusClosed
-                && ResolveOriginalStageStatusId() != StatusClosed;
-        }
-
-        private long? ResolveOriginalStageStatusId()
-        {
-            return TryGetLong(_sourceRow.GetValue("status_id"))
-                ?? TryGetLong(_sourceRow.GetValue("status.id"));
-        }
-
-        private bool IsContractAlreadyClosed()
-        {
-            return ResolveContractStatusId() == StatusClosed;
-        }
-
-        private long? ResolveContractId()
-        {
-            return TryGetLong(_contractRow?.GetValue("id"))
-                ?? TryGetLong(_displayRow.GetValue("contract.id"))
-                ?? TryGetLong(_sourceRow.GetValue("contract.id"));
-        }
-
-        private DateTimeOffset? GetPaymentBaseDate()
-        {
-            return ParseDate(_sourceRow.GetValue("prepayment_at"))
-                ?? ParseDate(_sourceRow.GetValue("payment_at"));
+            return _contract
+                ?? throw new InvalidOperationException("Stage edit dialog requires selected contract edit state.");
         }
 
         private UIElement BuildWideEditorsColumn()
@@ -771,78 +656,9 @@ namespace CbsContractsDesktopClient.Views.Functional
                 .ToList();
         }
 
-        private static IReadOnlyList<StageTaskRecord> ReadStageTasks(ReferenceDataRow row)
-        {
-            return JsonDataReader.EnumerateObjectArray(row, "tasks")
-                .Select(static item => new StageTaskRecord(
-                    Id: JsonDataReader.TryGetLong(item, "id"),
-                    ListKey: JsonDataReader.TryGetString(item, "list_key"),
-                    TaskKindId: JsonDataReader.TryGetLong(item, "task_kind_id"),
-                    Name: JsonDataReader.TryGetString(item, "name") ?? string.Empty))
-                .ToList();
-        }
         private EnumSelectOption? GetSelectedStatusOption()
         {
             return StageContractStatusDialogControls.GetSelectedStatusOption(_statusBox);
-        }
-
-        private static TextBox BuildNumberTextBox()
-        {
-            return new TextBox
-            {
-                InputScope = new InputScope
-                {
-                    Names =
-                    {
-                        new InputScopeName(InputScopeNameValue.Number)
-                    }
-                }
-            };
-        }
-
-        private string ResolveContractStatusName()
-        {
-            var directName = JsonDataReader.FirstText(
-                _contractRow?.GetValue("status.name"),
-                _displayRow.GetValue("contract.status.name"),
-                _sourceRow.GetValue("contract.status.name"));
-            if (!string.IsNullOrWhiteSpace(directName))
-            {
-                return directName;
-            }
-
-            var rawStatus = _contractRow?.GetValue("status")
-                ?? _displayRow.GetValue("contract.status")
-                ?? _sourceRow.GetValue("contract.status");
-            if (rawStatus is not null && TryGetLong(rawStatus) is null)
-            {
-                var text = rawStatus.ToString();
-                if (!string.IsNullOrWhiteSpace(text) && !text.TrimStart().StartsWith('{'))
-                {
-                    return text;
-                }
-            }
-
-            var statusId = ResolveContractStatusId();
-            return FindStatusLabel(_statusOptions, statusId);
-        }
-
-        private long? ResolveContractStatusId()
-        {
-            return TryGetLong(_contractRow?.GetValue("status.id"))
-                ?? TryGetLong(_contractRow?.GetValue("status_id"))
-                ?? TryGetLong(_displayRow.GetValue("contract.status.id"))
-                ?? TryGetLong(_sourceRow.GetValue("contract.status.id"))
-                ?? TryGetLong(_displayRow.GetValue("contract.status_id"))
-                ?? TryGetLong(_sourceRow.GetValue("contract.status_id"));
-        }
-
-        private static string BuildTitleText(ReferenceDataRow row)
-        {
-            var stageName = row.GetValue("name")?.ToString();
-            return string.IsNullOrWhiteSpace(stageName)
-                ? "Редактирование этапа"
-                : $"Редактирование этапа {stageName}";
         }
 
         private sealed record StageTaskOption(long TaskKindId, string Name, bool IsSelected);

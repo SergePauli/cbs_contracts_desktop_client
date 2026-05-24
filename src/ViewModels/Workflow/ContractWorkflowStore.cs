@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow
@@ -18,6 +19,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         [ObservableProperty]
         public partial ReferenceDataRow? Contragent { get; set; }
+
+        [ObservableProperty]
+        public partial StageEditState? SelectedStageEditState { get; set; }
+
+        [ObservableProperty]
+        public partial ContractEditState? SelectedContractEditState { get; set; }
 
         [ObservableProperty]
         public partial int? FocusedRevisionPriority { get; set; }
@@ -79,9 +86,11 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             SelectedRevision = null;
             SelectedStage = null;
+            SelectedStageEditState = null;
             Contract = selectionKind == ContractRowDetailSelectionKind.Contract
                 ? contract ?? selectedRow
                 : contract;
+            SelectedContractEditState = ContractEditState.FromRow(Contract);
             Contragent = contragent;
             FocusedRevisionPriority = null;
 
@@ -93,6 +102,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             else if (selectionKind == ContractRowDetailSelectionKind.Stage)
             {
                 SelectedStage = selectedRow;
+                SelectedStageEditState = StageEditState.FromRow(selectedRow);
             }
 
             SelectedRowHeader = selectedRowHeader ?? string.Empty;
@@ -103,7 +113,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             SelectedRevision = null;
             SelectedStage = null;
+            SelectedStageEditState = null;
             Contract = null;
+            SelectedContractEditState = null;
             Contragent = null;
             FocusedRevisionPriority = null;
             SelectedRowHeader = string.Empty;

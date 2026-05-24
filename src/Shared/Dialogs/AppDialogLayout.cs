@@ -1,7 +1,9 @@
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Documents;
 
 namespace CbsContractsDesktopClient.Shared.Dialogs;
 
@@ -61,6 +63,61 @@ public static class AppDialogLayout
         };
     }
 
+    public static UIElement BuildDialogSectionTitle(string title)
+    {
+        return BuildDialogSectionTitle(title, null);
+    }
+
+    public static UIElement BuildDialogSectionTitle(string title, string? accentText)
+    {
+        var textBlock = new TextBlock
+        {
+            FontSize = 14,
+            LineHeight = 18,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = Application.Current.Resources["ShellPrimaryTextBrush"] as Brush,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+
+        if (string.IsNullOrWhiteSpace(accentText))
+        {
+            textBlock.Text = title;
+        }
+        else
+        {
+            textBlock.Inlines.Add(new Run { Text = title + " " });
+            textBlock.Inlines.Add(new Run
+            {
+                Text = accentText,
+                Foreground = Application.Current.Resources["ShellAccentBrush"] as Brush
+            });
+        }
+
+        return new Border
+        {
+            Margin = new Thickness(0, 2, 0, 0),
+            Padding = new Thickness(4, 0, 4, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            Child = textBlock
+        };
+    }
+
+    public static TextBox BuildNumberTextBox()
+    {
+        return new TextBox
+        {
+            InputScope = new InputScope
+            {
+                Names =
+                {
+                    new InputScopeName(InputScopeNameValue.Number)
+                }
+            }
+        };
+    }
+
     public static UIElement BuildSummaryLine(string label, string value)
     {
         return BuildSummaryElement(
@@ -71,6 +128,28 @@ public static class AppDialogLayout
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextWrapping = TextWrapping.Wrap
             });
+    }
+
+    public static UIElement BuildAccentSummaryLine(string label, string value)
+    {
+        return BuildSummaryElement(
+            label,
+            new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(value) ? "-" : value,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Foreground = Application.Current.Resources["ShellAccentBrush"] as Brush,
+                TextWrapping = TextWrapping.Wrap
+            });
+    }
+
+    public static TextBlock BuildDynamicSummaryText()
+    {
+        return new TextBlock
+        {
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap
+        };
     }
 
     public static UIElement BuildSummaryElement(string label, FrameworkElement valueElement)

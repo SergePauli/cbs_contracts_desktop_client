@@ -3,6 +3,8 @@ use utf-8 for file creation or updates
 Workflow rules:
 - Do not create or run new tests until the code changes are approved.
 - Add or update tests immediately before committing approved changes.
+- Confirm application architecture decisions before implementing them: first discuss where new code belongs, how it should be named, and its ownership boundaries; only write code after the decision is approved.
+- Do not mask data contract violations with defensive fallbacks, nullable workarounds, or silent checks; throw an exception at the boundary where invalid data is detected.
 - Keep API request builders next to the entity store/state they serialize.
 - Dialogs must not build API update payloads directly; they should collect UI input and delegate change serialization to the entity store/state payload builder.
 

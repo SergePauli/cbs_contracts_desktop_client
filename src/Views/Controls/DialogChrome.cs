@@ -15,7 +15,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             ApplyCompactResources(dialog);
             dialog.BorderThickness = new Thickness(0);
             dialog.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            ApplyButtonMargins(dialog);
             EnsureContentMargin(dialog);
 
             if (dialog.Title is string title)
@@ -31,7 +30,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             ApplyCompactResources(dialog);
             dialog.BorderThickness = new Thickness(0);
             dialog.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-            ApplyButtonMargins(dialog);
             EnsureContentMargin(dialog);
             dialog.Title = BuildTitle(dialog, title);
         }
@@ -46,29 +44,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             dialog.Resources["ContentDialogBorderWidth"] = new Thickness(0);
             dialog.Resources["ContentDialogSeparatorThickness"] = new Thickness(0);
             dialog.Resources["ContentDialogBorderBrush"] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
-        }
-
-        private static void ApplyButtonMargins(ContentDialog dialog)
-        {
-            var primaryStyle = CreateDialogButtonStyle(dialog.PrimaryButtonStyle);
-            var secondaryStyle = CreateDialogButtonStyle(dialog.SecondaryButtonStyle);
-            var closeStyle = CreateDialogButtonStyle(dialog.CloseButtonStyle);
-
-            dialog.PrimaryButtonStyle = primaryStyle;
-            dialog.SecondaryButtonStyle = secondaryStyle;
-            dialog.CloseButtonStyle = closeStyle;
-        }
-
-        private static Style CreateDialogButtonStyle(Style? basedOn)
-        {
-            var style = new Style(typeof(Button));
-            if (basedOn is not null)
-            {
-                style.BasedOn = basedOn;
-            }
-
-            style.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(4)));
-            return style;
         }
 
         private static void EnsureContentMargin(ContentDialog dialog)
@@ -106,7 +81,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             var root = new Border
             {
                 Background = Application.Current.Resources["ShellSidebarBackgroundBrush"] as Brush,
-                Padding = new Thickness(4),
+                Padding = new Thickness(12,4,4,4),
                 MinWidth = ReadDialogWidth(dialog),
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
@@ -125,14 +100,15 @@ namespace CbsContractsDesktopClient.Views.Controls
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = Application.Current.Resources["ShellPrimaryTextBrush"] as Brush,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                FontSize = 14
             };
             grid.Children.Add(titleBlock);
 
             var closeButton = new Button
             {
-                Width = 28,
-                Height = 28,
+                Width = 24,
+                Height = 24,
                 Padding = new Thickness(0),
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -173,5 +149,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             return 548;
         }
+
     }
 }

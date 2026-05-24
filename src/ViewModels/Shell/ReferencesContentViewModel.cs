@@ -348,7 +348,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         {
             ArgumentNullException.ThrowIfNull(payload);
 
-            var id = TryGetSelectedRowId(savedRow)
+            var id = savedRow is null ? null : TryGetSelectedRowId(savedRow)
                 ?? TryGetPayloadId(payload)
                 ?? (SelectedRow is null ? null : TryGetSelectedRowId(SelectedRow));
             if (id is null || id.Value <= 0)

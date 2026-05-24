@@ -15,6 +15,11 @@ public sealed class StageCommerEditDialogTests
     {
         var code = File.ReadAllText(DialogPath);
 
+        Assert.Contains("public sealed class StageCommerEditDialog : AppEditDialog", code);
+        Assert.Contains("return BuildEditContent(root);", code);
+        Assert.Contains("private readonly TextBox _durationBox = BuildNumberTextBox();", code);
+        Assert.Contains("private readonly TextBox _paymentDurationBox = BuildNumberTextBox();", code);
+        Assert.DoesNotContain("private static TextBox BuildNumberTextBox()", code);
         Assert.Contains("IsDeadlineManualMode(GetSelectedDeadlineKind())", code);
         Assert.Contains("IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind())", code);
         Assert.Contains("_deadlineAtEditor.IsReadOnly = !deadlineManual;", code);
@@ -38,8 +43,32 @@ public sealed class StageCommerEditDialogTests
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("public bool ShouldCloseContract()", code);
-        Assert.Contains("IsLastOpenStageInContract()", code);
+        Assert.Contains("_stage.ShouldCloseContract(_contract, StatusClosed)", code);
         Assert.Contains("public IReadOnlyDictionary<string, object?> BuildContractClosePayload()", code);
-        Assert.Contains("StageCommerEditPayloadBuilder.BuildContractClosePayload(contractId, _closedAtEditor.Date)", code);
+        Assert.Contains("StageCommerEditPayloadBuilder.BuildContractClosePayload(RequireContract().Id, _closedAtEditor.Date)", code);
+    }
+
+    [Fact]
+    public void StageCommerEditDialog_UsesCenteredSectionTitlesAndAccentMoney()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("BuildDialogSectionTitle(RequireContract().GetSectionTitle())", code);
+        Assert.Contains("BuildDialogSectionTitle(", code);
+        Assert.Contains("_stage.GetSectionTitleAmount(_contract)", code);
+        Assert.Contains("BuildAccentSummaryLine(\"Стоимость\", FormatMoney(_contract?.Cost))", code);
+        Assert.DoesNotContain("BuildSummaryLine(\"Стоимость\", FormatMoney(_stage.Cost))", code);
+    }
+
+    [Fact]
+    public void StageCommerEditDialog_ReadsRequiredContractStatusDirectly()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("RequireContract().Status.Name!", code);
+        Assert.Contains("RequireContract().Status.Id", code);
+        Assert.DoesNotContain("ResolveContractStatusName", code);
+        Assert.DoesNotContain("ResolveContractStatusId", code);
+        Assert.DoesNotContain("FindStatusLabel(_statusOptions", code);
     }
 }
