@@ -49,6 +49,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _isViewportSubscribed;
         private bool _isHolidayRecalcInProgress;
         private bool _isFnsCompareInProgress;
+        private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
         private const int FinDepartmentId = 3;
         private static readonly ReferenceDefinition StageEditDefinition = new()
@@ -889,6 +890,12 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            if (_userService.CurrentUser?.DepartmentId == OziDepartmentId)
+            {
+                await ShowStageOziEditDialogAsync();
+                return;
+            }
+
             if (_userService.CurrentUser?.DepartmentId == CommersDepartmentId)
             {
                 await ShowStageCommerEditDialogAsync();
@@ -901,12 +908,91 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (_userService.CurrentUser?.DepartmentId != CommersDepartmentId)
+            await ShowErrorDialogAsync(
+                "Редактирование этапа",
+                "Диалог редактирования этапа для вашего отдела пока не реализован.");
+        }
+
+        private async Task ShowStageOziEditDialogAsync()
+        {
+            var sourceRow = await LoadStageEditRowAsync();
+            if (sourceRow is null)
             {
-                await ShowErrorDialogAsync(
-                    "Редактирование этапа",
-                    "Диалог редактирования этапа для вашего отдела пока не реализован.");
+                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
                 return;
+            }
+
+            _contractWorkflowStore.SetStageSelection(
+                sourceRow,
+                _contractWorkflowStore.Contract,
+                _contractWorkflowStore.Contragent);
+
+            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var employeeItems = await LoadOziEmployeeItemsAsync();
+            StageOziEditDialog dialog;
+            try
+            {
+                dialog = new StageOziEditDialog(
+                    _contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),
+                    _contractWorkflowStore.SelectedContractEditState,
+                    statusOptions,
+                    employeeItems,
+                    _userService.CurrentUser?.ProfileId)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            ReferenceDataRow? savedRow = null;
+            bool shouldRefreshSelectedRowDetails = false;
+            dialog.SaveRequestedAsync += async args =>
+            {
+                try
+                {
+                    var stagePayload = dialog.BuildPayload();
+                    if (!HasUpdatePayloadChanges(stagePayload))
+                    {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
+                    savedRow = await SaveStagePayloadAsync(stagePayload);
+
+                    if (dialog.ShouldCloseContract())
+                    {
+                        await _referenceCrudService.UpdateAsync(
+                            ContractEditDefinition,
+                            dialog.BuildContractClosePayload());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+            };
+
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
+            _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
+            ShowSuccessNotification(
+                "Этап сохранён",
+                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+            if (shouldRefreshSelectedRowDetails)
+            {
+                await RefreshRowDetailAsync();
             }
         }
 
@@ -2714,6 +2800,40 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             return await _referenceLookupCacheService.GetOptionsAsync(model, preset, cancellationToken);
+        }
+
+        private async Task<IReadOnlyList<ReferenceLookupItem>> LoadOziEmployeeItemsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "Employee",
+                    Preset = "item",
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["contragent_id__eq"] = 1L,
+                        ["used__eq"] = true
+                    },
+                    Sorts = ["priority asc"],
+                    Limit = 1000
+                },
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(static row => new ReferenceLookupItem
+                {
+                    Model = "Employee",
+                    Preset = "item",
+                    Id = row.GetValue("id"),
+                    Name = GetText(row, "name", "person.name", "full_name"),
+                    FullName = GetText(row, "full_name", "name", "person.name"),
+                    Code = GetText(row, "code"),
+                    Row = row
+                })
+                .Where(static item => item.Id is not null && !string.IsNullOrWhiteSpace(item.DisplayName))
+                .ToList();
         }
 
         private async Task EnsureContragentAddressAsync(

@@ -108,12 +108,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             long contractId,
             DateTimeOffset? closedAt)
         {
-            return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = contractId,
-                ["status_id"] = 5L,
-                ["closed_at"] = FormatDate(closedAt)
-            };
+            return StageEditPayloadBuilderHelpers.BuildContractClosePayload(contractId, closedAt);
         }
 
         private static void AppendChangedText(

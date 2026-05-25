@@ -38,7 +38,7 @@ public sealed class StageEditState : IEditState
 
     public DateTimeOffset? ClosedAt { get; set; }
 
-    public DateTimeOffset? CompletedAt { get; private set; }
+    public DateTimeOffset? CompletedAt { get; set; }
 
     public string? PaymentDeadlineKind { get; set; }
 
@@ -56,15 +56,21 @@ public sealed class StageEditState : IEditState
 
     public bool IsFunded { get; set; }
 
-    public bool? IsRideOut { get; private set; }
+    public bool? IsRideOut { get; set; }
 
-    public DateTimeOffset? RideOutAt { get; private set; }
+    public DateTimeOffset? RideOutAt { get; set; }
 
-    public bool? IsSended { get; private set; }
+    public bool? IsSended { get; set; }
 
-    public DateTimeOffset? SendedAt { get; private set; }
+    public DateTimeOffset? SendedAt { get; set; }
+
+    public int? RegistryQuarter { get; set; }
+
+    public int? RegistryYear { get; set; }
 
     public IReadOnlyList<StageTaskEditState> Tasks { get; private set; } = [];
+
+    public IReadOnlyList<StagePerformerEditState> Performers { get; set; } = [];
 
     public DateTimeOffset? PaymentBaseDate => PrepaymentAt ?? PaymentAt;
 
@@ -72,6 +78,7 @@ public sealed class StageEditState : IEditState
         HasStatusChanges
         || HasDeadlineRuleChanges
         || HasFinancialChanges
+        || HasOziChanges
         || !SameDate(ClosedAt, Original.ClosedAt);
 
     public bool HasStatusChanges => Status.Id != Original.Status.Id;
@@ -91,6 +98,16 @@ public sealed class StageEditState : IEditState
         || !SameDate(InvoiceAt, Original.InvoiceAt)
         || !SameDate(FundedAt, Original.FundedAt)
         || IsFunded != Original.IsFunded;
+
+    public bool HasOziChanges =>
+        !SameDate(CompletedAt, Original.CompletedAt)
+        || !SameDate(RideOutAt, Original.RideOutAt)
+        || !SameDate(SendedAt, Original.SendedAt)
+        || IsRideOut != Original.IsRideOut
+        || IsSended != Original.IsSended
+        || RegistryQuarter != Original.RegistryQuarter
+        || RegistryYear != Original.RegistryYear
+        || !SamePerformerEmployees(Performers, Original.Performers);
 
     public void RestoreOriginal()
     {
@@ -119,7 +136,10 @@ public sealed class StageEditState : IEditState
         RideOutAt = Original.RideOutAt;
         IsSended = Original.IsSended;
         SendedAt = Original.SendedAt;
+        RegistryQuarter = Original.RegistryQuarter;
+        RegistryYear = Original.RegistryYear;
         Tasks = Original.Tasks;
+        Performers = Original.Performers;
     }
 
     public bool IsLastOpenStageIn(ContractEditState? contract, long closedStatusId)
@@ -225,6 +245,28 @@ public sealed class StageEditState : IEditState
             profileId);
     }
 
+    public StageOziEditPayloadInput ToOziPayloadInput(
+        IReadOnlyList<StagePerformerEditState> selectedPerformers,
+        string? comment,
+        int? profileId)
+    {
+        return new StageOziEditPayloadInput(
+            Id,
+            ListKey,
+            Status.Id,
+            CompletedAt,
+            RideOutAt,
+            SendedAt,
+            ClosedAt,
+            IsRideOut,
+            IsSended,
+            RegistryQuarter,
+            RegistryYear,
+            selectedPerformers,
+            comment,
+            profileId);
+    }
+
     public static StageEditState FromRow(ReferenceDataRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
@@ -263,7 +305,10 @@ public sealed class StageEditState : IEditState
             RideOutAt: AppFormatters.ParseDate(row.GetValue("ride_out_at")),
             IsSended: TryGetBool(row.GetValue("is_sended")),
             SendedAt: AppFormatters.ParseDate(row.GetValue("sended_at")),
-            Tasks: ReadTasks(row)));
+            RegistryQuarter: TryGetInt(row.GetValue("registry_quarter")),
+            RegistryYear: TryGetInt(row.GetValue("registry_year")),
+            Tasks: ReadTasks(row),
+            Performers: ReadPerformers(row)));
     }
 
     private static IReadOnlyList<StageTaskEditState> ReadTasks(ReferenceDataRow row)
@@ -275,6 +320,32 @@ public sealed class StageEditState : IEditState
                 TaskKindId: TryGetLong(task, "task_kind_id"),
                 Name: TryGetString(task, "name")))
             .ToList();
+    }
+
+    private static IReadOnlyList<StagePerformerEditState> ReadPerformers(ReferenceDataRow row)
+    {
+        return EnumerateObjectArray(row, "performers")
+            .Select(static performer => new StagePerformerEditState(
+                Id: TryGetLong(performer, "id"),
+                ListKey: TryGetString(performer, "list_key"),
+                EmployeeId: TryGetLong(performer, "employee_id") ?? TryGetLong(performer, "id"),
+                Name: TryGetString(performer, "name") ?? string.Empty,
+                Priority: TryGetInt(performer, "priority")))
+            .ToList();
+    }
+
+    private static bool SamePerformerEmployees(
+        IReadOnlyList<StagePerformerEditState> left,
+        IReadOnlyList<StagePerformerEditState> right)
+    {
+        return left
+            .Select(static item => item.EmployeeId)
+            .Where(static id => id is not null)
+            .Select(static id => id!.Value)
+            .SequenceEqual(right
+                .Select(static item => item.EmployeeId)
+                .Where(static id => id is not null)
+                .Select(static id => id!.Value));
     }
 
     private static decimal? TryGetDecimal(object? value)
@@ -332,4 +403,7 @@ public sealed record StageEditStateSnapshot(
     DateTimeOffset? RideOutAt,
     bool? IsSended,
     DateTimeOffset? SendedAt,
-    IReadOnlyList<StageTaskEditState> Tasks);
+    int? RegistryQuarter,
+    int? RegistryYear,
+    IReadOnlyList<StageTaskEditState> Tasks,
+    IReadOnlyList<StagePerformerEditState> Performers);

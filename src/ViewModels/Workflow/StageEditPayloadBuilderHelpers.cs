@@ -2,6 +2,18 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow;
 
 public static class StageEditPayloadBuilderHelpers
 {
+    public static IReadOnlyDictionary<string, object?> BuildContractClosePayload(
+        long contractId,
+        DateTimeOffset? closedAt)
+    {
+        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["id"] = contractId,
+            ["status_id"] = 5L,
+            ["closed_at"] = Shared.Formatting.AppFormatters.FormatDate(closedAt)
+        };
+    }
+
     public static void AppendCommentAttributes(
         IDictionary<string, object?> request,
         string? comment,
