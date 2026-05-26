@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.ViewModels.References;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using CbsContractsDesktopClient.Views.Controls;
@@ -12,7 +13,7 @@ using KeyboardAcceleratorPlacementModeEnum = Microsoft.UI.Xaml.Input.KeyboardAcc
 
 namespace CbsContractsDesktopClient.Views.References
 {
-    public sealed class ContragentEditDialog : ContentDialog
+    public sealed class ContragentEditDialog : AppEditDialog
     {
         private ListView? _registrationsListView;
         private bool _isRegistrationSyncing;
@@ -26,22 +27,26 @@ namespace CbsContractsDesktopClient.Views.References
             ViewModel = viewModel;
             DataContext = viewModel;
             Title = ViewModel.DialogTitle;
-            PrimaryButtonText = viewModel.PrimaryButtonText;
-            CloseButtonText = "Закрыть";
-            DefaultButton = ContentDialogButton.Close;
-            SetBinding(IsPrimaryButtonEnabledProperty, new Binding
-            {
-                Path = new PropertyPath(nameof(ContragentEditViewModel.CanSubmit))
-            });
             Resources["ContentDialogMinWidth"] = 650d;
             Resources["ContentDialogMinHeight"] = 600d;
             Resources["ContentDialogMaxWidth"] = 920d;
-            Content = BuildContent();
+            Content = BuildEditContent(BuildContent());
             DialogChrome.Apply(this);
             Loaded += OnLoaded;
         }
 
         public ContragentEditViewModel ViewModel { get; }
+
+        public override bool Validate()
+        {
+            if (ViewModel.CanSubmit)
+            {
+                return true;
+            }
+
+            ViewModel.ShowErrorInfo("Заполните обязательные поля или внесите изменения.");
+            return false;
+        }
 
         private Grid BuildHeader()
         {
@@ -106,7 +111,7 @@ namespace CbsContractsDesktopClient.Views.References
             }
         }
 
-        private UIElement BuildContent()
+        private FrameworkElement BuildContent()
         {
             var root = new Grid
             {

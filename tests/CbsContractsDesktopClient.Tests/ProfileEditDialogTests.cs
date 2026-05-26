@@ -22,7 +22,9 @@ public sealed class ProfileEditDialogTests
     {
         var code = File.ReadAllText(ProfileEditDialogPath);
 
-        Assert.Contains("public sealed class ProfileEditDialog : ContentDialog", code);
+        Assert.Contains("public sealed class ProfileEditDialog : AppEditDialog", code);
+        Assert.Contains("Content = BuildEditContent(BuildContent());", code);
+        Assert.Contains("public override bool Validate()", code);
         Assert.Contains("BuildFieldsGrid()", code);
         Assert.Contains("BuildValidationInfoBar()", code);
         Assert.Contains("new InfoBar", code);

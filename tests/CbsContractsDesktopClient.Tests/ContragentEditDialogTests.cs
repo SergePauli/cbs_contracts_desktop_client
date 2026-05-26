@@ -15,13 +15,14 @@ public sealed class ContragentEditDialogTests
     {
         var code = File.ReadAllText(DialogPath);
 
-        Assert.Contains("public sealed class ContragentEditDialog : ContentDialog", code);
+        Assert.Contains("public sealed class ContragentEditDialog : AppEditDialog", code);
         Assert.Contains("using CbsContractsDesktopClient.Views.Controls;", code);
         Assert.Contains("Title = ViewModel.DialogTitle;", code);
         Assert.Contains("Resources[\"ContentDialogMinWidth\"] = 650d;", code);
         Assert.Contains("Resources[\"ContentDialogMinHeight\"] = 600d;", code);
         Assert.Contains("Resources[\"ContentDialogMaxWidth\"] = 920d;", code);
-        Assert.Contains("Content = BuildContent();", code);
+        Assert.Contains("Content = BuildEditContent(BuildContent());", code);
+        Assert.Contains("public override bool Validate()", code);
         Assert.Contains("DialogChrome.Apply(this);", code);
         Assert.Contains("Loaded += OnLoaded;", code);
         Assert.Contains("SuppressKeyboardAcceleratorTooltips(this);", code);

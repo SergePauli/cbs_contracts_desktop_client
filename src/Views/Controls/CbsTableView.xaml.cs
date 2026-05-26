@@ -113,6 +113,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableView),
                 new PropertyMetadata(CbsTableRowStyleKey.None, OnRowStyleKeyChanged));
 
+        public static readonly DependencyProperty ShowStageCostFractionProperty =
+            DependencyProperty.Register(
+                nameof(ShowStageCostFraction),
+                typeof(bool),
+                typeof(CbsTableView),
+                new PropertyMetadata(false, OnShowStageCostFractionChanged));
+
         public static readonly DependencyProperty SupportsRowSelectionProperty =
             DependencyProperty.Register(
                 nameof(SupportsRowSelection),
@@ -338,6 +345,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(RowStyleKeyProperty, value);
         }
 
+        public bool ShowStageCostFraction
+        {
+            get => (bool)GetValue(ShowStageCostFractionProperty);
+            set => SetValue(ShowStageCostFractionProperty, value);
+        }
+
         public int RetainedBufferRows
         {
             get => (int)GetValue(RetainedBufferRowsProperty);
@@ -526,7 +539,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                     sourceRows[absoluteIndex],
                     Columns,
                     RowHeight,
-                    RowStyleKey);
+                    RowStyleKey,
+                    ShowStageCostFraction);
                 _rowPool[index].Tag = absoluteIndex;
                 ApplyRowSelectionState(_rowPool[index], absoluteIndex);
             }
@@ -617,6 +631,11 @@ namespace CbsContractsDesktopClient.Views.Controls
         }
 
         private static void OnRowStyleKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((CbsTableView)d).RebuildRows();
+        }
+
+        private static void OnShowStageCostFractionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((CbsTableView)d).RebuildRows();
         }

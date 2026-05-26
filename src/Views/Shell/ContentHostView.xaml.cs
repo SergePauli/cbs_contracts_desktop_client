@@ -11,6 +11,7 @@ using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.ViewModels.References;
@@ -25,7 +26,9 @@ using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.System;
 using static CbsContractsDesktopClient.Shared.Dates.BusinessCalendar;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
@@ -41,6 +44,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IFnsContragentService _fnsContragentService;
         private readonly IDataQueryService _dataQueryService;
         private readonly IUserService _userService;
+        private readonly ILocalUserSettingsService _localUserSettingsService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
@@ -49,6 +53,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _isViewportSubscribed;
         private bool _isHolidayRecalcInProgress;
         private bool _isFnsCompareInProgress;
+        private bool _showStageCostFraction;
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
         private const int FinDepartmentId = 3;
@@ -97,9 +102,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             _fnsContragentService = App.Services.GetRequiredService<IFnsContragentService>();
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _userService = App.Services.GetRequiredService<IUserService>();
+            _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
+            _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             InitializeComponent();
             DataContext = _viewModel;
+            ApplyStageCostFractionMode();
             UpdateSelectionActionButtons();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
@@ -382,6 +390,174 @@ namespace CbsContractsDesktopClient.Views.Shell
             ShowSuccessNotification("Данные скопированы", "Карточка контрагента скопирована в буфер обмена.");
         }
 
+        private void CopyStageInfoButton_Click(object sender, RoutedEventArgs e)
+        {
+            var text = StageClipboardFormatter.BuildClipboardText(_viewModel.SelectedRow);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            var dataPackage = new DataPackage();
+            dataPackage.SetText(text);
+            Clipboard.SetContent(dataPackage);
+            ShowSuccessNotification("Данные скопированы", "Этап скопирован в буфер обмена.");
+        }
+
+        private void CommentStageButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement anchor)
+            {
+                return;
+            }
+
+            var commentBox = new TextBox
+            {
+                Width = 400,
+                PlaceholderText = "Введите комментарий + Enter"
+            };
+            var flyout = new Flyout
+            {
+                Content = new StackPanel
+                {
+                    Width = 400,
+                    Children =
+                    {
+                        commentBox
+                    }
+                }
+            };
+
+            commentBox.KeyDown += async (_, args) =>
+            {
+                if (args.Key != VirtualKey.Enter)
+                {
+                    return;
+                }
+
+                args.Handled = true;
+                await SaveStageCommentAsync(commentBox.Text, flyout);
+            };
+            flyout.Opened += (_, _) => commentBox.Focus(FocusState.Programmatic);
+            flyout.ShowAt(anchor);
+        }
+
+        private async Task SaveStageCommentAsync(string? comment, Flyout flyout)
+        {
+            var normalizedComment = comment?.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedComment))
+            {
+                return;
+            }
+
+            if (_viewModel.SelectedRow is null || TryGetSelectedRowId(_viewModel.SelectedRow) is not long stageId)
+            {
+                await ShowErrorDialogAsync("Комментарий к этапу", "Не удалось определить выбранный этап.");
+                return;
+            }
+
+            if (_userService.CurrentUser?.ProfileId is not int profileId)
+            {
+                await ShowErrorDialogAsync("Комментарий к этапу", "Не удалось определить profile_id пользователя.");
+                return;
+            }
+
+            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["id"] = stageId
+            };
+            var listKey = _viewModel.SelectedRow.GetValue("list_key")?.ToString();
+            if (!string.IsNullOrWhiteSpace(listKey))
+            {
+                payload["list_key"] = listKey;
+            }
+
+            StageEditPayloadBuilderHelpers.AppendCommentAttributes(payload, normalizedComment, profileId);
+
+            try
+            {
+                await SaveStagePayloadAsync(payload);
+                flyout.Hide();
+                ShowSuccessNotification("Комментарий сохранён", "Комментарий к этапу добавлен.");
+                await RefreshRowDetailAsync();
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось сохранить комментарий", ex.Message);
+            }
+        }
+
+        private async void CreateStageEmployeeButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedRow is null)
+            {
+                return;
+            }
+
+            if (!_referenceDefinitionService.TryGetByRoute("/employees", out var employeeDefinition))
+            {
+                await ShowErrorDialogAsync("Не удалось создать сотрудника.", "Справочник сотрудников не подключен.");
+                return;
+            }
+
+            var contragentId =
+                TryGetLongValue(_viewModel.SelectedRow, "contract.contragent.id")
+                ?? TryGetLongValue(_viewModel.SelectedRow, "contract.contragent_id")
+                ?? TryGetLongValue(_viewModel.SelectedRow, "contragent.id")
+                ?? TryGetLongValue(_viewModel.SelectedRow, "contragent_id");
+            var contragentName =
+                TryGetText(_viewModel.SelectedRow, "contract.contragent.name")
+                ?? TryGetText(_viewModel.SelectedRow, "contract.contragent.org.name")
+                ?? TryGetText(_viewModel.SelectedRow, "contract.contragent.org.full_name")
+                ?? TryGetText(_viewModel.SelectedRow, "contragent.name");
+
+            if (contragentId is null || string.IsNullOrWhiteSpace(contragentName))
+            {
+                await ShowErrorDialogAsync("Не удалось создать сотрудника.", "В выбранном этапе отсутствует контрагент.");
+                return;
+            }
+
+            await ShowEmployeeEditDialogAsync(
+                isCreateMode: true,
+                employeeDefinition: employeeDefinition,
+                initialState: new EmployeeEditDialogState
+                {
+                    Definition = employeeDefinition,
+                    IsCreateMode = true,
+                    ContragentId = contragentId,
+                    ContragentName = contragentName,
+                    IsUsed = true
+                });
+        }
+
+        private void ShowStageCostFractionButton_Click(object sender, RoutedEventArgs e)
+        {
+            _showStageCostFraction = ShowStageCostFractionButton.IsChecked == true;
+            ApplyStageCostFractionMode();
+            UpdateSelectionActionButtons();
+            _ = SaveStageCostFractionModeAsync(_showStageCostFraction);
+        }
+
+        private void ApplyStageCostFractionMode()
+        {
+            if (ReferenceTableView is not null)
+            {
+                ReferenceTableView.ShowStageCostFraction = _showStageCostFraction;
+            }
+
+            if (ShowStageCostFractionButton is not null)
+            {
+                ShowStageCostFractionButton.IsChecked = _showStageCostFraction;
+            }
+        }
+
+        private async Task SaveStageCostFractionModeAsync(bool showStageCostFraction)
+        {
+            var settings = await _localUserSettingsService.GetAsync();
+            settings.ShowStageCostFraction = showStageCostFraction;
+            await _localUserSettingsService.SaveAsync(settings);
+        }
+
         private void ShowContragentCreateMenu(FrameworkElement anchor)
         {
             var menu = new MenuFlyout();
@@ -642,12 +818,17 @@ namespace CbsContractsDesktopClient.Views.Shell
             var canDeleteSelectedRow = hasSelectedRow && _viewModel.CanDeleteRows;
             var isHolidayReference = string.Equals(_viewModel.CurrentReference?.Route, "/holidays", StringComparison.OrdinalIgnoreCase);
             var isContragentReference = _viewModel.IsContragentReference;
+            var isStagesTable = IsStagesTableActive();
             var isContractDetailTable = IsContractDetailTableActive();
             var hasWorkflowContract = _contractWorkflowStore.Contract is { IsPlaceholder: false };
             var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
             var canCompareFns = hasSelectedRow && isContragentReference && !_isFnsCompareInProgress;
+            var canCopyStageInfo = hasSelectedRow && isStagesTable;
+            var canCommentStage = hasSelectedRow && isStagesTable && _userService.CurrentUser?.ProfileId is not null;
+            var canCreateStageEmployee = hasSelectedRow && isStagesTable;
             var canCopyContragentDetails = hasSelectedRow && isContragentReference;
-            var canCopyRevisionContract = isContractDetailTable && hasWorkflowContract;
+            var showContractCopyDetails = isContractDetailTable && !isStagesTable;
+            var canCopyRevisionContract = showContractCopyDetails && hasWorkflowContract;
             var canCopyDetails = canCopyContragentDetails || canCopyRevisionContract;
 
             if (EditSelectedRowButton is not null)
@@ -687,14 +868,50 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (CopyContragentDetailsButton is not null)
             {
-                CopyContragentDetailsButton.Visibility = isContragentReference || isContractDetailTable ? Visibility.Visible : Visibility.Collapsed;
+                CopyContragentDetailsButton.Visibility = isContragentReference || showContractCopyDetails ? Visibility.Visible : Visibility.Collapsed;
                 CopyContragentDetailsButton.IsEnabled = canCopyDetails;
                 ToolTipService.SetToolTip(
                     CopyContragentDetailsButton,
-                    isContractDetailTable
+                    showContractCopyDetails
                         ? "Скопировать данные контракта"
                         : "Скопировать данные контрагента");
                 CopyContragentDetailsButton.Foreground = canCopyDetails
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkSlateBlue)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (CopyStageInfoButton is not null)
+            {
+                CopyStageInfoButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;
+                CopyStageInfoButton.IsEnabled = canCopyStageInfo;
+                CopyStageInfoButton.Foreground = canCopyStageInfo
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkSlateBlue)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (CommentStageButton is not null)
+            {
+                CommentStageButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;
+                CommentStageButton.IsEnabled = canCommentStage;
+                CommentStageButton.Foreground = canCommentStage
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.SeaGreen)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (CreateStageEmployeeButton is not null)
+            {
+                CreateStageEmployeeButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;
+                CreateStageEmployeeButton.IsEnabled = canCreateStageEmployee;
+                CreateStageEmployeeButton.Foreground = canCreateStageEmployee
+                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.SeaGreen)
+                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
+            }
+
+            if (ShowStageCostFractionButton is not null)
+            {
+                ShowStageCostFractionButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;
+                ShowStageCostFractionButton.IsEnabled = isStagesTable;
+                ShowStageCostFractionButton.Foreground = _showStageCostFraction && isStagesTable
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkSlateBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
@@ -775,55 +992,61 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            var reference = _viewModel.CurrentReference;
+            if (reference is null)
+            {
+                return;
+            }
+
             var dialogViewModel = isCreateMode
-                ? ReferenceEditViewModel.CreateForCreate(_viewModel.CurrentReference)
-                : ReferenceEditViewModel.CreateForEdit(_viewModel.CurrentReference, _viewModel.SelectedRow!);
+                ? ReferenceEditViewModel.CreateForCreate(reference)
+                : ReferenceEditViewModel.CreateForEdit(reference, _viewModel.SelectedRow!);
 
             var dialog = new ReferenceEditDialog(dialogViewModel)
             {
                 XamlRoot = XamlRoot
             };
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary)
+            ReferenceDataRow? savedRow = null;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
+
+            dialog.SaveRequestedAsync += async args =>
+            {
+                var values = isCreateMode
+                    ? ReferenceEditPayloadBuilder.BuildForCreate(dialogViewModel)
+                    : ReferenceEditPayloadBuilder.BuildForUpdate(dialogViewModel);
+                savedPayload = values;
+
+                var action = isCreateMode ? "CREATE" : "EDIT";
+                var keys = values.Count == 0
+                    ? "<empty>"
+                    : string.Join(", ", values.Keys);
+                _viewModel.AppendUiTrace($"REFERENCE {action} DIALOG CONFIRMED keys={keys}");
+
+                try
+                {
+                    savedRow = isCreateMode
+                        ? await _referenceCrudService.CreateAsync(reference, values)
+                        : await _referenceCrudService.UpdateAsync(reference, values);
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+            };
+
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
             {
                 return;
             }
 
-            var values = isCreateMode
-                ? ReferenceEditPayloadBuilder.BuildForCreate(dialogViewModel)
-                : ReferenceEditPayloadBuilder.BuildForUpdate(dialogViewModel);
-
-            var action = isCreateMode ? "CREATE" : "EDIT";
-            var keys = values.Count == 0
-                ? "<empty>"
-                : string.Join(", ", values.Keys);
-            _viewModel.AppendUiTrace($"REFERENCE {action} DIALOG CONFIRMED keys={keys}");
-
-            try
-            {
-                ReferenceDataRow savedRow;
-                if (isCreateMode)
-                {
-                    savedRow = await _referenceCrudService.CreateAsync(_viewModel.CurrentReference, values);
-                }
-                else
-                {
-                    savedRow = await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference, values);
-                }
-
-                _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-                await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, values);
-                ShowSuccessNotification(
-                    isCreateMode ? "Запись создана" : "Изменения сохранены",
-                    BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync(
-                    isCreateMode ? "Не удалось создать запись." : "Не удалось сохранить изменения.",
-                    ex.Message);
-            }
+            _referenceLookupCacheService.Invalidate(reference.Model);
+            await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            ShowSuccessNotification(
+                isCreateMode ? "Запись создана" : "Изменения сохранены",
+                BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
         }
 
         private async Task ShowRevisionEditDialogAsync()
@@ -2429,9 +2652,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             ReferenceDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
-            dialog.PrimaryButtonClick += async (_, args) =>
+            dialog.SaveRequestedAsync += async args =>
             {
-                var deferral = args.GetDeferral();
                 try
                 {
                     viewModel.ClearErrorInfo();
@@ -2457,14 +2679,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                     viewModel.ShowErrorInfo(ex.Message);
                     args.Cancel = true;
                 }
-                finally
-                {
-                    deferral.Complete();
-                }
             };
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary || savedRow is null || _viewModel.CurrentReference is null)
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null || _viewModel.CurrentReference is null)
             {
                 return;
             }
@@ -2479,7 +2697,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async Task ShowEmployeeEditDialogAsync(
             bool isCreateMode,
             long? employeeId = null,
-            ReferenceDefinition? employeeDefinition = null)
+            ReferenceDefinition? employeeDefinition = null,
+            EmployeeEditDialogState? initialState = null)
         {
             var definition = employeeDefinition ?? _viewModel.CurrentReference;
             if (definition is null)
@@ -2498,7 +2717,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 }
             }
 
-            var state = EmployeeEditStateFactory.Create(definition, isCreateMode, sourceRow);
+            var state = initialState ?? EmployeeEditStateFactory.Create(definition, isCreateMode, sourceRow);
             var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);
             var dialog = new EmployeeEditDialog(viewModel)
             {
@@ -2508,9 +2727,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             ReferenceDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
-            dialog.PrimaryButtonClick += async (_, args) =>
+            dialog.SaveRequestedAsync += async args =>
             {
-                var deferral = args.GetDeferral();
                 try
                 {
                     viewModel.ClearErrorInfo();
@@ -2536,14 +2754,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                     viewModel.ShowErrorInfo(ex.Message);
                     args.Cancel = true;
                 }
-                finally
-                {
-                    deferral.Complete();
-                }
             };
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary || savedRow is null)
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
             {
                 return;
             }
@@ -2594,9 +2808,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             ReferenceDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
-            dialog.PrimaryButtonClick += async (_, args) =>
+            dialog.SaveRequestedAsync += async args =>
             {
-                var deferral = args.GetDeferral();
                 try
                 {
                     viewModel.ClearErrorInfo();
@@ -2625,14 +2838,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                     viewModel.ShowErrorInfo(ex.Message);
                     args.Cancel = true;
                 }
-                finally
-                {
-                    deferral.Complete();
-                }
             };
 
-            var result = await dialog.ShowAsync();
-            if (result != ContentDialogResult.Primary || savedRow is null || _viewModel.CurrentReference is null)
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null || _viewModel.CurrentReference is null)
             {
                 return;
             }

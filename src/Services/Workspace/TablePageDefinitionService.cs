@@ -290,7 +290,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
                     CreateStageDateColumn("deadline_at", "Срок", "deadline_at", "deadline_at", "6rem", immutable: true),
                     CreateStageTextColumn("contragent", "Контрагент", "contract.contragent.name", "contract.contragent.org.name_or_contract.contragent.org.full_name", "contract.contragent.org.name", "19rem", immutable: true),
                     CreateStageTextColumn("region", "Регион", "contract.contragent.region.name", "contract.contragent.real_addr.address.area_id", "contract.contragent.real_addr.address.area.name", "10rem", bodyTemplateKey: "StageRegion"),
-                    CreateStageNumberColumn("cost", "Сумма", "cost", "7rem", immutable: true),
+                    CreateStageNumberColumn("cost", "Сумма", "cost", "7rem", immutable: true, bodyTemplateKey: "StageCost"),
                     CreateStageStatusColumn(),
                     CreateStageBooleanColumn("is_funded", "БЗ", "is_funded"),
                     CreateStageBooleanColumn("governmental", "ГК", "contract.governmental", "contract.governmental", "contract.governmental"),

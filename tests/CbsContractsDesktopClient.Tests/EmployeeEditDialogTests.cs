@@ -30,6 +30,9 @@ public sealed class EmployeeEditDialogTests
 
         var lookupEditorCode = File.ReadAllText(DialogLookupEditorsPath);
 
+        Assert.Contains("public sealed class EmployeeEditDialog : AppEditDialog", code);
+        Assert.Contains("Content = BuildEditContent(BuildContent());", code);
+        Assert.Contains("public override bool Validate()", code);
         Assert.Contains("DialogLookupEditors.BuildAutoSuggestBox", code);
         Assert.Contains("nameof(EmployeeEditViewModel.PositionSuggestionLabels)", code);
         Assert.Contains("UpdatePositionOptionsAsync", code);

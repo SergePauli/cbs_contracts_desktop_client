@@ -80,6 +80,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableRowView),
                 new PropertyMetadata(CbsTableRowStyleKey.None, OnStateChanged));
 
+        public static readonly DependencyProperty ShowStageCostFractionProperty =
+            DependencyProperty.Register(
+                nameof(ShowStageCostFraction),
+                typeof(bool),
+                typeof(CbsTableRowView),
+                new PropertyMetadata(false, OnStateChanged));
+
         public CbsTableRowView()
         {
             InitializeComponent();
@@ -133,11 +140,18 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(RowStyleKeyProperty, value);
         }
 
+        public bool ShowStageCostFraction
+        {
+            get => (bool)GetValue(ShowStageCostFractionProperty);
+            set => SetValue(ShowStageCostFractionProperty, value);
+        }
+
         public void Configure(
             ReferenceDataRow? row,
             IReadOnlyList<CbsTableColumnDefinition> columns,
             double rowHeight,
-            CbsTableRowStyleKey rowStyleKey)
+            CbsTableRowStyleKey rowStyleKey,
+            bool showStageCostFraction)
         {
             _isConfiguring = true;
             try
@@ -146,6 +160,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Columns = columns;
                 RowHeight = rowHeight;
                 RowStyleKey = rowStyleKey;
+                ShowStageCostFraction = showStageCostFraction;
                 Density = ResolveDensity(rowHeight);
             }
             finally
@@ -279,7 +294,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                     }
                     else
                     {
-                        ApplyBodyContent(_textCells[index], Columns[index], Row, value);
+                        ApplyBodyContent(_textCells[index], Columns[index], Row, value, ShowStageCostFraction);
                     }
                 }
             }
@@ -289,11 +304,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             TextBlock textCell,
             CbsTableColumnDefinition column,
             ReferenceDataRow? row,
-            object? value)
+            object? value,
+            bool showStageCostFraction)
         {
             if (!string.IsNullOrWhiteSpace(column.BodyTemplateKey))
             {
-                var formatted = FormatTemplateValue(column.BodyTemplateKey, row, value);
+                var formatted = FormatTemplateValue(column.BodyTemplateKey, row, value, showStageCostFraction);
                 if (formatted is not null)
                 {
                     textCell.Text = formatted;
@@ -340,7 +356,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
         }
 
-        private static string? FormatTemplateValue(string templateKey, ReferenceDataRow? row, object? value)
+        private static string? FormatTemplateValue(
+            string templateKey,
+            ReferenceDataRow? row,
+            object? value,
+            bool showStageCostFraction)
         {
             if (row is null)
             {
@@ -354,10 +374,30 @@ namespace CbsContractsDesktopClient.Views.Controls
                     row.GetValue("contract.region.name"),
                     value),
                 "StageRegister" => FormatStageRegister(row),
+                "StageCost" => FormatStageCost(value, showStageCostFraction),
                 "StageDuration" => FormatStageDuration(row, value),
                 "StageSzi" => HasStageTaskKind(row, 10) ? "\u2713" : string.Empty,
                 _ => null
             };
+        }
+
+        private static string FormatStageCost(object? value, bool showFraction)
+        {
+            var cost = value switch
+            {
+                decimal decimalValue => decimalValue,
+                double doubleValue => Convert.ToDecimal(doubleValue, CultureInfo.InvariantCulture),
+                float floatValue => Convert.ToDecimal(floatValue, CultureInfo.InvariantCulture),
+                long longValue => longValue,
+                int intValue => intValue,
+                string text when decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var invariantValue) => invariantValue,
+                string text when decimal.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out var currentValue) => currentValue,
+                _ => (decimal?)null
+            };
+
+            return cost is decimal amount
+                ? amount.ToString(showFraction ? "N2" : "N0", CultureInfo.CurrentCulture)
+                : string.Empty;
         }
 
         private static bool IsStatusBadgeTemplate(CbsTableColumnDefinition column)

@@ -364,6 +364,80 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContentHostView_DefinesStageCopyActionButton()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("x:Name=\"CopyStageInfoButton\"", xaml);
+        Assert.Contains("Click=\"CopyStageInfoButton_Click\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"Скопировать этап в буфер обмена\"", xaml);
+        Assert.Contains("private void CopyStageInfoButton_Click(object sender, RoutedEventArgs e)", codeBehind);
+        Assert.Contains("StageClipboardFormatter.BuildClipboardText(_viewModel.SelectedRow)", codeBehind);
+        Assert.Contains("var isStagesTable = IsStagesTableActive();", codeBehind);
+        Assert.Contains("var canCopyStageInfo = hasSelectedRow && isStagesTable;", codeBehind);
+        Assert.Contains("CopyStageInfoButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
+        Assert.Contains("CopyStageInfoButton.IsEnabled = canCopyStageInfo;", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_DefinesStageCommentActionButton()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("x:Name=\"CommentStageButton\"", xaml);
+        Assert.Contains("Click=\"CommentStageButton_Click\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"Комментировать этап\"", xaml);
+        Assert.Contains("private void CommentStageButton_Click(object sender, RoutedEventArgs e)", codeBehind);
+        Assert.Contains("PlaceholderText = \"Введите комментарий + Enter\"", codeBehind);
+        Assert.Contains("args.Key != VirtualKey.Enter", codeBehind);
+        Assert.Contains("private async Task SaveStageCommentAsync(string? comment, Flyout flyout)", codeBehind);
+        Assert.Contains("StageEditPayloadBuilderHelpers.AppendCommentAttributes(payload, normalizedComment, profileId);", codeBehind);
+        Assert.Contains("await SaveStagePayloadAsync(payload);", codeBehind);
+        Assert.Contains("var canCommentStage = hasSelectedRow && isStagesTable && _userService.CurrentUser?.ProfileId is not null;", codeBehind);
+        Assert.Contains("CommentStageButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
+        Assert.Contains("CommentStageButton.IsEnabled = canCommentStage;", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_DefinesStageEmployeeCreateActionButton()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("x:Name=\"CreateStageEmployeeButton\"", xaml);
+        Assert.Contains("Click=\"CreateStageEmployeeButton_Click\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"Новый сотрудник\"", xaml);
+        Assert.Contains("private async void CreateStageEmployeeButton_Click(object sender, RoutedEventArgs e)", codeBehind);
+        Assert.Contains("_referenceDefinitionService.TryGetByRoute(\"/employees\", out var employeeDefinition)", codeBehind);
+        Assert.Contains("TryGetLongValue(_viewModel.SelectedRow, \"contract.contragent.id\")", codeBehind);
+        Assert.Contains("TryGetText(_viewModel.SelectedRow, \"contract.contragent.name\")", codeBehind);
+        Assert.Contains("initialState: new EmployeeEditDialogState", codeBehind);
+        Assert.Contains("ContragentId = contragentId", codeBehind);
+        Assert.Contains("ContragentName = contragentName", codeBehind);
+        Assert.Contains("EmployeeEditDialogState? initialState = null", codeBehind);
+        Assert.Contains("var state = initialState ?? EmployeeEditStateFactory.Create(definition, isCreateMode, sourceRow);", codeBehind);
+        Assert.Contains("CreateStageEmployeeButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
+        Assert.Contains("CreateStageEmployeeButton.IsEnabled = canCreateStageEmployee;", codeBehind);
+    }
+
+    [Fact]
+    public void ContentHostView_DefinesStageCostFractionToggleButton()
+    {
+        var xaml = File.ReadAllText(ContentHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("x:Name=\"ShowStageCostFractionButton\"", xaml);
+        Assert.Contains("Click=\"ShowStageCostFractionButton_Click\"", xaml);
+        Assert.Contains("ToolTipService.ToolTip=\"Показывать дробную часть суммы\"", xaml);
+        Assert.Contains("_showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;", codeBehind);
+        Assert.Contains("ReferenceTableView.ShowStageCostFraction = _showStageCostFraction;", codeBehind);
+        Assert.Contains("settings.ShowStageCostFraction = showStageCostFraction;", codeBehind);
+        Assert.Contains("ShowStageCostFractionButton.Visibility = isStagesTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
+    }
+
+    [Fact]
     public void ContentHostView_DefinesFnsCompareActionButton()
     {
         var xaml = File.ReadAllText(ContentHostViewXamlPath);
@@ -382,8 +456,9 @@ public sealed class ContentHostViewTests
         Assert.Contains("Clipboard.SetContent(dataPackage);", codeBehind);
         Assert.Contains("var isContractDetailTable = IsContractDetailTableActive();", codeBehind);
         Assert.Contains("var hasWorkflowContract = _contractWorkflowStore.Contract is { IsPlaceholder: false };", codeBehind);
-        Assert.Contains("var canCopyRevisionContract = isContractDetailTable && hasWorkflowContract;", codeBehind);
-        Assert.Contains("CopyContragentDetailsButton.Visibility = isContragentReference || isContractDetailTable ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
+        Assert.Contains("var showContractCopyDetails = isContractDetailTable && !isStagesTable;", codeBehind);
+        Assert.Contains("var canCopyRevisionContract = showContractCopyDetails && hasWorkflowContract;", codeBehind);
+        Assert.Contains("CopyContragentDetailsButton.Visibility = isContragentReference || showContractCopyDetails ? Visibility.Visible : Visibility.Collapsed;", codeBehind);
         Assert.Contains("IsContractDetailTableActive", codeBehind);
         Assert.Contains("? \"Скопировать данные контракта\"", codeBehind);
         Assert.Contains("_fnsContragentService = App.Services.GetRequiredService<IFnsContragentService>();", codeBehind);

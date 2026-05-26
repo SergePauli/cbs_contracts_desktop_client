@@ -112,6 +112,8 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
             && column.BodyTemplateKey == "StageRegion");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "duration"
             && column.BodyTemplateKey == "StageDuration");
+        Assert.Contains(definition.Columns, static column => column.FieldKey == "cost"
+            && column.BodyTemplateKey == "StageCost");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "register"
             && column.BodyTemplateKey == "StageRegister"
             && column.FilterField == "registry_quarter_or_registry_year"

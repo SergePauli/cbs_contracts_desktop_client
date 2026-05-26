@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.Helpers;
 using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.Views.Controls;
@@ -11,7 +12,7 @@ using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.References
 {
-    public sealed class ReferenceEditDialog : ContentDialog
+    public sealed class ReferenceEditDialog : AppEditDialog
     {
         private readonly List<(TextBox Editor, ReferenceEditFieldViewModel ViewModel)> _textEditors = [];
         private readonly List<(CalendarDatePicker Editor, ReferenceEditFieldViewModel ViewModel)> _dateEditors = [];
@@ -21,18 +22,13 @@ namespace CbsContractsDesktopClient.Views.References
             ViewModel = viewModel;
             DataContext = viewModel;
             Title = viewModel.DialogTitle;
-            PrimaryButtonText = viewModel.PrimaryButtonText;
-            CloseButtonText = "Отмена";
-            DefaultButton = ContentDialogButton.Primary;
-            IsPrimaryButtonEnabled = viewModel.CanSubmit;
-            PrimaryButtonClick += ContentDialog_PrimaryButtonClick;
             Unloaded += OnUnloaded;
             viewModel.PropertyChanged += OnViewModelPropertyChanged;
             foreach (var field in viewModel.Fields)
             {
                 field.PropertyChanged += OnFieldPropertyChanged;
             }
-            Content = BuildContent();
+            Content = BuildEditContent(BuildContent());
             DialogChrome.Apply(this);
         }
 
@@ -52,7 +48,7 @@ namespace CbsContractsDesktopClient.Views.References
         {
             if (e.PropertyName == nameof(ReferenceEditViewModel.CanSubmit))
             {
-                IsPrimaryButtonEnabled = ViewModel.CanSubmit;
+                SyncTextEditorsToViewModel();
             }
         }
 
@@ -63,18 +59,20 @@ namespace CbsContractsDesktopClient.Views.References
             {
                 field.PropertyChanged -= OnFieldPropertyChanged;
             }
-            PrimaryButtonClick -= ContentDialog_PrimaryButtonClick;
             Unloaded -= OnUnloaded;
         }
 
-        private void ContentDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
+        public override bool Validate()
         {
             SyncTextEditorsToViewModel();
 
-            if (!ViewModel.CanSubmit)
+            if (ViewModel.CanSubmit)
             {
-                args.Cancel = true;
+                return true;
             }
+
+            ShowErrorInfo("Заполните обязательные поля или внесите изменения.");
+            return false;
         }
 
         private void OnFieldPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -82,12 +80,11 @@ namespace CbsContractsDesktopClient.Views.References
             UpdatePrimaryButtonState();
         }
 
-        private UIElement BuildContent()
+        private FrameworkElement BuildContent()
         {
-            var root = new Grid
-            {
-                MinWidth = 560,
-                MaxWidth = 720
+            var root = new Grid   {
+               
+                Padding = new Thickness(8, 0, 8, 8),
             };
 
             var stack = new StackPanel
@@ -239,7 +236,6 @@ namespace CbsContractsDesktopClient.Views.References
         private void UpdatePrimaryButtonState()
         {
             SyncTextEditorsToViewModel();
-            IsPrimaryButtonEnabled = ViewModel.CanSubmit;
         }
 
         private static void SyncTextEditorToViewModel(TextBox editor, ReferenceEditFieldViewModel viewModel)

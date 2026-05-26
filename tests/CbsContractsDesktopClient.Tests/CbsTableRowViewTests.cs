@@ -58,4 +58,15 @@ public sealed class CbsTableRowViewTests
         Assert.Contains("ApplyStatusBadgeContent", code);
         Assert.Contains("StageContractStatusDialogControls.ResolveStatusBadgeColors(statusId)", code);
     }
+
+    [Fact]
+    public void CbsTableRowView_FormatsStageCostWithOptionalFraction()
+    {
+        var code = File.ReadAllText(CbsTableRowViewPath);
+
+        Assert.Contains("ShowStageCostFractionProperty", code);
+        Assert.Contains("ShowStageCostFraction = showStageCostFraction;", code);
+        Assert.Contains("\"StageCost\" => FormatStageCost(value, showStageCostFraction)", code);
+        Assert.Contains("amount.ToString(showFraction ? \"N2\" : \"N0\", CultureInfo.CurrentCulture)", code);
+    }
 }

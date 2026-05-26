@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
@@ -8,44 +9,46 @@ using Microsoft.UI.Xaml.Data;
 
 namespace CbsContractsDesktopClient.Views.References
 {
-    public sealed class EmployeeEditDialog : ContentDialog
+    public sealed class EmployeeEditDialog : AppEditDialog
     {
         public EmployeeEditDialog(EmployeeEditViewModel viewModel)
         {
-            MinWidth = 500;            
-            MaxWidth = 800;
+           
             FullSizeDesired = false;
             HorizontalAlignment = HorizontalAlignment.Center;
             ViewModel = viewModel;
             DataContext = viewModel;
             Title = viewModel.DialogTitle;
-            PrimaryButtonText = viewModel.PrimaryButtonText;
-            CloseButtonText = "Закрыть";
-            DefaultButton = ContentDialogButton.Close;
-            SetBinding(IsPrimaryButtonEnabledProperty, new Binding
-            {
-                Path = new PropertyPath(nameof(EmployeeEditViewModel.CanSubmit))
-            });
             Resources["ContentDialogMinWidth"] = 500d;
             Resources["ContentDialogMaxWidth"] = 800d;
-            Content = BuildContent();
+            Content = BuildEditContent(BuildContent());
             DialogChrome.Apply(this);
         }
 
         public EmployeeEditViewModel ViewModel { get; }
 
-        private UIElement BuildContent()
+        public override bool Validate()
+        {
+            if (ViewModel.CanSubmit)
+            {
+                return true;
+            }
+
+            ViewModel.ShowErrorInfo("Заполните обязательные поля или внесите изменения.");
+            return false;
+        }
+
+        private FrameworkElement BuildContent()
         {
             var host = new Grid
             {
-                Width = 700,
+               
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 
             var root = new Grid
             {
-                MinWidth = 400,                
-                MaxWidth = 700,
+                
                 HorizontalAlignment = HorizontalAlignment.Center
             };
 

@@ -123,6 +123,69 @@
                             Content="&#xE8C8;" />
 
                         <Button
+                            x:Name="CopyStageInfoButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="CopyStageInfoButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Скопировать этап в буфер обмена"
+                            Content="&#xE8C8;" />
+
+                        <Button
+                            x:Name="CommentStageButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="CommentStageButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Комментировать этап"
+                            Content="&#xE90A;" />
+
+                        <Button
+                            x:Name="CreateStageEmployeeButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="CreateStageEmployeeButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Новый сотрудник"
+                            Content="&#xE77B;" />
+
+                        <ToggleButton
+                            x:Name="ShowStageCostFractionButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="ShowStageCostFractionButton_Click"
+                            FontSize="13"
+                            Foreground="{StaticResource ShellSecondaryTextBrush}"
+                            IsEnabled="False"
+                            Visibility="Collapsed"
+                            ToolTipService.ToolTip="Показывать дробную часть суммы"
+                            Content="%" />
+
+                        <Button
                             x:Name="DeleteSelectedRowButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"

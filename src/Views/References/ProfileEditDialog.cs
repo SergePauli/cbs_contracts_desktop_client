@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
@@ -9,27 +10,31 @@ using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.References
 {
-    public sealed class ProfileEditDialog : ContentDialog
+    public sealed class ProfileEditDialog : AppEditDialog
     {
         public ProfileEditDialog(ProfileEditViewModel viewModel)
         {
             ViewModel = viewModel;
             DataContext = viewModel;
             Title = viewModel.DialogTitle;
-            PrimaryButtonText = viewModel.PrimaryButtonText;
-            CloseButtonText = "Закрыть";
-            DefaultButton = ContentDialogButton.Close;
-            SetBinding(IsPrimaryButtonEnabledProperty, new Binding
-            {
-                Path = new PropertyPath(nameof(ProfileEditViewModel.CanSubmit))
-            });
-            Content = BuildContent();
+            Content = BuildEditContent(BuildContent());
             DialogChrome.Apply(this);
         }
 
         public ProfileEditViewModel ViewModel { get; }
 
-        private UIElement BuildContent()
+        public override bool Validate()
+        {
+            if (ViewModel.CanSubmit)
+            {
+                return true;
+            }
+
+            ViewModel.ShowErrorInfo("Заполните обязательные поля или внесите изменения.");
+            return false;
+        }
+
+        private FrameworkElement BuildContent()
         {
             var root = new Grid
             {

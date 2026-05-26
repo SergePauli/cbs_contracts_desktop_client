@@ -16,10 +16,14 @@ public sealed class ReferenceEditDialogTests
     {
         var code = File.ReadAllText(ReferenceEditDialogPath);
 
+        Assert.Contains("public sealed class ReferenceEditDialog : AppEditDialog", code);
+        Assert.Contains("Content = BuildEditContent(BuildContent());", code);
+        Assert.Contains("public override bool Validate()", code);
         Assert.Contains("textBox.TextChanged += (_, _) =>", code);
         Assert.Contains("datePicker.DateChanged += (_, _) => UpdatePrimaryButtonState();", code);
         Assert.Contains("UpdatePrimaryButtonState();", code);
-        Assert.Contains("IsPrimaryButtonEnabled = ViewModel.CanSubmit;", code);
+        Assert.Contains("SyncTextEditorsToViewModel();", code);
+        Assert.DoesNotContain("IsPrimaryButtonEnabled = ViewModel.CanSubmit;", code);
         Assert.DoesNotContain("LostFocus", code);
     }
 }

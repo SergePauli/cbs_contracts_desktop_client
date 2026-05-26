@@ -162,4 +162,15 @@ public sealed class CbsTableViewTests
         Assert.Contains("new CbsTableRowSelectionChangedEventArgs(null, rowIndex, isSelected: false)", code);
         Assert.Contains("public sealed class CbsTableRowSelectionChangedEventArgs : EventArgs", code);
     }
+
+    [Fact]
+    public void CbsTableView_PropagatesStageCostFractionModeToRows()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("ShowStageCostFractionProperty", code);
+        Assert.Contains("nameof(ShowStageCostFraction)", code);
+        Assert.Contains("OnShowStageCostFractionChanged", code);
+        Assert.Contains("ShowStageCostFraction);", code);
+    }
 }
