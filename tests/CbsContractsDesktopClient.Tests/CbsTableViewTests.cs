@@ -139,6 +139,18 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
+    public void CbsTableView_UsesInitialColumnFilterValues()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("FormatFilterValue(column.Filter.Value)", code);
+        Assert.Contains("IsChecked = TryGetBooleanFilterValue(column.Filter.Value)", code);
+        Assert.Contains("Date = TryGetDateFilterValue(column.Filter.Value)", code);
+        Assert.Contains("SelectedValues = NormalizeFilterSelectedValues(column.Filter.Value)", code);
+        Assert.Contains("private static IReadOnlyList<object?> NormalizeFilterSelectedValues(object? value)", code);
+    }
+
+    [Fact]
     public void CbsTableView_EmitsRowDoubleTappedEventAndKeepsSelectionInSync()
     {
         var code = File.ReadAllText(CbsTableViewPath);

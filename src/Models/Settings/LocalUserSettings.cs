@@ -15,6 +15,8 @@ namespace CbsContractsDesktopClient.Models.Settings
 
         public List<string> ColumnOrder { get; set; } = [];
 
+        public List<LocalTableFilterSettings> Filters { get; set; } = [];
+
         public LocalTableSortSettings? Sort { get; set; }
     }
 
@@ -30,5 +32,16 @@ namespace CbsContractsDesktopClient.Models.Settings
         public string? FieldKey { get; set; }
 
         public string? Direction { get; set; }
+    }
+
+    public sealed class LocalTableFilterSettings
+    {
+        public string? FieldKey { get; set; }
+
+        public string? FilterMode { get; set; }
+
+        public string? MatchMode { get; set; }
+
+        public object? Value { get; set; }
     }
 }

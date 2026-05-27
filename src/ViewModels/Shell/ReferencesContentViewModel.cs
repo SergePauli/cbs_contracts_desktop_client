@@ -33,6 +33,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly ITablePageDefinitionService _tablePageDefinitionService;
         private readonly IReferenceLookupCacheService? _referenceLookupCacheService;
+        private readonly IUserService? _userService;
         private readonly SemaphoreSlim _navigationGate = new(1, 1);
         private LazyDataViewState<ReferenceDataRow>? _state;
         private ICbsTableRows<ReferenceDataRow>? _rows;
@@ -62,13 +63,15 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             IDataQueryService dataQueryService,
             IReferenceDefinitionService referenceDefinitionService,
             ITablePageDefinitionService tablePageDefinitionService,
-            IReferenceLookupCacheService? referenceLookupCacheService = null)
+            IReferenceLookupCacheService? referenceLookupCacheService = null,
+            IUserService? userService = null)
         {
             _shellViewModel = shellViewModel;
             _dataQueryService = dataQueryService;
             _referenceDefinitionService = referenceDefinitionService;
             _tablePageDefinitionService = tablePageDefinitionService;
             _referenceLookupCacheService = referenceLookupCacheService;
+            _userService = userService;
 
             FilterFields = [];
 
@@ -137,6 +140,10 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public bool IsEmployeeReference => CurrentReference?.EditorKind == ReferenceEditorKind.Employee;
 
         public bool IsContragentReference => string.Equals(CurrentReference?.Route, "/contragents", StringComparison.OrdinalIgnoreCase);
+
+        public bool IsStagesTable => string.Equals(CurrentTablePage?.Route, "/stages", StringComparison.OrdinalIgnoreCase);
+
+        public IReadOnlyList<DataFilterCriterion> CurrentFilters => _state?.Filters.ToList() ?? [];
 
         public bool CanCreateRows => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.Create) == true;
 
@@ -419,23 +426,106 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 matchMode,
                 normalizedValue,
                 cancellationToken);
+            await SaveCurrentFiltersAsync(cancellationToken);
             _lastViewportEnsureStart = -1;
             _lastViewportEnsureEnd = -1;
             AppendUiTrace(
                 $"FILTER VM APPLIED field={fieldKey} mode={matchMode} value={DescribeFilterValue(normalizedValue)}");
         }
 
-        public async Task ResetFiltersAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<DataFilterCriterion>> ResetFiltersAsync(CancellationToken cancellationToken = default)
         {
+            var resetFilters = GetResetFilters();
+            await ApplyFilterSetAsync(resetFilters, cancellationToken);
+
+            return resetFilters;
+        }
+
+        public async Task<IReadOnlyList<DataFilterCriterion>> ClearFiltersAsync(CancellationToken cancellationToken = default)
+        {
+            var filters = Array.Empty<DataFilterCriterion>();
+            await ApplyFilterSetAsync(filters, cancellationToken);
+
+            return filters;
+        }
+
+        private async Task ApplyFilterSetAsync(
+            IReadOnlyList<DataFilterCriterion> filters,
+            CancellationToken cancellationToken = default)
+        {
+            var filtersByField = filters.ToDictionary(
+                static filter => filter.FieldKey,
+                StringComparer.OrdinalIgnoreCase);
+
             foreach (var filterField in FilterFields)
             {
-                filterField.Value = null;
+                filterField.Value = filtersByField.TryGetValue(filterField.FieldKey, out var filter)
+                    ? ToFilterFieldValue(filterField, filter.Value)
+                    : null;
             }
+
+            ApplyFilterValuesToCurrentColumns(filtersByField);
 
             if (_state is not null)
             {
-                await _state.ClearFiltersAsync(cancellationToken);
+                await _state.SetFiltersAsync(filters, cancellationToken);
+                await SaveCurrentFiltersAsync(cancellationToken);
             }
+        }
+
+        private async Task SaveCurrentFiltersAsync(CancellationToken cancellationToken)
+        {
+            if (_state is null
+                || CurrentTablePage is null
+                || !CurrentTablePage.Capabilities.HasFlag(TablePageCapabilities.PersistFilters))
+            {
+                return;
+            }
+
+            await _tablePageDefinitionService.SaveFiltersAsync(
+                CurrentTablePage.Route,
+                _state.Filters.ToList(),
+                cancellationToken);
+        }
+
+        private IReadOnlyList<DataFilterCriterion> GetResetFilters()
+        {
+            if (CurrentTablePage is not null
+                && string.Equals(CurrentTablePage.Route, "/stages", StringComparison.OrdinalIgnoreCase))
+            {
+                var defaults = StageTableFilterDefaultsReader.FromUser(_userService?.CurrentUser);
+                AppendUiTrace(StageTableFilterDefaultsReader.BuildTrace(_userService?.CurrentUser, defaults));
+                return defaults.ToCriteria();
+            }
+
+            return [];
+        }
+
+        private void ApplyFilterValuesToCurrentColumns(IReadOnlyDictionary<string, DataFilterCriterion> filtersByField)
+        {
+            if (CurrentTablePage is null)
+            {
+                return;
+            }
+
+            foreach (var column in CurrentTablePage.Columns.Where(static column => column.IsFilterable))
+            {
+                if (filtersByField.TryGetValue(column.FieldKey, out var filter))
+                {
+                    column.Filter.MatchMode = filter.MatchMode;
+                    column.Filter.Value = filter.Value;
+                    continue;
+                }
+
+                column.Filter.Value = null;
+            }
+        }
+
+        private static object? ToFilterFieldValue(ReferenceFilterField filterField, object? value)
+        {
+            return filterField.EditorKind == CbsTableFilterEditorKind.MultiSelect
+                ? CbsTableMultiSelectFilterValue.Create(filterField.Options, NormalizeFilterSelectedValues(value))
+                : value;
         }
 
         public async Task ApplySortAsync(string fieldKey, DataSortDirection direction, CancellationToken cancellationToken = default)
@@ -932,10 +1022,23 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                         .ToList(),
                     EmptySelectionText = column.Filter.EmptySelectionText,
                     Value = column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
-                        ? CbsTableMultiSelectFilterValue.Create(column.Filter.StaticOptions, Array.Empty<object?>())
-                        : null
+                        ? CbsTableMultiSelectFilterValue.Create(
+                            column.Filter.StaticOptions,
+                            NormalizeFilterSelectedValues(column.Filter.Value))
+                        : column.Filter.Value
                 });
             }
+        }
+
+        private static IReadOnlyList<object?> NormalizeFilterSelectedValues(object? value)
+        {
+            return value switch
+            {
+                null => [],
+                string => [value],
+                System.Collections.IEnumerable values => values.Cast<object?>().ToList(),
+                _ => [value]
+            };
         }
 
         private async Task TryLoadFilterOptionSourcesAsync(TablePageDefinition definition, CancellationToken cancellationToken)
@@ -2003,6 +2106,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 || message.StartsWith("STEP API ", StringComparison.Ordinal)
                 || message.StartsWith("STEP VM ", StringComparison.Ordinal)
                 || message.StartsWith("FILTER ", StringComparison.Ordinal)
+                || message.StartsWith("STAGE FILTER DEFAULTS ", StringComparison.Ordinal)
+                || message.StartsWith("STAGE FILTER SETTINGS ", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL LOAD STATE NULL", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL RETENTION STATE NULL", StringComparison.Ordinal);
         }

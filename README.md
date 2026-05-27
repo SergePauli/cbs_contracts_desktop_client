@@ -197,18 +197,21 @@ Audit panel теперь является reusable частью reference worksp
 - первые complex references: `/users`, `/employees`
 - крупный complex reference `/contragents`
 - первая функциональная таблица `/revisions`
+- самая крупная функциональная таблица `/stages` с раскладкой колонок, stage-specific фильтрами, workflow/detail refresh и профильными edit dialogs
 - audit timeline как общий сценарий для всех справочников
 
-Текущая работа теперь смещается с «собрать основу приложения» и первой функциональной страницы на:
+Текущая работа теперь смещается с «собрать основу приложения» и перенести таблицу этапов на:
 
-- масштабирование функциональных контрактных таблиц поверх shell/table platform
-- дальнейшую полировку UX таблицы и audit panel
-- перенос следующих рабочих экранов из web-клиента
+- SOLID-рефакторинг `ContentHostView`, который стал перегруженным orchestration-классом
+- шлифовку `DetailView` для сложных контрактных таблиц
+- перенос следующей функциональной таблицы `Контракты`
 
 ## Ближайшие направления
 
-- следующая функциональная таблица: `Этапы контрактов`
-- переиспользование `TablePageDefinition`, workflow-store и contract-oriented detail footer после `/revisions`
+- декомпозиция `ContentHostView`: table commands, dialog launching, settings persistence, notifications и workflow/detail refresh
+- подготовка content/table pattern к странице `Активность`, где возможно несколько таблиц одновременно
+- шлифовка `DetailView` для сложных таблиц
+- следующая функциональная таблица: `Контракты`
 - details/read scenarios и доменные ограничения CRUD
 - следующие специализированные типы колонок и фильтров поверх уже готовых `text` / `numeric` / `boolean` / `date-time` / `multiselect`
 - поиск по аудиту

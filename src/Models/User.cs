@@ -10,6 +10,8 @@ namespace CbsContractsDesktopClient.Models
         public int? DepartmentId { get; set; }
         public string DepartmentName { get; set; } = string.Empty;
         public string Token { get; set; } = string.Empty;
+        public string? Statuses { get; set; }
+        public string? ContractsTypes { get; set; }
         public DateTime LoginTime { get; set; }
     }
 

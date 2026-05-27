@@ -1147,7 +1147,10 @@ namespace CbsContractsDesktopClient.Services.References
             string route,
             LocalTableSettings tableSettings)
         {
-            if (tableSettings.Columns.Count == 0 && tableSettings.ColumnOrder.Count == 0 && tableSettings.Sort is null)
+            if (tableSettings.Columns.Count == 0
+                && tableSettings.ColumnOrder.Count == 0
+                && tableSettings.Filters.Count == 0
+                && tableSettings.Sort is null)
             {
                 localSettings.Tables.Remove(route);
             }

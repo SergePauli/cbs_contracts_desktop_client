@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using CbsContractsDesktopClient.Services.Workspace;
 
 namespace CbsContractsDesktopClient.Services
 {
@@ -53,23 +54,31 @@ namespace CbsContractsDesktopClient.Services
                     };
                 }
 
+                var user = new User
+                {
+                    Id = authResponse.User.Id,
+                    ProfileId = authResponse.User.GetProfileId(),
+                    Username = authResponse.User.Name ?? username,
+                    FullName = authResponse.User.Name ?? username,
+                    Role = authResponse.User.Role ?? string.Empty,
+                    DepartmentId = authResponse.User.GetDepartmentId(),
+                    DepartmentName = authResponse.User.GetDepartmentName(),
+                    Statuses = authResponse.User.GetStatuses(),
+                    ContractsTypes = authResponse.User.GetContractsTypes(),
+                    Token = authResponse.Tokens?.Access ?? string.Empty,
+                    LoginTime = DateTime.Now
+                };
+                var stageFilterDefaults = StageTableFilterDefaultsReader.FromUser(user);
+                var stageFilterDefaultsTrace = StageTableFilterDefaultsReader.BuildTrace(user, stageFilterDefaults);
+                ApiServiceBase.EmitExternalTrace(stageFilterDefaultsTrace);
+                DiagnosticsFileLogger.AppendLine($"[{DateTime.Now:HH:mm:ss.fff}] {stageFilterDefaultsTrace}");
+
                 return new LoginResponse
                 {
                     Success = true,
                     Token = authResponse.Tokens?.Access ?? string.Empty,
                     DebugJson = rawJson,
-                    User = new User
-                    {
-                        Id = authResponse.User.Id,
-                        ProfileId = authResponse.User.GetProfileId(),
-                        Username = authResponse.User.Name ?? username,
-                        FullName = authResponse.User.Name ?? username,
-                        Role = authResponse.User.Role ?? string.Empty,
-                        DepartmentId = authResponse.User.GetDepartmentId(),
-                        DepartmentName = authResponse.User.GetDepartmentName(),
-                        Token = authResponse.Tokens?.Access ?? string.Empty,
-                        LoginTime = DateTime.Now
-                    }
+                    User = user
                 };
             }
             catch (Exception ex)
@@ -205,6 +214,46 @@ namespace CbsContractsDesktopClient.Services
             return null;
         }
 
+        public string? GetStatuses()
+        {
+            if (TryGetString("statuses", out var statuses))
+            {
+                return statuses;
+            }
+
+            if (TryGetNestedString("profile", "statuses", out statuses))
+            {
+                return statuses;
+            }
+
+            if (TryGetFirstArrayNestedString("profiles", "statuses", out statuses))
+            {
+                return statuses;
+            }
+
+            return null;
+        }
+
+        public string? GetContractsTypes()
+        {
+            if (TryGetString("contracts_types", out var contractsTypes))
+            {
+                return contractsTypes;
+            }
+
+            if (TryGetNestedString("profile", "contracts_types", out contractsTypes))
+            {
+                return contractsTypes;
+            }
+
+            if (TryGetFirstArrayNestedString("profiles", "contracts_types", out contractsTypes))
+            {
+                return contractsTypes;
+            }
+
+            return null;
+        }
+
         private bool TryGetInt32(string key, out int value)
         {
             value = default;
@@ -214,6 +263,17 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return TryReadInt32(element, out value);
+        }
+
+        private bool TryGetString(string key, out string value)
+        {
+            value = string.Empty;
+            if (ExtraFields == null || !ExtraFields.TryGetValue(key, out var element))
+            {
+                return false;
+            }
+
+            return TryReadString(element, out value);
         }
 
         private bool TryGetNestedProperty(string parentKey, string childKey, out int value)
@@ -268,6 +328,17 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return child.TryGetProperty(grandChildKey, out var grandChild) && TryReadInt32(grandChild, out value);
+        }
+
+        private bool TryGetFirstArrayNestedString(string arrayKey, string childKey, out string value)
+        {
+            value = string.Empty;
+            if (!TryGetFirstArrayItem(arrayKey, out var item))
+            {
+                return false;
+            }
+
+            return item.TryGetProperty(childKey, out var child) && TryReadString(child, out value);
         }
 
         private bool TryGetNestedString(string parentKey, string childKey, out string value)

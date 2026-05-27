@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
@@ -212,58 +213,152 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             try
             {
+                ClearFilterInputsCore();
+            }
+            finally
+            {
+                _suppressFilterNotifications = false;
+            }
+        }
+
+        public void ApplyFilterInputs(IReadOnlyList<DataFilterCriterion> filters)
+        {
+            ArgumentNullException.ThrowIfNull(filters);
+
+            _suppressFilterNotifications = true;
+
+            try
+            {
+                ClearFilterInputsCore();
+
+                var filtersByField = filters.ToDictionary(
+                    static filter => filter.FieldKey,
+                    StringComparer.OrdinalIgnoreCase);
+
                 foreach (var column in Columns.Where(static column => column.IsFilterable))
                 {
-                    if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+                    if (!filtersByField.TryGetValue(column.FieldKey, out var filter))
                     {
-                        if (_filterMultiSelectStates.TryGetValue(column.FieldKey, out var state))
-                        {
-                            state.SelectedValues = Array.Empty<object?>();
-                            state.SelectedOptions = [];
-                            state.SearchText = string.Empty;
-                            state.AvailableOptions = GetMultiSelectOptions(column).ToList();
-                            UpdateMultiSelectFilterButtonContent(state.Button, column);
-                            RebuildMultiSelectOptionItems(state);
-                        }
+                        column.Filter.Value = null;
+                        continue;
                     }
-                    else if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
-                    {
-                        _filterTexts.Remove(GetFilterStateKey(column));
-                    }
-                    else if (IsDateFilterMode(column.Filter.Mode))
-                    {
-                        _filterTexts[GetFilterStateKey(column)] = string.Empty;
-                        if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
-                        {
-                            dateTimeState.DatePicker.Date = null;
-                        }
-                    }
-                    else
-                    {
-                        _filterTexts[GetFilterStateKey(column)] = string.Empty;
-                    }
-                }
 
-                foreach (var textBox in _filterTextBoxes.Values)
-                {
-                    if (textBox.Tag is CbsTableColumnDefinition column && IsDateFilterMode(column.Filter.Mode))
-                    {
-                        textBox.Text = string.Empty;
-                    }
-                    else if (!string.IsNullOrEmpty(textBox.Text))
-                    {
-                        textBox.Text = string.Empty;
-                    }
-                }
-
-                foreach (var checkBox in _filterBooleanCheckBoxes.Values)
-                {
-                    checkBox.IsChecked = null;
+                    column.Filter.MatchMode = filter.MatchMode;
+                    column.Filter.Value = filter.Value;
+                    _filterModes[GetFilterStateKey(column)] = filter.MatchMode;
+                    ApplyFilterInput(column, filter.Value);
                 }
             }
             finally
             {
                 _suppressFilterNotifications = false;
+            }
+        }
+
+        private void ClearFilterInputsCore()
+        {
+            foreach (var column in Columns.Where(static column => column.IsFilterable))
+            {
+                column.Filter.Value = null;
+
+                if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+                {
+                    if (_filterMultiSelectStates.TryGetValue(column.FieldKey, out var state))
+                    {
+                        state.SelectedValues = Array.Empty<object?>();
+                        state.SelectedOptions = [];
+                        state.SearchText = string.Empty;
+                        state.AvailableOptions = GetMultiSelectOptions(column).ToList();
+                        UpdateMultiSelectFilterButtonContent(state.Button, column);
+                        RebuildMultiSelectOptionItems(state);
+                    }
+                }
+                else if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
+                {
+                    _filterTexts.Remove(GetFilterStateKey(column));
+                }
+                else if (IsDateFilterMode(column.Filter.Mode))
+                {
+                    _filterTexts[GetFilterStateKey(column)] = string.Empty;
+                    if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
+                    {
+                        dateTimeState.DatePicker.Date = null;
+                        RefreshDateTimeFilterTextBox(column);
+                    }
+                }
+                else
+                {
+                    _filterTexts[GetFilterStateKey(column)] = string.Empty;
+                }
+            }
+
+            foreach (var textBox in _filterTextBoxes.Values)
+            {
+                if (textBox.Tag is CbsTableColumnDefinition column && IsDateFilterMode(column.Filter.Mode))
+                {
+                    textBox.Text = string.Empty;
+                }
+                else if (!string.IsNullOrEmpty(textBox.Text))
+                {
+                    textBox.Text = string.Empty;
+                }
+            }
+
+            foreach (var checkBox in _filterBooleanCheckBoxes.Values)
+            {
+                checkBox.IsChecked = null;
+            }
+        }
+
+        private void ApplyFilterInput(CbsTableColumnDefinition column, object? value)
+        {
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+            {
+                if (_filterMultiSelectStates.TryGetValue(column.FieldKey, out var state))
+                {
+                    var selectedValues = NormalizeFilterSelectedValues(value);
+                    var allOptions = GetMultiSelectOptions(column);
+                    state.SelectedValues = selectedValues;
+                    state.SelectedOptions = allOptions
+                        .Where(option => selectedValues.Any(selected => AreFilterValuesEqual(selected, option.Value)))
+                        .ToList();
+                    state.AvailableOptions = allOptions.ToList();
+                    state.SearchText = string.Empty;
+                    UpdateMultiSelectFilterButtonContent(state.Button, column);
+                    RebuildMultiSelectOptionItems(state);
+                }
+
+                return;
+            }
+
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
+            {
+                if (_filterBooleanCheckBoxes.TryGetValue(column.FieldKey, out var checkBox))
+                {
+                    checkBox.IsChecked = TryGetBooleanFilterValue(value);
+                }
+
+                return;
+            }
+
+            if (IsDateFilterMode(column.Filter.Mode))
+            {
+                _filterTexts[GetFilterStateKey(column)] = FormatFilterValue(value);
+                if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
+                {
+                    dateTimeState.DatePicker.Date = TryGetDateFilterValue(value);
+                    dateTimeState.TextBox.Text = FormatFilterValue(value);
+                    RefreshDateTimeFilterTextBox(column);
+                }
+
+                return;
+            }
+
+            var text = FormatFilterValue(value);
+            _filterTexts[GetFilterStateKey(column)] = text;
+            if (_filterTextBoxes.TryGetValue(column.FieldKey, out var textBox))
+            {
+                textBox.Text = text;
             }
         }
 
@@ -1200,7 +1295,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 Tag = column,
                 IsThreeState = true,
-                IsChecked = null,
+                IsChecked = TryGetBooleanFilterValue(column.Filter.Value),
                 MinWidth = 24,
                 MaxHeight = 24,     
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -1285,7 +1380,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
                 MinWidth = 24,
-                Date = null,
+                Date = TryGetDateFilterValue(column.Filter.Value),
                 PlaceholderText = string.Empty,
                 Padding = new Thickness(0, 0, 24, 0)
             };
@@ -1380,8 +1475,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                 SearchTextBox = searchTextBox,
                 OptionsHost = optionsHost,
                 AvailableOptions = GetMultiSelectOptions(column).ToList(),
-                SelectedOptions = [],
-                SelectedValues = Array.Empty<object?>(),
+                SelectedOptions = GetMultiSelectOptions(column)
+                    .Where(option => NormalizeFilterSelectedValues(column.Filter.Value).Any(value => AreFilterValuesEqual(value, option.Value)))
+                    .ToList(),
+                SelectedValues = NormalizeFilterSelectedValues(column.Filter.Value),
                 SearchText = string.Empty
             };
 
@@ -1685,19 +1782,19 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (isChecked)
             {
-                if (!selectedValues.Any(value => Equals(value, option.Value)))
+                if (!selectedValues.Any(value => AreFilterValuesEqual(value, option.Value)))
                 {
                     selectedValues.Add(option.Value);
                 }
             }
             else
             {
-                selectedValues.RemoveAll(value => Equals(value, option.Value));
+                selectedValues.RemoveAll(value => AreFilterValuesEqual(value, option.Value));
             }
 
             state.SelectedValues = selectedValues;
             state.SelectedOptions = GetMultiSelectOptions(state.Column)
-                .Where(optionItem => state.SelectedValues.Any(value => Equals(value, optionItem.Value)))
+                .Where(optionItem => state.SelectedValues.Any(value => AreFilterValuesEqual(value, optionItem.Value)))
                 .ToList();
             UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
 
@@ -1743,7 +1840,115 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
             else if (!_filterTexts.ContainsKey(filterStateKey))
             {
-                _filterTexts[filterStateKey] = string.Empty;
+                _filterTexts[filterStateKey] = FormatFilterValue(column.Filter.Value);
+            }
+        }
+
+        private static IReadOnlyList<object?> NormalizeFilterSelectedValues(object? value)
+        {
+            return value switch
+            {
+                null => [],
+                string => [value],
+                System.Collections.IEnumerable values => values.Cast<object?>().ToList(),
+                _ => [value]
+            };
+        }
+
+        private static bool? TryGetBooleanFilterValue(object? value)
+        {
+            return value switch
+            {
+                bool boolValue => boolValue,
+                string text when bool.TryParse(text, out var parsedValue) => parsedValue,
+                _ => null
+            };
+        }
+
+        private static DateTimeOffset? TryGetDateFilterValue(object? value)
+        {
+            return value switch
+            {
+                DateTimeOffset dateTimeOffset => dateTimeOffset,
+                DateTime dateTime => new DateTimeOffset(dateTime),
+                string text when DateTimeOffset.TryParse(
+                    text,
+                    CultureInfo.CurrentCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
+                    out var parsedOffset) => parsedOffset,
+                string text when DateTimeOffset.TryParse(
+                    text,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                    out var parsedOffset) => parsedOffset,
+                _ => null
+            };
+        }
+
+        private static string FormatFilterValue(object? value)
+        {
+            return value switch
+            {
+                null => string.Empty,
+                DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("d", CultureInfo.CurrentCulture),
+                DateTime dateTime => dateTime.ToString("d", CultureInfo.CurrentCulture),
+                _ => value.ToString() ?? string.Empty
+            };
+        }
+
+        private static bool AreFilterValuesEqual(object? left, object? right)
+        {
+            if (left is null || right is null)
+            {
+                return left is null && right is null;
+            }
+
+            if (TryConvertFilterNumber(left, out var leftNumber)
+                && TryConvertFilterNumber(right, out var rightNumber))
+            {
+                return leftNumber == rightNumber;
+            }
+
+            return Equals(left, right);
+        }
+
+        private static bool TryConvertFilterNumber(object value, out decimal number)
+        {
+            switch (value)
+            {
+                case byte byteValue:
+                    number = byteValue;
+                    return true;
+                case sbyte sbyteValue:
+                    number = sbyteValue;
+                    return true;
+                case short shortValue:
+                    number = shortValue;
+                    return true;
+                case ushort ushortValue:
+                    number = ushortValue;
+                    return true;
+                case int intValue:
+                    number = intValue;
+                    return true;
+                case uint uintValue:
+                    number = uintValue;
+                    return true;
+                case long longValue:
+                    number = longValue;
+                    return true;
+                case ulong ulongValue:
+                    number = ulongValue;
+                    return true;
+                case decimal decimalValue:
+                    number = decimalValue;
+                    return true;
+                case string text when decimal.TryParse(text, NumberStyles.Number, CultureInfo.InvariantCulture, out var parsed):
+                    number = parsed;
+                    return true;
+                default:
+                    number = default;
+                    return false;
             }
         }
 
@@ -1804,10 +2009,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                 var allOptions = GetMultiSelectOptions(state.Column);
                 state.AvailableOptions = allOptions.ToList();
                 state.SelectedValues = state.SelectedValues
-                    .Where(value => allOptions.Any(option => Equals(option.Value, value)))
+                    .Where(value => allOptions.Any(option => AreFilterValuesEqual(option.Value, value)))
                     .ToList();
                 state.SelectedOptions = allOptions
-                    .Where(option => state.SelectedValues.Any(value => Equals(value, option.Value)))
+                    .Where(option => state.SelectedValues.Any(value => AreFilterValuesEqual(value, option.Value)))
                     .ToList();
                 UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
                 RebuildMultiSelectOptionItems(state);
@@ -1843,7 +2048,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             state.SelectedOptions = allOptions
-                .Where(option => state.SelectedValues.Any(value => Equals(value, option.Value)))
+                .Where(option => state.SelectedValues.Any(value => AreFilterValuesEqual(value, option.Value)))
                 .ToList();
 
             foreach (var option in state.AvailableOptions)
@@ -1851,7 +2056,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 var checkBox = new CheckBox
                 {
                     Tag = (state, option),
-                    IsChecked = state.SelectedValues.Any(value => Equals(value, option.Value)),
+                    IsChecked = state.SelectedValues.Any(value => AreFilterValuesEqual(value, option.Value)),
                     MinHeight = 20,
                     Padding = new Thickness(0),
                     Margin = new Thickness(4, 1, 4, 1)

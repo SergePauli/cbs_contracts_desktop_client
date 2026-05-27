@@ -2,6 +2,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Models.Data;
 
 namespace CbsContractsDesktopClient.Services.Workspace
 {
@@ -15,6 +16,11 @@ namespace CbsContractsDesktopClient.Services.Workspace
 
         Task SaveSortAsync(
             ReferenceTableSortSettings settings,
+            CancellationToken cancellationToken = default);
+
+        Task SaveFiltersAsync(
+            string route,
+            IReadOnlyList<DataFilterCriterion> filters,
             CancellationToken cancellationToken = default);
 
         Task SaveColumnLayoutAsync(

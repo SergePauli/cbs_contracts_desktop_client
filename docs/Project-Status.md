@@ -87,6 +87,23 @@
   - `RevisionEditDialog`
   - копирование contract summary в буфер обмена
   - временная диагностика API-запросов снята после стабилизации
+- функциональная таблица этапов:
+  - `/stages`
+  - модель `Stage`, preset `list`
+  - metadata и состав колонок перенесены из web-версии
+  - поддержан диалог изменения раскладки колонок для большой вариативной таблицы
+  - conditional row styling без декоративного левого border marker
+  - row selection/unselect обновляет общий `ContractWorkflowStore`
+  - contract-oriented `DetailView` переиспользует общий workflow с ревизиями
+  - статус этапа и контракта отображается цветными badge-компонентами
+  - фильтры статуса, типа работ, СЗИ, реестра, финансирования и сохраненных пользовательских defaults приведены к Rails API contract
+  - reset button применяет начальные установки фильтрации, menu reset полностью очищает фильтры после подтверждения
+  - оптимизирован lazy/table pipeline: сохранены skeleton rows, снижены лишние refresh/reload сценарии
+  - добавлены специализированные диалоги редактирования этапов для коммерческого, финансового и ОЗИ-профилей
+  - общий `StageEditState`/`ContractEditState` и payload builders формируют только delta update payload
+  - комментарии этапов сохраняются через `comments_attributes`
+  - закрытие последнего открытого этапа может закрывать контракт по бизнес-правилам коммерческого профиля
+  - общие UI-компоненты и форматтеры вынесены в `Pauli.WinUiKit` и `Shared`
 
 ### 4. Табличная платформа
 
@@ -145,6 +162,7 @@
 - `/contragents` definition, detail-view, specialized editor flow, FNS integration и payload contracts
 - `EmployeeBox` reusable UI contract/rendering hooks
 - `/revisions` functional table definition, metadata, detail footer, workflow-store hooks, edit dialog и copy action
+- `/stages` functional table definition, filters/defaults, row update, workflow-store hooks, edit dialogs, payload builders и button behavior
 
 ## Что сейчас в разработке по смыслу
 
@@ -152,15 +170,19 @@
 
 **масштабирование функциональных контрактных таблиц поверх готовой shell + table platform**
 
-То есть команда больше не строит “скелет”, завершила крупный этап сложных справочников и закрыла первую функциональную таблицу `/revisions`. Следующий фокус - таблица этапов контрактов и дальнейшее переиспользование contract-oriented detail workflow.
+То есть команда больше не строит “скелет”, завершила крупный этап сложных справочников и закрыла функциональные таблицы `/revisions` и `/stages`. Следующий фокус - снижение архитектурной сложности shell/content слоя и подготовка к таблице контрактов.
 
 Отдельно важно:
 
 - общий диагностический слой lazy/table/API-пайплайна сохранен и штатно выключен
 - временная диагностика `ReferenceEditDialog` снята после фикса регрессии с `PrimaryButton`
+- `ContentHostView` стал ключевым архитектурным долгом: в нем смешались orchestration UI, table actions, dialogs, workflow-store refresh, notifications и часть settings-flow
 
 ## Что еще не является завершенным
 
+- SOLID-декомпозиция `ContentHostView` и вынос сценариев таблиц/диалогов/settings в отдельные владельцы
+- полировка `DetailView` для сложных таблиц, где одновременно нужны contract/stage/revision-specific summaries
+- функциональная таблица `Контракты`
 - доменные действия над строками
 - полноценный CRUD справочников:
   - read/details
@@ -171,9 +193,10 @@
 
 ## Что логично делать дальше
 
-1. Реализовать следующую функциональную таблицу: `Этапы контрактов`
-2. Переиспользовать `TablePageDefinition`, `ContentHostView`, workflow-store и общий contract-oriented detail footer
-3. Довести CRUD справочников до details/archive и backend-aware ограничений
-4. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect
-5. Расширять доменный контекст в audit/context panel
-6. Укреплять тестовое покрытие вокруг новых shell/table сценариев
+1. Провести SOLID-рефакторинг `ContentHostView`: разделить content orchestration, table commands, dialog launching, settings persistence, notifications и workflow refresh.
+2. Отполировать `DetailView` для сложных таблиц и подготовить его к нескольким таблицам на одной странице, особенно для будущей страницы `Активность`.
+3. Начать разработку функциональной таблицы `Контракты`.
+4. Довести CRUD справочников до details/archive и backend-aware ограничений.
+5. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect.
+6. Расширять доменный контекст в audit/context panel.
+7. Укреплять тестовое покрытие вокруг новых shell/table сценариев.

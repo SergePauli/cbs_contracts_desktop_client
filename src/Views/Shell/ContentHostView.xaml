@@ -225,7 +225,7 @@
                             FontFamily="Segoe Fluent Icons"
                             FontSize="14"
                             Foreground="{StaticResource ShellSecondaryTextBrush}"
-                            ToolTipService.ToolTip="Сбросить фильтры"
+                            ToolTipService.ToolTip="Начальные установки фильтрации"
                             Visibility="{Binding HasFilters, Converter={StaticResource BoolVisibilityConverter}}"
                             Content="&#xe71c;" />
 
@@ -252,6 +252,9 @@
                                     <MenuFlyoutItem
                                         Text="Сбросить фильтры"
                                         Click="ResetFiltersMenuItem_Click" />
+                                    <MenuFlyoutItem
+                                        Text="Сохранить фильтры"
+                                        Click="SaveStageFiltersMenuItem_Click" />
                                     <MenuFlyoutItem
                                         Text="Сбросить сортировку"
                                         Click="ResetSortingMenuItem_Click" />

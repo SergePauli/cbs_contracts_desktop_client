@@ -205,6 +205,91 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         Assert.Equal("Old", viewModel.Items[0].GetValue("name"));
     }
 
+    [Fact]
+    public async Task ResetFiltersAsync_ForStagesAppliesUserDefaultFilters()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Status"] = [],
+                ["TaskKind"] = [],
+                ["Stage"] = []
+            }
+        };
+        var userService = new FakeUserService
+        {
+            CurrentUser = new User
+            {
+                Username = "tester",
+                Role = "admin",
+                Statuses = JsonSerializer.Serialize(new Dictionary<string, string?>
+                {
+                    ["s_statuses"] = JsonSerializer.Serialize(new object?[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "В работе" },
+                        new Dictionary<string, object?> { ["id"] = 4L, ["name"] = "Выполнено" },
+                        new Dictionary<string, object?> { ["id"] = null, ["name"] = "Пустой" }
+                    }),
+                    ["s_funded"] = "false"
+                })
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/stages", userService);
+
+        await viewModel.EnsureLoadedAsync();
+
+        var filters = await viewModel.ResetFiltersAsync();
+
+        var statusFilter = Assert.Single(filters, static filter => filter.FieldKey == "status");
+        Assert.Equal(DataFilterMatchMode.In, statusFilter.MatchMode);
+        Assert.Equal([2L, 4L, null], Assert.IsAssignableFrom<IReadOnlyList<long?>>(statusFilter.Value));
+
+        var fundedFilter = Assert.Single(filters, static filter => filter.FieldKey == "is_funded");
+        Assert.Equal(DataFilterMatchMode.Equals, fundedFilter.MatchMode);
+        Assert.Equal(false, fundedFilter.Value);
+    }
+
+    [Fact]
+    public async Task ClearFiltersAsync_RemovesEveryFilter()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Status"] = [],
+                ["TaskKind"] = [],
+                ["Stage"] = []
+            }
+        };
+        var userService = new FakeUserService
+        {
+            CurrentUser = new User
+            {
+                Username = "tester",
+                Role = "admin",
+                Statuses = JsonSerializer.Serialize(new Dictionary<string, string?>
+                {
+                    ["s_statuses"] = JsonSerializer.Serialize(new object?[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "В работе" }
+                    }),
+                    ["s_funded"] = "false"
+                })
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/stages", userService);
+
+        await viewModel.EnsureLoadedAsync();
+        await viewModel.ResetFiltersAsync();
+
+        var filters = await viewModel.ClearFiltersAsync();
+
+        Assert.Empty(filters);
+        Assert.Empty(viewModel.CurrentFilters);
+        Assert.All(viewModel.FilterFields, static filter => Assert.Null(filter.Value));
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
@@ -225,12 +310,14 @@ public sealed class ReferencesContentViewModelTests : IDisposable
 
     private ReferencesContentViewModel CreateViewModel(
         FakeDataQueryService dataQueryService,
-        string route)
+        string route,
+        FakeUserService? userService = null)
     {
+        userService ??= new FakeUserService();
         var settingsService = new LocalUserSettingsService(_settingsFilePath);
         var referenceDefinitionService = new ReferenceDefinitionService(settingsService);
         var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, settingsService);
-        var shellViewModel = new AppShellViewModel(new FakeUserService())
+        var shellViewModel = new AppShellViewModel(userService)
         {
             CurrentRoute = route
         };
@@ -240,7 +327,8 @@ public sealed class ReferencesContentViewModelTests : IDisposable
             dataQueryService,
             referenceDefinitionService,
             tablePageDefinitionService,
-            new ReferenceLookupCacheService(dataQueryService));
+            new ReferenceLookupCacheService(dataQueryService),
+            userService);
     }
 
     private sealed class FakeDataQueryService : IDataQueryService

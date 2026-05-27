@@ -14,6 +14,8 @@ namespace CbsContractsDesktopClient.Models.Table
 
         public DataFilterMatchMode MatchMode { get; set; } = DataFilterMatchMode.Contains;
 
+        public object? Value { get; set; }
+
         public string? OptionsSourceKey { get; init; }
 
         public IReadOnlyList<CbsTableFilterOptionDefinition> StaticOptions { get; init; } = [];

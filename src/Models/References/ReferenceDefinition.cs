@@ -63,6 +63,7 @@ namespace CbsContractsDesktopClient.Models.References
                     | TablePageCapabilities.ResetFilters
                     | TablePageCapabilities.PersistColumnWidths
                     | TablePageCapabilities.PersistSort
+                    | TablePageCapabilities.PersistFilters
                     | TablePageCapabilities.Audit,
                 Columns = Columns,
                 InitialSortField = InitialSortField,
@@ -116,6 +117,7 @@ namespace CbsContractsDesktopClient.Models.References
                         EditorKind = column.Filter.EditorKind,
                         Mode = column.Filter.Mode,
                         MatchMode = column.Filter.MatchMode,
+                        Value = column.Filter.Value,
                         OptionsSourceKey = column.Filter.OptionsSourceKey,
                         StaticOptions = column.Filter.StaticOptions
                             .Select(static option => new CbsTableFilterOptionDefinition

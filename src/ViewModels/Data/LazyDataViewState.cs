@@ -113,6 +113,21 @@ namespace CbsContractsDesktopClient.ViewModels.Data
             await RefreshAsync(cancellationToken);
         }
 
+        public async Task SetFiltersAsync(
+            IEnumerable<DataFilterCriterion> filters,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(filters);
+
+            Filters.Clear();
+            foreach (var filter in filters)
+            {
+                Filters.Add(filter);
+            }
+
+            await RefreshAsync(cancellationToken);
+        }
+
         public async Task SetSortAsync(
             string fieldKey,
             DataSortDirection direction,

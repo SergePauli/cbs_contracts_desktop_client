@@ -101,6 +101,7 @@ namespace CbsContractsDesktopClient.Models.Workspace
                     EditorKind = column.Filter.EditorKind,
                     Mode = column.Filter.Mode,
                     MatchMode = column.Filter.MatchMode,
+                    Value = column.Filter.Value,
                     OptionsSourceKey = column.Filter.OptionsSourceKey,
                     StaticOptions = column.Filter.StaticOptions
                         .Select(static option => new CbsTableFilterOptionDefinition

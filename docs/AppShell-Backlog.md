@@ -73,38 +73,98 @@ Shell уже больше не является только каркасом п
 
 ## Что теперь считается следующим этапом
 
-Теперь следующий этап уже не “сделать shell”, а:
+Теперь следующий этап уже не “сделать shell” и не “доказать table platform”, а:
 
-1. Расширять CRUD-слой справочников от базового create/update/delete к details и доменным ограничениям
-2. Развивать reference workspace как основу прикладных процессов
-3. При росте числа экранов выделить более формальный `INavigationService` и реестр страниц
-4. Продолжать уплотнение и полировку shell UX только по месту, без возврата к broad redesign
-5. Поддерживать audit panel как общий cross-reference сценарий для всех новых таблиц
+1. Снизить архитектурную сложность `ContentHostView`, который стал супер-классом и смешал несколько слоев ответственности
+2. Подготовить shell/content слой к страницам с несколькими таблицами одновременно, в первую очередь к будущей странице `Активность`
+3. Отполировать contract-oriented `DetailView` для сложных таблиц
+4. Начать следующую функциональную таблицу: `Контракты`
+5. Расширять CRUD-слой справочников от базового create/update/delete к details и доменным ограничениям
+6. При росте числа экранов выделить более формальный `INavigationService` и реестр страниц
+7. Поддерживать audit panel как общий cross-reference сценарий для всех новых таблиц
 
 ## Ближайшая следующая задача
 
-Следующий production-шаг: функциональная таблица `Этапы контрактов`.
+Следующий production-шаг: архитектурная декомпозиция `ContentHostView` перед дальнейшим расширением функциональных таблиц.
 
-Почему она следующая:
+Почему это сейчас важнее новой таблицы:
 
-- таблица `Дополнительные соглашения к контрактам` уже проверила общий `TablePageDefinition` pattern вне раздела справочников
-- для этапов можно переиспользовать тот же `ContentHostView`, table metadata, settings persistence, detail footer и workflow-store подход
-- это естественное продолжение контрактного рабочего процесса после выбора договора/ревизии
+- таблица `Этапы контрактов` довела текущий подход до production-функционала, но одновременно показала пределы монолитного `ContentHostView`
+- внутри одного класса сейчас сосуществуют table commands, dialog launching, settings persistence, notifications, workflow-store refresh, detail-view updates и часть API orchestration
+- следующий крупный экран `Активность` потенциально будет использовать несколько таблиц одновременно, и текущая модель content host усложнит развитие
+- таблица `Контракты` должна опираться на более чистые владельцы поведения, а не увеличивать уже перегруженный класс
 
 Ожидаемый первый scope:
 
-1. Изучить web/API-метаданные таблицы этапов контрактов.
-2. Добавить route/page definition для функциональной таблицы этапов.
-3. Настроить list-screen: колонки, nested display/filter/sort mapping, lazy loading, width persistence.
-4. Переиспользовать общий contract-oriented detail footer там, где он совпадает с `/revisions`.
-5. Определить минимальный набор row actions и edit-dialog scope для первой поставки.
-6. Зафиксировать metadata и query-contract регрессионными тестами.
+1. Описать границы ответственности текущего `ContentHostView`.
+2. Выделить table command layer: reset/apply defaults, sorting, column layout, save settings, copy/comment/actions.
+3. Выделить dialog launching layer для reference/stage/revision/domain dialogs.
+4. Выделить workflow/detail refresh layer поверх `ContractWorkflowStore`.
+5. Сохранить существующее поведение `/revisions` и `/stages` через регрессионные тесты.
+6. Проверить, что новый pattern подходит для страницы с несколькими таблицами.
 
 После этого:
 
-- переносить следующие функциональные таблицы уже с проверенным pattern
+- шлифовать `DetailView` для сложных таблиц
+- переносить таблицу `Контракты` уже с более чистым content/table pattern
 - возвращаться к delete/archive правилам и доменным ограничениям CRUD
 - поддерживать регрессионные тесты на shell navigation / content chrome / audit
+
+## Закрытый production-этап: функциональная таблица `Этапы контрактов`
+
+Функциональная страница `/stages` закрыта как самый большой production-этап текущей table platform.
+
+Что выполнено:
+
+1. Route `/stages` подключен к общей `TablePageDefinition` platform:
+   - модель `Stage`
+   - preset `list`
+   - metadata таблицы перенесена из web-версии
+   - поддержаны nested display/filter/sort mapping
+   - поддержан диалог изменения раскладки колонок
+2. Таблица получила stage-specific поведение:
+   - conditional row styling для текста/границ без левого цветового marker
+   - row select/unselect обновляет общий workflow-store
+   - скелетоны и lazy loading стабилизированы для большой таблицы
+   - row update после edit не вызывает полный reload таблицы
+3. Фильтры этапов приведены к API contract:
+   - status-фильтр разделен от статусов контракта
+   - пустой status формирует корректную группировку условий
+   - register filter парсит маску квартал/год
+   - task kind filter показывает код и имя
+   - SZI filter использует правильное поле API
+   - сохраненные defaults пользователя применяются кнопкой начальных установок
+   - menu reset полностью очищает фильтры после подтверждения
+   - сохранение избранных фильтров обновляет только stage-specific настройки профиля и не разрушает соседние settings
+4. Detail workflow унифицирован с `/revisions`:
+   - `ContractWorkflowStore` хранит выбранный контракт/этап/ревизию
+   - `RowDetailStrategy` формирует header для разных типов строк
+   - detail refresh работает после nested updates
+5. Реализованы stage edit dialogs:
+   - коммерческий профиль
+   - финансовый профиль
+   - ОЗИ-профиль
+   - общий `StageEditState` / `ContractEditState`
+   - общие payload builders рядом со workflow store/state
+   - запросы на update содержат только `id`, измененные поля и `list_key` при наличии
+6. Перенесена бизнес-логика:
+   - расчет календарных/рабочих сроков
+   - holidays cache
+   - блокировка auto-calculated deadline fields
+   - комментарии через `comments_attributes`
+   - закрытие последнего открытого этапа может закрывать контракт по правилам коммерческого профиля
+7. Общие UI и formatting элементы вынесены из диалогов:
+   - `Pauli.WinUiKit.CalendarInput`
+   - `Pauli.WinUiKit.MultiSelect`
+   - `AppEditDialog`
+   - `AppDialogLayout`
+   - shared formatters/readers/options/status controls
+8. Поведение закреплено регрессионными тестами:
+   - table/filter/query contracts
+   - edit states и payload builders
+   - dialog layout/UI contracts
+   - workflow/detail refresh
+   - save/reset/default filter button behavior
 
 ## Закрытый production-этап: функциональная таблица `Дополнительные соглашения к контрактам`
 

@@ -192,6 +192,20 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContentHostView_FilterResetButtonAndMenuUseDifferentActions()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+
+        Assert.Contains("private async void ResetFiltersButton_Click", codeBehind);
+        Assert.Contains("var filters = await _viewModel.ResetFiltersAsync();", codeBehind);
+        Assert.Contains("private async void ResetFiltersMenuItem_Click", codeBehind);
+        Assert.Contains("var confirmed = await ConfirmFilterClearAsync();", codeBehind);
+        Assert.Contains("var filters = await _viewModel.ClearFiltersAsync();", codeBehind);
+        Assert.Contains("private async Task<bool> ConfirmFilterClearAsync()", codeBehind);
+        Assert.Contains("Content = \"Очистить все фильтры текущей таблицы?\"", codeBehind);
+    }
+
+    [Fact]
     public void ContentHostView_PreparesProfileEditStateScaffold()
     {
         var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);

@@ -4,6 +4,7 @@ using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
+using System.Text.Json;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
@@ -99,6 +100,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal("list", definition.Preset);
         Assert.Equal("Этапы контрактов", definition.Title);
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
         Assert.Equal(CbsTableRowStyleKey.StageDeadline, definition.RowStyleKey);
         Assert.Equal("id", definition.InitialSortField);
         Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
@@ -148,6 +150,76 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.True(definition.Columns.Single(static column => column.FieldKey == "id").IsVisible);
         Assert.False(definition.Columns.Single(static column => column.FieldKey == "region").IsVisible);
         Assert.True(definition.Columns.Single(static column => column.FieldKey == "contragent").IsVisible);
+    }
+
+    [Fact]
+    public async Task SaveFiltersAsync_PersistsStagesFilters()
+    {
+        var service = CreateService();
+
+        await service.SaveFiltersAsync(
+            "/stages",
+            [
+                new DataFilterCriterion
+                {
+                    FieldKey = "status",
+                    FilterMode = DataFilterMode.Numeric,
+                    MatchMode = DataFilterMatchMode.In,
+                    Value = new object?[] { 2L, 5L }
+                },
+                new DataFilterCriterion
+                {
+                    FieldKey = "contragent",
+                    FilterMode = DataFilterMode.Text,
+                    MatchMode = DataFilterMatchMode.Contains,
+                    Value = "Romashka"
+                }
+            ]);
+
+        var json = await File.ReadAllTextAsync(_settingsFilePath);
+        using var document = JsonDocument.Parse(json);
+        var filters = document.RootElement
+            .GetProperty("tables")
+            .GetProperty("/stages")
+            .GetProperty("filters");
+
+        Assert.Equal(2, filters.GetArrayLength());
+        Assert.Equal("status", filters[0].GetProperty("fieldKey").GetString());
+        Assert.Equal("Numeric", filters[0].GetProperty("filterMode").GetString());
+        Assert.Equal("In", filters[0].GetProperty("matchMode").GetString());
+        Assert.Equal([2, 5], filters[0].GetProperty("value").EnumerateArray().Select(static item => item.GetInt32()));
+        Assert.Equal("contragent", filters[1].GetProperty("fieldKey").GetString());
+    }
+
+    [Fact]
+    public async Task TryGetByRoute_AppliesSavedStagesFilters()
+    {
+        var service = CreateService();
+        await service.SaveFiltersAsync(
+            "/stages",
+            [
+                new DataFilterCriterion
+                {
+                    FieldKey = "status",
+                    FilterMode = DataFilterMode.Numeric,
+                    MatchMode = DataFilterMatchMode.In,
+                    Value = new object?[] { 2L, 5L }
+                }
+            ]);
+
+        var reloadedService = CreateService();
+        var found = reloadedService.TryGetByRoute("/stages", out var definition);
+
+        Assert.True(found);
+        var filter = Assert.Single(definition.InitialFilters);
+        Assert.Equal("status", filter.FieldKey);
+        Assert.Equal(DataFilterMode.Numeric, filter.FilterMode);
+        Assert.Equal(DataFilterMatchMode.In, filter.MatchMode);
+        var values = Assert.IsAssignableFrom<IEnumerable<object?>>(filter.Value);
+        Assert.Equal([2L, 5L], values.Cast<long>());
+        var statusColumn = definition.Columns.Single(static column => column.FieldKey == "status");
+        Assert.Equal(DataFilterMatchMode.In, statusColumn.Filter.MatchMode);
+        Assert.Equal([2L, 5L], Assert.IsAssignableFrom<IEnumerable<object?>>(statusColumn.Filter.Value).Cast<long>());
     }
 
     public void Dispose()

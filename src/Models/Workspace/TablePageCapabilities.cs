@@ -15,6 +15,7 @@ namespace CbsContractsDesktopClient.Models.Workspace
         PersistSort = 64,
         Audit = 128,
         DetailFooter = 256,
-        ConfigureColumns = 512
+        ConfigureColumns = 512,
+        PersistFilters = 1024
     }
 }

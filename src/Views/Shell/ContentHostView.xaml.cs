@@ -12,6 +12,7 @@ using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
+using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.ViewModels.References;
@@ -83,6 +84,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             Route = "/contracts",
             Model = "Contract",
             Title = "Contract",
+            Preset = "edit"
+        };
+        private static readonly ReferenceDefinition ProfileSettingsDefinition = new()
+        {
+            Route = "/users",
+            Model = "Profile",
+            Title = "Profile",
             Preset = "edit"
         };
         private static readonly IReadOnlyList<ContractRowDetailStrategy> RowDetailStrategies =
@@ -320,8 +328,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void ResetFiltersButton_Click(object sender, RoutedEventArgs e)
         {
             _filterDebounceCts?.Cancel();
-            await _viewModel.ResetFiltersAsync();
-            ReferenceTableView.ClearFilterInputs();
+            var filters = await _viewModel.ResetFiltersAsync();
+            ReferenceTableView.ApplyFilterInputs(filters);
         }
 
         private async void CreateRowButton_Click(object sender, RoutedEventArgs e)
@@ -648,9 +656,72 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void ResetFiltersMenuItem_Click(object sender, RoutedEventArgs e)
         {
+            var confirmed = await ConfirmFilterClearAsync();
+            if (!confirmed)
+            {
+                return;
+            }
+
             _filterDebounceCts?.Cancel();
-            await _viewModel.ResetFiltersAsync();
-            ReferenceTableView.ClearFilterInputs();
+            var filters = await _viewModel.ClearFiltersAsync();
+            ReferenceTableView.ApplyFilterInputs(filters);
+        }
+
+        private async void SaveStageFiltersMenuItem_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_viewModel.IsStagesTable)
+            {
+                await ShowInfoDialogAsync(
+                    "Сохранение фильтров",
+                    "Сохранение избранных фильтров поддержано только для таблицы этапов.");
+                return;
+            }
+
+            var user = _userService.CurrentUser;
+            try
+            {
+                var settingsPayload = StageTableFilterSettingsPayloadBuilder.Build(
+                    user?.ProfileId,
+                    user?.Statuses,
+                    user?.ContractsTypes,
+                    _viewModel.CurrentFilters,
+                    _viewModel.CurrentFilterOptionsSources);
+
+                if (!settingsPayload.HasChanges)
+                {
+                    await ShowInfoDialogAsync(
+                        "Сохранение фильтров",
+                        "Избранные фильтры не изменены.");
+                    return;
+                }
+
+                var confirmed = await ConfirmSettingsChangeAsync(
+                    "Сохранить текущие фильтры этапов как начальные установки фильтрации?");
+                if (!confirmed)
+                {
+                    return;
+                }
+
+                DiagnosticsFileLogger.AppendBlock(
+                    "STAGE FILTER SETTINGS UPDATE REQUEST",
+                    $"payload={System.Text.Json.JsonSerializer.Serialize(settingsPayload.Payload)}");
+                await _referenceCrudService.UpdateAsync(ProfileSettingsDefinition, settingsPayload.Payload);
+
+                if (user is not null)
+                {
+                    user.Statuses = settingsPayload.StatusesJson;
+                    user.ContractsTypes = settingsPayload.ContractsTypesJson;
+                }
+
+                _viewModel.AppendUiTrace("STAGE FILTER SETTINGS SAVED");
+                ShowSuccessNotification(
+                    "Настройки сохранены",
+                    "Начальные установки фильтрации этапов обновлены.");
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось сохранить фильтры", ex.Message);
+            }
         }
 
         private async void ResetSortingMenuItem_Click(object sender, RoutedEventArgs e)
@@ -1448,6 +1519,50 @@ namespace CbsContractsDesktopClient.Views.Shell
             DialogChrome.Apply(dialog);
 
             await dialog.ShowAsync();
+        }
+
+        private async Task ShowInfoDialogAsync(string title, string message)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = title,
+                CloseButtonText = "Закрыть",
+                DefaultButton = ContentDialogButton.Close,
+                Content = message
+            };
+
+            await dialog.ShowAsync();
+        }
+
+        private async Task<bool> ConfirmSettingsChangeAsync(string message)
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "Изменение настроек",
+                Content = message,
+                PrimaryButtonText = "Сохранить",
+                CloseButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        }
+
+        private async Task<bool> ConfirmFilterClearAsync()
+        {
+            var dialog = new ContentDialog
+            {
+                XamlRoot = XamlRoot,
+                Title = "Сброс фильтров",
+                Content = "Очистить все фильтры текущей таблицы?",
+                PrimaryButtonText = "Очистить",
+                CloseButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Primary
+            };
+
+            return await dialog.ShowAsync() == ContentDialogResult.Primary;
         }
 
         private async Task CompareSelectedContragentWithFnsAsync()

@@ -1,4 +1,5 @@
 using System.Threading;
+using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Settings;
@@ -43,7 +44,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
 
             if (_referenceDefinitionService.TryGetByRoute(route, out var referenceDefinition))
             {
-                definition = referenceDefinition.ToTablePageDefinition();
+                definition = ApplySavedSettings(referenceDefinition.ToTablePageDefinition());
                 return true;
             }
 
@@ -110,6 +111,49 @@ namespace CbsContractsDesktopClient.Services.Workspace
                 }
 
                 RemoveTableIfEmpty(localSettings, settings.Route, tableSettings);
+
+                await _localUserSettingsService.SaveAsync(localSettings, cancellationToken);
+                _cachedSettings = null;
+            }
+            finally
+            {
+                _settingsGate.Release();
+            }
+        }
+
+        public async Task SaveFiltersAsync(
+            string route,
+            IReadOnlyList<DataFilterCriterion> filters,
+            CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(route))
+            {
+                return;
+            }
+
+            await _settingsGate.WaitAsync(cancellationToken);
+
+            try
+            {
+                var localSettings = await _localUserSettingsService.GetAsync(cancellationToken);
+                if (!localSettings.Tables.TryGetValue(route, out var tableSettings))
+                {
+                    tableSettings = new LocalTableSettings();
+                    localSettings.Tables[route] = tableSettings;
+                }
+
+                tableSettings.Filters = filters
+                    .Where(static filter => !string.IsNullOrWhiteSpace(filter.FieldKey))
+                    .Select(static filter => new LocalTableFilterSettings
+                    {
+                        FieldKey = filter.FieldKey,
+                        FilterMode = filter.FilterMode.ToString(),
+                        MatchMode = filter.MatchMode.ToString(),
+                        Value = NormalizeFilterValueForSettings(filter.Value)
+                    })
+                    .ToList();
+
+                RemoveTableIfEmpty(localSettings, route, tableSettings);
 
                 await _localUserSettingsService.SaveAsync(localSettings, cancellationToken);
                 _cachedSettings = null;
@@ -276,6 +320,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
                     | TablePageCapabilities.ResetFilters
                     | TablePageCapabilities.PersistColumnWidths
                     | TablePageCapabilities.PersistSort
+                    | TablePageCapabilities.PersistFilters
                     | TablePageCapabilities.Audit
                     | TablePageCapabilities.ConfigureColumns,
                 InitialSortField = "id",
@@ -539,6 +584,12 @@ namespace CbsContractsDesktopClient.Services.Workspace
                 definition = ApplySavedColumnOrder(definition, tableSettings.ColumnOrder);
             }
 
+            if (definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters)
+                && tableSettings.Filters.Count > 0)
+            {
+                definition = ApplySavedFilters(definition, tableSettings.Filters);
+            }
+
             if (!string.IsNullOrWhiteSpace(tableSettings.Sort?.FieldKey)
                 && Enum.TryParse<DataSortDirection>(tableSettings.Sort.Direction, ignoreCase: true, out var direction))
             {
@@ -561,6 +612,116 @@ namespace CbsContractsDesktopClient.Services.Workspace
             }
 
             return definition;
+        }
+
+        private static TablePageDefinition ApplySavedFilters(
+            TablePageDefinition definition,
+            IReadOnlyList<LocalTableFilterSettings> savedFilters)
+        {
+            var filters = savedFilters
+                .Select(TryCreateSavedFilter)
+                .Where(static filter => filter is not null)
+                .Select(static filter => filter!)
+                .ToList();
+            if (filters.Count == 0)
+            {
+                return definition;
+            }
+
+            foreach (var column in definition.Columns)
+            {
+                var filter = filters.FirstOrDefault(item =>
+                    string.Equals(item.FieldKey, column.FieldKey, StringComparison.OrdinalIgnoreCase));
+                if (filter is null)
+                {
+                    continue;
+                }
+
+                column.Filter.MatchMode = filter.MatchMode;
+                column.Filter.Value = filter.Value;
+            }
+
+            return new TablePageDefinition
+            {
+                Route = definition.Route,
+                Model = definition.Model,
+                Title = definition.Title,
+                NavigationDescription = definition.NavigationDescription,
+                Preset = definition.Preset,
+                Summary = definition.Summary,
+                Kind = definition.Kind,
+                Capabilities = definition.Capabilities,
+                InitialSortField = definition.InitialSortField,
+                InitialSortDirection = definition.InitialSortDirection,
+                InitialFilters = filters,
+                Columns = definition.Columns,
+                RowStyleKey = definition.RowStyleKey
+            };
+        }
+
+        private static DataFilterCriterion? TryCreateSavedFilter(LocalTableFilterSettings settings)
+        {
+            if (string.IsNullOrWhiteSpace(settings.FieldKey)
+                || !Enum.TryParse<DataFilterMode>(settings.FilterMode, ignoreCase: true, out var filterMode)
+                || !Enum.TryParse<DataFilterMatchMode>(settings.MatchMode, ignoreCase: true, out var matchMode))
+            {
+                return null;
+            }
+
+            var value = NormalizeSavedFilterValue(settings.Value);
+            if (value is null || value is string text && string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            return new DataFilterCriterion
+            {
+                FieldKey = settings.FieldKey,
+                FilterMode = filterMode,
+                MatchMode = matchMode,
+                Value = value
+            };
+        }
+
+        private static object? NormalizeFilterValueForSettings(object? value)
+        {
+            return value switch
+            {
+                null => null,
+                DateTimeOffset dateTimeOffset => dateTimeOffset.ToString("O"),
+                DateTime dateTime => dateTime.ToString("O"),
+                string or bool or byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal => value,
+                System.Collections.IEnumerable values when value is not string => values.Cast<object?>()
+                    .Select(NormalizeFilterValueForSettings)
+                    .ToList(),
+                _ => value.ToString()
+            };
+        }
+
+        private static object? NormalizeSavedFilterValue(object? value)
+        {
+            return value switch
+            {
+                JsonElement element => NormalizeSavedJsonElement(element),
+                _ => value
+            };
+        }
+
+        private static object? NormalizeSavedJsonElement(JsonElement element)
+        {
+            return element.ValueKind switch
+            {
+                JsonValueKind.Array => element.EnumerateArray()
+                    .Select(NormalizeSavedJsonElement)
+                    .ToList(),
+                JsonValueKind.String => element.GetString(),
+                JsonValueKind.Number when element.TryGetInt64(out var longValue) => longValue,
+                JsonValueKind.Number when element.TryGetDecimal(out var decimalValue) => decimalValue,
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Null or JsonValueKind.Undefined => null,
+                _ => element.ToString()
+            };
         }
 
         private static TablePageDefinition ApplySavedColumnOrder(
@@ -605,7 +766,10 @@ namespace CbsContractsDesktopClient.Services.Workspace
             string route,
             LocalTableSettings tableSettings)
         {
-            if (tableSettings.Columns.Count == 0 && tableSettings.ColumnOrder.Count == 0 && tableSettings.Sort is null)
+            if (tableSettings.Columns.Count == 0
+                && tableSettings.ColumnOrder.Count == 0
+                && tableSettings.Filters.Count == 0
+                && tableSettings.Sort is null)
             {
                 localSettings.Tables.Remove(route);
             }
