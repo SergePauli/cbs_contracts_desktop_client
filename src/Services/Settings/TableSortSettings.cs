@@ -1,8 +1,9 @@
+// Contains the persisted sort state for a workspace table.
 using CbsContractsDesktopClient.Models.Data;
 
-namespace CbsContractsDesktopClient.Services.References
+namespace CbsContractsDesktopClient.Services.Settings
 {
-    public sealed class ReferenceTableSortSettings
+    public sealed class TableSortSettings
     {
         public required string Route { get; init; }
 

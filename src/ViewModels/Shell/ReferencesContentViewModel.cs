@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -15,7 +15,10 @@ using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels.Data;
@@ -537,7 +540,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             await _state.SetSortAsync(fieldKey, direction, cancellationToken);
             await _tablePageDefinitionService.SaveSortAsync(
-                new ReferenceTableSortSettings
+                new TableSortSettings
                 {
                     Route = CurrentTablePage.Route,
                     FieldKey = fieldKey,
@@ -557,7 +560,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             await _state.ClearSortsAsync(cancellationToken);
             await _tablePageDefinitionService.SaveSortAsync(
-                new ReferenceTableSortSettings
+                new TableSortSettings
                 {
                     Route = CurrentTablePage.Route,
                     FieldKey = null,
@@ -670,7 +673,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
             column.Width = width;
             await _tablePageDefinitionService.SaveColumnWidthAsync(
-                new ReferenceTableColumnWidthSettings
+                new TableColumnWidthSettings
                 {
                     Route = CurrentTablePage.Route,
                     FieldKey = fieldKey,
@@ -690,7 +693,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 column.Width = null;
                 await _tablePageDefinitionService.SaveColumnWidthAsync(
-                    new ReferenceTableColumnWidthSettings
+                    new TableColumnWidthSettings
                     {
                         Route = CurrentTablePage.Route,
                         FieldKey = column.FieldKey,
@@ -732,7 +735,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             CurrentTablePage = updatedDefinition;
 
             await _tablePageDefinitionService.SaveColumnLayoutAsync(
-                new ReferenceTableColumnLayoutSettings
+                new TableColumnLayoutSettings
                 {
                     Route = updatedDefinition.Route,
                     OrderedFieldKeys = columns.Select(static column => column.FieldKey).ToList(),

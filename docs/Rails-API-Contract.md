@@ -10,11 +10,13 @@
 
 - Create uses `POST model/add/{Model}`.
 - Update uses `PUT model/{Model}/{id}`.
+- Mutation requests always ask Rails for `data_set: "item"` because the response is only an acknowledgement; for newly created rows the client only needs the returned `id`.
+- Full entity/table reads must be requested from the GO read/query layer, not inferred from Rails mutation responses.
 - Payloads are wrapped as:
 
 ```json
 {
-  "data_set": "edit",
+  "data_set": "item",
   "Stage": {
     "id": 123,
     "status_id": 5,
@@ -31,4 +33,4 @@
 
 ## Stage update guard
 
-`ReferenceCrudService.UpdateAsync` rejects Stage payloads that contain read-model keys before any HTTP request is sent. This is intentional: if it fails, fix the dialog payload builder instead of weakening the guard.
+`ModelMutationService.UpdateAsync` rejects Stage payloads that contain read-model keys before any HTTP request is sent. This is intentional: if it fails, fix the dialog payload builder instead of weakening the guard.

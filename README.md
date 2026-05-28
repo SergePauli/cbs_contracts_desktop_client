@@ -1,4 +1,4 @@
-﻿# cbs_contracts_desktop_client
+# cbs_contracts_desktop_client
 
 Нативный Windows-клиент системы «База контрактов и контрагентов» на `WinUI 3` и `.NET 8`, развиваемый параллельно с web-клиентом `cbs_contracts_webclient`.
 
@@ -66,7 +66,7 @@
 - `ReferencesContentViewModel` как orchestration-слой
 - `ReferenceEditViewModel` / `ReferenceEditDialog` для create и edit
 - `ReferenceEditPayloadBuilder` для create/update payload
-- `ReferenceCrudService` для `create/update/delete`
+- `ModelMutationService` для `create/update/delete`
 - `ReferenceEditorKind` для переключения generic/specialized editor flow
 - `ProfileEditDialog` / `ProfileEditPayloadBuilder` для `/users`
 - `EmployeeEditDialog` / `EmployeeEditPayloadBuilder` для `/employees`
@@ -232,7 +232,7 @@ Audit panel теперь является reusable частью reference worksp
 - `LazyDataViewState`
 - `ReferenceDefinitionService`
 - `ReferenceEditViewModel`
-- `ReferenceCrudService`
+- `ModelMutationService`
 - `ProfileEditPayloadBuilder`
 - `EmployeeEditPayloadBuilder`
 - `ContragentEditPayloadBuilder`

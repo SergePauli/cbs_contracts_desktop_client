@@ -1,8 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Navigation;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.References;
 
 namespace CbsContractsDesktopClient.Services.Navigation

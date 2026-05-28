@@ -1,21 +1,21 @@
 using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Workspace;
-using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Models.Data;
+using CbsContractsDesktopClient.Services.Settings;
 
-namespace CbsContractsDesktopClient.Services.Workspace
+namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
 {
     public interface ITablePageDefinitionService
     {
         bool TryGetByRoute(string? route, out TablePageDefinition definition);
 
         Task SaveColumnWidthAsync(
-            ReferenceTableColumnWidthSettings settings,
+            TableColumnWidthSettings settings,
             CancellationToken cancellationToken = default);
 
         Task SaveSortAsync(
-            ReferenceTableSortSettings settings,
+            TableSortSettings settings,
             CancellationToken cancellationToken = default);
 
         Task SaveFiltersAsync(
@@ -24,7 +24,7 @@ namespace CbsContractsDesktopClient.Services.Workspace
             CancellationToken cancellationToken = default);
 
         Task SaveColumnLayoutAsync(
-            ReferenceTableColumnLayoutSettings settings,
+            TableColumnLayoutSettings settings,
             CancellationToken cancellationToken = default);
     }
 }

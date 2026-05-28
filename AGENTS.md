@@ -12,7 +12,7 @@ Workflow rules:
 Rails API rules:
 - Treat `api/index` and `api/count` as read-only query endpoints.
 - Never serialize an `edit`/`card`/`list` response row back into an update request.
-- Create/update must go through `ReferenceCrudService` with explicit payload builders.
+- Create/update must go through `ModelMutationService` with explicit payload builders.
 - Update payloads must include only the entity `id`, changed parameters, and `list_key` when the source entity has it.
 - Nested changes are allowed only through explicit Rails nested attributes such as `comments_attributes` or `tasks_attributes`.
 - Do not send read-model expansions such as `comments`, `contract`, `status`, `task_kind`, `tasks`, `revision`, `revisions`, or `stages` in update payloads.

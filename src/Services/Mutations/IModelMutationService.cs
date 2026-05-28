@@ -1,21 +1,22 @@
+// Defines the shared model mutation boundary used by reference and functional table workflows.
 using CbsContractsDesktopClient.Models.References;
 
-namespace CbsContractsDesktopClient.Services.References
+namespace CbsContractsDesktopClient.Services.Mutations
 {
-    public interface IReferenceCrudService
+    public interface IModelMutationService
     {
         Task<ReferenceDataRow> CreateAsync(
-            ReferenceDefinition definition,
+            string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default);
 
         Task<ReferenceDataRow> UpdateAsync(
-            ReferenceDefinition definition,
+            string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default);
 
         Task<ReferenceDataRow> DeleteAsync(
-            ReferenceDefinition definition,
+            string model,
             long id,
             CancellationToken cancellationToken = default);
     }

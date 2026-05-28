@@ -1,9 +1,12 @@
+// Contains the shared model mutation transport for create/update/delete requests.
+// Domain payload shape stays in explicit payload builders; this service only wraps and sends mutations.
+// Rails mutation responses are used only as acknowledgement/new-record identity; full reads belong to the GO read service.
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 
-namespace CbsContractsDesktopClient.Services.References
+namespace CbsContractsDesktopClient.Services.Mutations
 {
-    public sealed class ReferenceCrudService : ApiServiceBase, IReferenceCrudService
+    public sealed class ModelMutationService : ApiServiceBase, IModelMutationService
     {
         private static readonly HashSet<string> StageReadModelUpdateKeys = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -19,70 +22,71 @@ namespace CbsContractsDesktopClient.Services.References
             "tasks"
         };
 
-        public ReferenceCrudService(HttpClient httpClient, IUserService userService)
+        public ModelMutationService(HttpClient httpClient, IUserService userService)
             : base(httpClient, userService)
         {
         }
 
         public Task<ReferenceDataRow> CreateAsync(
-            ReferenceDefinition definition,
+            string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(definition);
+            ValidateModel(model);
             ArgumentNullException.ThrowIfNull(payload);
 
-            var request = BuildRequest(definition, payload);
+            var request = BuildRequest(model, payload);
             return PostAsync<Dictionary<string, object?>, ReferenceDataRow>(
-                $"model/add/{definition.Model}",
+                $"model/add/{model}",
                 request,
                 cancellationToken);
         }
 
         public Task<ReferenceDataRow> UpdateAsync(
-            ReferenceDefinition definition,
+            string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(definition);
+            ValidateModel(model);
             ArgumentNullException.ThrowIfNull(payload);
 
             var id = ExtractId(payload);
-            ValidateUpdatePayload(definition, payload);
-            var request = BuildRequest(definition, payload);
-            LogTrackedUpdateRequest(definition, id, request);
+            ValidateUpdatePayload(model, payload);
+            var request = BuildRequest(model, payload);
+            LogTrackedUpdateRequest(model, id, request);
             return PutAsync<Dictionary<string, object?>, ReferenceDataRow>(
-                $"model/{definition.Model}/{id}",
+                $"model/{model}/{id}",
                 request,
                 cancellationToken);
         }
 
         public Task<ReferenceDataRow> DeleteAsync(
-            ReferenceDefinition definition,
+            string model,
             long id,
             CancellationToken cancellationToken = default)
         {
-            ArgumentNullException.ThrowIfNull(definition);
+            ValidateModel(model);
 
-            return DeleteAsync<ReferenceDataRow>($"model/{definition.Model}/{id}", cancellationToken);
+            return DeleteAsync<ReferenceDataRow>($"model/{model}/{id}", cancellationToken);
         }
 
         private static Dictionary<string, object?> BuildRequest(
-            ReferenceDefinition definition,
+            string model,
             IReadOnlyDictionary<string, object?> payload)
         {
             return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             {
-                ["data_set"] = string.IsNullOrWhiteSpace(definition.Preset) ? "edit" : definition.Preset,
-                [definition.Model] = payload
+                // Rails mutation endpoints only need a minimal item-shaped response.
+                ["data_set"] = "item",
+                [model] = payload
             };
         }
 
         private static void ValidateUpdatePayload(
-            ReferenceDefinition definition,
+            string model,
             IReadOnlyDictionary<string, object?> payload)
         {
-            if (!string.Equals(definition.Model, "Stage", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(model, "Stage", StringComparison.OrdinalIgnoreCase))
             {
                 return;
             }
@@ -104,19 +108,27 @@ namespace CbsContractsDesktopClient.Services.References
         }
 
         private void LogTrackedUpdateRequest(
-            ReferenceDefinition definition,
+            string model,
             long id,
             IReadOnlyDictionary<string, object?> request)
         {
-            if (!ShouldLogUpdateRequest(definition.Model))
+            if (!ShouldLogUpdateRequest(model))
             {
                 return;
             }
 
-            var requestUri = $"model/{definition.Model}/{id}";
+            var requestUri = $"model/{model}/{id}";
             DiagnosticsFileLogger.AppendBlock(
-                $"{definition.Model.ToUpperInvariant()} UPDATE REQUEST",
+                $"{model.ToUpperInvariant()} UPDATE REQUEST",
                 $"method=PUT{Environment.NewLine}uri={requestUri}{Environment.NewLine}payload={SerializeForDiagnostics(request)}");
+        }
+
+        private static void ValidateModel(string model)
+        {
+            if (string.IsNullOrWhiteSpace(model))
+            {
+                throw new ArgumentException("Model name is required.", nameof(model));
+            }
         }
 
         private static bool ShouldLogUpdateRequest(string model)

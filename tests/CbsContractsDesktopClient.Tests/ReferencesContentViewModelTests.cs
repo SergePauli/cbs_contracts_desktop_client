@@ -3,6 +3,8 @@ using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
@@ -44,8 +46,8 @@ public sealed class ReferencesContentViewModelTests : IDisposable
             }
         };
         var settingsService = new LocalUserSettingsService(_settingsFilePath);
-        var referenceDefinitionService = new ReferenceDefinitionService(settingsService);
-        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, settingsService);
+        var referenceDefinitionService = new ReferenceDefinitionService(new TableSettingsService(settingsService));
+        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, new TableSettingsService(settingsService));
         var shellViewModel = new AppShellViewModel(new FakeUserService())
         {
             CurrentRoute = "/stages"
@@ -89,8 +91,8 @@ public sealed class ReferencesContentViewModelTests : IDisposable
             }
         };
         var settingsService = new LocalUserSettingsService(_settingsFilePath);
-        var referenceDefinitionService = new ReferenceDefinitionService(settingsService);
-        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, settingsService);
+        var referenceDefinitionService = new ReferenceDefinitionService(new TableSettingsService(settingsService));
+        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, new TableSettingsService(settingsService));
         var shellViewModel = new AppShellViewModel(new FakeUserService())
         {
             CurrentRoute = "/stages"
@@ -315,8 +317,8 @@ public sealed class ReferencesContentViewModelTests : IDisposable
     {
         userService ??= new FakeUserService();
         var settingsService = new LocalUserSettingsService(_settingsFilePath);
-        var referenceDefinitionService = new ReferenceDefinitionService(settingsService);
-        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, settingsService);
+        var referenceDefinitionService = new ReferenceDefinitionService(new TableSettingsService(settingsService));
+        var tablePageDefinitionService = new TablePageDefinitionService(referenceDefinitionService, new TableSettingsService(settingsService));
         var shellViewModel = new AppShellViewModel(userService)
         {
             CurrentRoute = route

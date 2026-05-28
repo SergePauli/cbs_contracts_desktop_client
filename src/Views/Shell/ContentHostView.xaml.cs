@@ -10,6 +10,8 @@ using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
@@ -38,7 +40,7 @@ namespace CbsContractsDesktopClient.Views.Shell
     public sealed partial class ContentHostView : UserControl
     {
         private readonly ReferencesContentViewModel _viewModel;
-        private readonly IReferenceCrudService _referenceCrudService;
+        private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
@@ -47,6 +49,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IUserService _userService;
         private readonly ILocalUserSettingsService _localUserSettingsService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
+        private readonly ContentHostDialogCoordinator _dialogCoordinator;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private CancellationTokenSource? _contragentDetailCts;
@@ -58,41 +61,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
         private const int FinDepartmentId = 3;
-        private static readonly ReferenceDefinition StageEditDefinition = new()
-        {
-            Route = "/internal/Stage",
-            Model = "Stage",
-            Title = "Stage",
-            Preset = "edit"
-        };
-        private static readonly ReferenceDefinition AddressEditDefinition = new()
-        {
-            Route = "/internal/Address",
-            Model = "Address",
-            Title = "Address",
-            Preset = "edit"
-        };
-        private static readonly ReferenceDefinition RevisionEditDefinition = new()
-        {
-            Route = "/revisions",
-            Model = "Revision",
-            Title = "Дополнительное соглашение",
-            Preset = "edit"
-        };
-        private static readonly ReferenceDefinition ContractEditDefinition = new()
-        {
-            Route = "/contracts",
-            Model = "Contract",
-            Title = "Contract",
-            Preset = "edit"
-        };
-        private static readonly ReferenceDefinition ProfileSettingsDefinition = new()
-        {
-            Route = "/users",
-            Model = "Profile",
-            Title = "Profile",
-            Preset = "edit"
-        };
+        private const string AddressModel = "Address";
+        private const string RevisionTitle = "Дополнительное соглашение";
+        private const string ContractModel = "Contract";
+        private const string ProfileModel = "Profile";
         private static readonly IReadOnlyList<ContractRowDetailStrategy> RowDetailStrategies =
         [
             new RevisionRowDetailStrategy(),
@@ -103,7 +75,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         public ContentHostView()
         {
             _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
-            _referenceCrudService = App.Services.GetRequiredService<IReferenceCrudService>();
+            _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
@@ -112,6 +84,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
+            _dialogCoordinator = new ContentHostDialogCoordinator(() => XamlRoot);
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             InitializeComponent();
             DataContext = _viewModel;
@@ -705,7 +678,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 DiagnosticsFileLogger.AppendBlock(
                     "STAGE FILTER SETTINGS UPDATE REQUEST",
                     $"payload={System.Text.Json.JsonSerializer.Serialize(settingsPayload.Payload)}");
-                await _referenceCrudService.UpdateAsync(ProfileSettingsDefinition, settingsPayload.Payload);
+                await _modelMutationService.UpdateAsync(ProfileModel, settingsPayload.Payload);
 
                 if (user is not null)
                 {
@@ -1097,8 +1070,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 try
                 {
                     savedRow = isCreateMode
-                        ? await _referenceCrudService.CreateAsync(reference, values)
-                        : await _referenceCrudService.UpdateAsync(reference, values);
+                        ? await _modelMutationService.CreateAsync(reference.Model, values)
+                        : await _modelMutationService.UpdateAsync(reference.Model, values);
                 }
                 catch (Exception ex)
                 {
@@ -1149,8 +1122,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 try
                 {
                     revisionPayload = dialog.BuildPayload();
-                    savedRow = await _referenceCrudService.UpdateAsync(
-                        RevisionEditDefinition,
+                    savedRow = await _modelMutationService.UpdateAsync(
+                        GetCurrentTableModel(),
                         revisionPayload);
                 }
                 catch (Exception ex)
@@ -1170,11 +1143,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _referenceLookupCacheService.Invalidate(RevisionEditDefinition.Model);
+            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             await RefreshReferenceAfterSaveAsync(false, savedRow, revisionPayload);
             ShowSuccessNotification(
                 "Ревизия сохранена",
-                BuildReferenceNotificationMessage(RevisionEditDefinition.Title, TryGetSelectedRowId(savedRow)));
+                BuildReferenceNotificationMessage(RevisionTitle, TryGetSelectedRowId(savedRow)));
         }
 
         private async Task ShowStageEditDialogAsync()
@@ -1261,8 +1234,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (dialog.ShouldCloseContract())
                     {
-                        await _referenceCrudService.UpdateAsync(
-                            ContractEditDefinition,
+                        await _modelMutationService.UpdateAsync(
+                            ContractModel,
                             dialog.BuildContractClosePayload());
                     }
                 }
@@ -1279,7 +1252,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
+            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
                 "Этап сохранён",
@@ -1344,8 +1317,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (dialog.ShouldCloseContract())
                     {
-                        await _referenceCrudService.UpdateAsync(
-                            ContractEditDefinition,
+                        await _modelMutationService.UpdateAsync(
+                            ContractModel,
                             dialog.BuildContractClosePayload());
                     }
                 }
@@ -1362,7 +1335,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
+            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
                 "Этап сохранён",
@@ -1430,8 +1403,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (hasContractChanges)
                     {
-                        await _referenceCrudService.UpdateAsync(
-                            ContractEditDefinition,
+                        await _modelMutationService.UpdateAsync(
+                            ContractModel,
                             dialog.BuildContractExternalNumberPayload());
                         shouldRefreshSelectedRowDetails = true;
                         savedRow ??= sourceRow;
@@ -1450,7 +1423,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _referenceLookupCacheService.Invalidate(StageEditDefinition.Model);
+            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
                 "Этап сохранён",
@@ -1475,25 +1448,19 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var confirmDialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = "Удаление записи",
-                PrimaryButtonText = "Удалить",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Close,
-                Content = "Удалить выбранную запись?"
-            };
-            DialogChrome.Apply(confirmDialog);
-
-            if (await confirmDialog.ShowAsync() != ContentDialogResult.Primary)
+            if (!await _dialogCoordinator.ConfirmAsync(
+                    "Удаление записи",
+                    "Удалить выбранную запись?",
+                    "Удалить",
+                    defaultButton: ContentDialogButton.Close,
+                    applyChrome: true))
             {
                 return;
             }
 
             try
             {
-                await _referenceCrudService.DeleteAsync(_viewModel.CurrentReference, id.Value);
+                await _modelMutationService.DeleteAsync(_viewModel.CurrentReference.Model, id.Value);
                 _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
                 await _viewModel.ReloadCurrentReferenceAsync();
                 ShowSuccessNotification(
@@ -1508,61 +1475,28 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task ShowErrorDialogAsync(string title, string message)
         {
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = title,
-                CloseButtonText = "Закрыть",
-                DefaultButton = ContentDialogButton.Close,
-                Content = message
-            };
-            DialogChrome.Apply(dialog);
-
-            await dialog.ShowAsync();
+            await _dialogCoordinator.ShowErrorAsync(title, message);
         }
 
         private async Task ShowInfoDialogAsync(string title, string message)
         {
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = title,
-                CloseButtonText = "Закрыть",
-                DefaultButton = ContentDialogButton.Close,
-                Content = message
-            };
-
-            await dialog.ShowAsync();
+            await _dialogCoordinator.ShowInfoAsync(title, message);
         }
 
         private async Task<bool> ConfirmSettingsChangeAsync(string message)
         {
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = "Изменение настроек",
-                Content = message,
-                PrimaryButtonText = "Сохранить",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary
-            };
-
-            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+            return await _dialogCoordinator.ConfirmAsync(
+                "Изменение настроек",
+                message,
+                "Сохранить");
         }
 
         private async Task<bool> ConfirmFilterClearAsync()
         {
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = "Сброс фильтров",
-                Content = "Очистить все фильтры текущей таблицы?",
-                PrimaryButtonText = "Очистить",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary
-            };
-
-            return await dialog.ShowAsync() == ContentDialogResult.Primary;
+            return await _dialogCoordinator.ConfirmAsync(
+                "Сброс фильтров",
+                "Очистить все фильтры текущей таблицы?",
+                "Очистить");
         }
 
         private async Task CompareSelectedContragentWithFnsAsync()
@@ -1655,7 +1589,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     return;
                 }
 
-                var savedRow = await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference, payload);
+                var savedRow = await _modelMutationService.UpdateAsync(_viewModel.CurrentReference.Model, payload);
                 _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
                 await RefreshReferenceAfterSaveAsync(false, savedRow, payload);
                 ShowSuccessNotification(
@@ -2487,7 +2421,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                             continue;
                         }
 
-                        await _referenceCrudService.UpdateAsync(StageEditDefinition, patch);
+                        await _modelMutationService.UpdateAsync(GetCurrentTableModel(), patch);
                         updatedCount++;
                         if (stage.ContractId is long contractId)
                         {
@@ -2786,8 +2720,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     savedRow = isCreateMode
-                        ? await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)
-                        : await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload);
+                        ? await _modelMutationService.CreateAsync(_viewModel.CurrentReference!.Model, payload)
+                        : await _modelMutationService.UpdateAsync(_viewModel.CurrentReference!.Model, payload);
                 }
                 catch (Exception ex)
                 {
@@ -2861,8 +2795,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     savedRow = isCreateMode
-                        ? await _referenceCrudService.CreateAsync(definition, payload)
-                        : await _referenceCrudService.UpdateAsync(definition, payload);
+                        ? await _modelMutationService.CreateAsync(definition.Model, payload)
+                        : await _modelMutationService.UpdateAsync(definition.Model, payload);
                 }
                 catch (Exception ex)
                 {
@@ -2945,8 +2879,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     savedRow = isCreateMode
-                        ? await _referenceCrudService.CreateAsync(_viewModel.CurrentReference!, payload)
-                        : await _referenceCrudService.UpdateAsync(_viewModel.CurrentReference!, payload);
+                        ? await _modelMutationService.CreateAsync(_viewModel.CurrentReference!.Model, payload)
+                        : await _modelMutationService.UpdateAsync(_viewModel.CurrentReference!.Model, payload);
                 }
                 catch (Exception ex)
                 {
@@ -3182,8 +3116,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var createdAddress = await _referenceCrudService.CreateAsync(
-                AddressEditDefinition,
+            var createdAddress = await _modelMutationService.CreateAsync(
+                AddressModel,
                 new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
                     ["value"] = viewModel.AddressReal.Trim(),
@@ -3421,7 +3355,13 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private Task<ReferenceDataRow> SaveStagePayloadAsync(IReadOnlyDictionary<string, object?> payload)
         {
-            return _referenceCrudService.UpdateAsync(StageEditDefinition, payload);
+            return _modelMutationService.UpdateAsync(GetCurrentTableModel(), payload);
+        }
+
+        private string GetCurrentTableModel()
+        {
+            return _viewModel.CurrentTablePage?.Model
+                ?? throw new InvalidOperationException("Current table page is required for model mutation.");
         }
 
         private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)

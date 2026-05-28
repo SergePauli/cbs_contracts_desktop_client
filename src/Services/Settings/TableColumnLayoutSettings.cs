@@ -1,6 +1,7 @@
-namespace CbsContractsDesktopClient.Services.References
+// Contains the persisted column order and visibility for a workspace table.
+namespace CbsContractsDesktopClient.Services.Settings
 {
-    public sealed class ReferenceTableColumnLayoutSettings
+    public sealed class TableColumnLayoutSettings
     {
         public required string Route { get; init; }
 

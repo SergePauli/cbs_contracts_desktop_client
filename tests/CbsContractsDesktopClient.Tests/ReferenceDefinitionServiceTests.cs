@@ -1,3 +1,4 @@
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using System.Text.Json;
@@ -259,33 +260,6 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task SaveColumnWidthAsync_PersistsWidthForSpecificTableAndColumn()
-    {
-        var service = CreateService();
-
-        await service.SaveColumnWidthAsync(new ReferenceTableColumnWidthSettings
-        {
-            Route = "/references/Ownership",
-            FieldKey = "name",
-            Width = "24rem"
-        });
-
-        Assert.True(File.Exists(_settingsFilePath));
-
-        var json = await File.ReadAllTextAsync(_settingsFilePath);
-        using var document = JsonDocument.Parse(json);
-        var width = document.RootElement
-            .GetProperty("tables")
-            .GetProperty("/references/Ownership")
-            .GetProperty("columns")
-            .GetProperty("name")
-            .GetProperty("width")
-            .GetString();
-
-        Assert.Equal("24rem", width);
-    }
-
-    [Fact]
     public async Task TryGetByRoute_AppliesSavedWidthFromSettingsFile()
     {
         var settingsService = CreateSettingsService();
@@ -304,7 +278,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
             }
         });
 
-        var service = new ReferenceDefinitionService(settingsService);
+        var service = new ReferenceDefinitionService(new TableSettingsService(settingsService));
 
         var found = service.TryGetByRoute("/references/Ownership", out var definition);
 
@@ -333,7 +307,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
             }
         });
 
-        var service = new ReferenceDefinitionService(settingsService);
+        var service = new ReferenceDefinitionService(new TableSettingsService(settingsService));
 
         var found = service.TryGetByRoute("/users", out var definition);
 
@@ -342,31 +316,6 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal("20rem", definition.Columns.Single(static column => column.FieldKey == "person").Width);
         Assert.Equal("department.name", definition.Columns.Single(static column => column.FieldKey == "department").DisplayField);
         Assert.Equal("user.person.full_name", definition.Columns.Single(static column => column.FieldKey == "person").DisplayField);
-    }
-
-    [Fact]
-    public async Task SaveSortAsync_PersistsSortForSpecificTable()
-    {
-        var service = CreateService();
-
-        await service.SaveSortAsync(new ReferenceTableSortSettings
-        {
-            Route = "/references/Ownership",
-            FieldKey = "name",
-            Direction = DataSortDirection.Descending
-        });
-
-        Assert.True(File.Exists(_settingsFilePath));
-
-        var json = await File.ReadAllTextAsync(_settingsFilePath);
-        using var document = JsonDocument.Parse(json);
-        var sort = document.RootElement
-            .GetProperty("tables")
-            .GetProperty("/references/Ownership")
-            .GetProperty("sort");
-
-        Assert.Equal("name", sort.GetProperty("fieldKey").GetString());
-        Assert.Equal("Descending", sort.GetProperty("direction").GetString());
     }
 
     [Fact]
@@ -388,7 +337,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
             }
         });
 
-        var service = new ReferenceDefinitionService(settingsService);
+        var service = new ReferenceDefinitionService(new TableSettingsService(settingsService));
 
         var found = service.TryGetByRoute("/references/Status", out var definition);
 
@@ -416,7 +365,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
             }
         });
 
-        var service = new ReferenceDefinitionService(settingsService);
+        var service = new ReferenceDefinitionService(new TableSettingsService(settingsService));
 
         var found = service.TryGetByRoute("/users", out var definition);
 
@@ -571,7 +520,7 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
 
     private ReferenceDefinitionService CreateService()
     {
-        return new ReferenceDefinitionService(CreateSettingsService());
+        return new ReferenceDefinitionService(new TableSettingsService(CreateSettingsService()));
     }
 
     private LocalUserSettingsService CreateSettingsService()

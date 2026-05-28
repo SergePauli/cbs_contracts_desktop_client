@@ -21,6 +21,13 @@ public sealed class ContentHostViewTests
         "Shell",
         "ContentHostView.xaml.cs");
 
+    private static readonly string ContentHostDialogCoordinatorPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ContentHostDialogCoordinator.cs");
+
     [Fact]
     public void ContentHostView_SettingsButton_ContainsTableSettingsTooltipAndMenuFlyout()
     {
@@ -202,7 +209,8 @@ public sealed class ContentHostViewTests
         Assert.Contains("var confirmed = await ConfirmFilterClearAsync();", codeBehind);
         Assert.Contains("var filters = await _viewModel.ClearFiltersAsync();", codeBehind);
         Assert.Contains("private async Task<bool> ConfirmFilterClearAsync()", codeBehind);
-        Assert.Contains("Content = \"Очистить все фильтры текущей таблицы?\"", codeBehind);
+        Assert.Contains("_dialogCoordinator.ConfirmAsync(", codeBehind);
+        Assert.Contains("Очистить все фильтры текущей таблицы?", codeBehind);
     }
 
     [Fact]
@@ -231,8 +239,8 @@ public sealed class ContentHostViewTests
         Assert.Contains("var dialog = new ProfileEditDialog(viewModel)", codeBehind);
         Assert.Contains("ProfileEditPayloadBuilder.BuildForCreate(viewModel)", codeBehind);
         Assert.Contains("ProfileEditPayloadBuilder.BuildForUpdate(viewModel)", codeBehind);
-        Assert.Contains("await _referenceCrudService.CreateAsync(definition, payload)", codeBehind);
-        Assert.Contains("await _referenceCrudService.UpdateAsync(definition, payload)", codeBehind);
+        Assert.Contains("await _modelMutationService.CreateAsync(definition.Model, payload)", codeBehind);
+        Assert.Contains("await _modelMutationService.UpdateAsync(definition.Model, payload)", codeBehind);
         Assert.Contains("CreateProfileEditDialogState", codeBehind);
         Assert.Contains("ProfileEditStateFactory.Create(", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(", codeBehind);
@@ -291,6 +299,21 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContentHostDialogCoordinator_OwnsCommonShellDialogs()
+    {
+        var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+        var coordinator = File.ReadAllText(ContentHostDialogCoordinatorPath);
+
+        Assert.Contains("private readonly ContentHostDialogCoordinator _dialogCoordinator;", codeBehind);
+        Assert.Contains("new ContentHostDialogCoordinator(() => XamlRoot)", codeBehind);
+        Assert.Contains("internal sealed class ContentHostDialogCoordinator", coordinator);
+        Assert.Contains("public async Task ShowErrorAsync", coordinator);
+        Assert.Contains("public async Task ShowInfoAsync", coordinator);
+        Assert.Contains("public async Task<bool> ConfirmAsync", coordinator);
+        Assert.Contains("DialogChrome.Apply(dialog);", coordinator);
+    }
+
+    [Fact]
     public void ContentHostView_OpensEditOnRowDoubleClick_ExceptInternRole()
     {
         var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
@@ -322,11 +345,11 @@ public sealed class ContentHostViewTests
         Assert.Contains("dialog.SaveRequestedAsync += async args =>", codeBehind);
         Assert.Contains("if (!dialog.WasSaved || savedRow is null)", codeBehind);
         Assert.Contains("LoadStageEditRowAsync", codeBehind);
-        Assert.Contains("Model = \"Stage\"", codeBehind);
-        Assert.Contains("Preset = \"edit\"", codeBehind);
-        Assert.Contains("_referenceCrudService.UpdateAsync(", codeBehind);
-        Assert.Contains("StageEditDefinition", codeBehind);
-        Assert.Contains("ContractEditDefinition", codeBehind);
+        Assert.Contains("private string GetCurrentTableModel()", codeBehind);
+        Assert.Contains("private const string ContractModel = \"Contract\";", codeBehind);
+        Assert.Contains("_modelMutationService.UpdateAsync(", codeBehind);
+        Assert.Contains("SaveStagePayloadAsync", codeBehind);
+        Assert.Contains("ContractModel,", codeBehind);
         Assert.Contains("dialog.ShouldCloseContract()", codeBehind);
         Assert.Contains("dialog.BuildContractClosePayload()", codeBehind);
     }

@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services.Navigation;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.References;
 using Xunit;
 
@@ -116,16 +117,6 @@ public sealed class NavigationMenuServiceTests
 
             definition = null!;
             return false;
-        }
-
-        public Task SaveColumnWidthAsync(ReferenceTableColumnWidthSettings settings, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task SaveSortAsync(ReferenceTableSortSettings settings, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
         }
     }
 }

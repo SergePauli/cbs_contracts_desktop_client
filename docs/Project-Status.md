@@ -1,4 +1,4 @@
-﻿# Project Status
+# Project Status
 
 ## Кратко
 
@@ -57,7 +57,7 @@
   - `EmployeeDetailView` под таблицей
   - специализированный `EmployeeEditDialog`
   - загрузка свежей записи перед edit через `IDataQueryService` с `preset = edit` и `id__eq`
-  - edit/create через `IReferenceCrudService`
+  - edit/create через `IModelMutationService`
   - lookup должности и контрагента через общий `DialogLookupEditors`
   - контакты через общий `DialogContactsEditor` с определением типа, валидацией и link-uri
 - complex reference screen контрагентов:
@@ -143,7 +143,7 @@
 - lazy data view state
 - reference definitions
 - reference edit view models
-- reference CRUD service
+- model mutation service
 - settings persistence
 - auth/user/login базовые сценарии
 - navigation menu rules

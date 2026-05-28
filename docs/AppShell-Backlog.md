@@ -1,4 +1,4 @@
-﻿# AppShell Backlog
+# AppShell Backlog
 
 ## Где проект сейчас
 
@@ -322,7 +322,7 @@ Shell уже больше не является только каркасом п
 - `CbsTableView` и lazy loading pipeline
 - filters / sorting / width persistence
 - success/error UX и reload после сохранения
-- `ReferenceCrudService` как transport-слой
+- `ModelMutationService` как transport-слой
 
 ### Что делаем специализированным
 
@@ -428,7 +428,7 @@ Shell уже больше не является только каркасом п
 - выполнено: поле `role` в `ProfileEditDialog` переведено на multi-select (`user`, `admin`, `excel`, `intern`) с правилом взаимного исключения `intern` vs `admin/excel`
 - выполнено: добавлен API-ready контракт роли `RoleApiValue` в формате CSV (`user,admin,excel`)
 - выполнено: завершен этап верстки `ProfileEditDialog` (компактный layout, стили меток, поведение select-полей, служебный `InfoBar` для ошибок)
-- выполнено: submit-flow подключен к `ReferenceCrudService`
+- выполнено: submit-flow подключен к `ModelMutationService`
 - выполнено: payload для `create/update` строится через `ProfileEditPayloadBuilder`
 - выполнено: ошибки API и валидации показываются через встроенный `InfoBar`
 - выполнено: успешное сохранение закрывает диалог и перезагружает список
@@ -692,7 +692,7 @@ Shell уже больше не является только каркасом п
 
 Файлы:
 
-- `src/Services/References/ReferenceDefinitionService.cs`
+- `src/Services/Definitions/ReferenceDefinitions/ReferenceDefinitionService.cs`
 - `Profile` / `Users` related definition files
 
 Шаги:

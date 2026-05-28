@@ -1,28 +1,28 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
-using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Mutations;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
 
-public sealed class ReferenceCrudServiceTests
+public sealed class ModelMutationServiceTests
 {
     [Fact]
     public void BuildRequest_CreatePayload_UsesRailsStyleEnvelope()
     {
         var request = BuildRequest(
-            CreateDefinition(),
+            "Status",
             new Dictionary<string, object?>
             {
                 ["name"] = "Новая запись"
             });
 
-        Assert.Equal("card", request["data_set"]);
+        Assert.Equal("item", request["data_set"]);
 
         var payload = Assert.IsType<Dictionary<string, object?>>(request["Status"]);
         Assert.Equal("Новая запись", payload["name"]);
@@ -44,7 +44,7 @@ public sealed class ReferenceCrudServiceTests
         }));
 
         var result = await service.CreateAsync(
-            CreateDefinition(),
+            "Status",
             new Dictionary<string, object?>
             {
                 ["name"] = "Новая запись"
@@ -61,7 +61,7 @@ public sealed class ReferenceCrudServiceTests
     public void BuildRequest_UpdatePayload_UsesRailsStyleEnvelope()
     {
         var request = BuildRequest(
-            CreateDefinition(),
+            "Status",
             new Dictionary<string, object?>
             {
                 ["id"] = 15L,
@@ -69,7 +69,7 @@ public sealed class ReferenceCrudServiceTests
                 ["used"] = false
             });
 
-        Assert.Equal("card", request["data_set"]);
+        Assert.Equal("item", request["data_set"]);
 
         var payload = Assert.IsType<Dictionary<string, object?>>(request["Status"]);
         Assert.Equal(15L, payload["id"]);
@@ -90,7 +90,7 @@ public sealed class ReferenceCrudServiceTests
         };
 
         var request = BuildRequest(
-            CreateDefinition(),
+            "Status",
             new Dictionary<string, object?>
             {
                 ["id"] = 15L,
@@ -119,7 +119,7 @@ public sealed class ReferenceCrudServiceTests
         }));
 
         var result = await service.UpdateAsync(
-            CreateDefinition(),
+            "Status",
             new Dictionary<string, object?>
             {
                 ["id"] = 15L,
@@ -142,7 +142,7 @@ public sealed class ReferenceCrudServiceTests
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             service.UpdateAsync(
-                CreateStageDefinition(),
+                "Stage",
                 new Dictionary<string, object?>
                 {
                     ["id"] = 15L,
@@ -175,7 +175,7 @@ public sealed class ReferenceCrudServiceTests
             });
         }));
 
-        var result = await service.DeleteAsync(CreateDefinition(), 21);
+        var result = await service.DeleteAsync("Status", 21);
 
         Assert.NotNull(capturedRequest);
         Assert.Equal(HttpMethod.Delete, capturedRequest!.Method);
@@ -184,49 +184,27 @@ public sealed class ReferenceCrudServiceTests
     }
 
     private static Dictionary<string, object?> BuildRequest(
-        ReferenceDefinition definition,
+        string model,
         IReadOnlyDictionary<string, object?> payload)
     {
-        var method = typeof(ReferenceCrudService).GetMethod(
+        var method = typeof(ModelMutationService).GetMethod(
             "BuildRequest",
             BindingFlags.NonPublic | BindingFlags.Static);
 
         Assert.NotNull(method);
 
-        var result = method!.Invoke(null, [definition, payload]);
+        var result = method!.Invoke(null, [model, payload]);
         return Assert.IsType<Dictionary<string, object?>>(result);
     }
 
-    private static ReferenceCrudService CreateService(HttpMessageHandler handler)
+    private static ModelMutationService CreateService(HttpMessageHandler handler)
     {
         var httpClient = new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/")
         };
 
-        return new ReferenceCrudService(httpClient, new StubUserService());
-    }
-
-    private static ReferenceDefinition CreateDefinition()
-    {
-        return new ReferenceDefinition
-        {
-            Route = "/references/Status",
-            Model = "Status",
-            Title = "Статусы",
-            Preset = "card"
-        };
-    }
-
-    private static ReferenceDefinition CreateStageDefinition()
-    {
-        return new ReferenceDefinition
-        {
-            Route = "/internal/Stage",
-            Model = "Stage",
-            Title = "Stage",
-            Preset = "edit"
-        };
+        return new ModelMutationService(httpClient, new StubUserService());
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
@@ -266,3 +244,4 @@ public sealed class ReferenceCrudServiceTests
         }
     }
 }
+

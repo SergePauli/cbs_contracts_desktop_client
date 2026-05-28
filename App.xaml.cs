@@ -7,6 +7,9 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
+using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
@@ -41,6 +44,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IUserService, UserService>();
             services.AddSingleton<INavigationMenuService, NavigationMenuService>();
             services.AddSingleton<ILocalUserSettingsService, LocalUserSettingsService>();
+            services.AddSingleton<ITableSettingsService, TableSettingsService>();
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
@@ -58,7 +62,7 @@ namespace CbsContractsDesktopClient
                 new HolidayRecalculationService(
                     provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HolidayRecalculationService)),
                     provider.GetRequiredService<IUserService>()));
-            services.AddHttpClient<IReferenceCrudService, ReferenceCrudService>(client =>
+            services.AddHttpClient<IModelMutationService, ModelMutationService>(client =>
             {
                 client.BaseAddress = PrimaryApiUri;
                 client.DefaultRequestHeaders.Accept.Clear();

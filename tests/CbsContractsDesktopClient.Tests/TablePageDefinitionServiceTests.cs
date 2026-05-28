@@ -1,6 +1,8 @@
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
+using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
@@ -135,7 +137,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
     {
         var service = CreateService();
 
-        await service.SaveColumnLayoutAsync(new ReferenceTableColumnLayoutSettings
+        await service.SaveColumnLayoutAsync(new TableColumnLayoutSettings
         {
             Route = "/stages",
             OrderedFieldKeys = ["status", "id", "region", "contragent"],
@@ -233,7 +235,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
     private TablePageDefinitionService CreateService()
     {
         var settingsService = new LocalUserSettingsService(_settingsFilePath);
-        var referenceDefinitionService = new ReferenceDefinitionService(settingsService);
-        return new TablePageDefinitionService(referenceDefinitionService, settingsService);
+        var referenceDefinitionService = new ReferenceDefinitionService(new TableSettingsService(settingsService));
+        return new TablePageDefinitionService(referenceDefinitionService, new TableSettingsService(settingsService));
     }
 }
