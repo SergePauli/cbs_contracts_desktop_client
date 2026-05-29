@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Text;
@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Shapes;
 using Windows.ApplicationModel.DataTransfer;
 using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Shell;
 
 namespace CbsContractsDesktopClient.Views.Shell
@@ -24,22 +25,22 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _isAuditDatePickerUpdating;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _actionFilterOptions =
         [
-            new() { Value = "added", Label = "Добавлено" },
-            new() { Value = "updated", Label = "Изменено" },
-            new() { Value = "removed", Label = "Удалено" },
-            new() { Value = "archived", Label = "Архивировано" },
-            new() { Value = "imported", Label = "Импорт" }
+            new() { Value = "added", Label = "Р”РѕР±Р°РІР»РµРЅРѕ" },
+            new() { Value = "updated", Label = "РР·РјРµРЅРµРЅРѕ" },
+            new() { Value = "removed", Label = "РЈРґР°Р»РµРЅРѕ" },
+            new() { Value = "archived", Label = "РђСЂС…РёРІРёСЂРѕРІР°РЅРѕ" },
+            new() { Value = "imported", Label = "РРјРїРѕСЂС‚" }
         ];
         private readonly List<string> _selectedActionValues = [];
         private StackPanel? _actionOptionsHost;
 
         public AppShellViewModel ViewModel { get; }
-        public ReferencesContentViewModel ReferencesViewModel { get; }
+        public AuditStore AuditStore { get; }
 
         public AuditPanelView()
         {
             ViewModel = App.Services.GetRequiredService<AppShellViewModel>();
-            ReferencesViewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
+            AuditStore = App.Services.GetRequiredService<AuditStore>();
             InitializeComponent();
             InitializeActionFilter();
             Loaded += OnLoaded;
@@ -98,7 +99,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _isAuditShiftPending = true;
             try
             {
-                var shifted = await ReferencesViewModel.ShiftAuditPanelWindowAsync(direction);
+                var shifted = await AuditStore.ShiftWindowAsync(direction);
                 if (shifted)
                 {
                     QueueAuditScrollReposition(direction);
@@ -134,7 +135,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            await ReferencesViewModel.SetAuditDateRangeAsync(
+            await AuditStore.SetDateRangeAsync(
                 AuditFromDatePicker.Date,
                 AuditToDatePicker.Date);
             SyncAuditDatePickers();
@@ -165,8 +166,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             RebuildActionFilterOptions();
             UpdateActionFilterButtonContent();
 
-            await ReferencesViewModel.SetAuditDateRangeAsync(null, null);
-            await ReferencesViewModel.SetAuditActionFilterAsync([]);
+            await AuditStore.SetDateRangeAsync(null, null);
+            await AuditStore.SetActionFilterAsync([]);
             AuditScrollViewer.ChangeView(
                 horizontalOffset: null,
                 verticalOffset: 0,
@@ -267,7 +268,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             UpdateActionFilterButtonContent();
-            await ReferencesViewModel.SetAuditActionFilterAsync(_selectedActionValues);
+            await AuditStore.SetActionFilterAsync(_selectedActionValues);
             AuditScrollViewer.ChangeView(
                 horizontalOffset: null,
                 verticalOffset: 0,
@@ -278,11 +279,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void UpdateActionFilterButtonContent()
         {
             var text = _selectedActionValues.Count == 0
-                ? "Действия"
+                ? "Р”РµР№СЃС‚РІРёСЏ"
                 : _selectedActionValues.Count == 1
                     ? _actionFilterOptions.FirstOrDefault(
-                        option => option.Value is string value && value == _selectedActionValues[0])?.Label ?? "1 действие"
-                    : $"Действия: {_selectedActionValues.Count}";
+                        option => option.Value is string value && value == _selectedActionValues[0])?.Label ?? "1 РґРµР№СЃС‚РІРёРµ"
+                    : $"Р”РµР№СЃС‚РІРёСЏ: {_selectedActionValues.Count}";
 
             AuditActionFilterButton.Content = new TextBlock
             {
@@ -386,7 +387,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 MinHeight = 28,
                 Padding = new Thickness(8, 0, 8, 0),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Content = "Копировать"
+                Content = "РљРѕРїРёСЂРѕРІР°С‚СЊ"
             };
             button.Click += CopyAuditEntryButton_Click;
             return button;
@@ -472,3 +473,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         }
     }
 }
+
+
+

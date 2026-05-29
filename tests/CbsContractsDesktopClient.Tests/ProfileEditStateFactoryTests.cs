@@ -18,7 +18,7 @@ public sealed class ProfileEditStateFactoryTests
             EditorKind = ReferenceEditorKind.Profile
         };
 
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -80,7 +80,7 @@ public sealed class ProfileEditStateFactoryTests
             EditorKind = ReferenceEditorKind.Profile
         };
 
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -107,7 +107,7 @@ public sealed class ProfileEditStateFactoryTests
             EditorKind = ReferenceEditorKind.Profile
         };
 
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {

@@ -5,17 +5,17 @@ namespace CbsContractsDesktopClient.Services.Mutations
 {
     public interface IModelMutationService
     {
-        Task<ReferenceDataRow> CreateAsync(
+        Task<TableDataRow> CreateAsync(
             string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default);
 
-        Task<ReferenceDataRow> UpdateAsync(
+        Task<TableDataRow> UpdateAsync(
             string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default);
 
-        Task<ReferenceDataRow> DeleteAsync(
+        Task<TableDataRow> DeleteAsync(
             string model,
             long id,
             CancellationToken cancellationToken = default);

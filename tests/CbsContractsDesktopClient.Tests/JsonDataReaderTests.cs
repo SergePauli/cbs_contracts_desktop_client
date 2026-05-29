@@ -10,7 +10,7 @@ public sealed class JsonDataReaderTests
     [Fact]
     public void TryGetArrayCount_ReturnsArrayLengthFromReferenceRow()
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -24,7 +24,7 @@ public sealed class JsonDataReaderTests
     [Fact]
     public void EnumerateObjectArray_SkipsNonObjectItems()
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -59,7 +59,7 @@ public sealed class JsonDataReaderTests
     [Fact]
     public void TryGetText_ReturnsFirstNonEmptyRowValue()
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -74,14 +74,14 @@ public sealed class JsonDataReaderTests
     [Fact]
     public void GetDisplayText_ReadsDisplayRowBeforeFallbackRow()
     {
-        var sourceRow = new ReferenceDataRow
+        var sourceRow = new TableDataRow
         {
             Values =
             {
                 ["name"] = JsonSerializer.SerializeToElement("source")
             }
         };
-        var displayRow = new ReferenceDataRow
+        var displayRow = new TableDataRow
         {
             Values =
             {

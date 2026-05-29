@@ -10,7 +10,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
         public ReferenceEditViewModel(
             ReferenceDefinition definition,
             bool isCreateMode,
-            ReferenceDataRow? sourceRow = null)
+            TableDataRow? sourceRow = null)
         {
             Definition = definition;
             IsCreateMode = isCreateMode;
@@ -35,7 +35,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         public bool IsCreateMode { get; }
 
-        public ReferenceDataRow? SourceRow { get; }
+        public TableDataRow? SourceRow { get; }
 
         public ObservableCollection<ReferenceEditFieldViewModel> Fields { get; }
 
@@ -74,7 +74,7 @@ namespace CbsContractsDesktopClient.ViewModels.References
             return new ReferenceEditViewModel(definition, isCreateMode: true);
         }
 
-        public static ReferenceEditViewModel CreateForEdit(ReferenceDefinition definition, ReferenceDataRow sourceRow)
+        public static ReferenceEditViewModel CreateForEdit(ReferenceDefinition definition, TableDataRow sourceRow)
         {
             return new ReferenceEditViewModel(definition, isCreateMode: false, sourceRow);
         }

@@ -6,7 +6,7 @@ namespace CbsContractsDesktopClient.Shared.Data;
 
 public static class JsonDataReader
 {
-    public static string? TryGetText(ReferenceDataRow? row, params string[] fieldKeys)
+    public static string? TryGetText(TableDataRow? row, params string[] fieldKeys)
     {
         if (row is null)
         {
@@ -25,24 +25,24 @@ public static class JsonDataReader
         return null;
     }
 
-    public static string GetText(ReferenceDataRow? row, params string[] fieldKeys)
+    public static string GetText(TableDataRow? row, params string[] fieldKeys)
     {
         return TryGetText(row, fieldKeys) ?? string.Empty;
     }
 
-    public static string? TryGetSingleLineText(ReferenceDataRow? row, params string[] fieldKeys)
+    public static string? TryGetSingleLineText(TableDataRow? row, params string[] fieldKeys)
     {
         return NormalizeSingleLine(TryGetText(row, fieldKeys));
     }
 
-    public static string GetSingleLineText(ReferenceDataRow? row, params string[] fieldKeys)
+    public static string GetSingleLineText(TableDataRow? row, params string[] fieldKeys)
     {
         return TryGetSingleLineText(row, fieldKeys) ?? string.Empty;
     }
 
     public static string? TryGetDisplayText(
-        ReferenceDataRow? displayRow,
-        ReferenceDataRow? fallbackRow,
+        TableDataRow? displayRow,
+        TableDataRow? fallbackRow,
         params string[] fieldKeys)
     {
         return TryGetText(displayRow, fieldKeys)
@@ -50,19 +50,19 @@ public static class JsonDataReader
     }
 
     public static string GetDisplayText(
-        ReferenceDataRow? displayRow,
-        ReferenceDataRow? fallbackRow,
+        TableDataRow? displayRow,
+        TableDataRow? fallbackRow,
         params string[] fieldKeys)
     {
         return TryGetDisplayText(displayRow, fallbackRow, fieldKeys) ?? string.Empty;
     }
 
-    public static string? TryGetRawText(ReferenceDataRow? row, string fieldKey)
+    public static string? TryGetRawText(TableDataRow? row, string fieldKey)
     {
         return row?.GetValue(fieldKey)?.ToString();
     }
 
-    public static string GetRawText(ReferenceDataRow? row, string fieldKey)
+    public static string GetRawText(TableDataRow? row, string fieldKey)
     {
         return TryGetRawText(row, fieldKey) ?? string.Empty;
     }
@@ -86,7 +86,7 @@ public static class JsonDataReader
         return TryFirstText(values) ?? string.Empty;
     }
 
-    public static JsonElement? TryGetArray(ReferenceDataRow? row, string fieldKey)
+    public static JsonElement? TryGetArray(TableDataRow? row, string fieldKey)
     {
         if (row is null)
         {
@@ -117,7 +117,7 @@ public static class JsonDataReader
         return current.ValueKind == JsonValueKind.Array ? current : null;
     }
 
-    public static JsonElement? TryGetFirstArray(ReferenceDataRow? row, params string[] fieldKeys)
+    public static JsonElement? TryGetFirstArray(TableDataRow? row, params string[] fieldKeys)
     {
         foreach (var fieldKey in fieldKeys)
         {
@@ -130,7 +130,7 @@ public static class JsonDataReader
         return null;
     }
 
-    public static JsonElement? TryGetNestedArray(ReferenceDataRow? row, string fieldKey, string nestedFieldKey)
+    public static JsonElement? TryGetNestedArray(TableDataRow? row, string fieldKey, string nestedFieldKey)
     {
         var root = row is not null
             && row.Values.TryGetValue(fieldKey, out var value)
@@ -141,12 +141,12 @@ public static class JsonDataReader
         return root is null ? null : TryGetArray(root.Value, nestedFieldKey);
     }
 
-    public static int? TryGetArrayCount(ReferenceDataRow? row, string fieldKey)
+    public static int? TryGetArrayCount(TableDataRow? row, string fieldKey)
     {
         return TryGetArray(row, fieldKey)?.GetArrayLength();
     }
 
-    public static IEnumerable<JsonElement> EnumerateObjectArray(ReferenceDataRow? row, string fieldKey)
+    public static IEnumerable<JsonElement> EnumerateObjectArray(TableDataRow? row, string fieldKey)
     {
         return EnumerateObjectArray(TryGetArray(row, fieldKey));
     }
@@ -303,9 +303,9 @@ public static class JsonDataReader
         };
     }
 
-    public static ReferenceDataRow ToReferenceDataRow(JsonElement item)
+    public static TableDataRow ToTableDataRow(JsonElement item)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = item.ValueKind == JsonValueKind.Object
                 ? item.EnumerateObject().ToDictionary(

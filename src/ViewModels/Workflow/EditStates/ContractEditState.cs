@@ -108,7 +108,7 @@ public sealed class ContractEditState : IEditState
         return request;
     }
 
-    public static ContractEditState? FromRow(ReferenceDataRow? row)
+    public static ContractEditState? FromRow(TableDataRow? row)
     {
         if (row is null || row.IsPlaceholder)
         {
@@ -160,7 +160,7 @@ public sealed class ContractEditState : IEditState
             Stages: stages));
     }
 
-    private static IReadOnlyList<StageSnapshotEditState> ReadStages(ReferenceDataRow row)
+    private static IReadOnlyList<StageSnapshotEditState> ReadStages(TableDataRow row)
     {
         return EnumerateObjectArray(row, "stages")
             .Select(static stage => new StageSnapshotEditState(

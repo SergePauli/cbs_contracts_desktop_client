@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
@@ -27,7 +27,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
                 nameof(Row),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(CbsTableRowView),
                 new PropertyMetadata(null, OnStateChanged));
 
@@ -92,9 +92,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             InitializeComponent();
         }
 
-        public ReferenceDataRow? Row
+        public TableDataRow? Row
         {
-            get => (ReferenceDataRow?)GetValue(RowProperty);
+            get => (TableDataRow?)GetValue(RowProperty);
             set => SetValue(RowProperty, value);
         }
 
@@ -147,7 +147,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         }
 
         public void Configure(
-            ReferenceDataRow? row,
+            TableDataRow? row,
             IReadOnlyList<CbsTableColumnDefinition> columns,
             double rowHeight,
             CbsTableRowStyleKey rowStyleKey,
@@ -303,7 +303,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void ApplyBodyContent(
             TextBlock textCell,
             CbsTableColumnDefinition column,
-            ReferenceDataRow? row,
+            TableDataRow? row,
             object? value,
             bool showStageCostFraction)
         {
@@ -358,7 +358,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private static string? FormatTemplateValue(
             string templateKey,
-            ReferenceDataRow? row,
+            TableDataRow? row,
             object? value,
             bool showStageCostFraction)
         {
@@ -405,7 +405,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static void ApplyStatusBadgeContent(Border badgeCell, TextBlock badgeText, ReferenceDataRow? row, object? value)
+        private static void ApplyStatusBadgeContent(Border badgeCell, TextBlock badgeText, TableDataRow? row, object? value)
         {
             var statusName = FirstText(value, row?.GetValue("status.name"));
             if (string.IsNullOrWhiteSpace(statusName))
@@ -421,7 +421,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             badgeCell.Background = new SolidColorBrush(colors.Background);
         }
 
-        private static string FormatStageRegister(ReferenceDataRow row)
+        private static string FormatStageRegister(TableDataRow row)
         {
             var quarter = row.GetValue("registry_quarter")?.ToString();
             var year = row.GetValue("registry_year")?.ToString();
@@ -432,7 +432,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                     : $"{quarter}.{year}";
         }
 
-        private static string FormatStageDuration(ReferenceDataRow row, object? value)
+        private static string FormatStageDuration(TableDataRow row, object? value)
         {
             var duration = value?.ToString();
             if (string.IsNullOrWhiteSpace(duration))
@@ -456,7 +456,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
         }
 
-        private static bool HasStageTaskKind(ReferenceDataRow row, long taskKindId)
+        private static bool HasStageTaskKind(TableDataRow row, long taskKindId)
         {
             if (!row.Values.TryGetValue("tasks", out var tasks) || tasks.ValueKind != JsonValueKind.Array)
             {
@@ -633,7 +633,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
         }
 
-        private static ConditionalRowStyle ResolveStageDeadlineStyle(ReferenceDataRow row)
+        private static ConditionalRowStyle ResolveStageDeadlineStyle(TableDataRow row)
         {
             var deadline = TryGetDateTime(row.GetValue("deadline_at"));
             var statusId = TryGetLong(row.GetValue("status.id")) ?? TryGetLong(row.GetValue("status_id")) ?? 2;

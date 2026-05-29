@@ -51,9 +51,9 @@ public sealed class StageFinEditPayloadBuilderTests
         Assert.Equal(7, comments[0]["profile_id"]);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,

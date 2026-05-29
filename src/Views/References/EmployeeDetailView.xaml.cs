@@ -11,7 +11,7 @@ namespace CbsContractsDesktopClient.Views.References
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
                 nameof(Row),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(EmployeeDetailView),
                 new PropertyMetadata(null, OnRowChanged));
 
@@ -21,9 +21,9 @@ namespace CbsContractsDesktopClient.Views.References
             Refresh();
         }
 
-        public ReferenceDataRow? Row
+        public TableDataRow? Row
         {
-            get => (ReferenceDataRow?)GetValue(RowProperty);
+            get => (TableDataRow?)GetValue(RowProperty);
             set => SetValue(RowProperty, value);
         }
 

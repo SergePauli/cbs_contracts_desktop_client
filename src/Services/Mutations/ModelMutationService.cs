@@ -27,7 +27,7 @@ namespace CbsContractsDesktopClient.Services.Mutations
         {
         }
 
-        public Task<ReferenceDataRow> CreateAsync(
+        public Task<TableDataRow> CreateAsync(
             string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default)
@@ -36,13 +36,13 @@ namespace CbsContractsDesktopClient.Services.Mutations
             ArgumentNullException.ThrowIfNull(payload);
 
             var request = BuildRequest(model, payload);
-            return PostAsync<Dictionary<string, object?>, ReferenceDataRow>(
+            return PostAsync<Dictionary<string, object?>, TableDataRow>(
                 $"model/add/{model}",
                 request,
                 cancellationToken);
         }
 
-        public Task<ReferenceDataRow> UpdateAsync(
+        public Task<TableDataRow> UpdateAsync(
             string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default)
@@ -54,20 +54,20 @@ namespace CbsContractsDesktopClient.Services.Mutations
             ValidateUpdatePayload(model, payload);
             var request = BuildRequest(model, payload);
             LogTrackedUpdateRequest(model, id, request);
-            return PutAsync<Dictionary<string, object?>, ReferenceDataRow>(
+            return PutAsync<Dictionary<string, object?>, TableDataRow>(
                 $"model/{model}/{id}",
                 request,
                 cancellationToken);
         }
 
-        public Task<ReferenceDataRow> DeleteAsync(
+        public Task<TableDataRow> DeleteAsync(
             string model,
             long id,
             CancellationToken cancellationToken = default)
         {
             ValidateModel(model);
 
-            return DeleteAsync<ReferenceDataRow>($"model/{model}/{id}", cancellationToken);
+            return DeleteAsync<TableDataRow>($"model/{model}/{id}", cancellationToken);
         }
 
         private static Dictionary<string, object?> BuildRequest(

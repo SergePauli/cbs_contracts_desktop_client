@@ -64,7 +64,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         }
 
         public static IReadOnlyDictionary<string, object?> BuildForUpdate(
-            ReferenceDataRow sourceRow,
+            TableDataRow sourceRow,
             StageCommerEditPayloadInput input)
         {
             ArgumentNullException.ThrowIfNull(sourceRow);
@@ -113,7 +113,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         private static void AppendChangedText(
             IDictionary<string, object?> request,
-            ReferenceDataRow sourceRow,
+            TableDataRow sourceRow,
             string key,
             string? value)
         {
@@ -142,7 +142,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         private static void AppendChangedInt(
             IDictionary<string, object?> request,
-            ReferenceDataRow sourceRow,
+            TableDataRow sourceRow,
             string key,
             int? value)
         {
@@ -167,7 +167,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         private static void AppendChangedLong(
             IDictionary<string, object?> request,
-            ReferenceDataRow sourceRow,
+            TableDataRow sourceRow,
             string key,
             long? value,
             string fallbackKey)
@@ -194,7 +194,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         private static void AppendChangedDate(
             IDictionary<string, object?> request,
-            ReferenceDataRow sourceRow,
+            TableDataRow sourceRow,
             string key,
             DateTimeOffset? value)
         {
@@ -228,7 +228,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         }
 
         private static IReadOnlyList<Dictionary<string, object?>> BuildTaskAttributesDelta(
-            ReferenceDataRow sourceRow,
+            TableDataRow sourceRow,
             IReadOnlyCollection<long> selectedTaskKindIds)
         {
             var selectedKinds = selectedTaskKindIds.ToHashSet();
@@ -316,7 +316,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             return added.Concat(removed).ToList();
         }
 
-        private static IReadOnlyList<StageTaskRecord> ReadStageTasks(ReferenceDataRow row)
+        private static IReadOnlyList<StageTaskRecord> ReadStageTasks(TableDataRow row)
         {
             return JsonDataReader.EnumerateObjectArray(row, "tasks")
                 .Select(static item => new StageTaskRecord(

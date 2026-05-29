@@ -48,19 +48,19 @@ public sealed class StageEditStateTests
         Assert.Contains("руб", stage.GetSectionTitleAmount(contract));
     }
 
-    private static ReferenceDataRow CreateStageRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateStageRow(params (string Key, object? Value)[] values)
     {
         return CreateRow(values);
     }
 
-    private static ReferenceDataRow CreateContractRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateContractRow(params (string Key, object? Value)[] values)
     {
         return CreateRow(values);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,

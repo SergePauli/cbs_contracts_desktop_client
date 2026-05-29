@@ -1,9 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace CbsContractsDesktopClient.Models.References
+namespace CbsContractsDesktopClient.Models.Table
 {
-    public sealed class ReferenceDataRow
+    public sealed class TableDataRow
     {
         public bool IsPlaceholder { get; init; }
 
@@ -12,9 +12,9 @@ namespace CbsContractsDesktopClient.Models.References
 
         public object? this[string fieldKey] => GetValue(fieldKey);
 
-        public static ReferenceDataRow CreatePlaceholder()
+        public static TableDataRow CreatePlaceholder()
         {
-            return new ReferenceDataRow
+            return new TableDataRow
             {
                 IsPlaceholder = true
             };

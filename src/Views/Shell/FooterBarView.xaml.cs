@@ -1,6 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using CbsContractsDesktopClient.ViewModels.Shell;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml.Controls;
-using CbsContractsDesktopClient.ViewModels.Shell;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
@@ -15,3 +15,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         }
     }
 }
+
+
+
+

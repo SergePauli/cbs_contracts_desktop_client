@@ -7,7 +7,7 @@ namespace CbsContractsDesktopClient.Services.References
     public sealed class HolidayRecalculationService : ApiServiceBase, IHolidayRecalculationService
     {
         private readonly SemaphoreSlim _holidayCalendarGate = new(1, 1);
-        private IReadOnlyList<ReferenceDataRow>? _holidayCalendarCache;
+        private IReadOnlyList<TableDataRow>? _holidayCalendarCache;
         private IReadOnlyList<HolidayCalendarDay>? _holidayCalendarDaysCache;
 
         public HolidayRecalculationService(HttpClient httpClient, IUserService userService)
@@ -15,7 +15,7 @@ namespace CbsContractsDesktopClient.Services.References
         {
         }
 
-        public async Task<IReadOnlyList<ReferenceDataRow>> GetHolidayCalendarAsync(CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<TableDataRow>> GetHolidayCalendarAsync(CancellationToken cancellationToken = default)
         {
             await EnsureHolidayCalendarCacheAsync(cancellationToken);
             return _holidayCalendarCache ?? [];
@@ -59,7 +59,7 @@ namespace CbsContractsDesktopClient.Services.References
             }
         }
 
-        private Task<IReadOnlyList<ReferenceDataRow>> LoadHolidayCalendarAsync(CancellationToken cancellationToken)
+        private Task<IReadOnlyList<TableDataRow>> LoadHolidayCalendarAsync(CancellationToken cancellationToken)
         {
             var request = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
             {
@@ -71,13 +71,13 @@ namespace CbsContractsDesktopClient.Services.References
                 }
             };
 
-            return PostAsync<Dictionary<string, object?>, IReadOnlyList<ReferenceDataRow>>(
+            return PostAsync<Dictionary<string, object?>, IReadOnlyList<TableDataRow>>(
                 "model/Holiday",
                 request,
                 cancellationToken);
         }
 
-        public Task<IReadOnlyList<ReferenceDataRow>> GetAffectedStagesAsync(
+        public Task<IReadOnlyList<TableDataRow>> GetAffectedStagesAsync(
             string intervalStart,
             string intervalEnd,
             CancellationToken cancellationToken = default)
@@ -121,13 +121,13 @@ namespace CbsContractsDesktopClient.Services.References
                 ["sorts"] = new[] { "id desc" }
             };
 
-            return PostAsync<Dictionary<string, object?>, IReadOnlyList<ReferenceDataRow>>(
+            return PostAsync<Dictionary<string, object?>, IReadOnlyList<TableDataRow>>(
                 "model/Stage",
                 request,
                 cancellationToken);
         }
 
-        private static HolidayCalendarDay? TryCreateHolidayCalendarDay(ReferenceDataRow row)
+        private static HolidayCalendarDay? TryCreateHolidayCalendarDay(TableDataRow row)
         {
             var beginAt = ParseDate(row.GetValue("begin_at"));
             if (beginAt is null)

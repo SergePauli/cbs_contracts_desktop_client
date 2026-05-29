@@ -4,12 +4,12 @@ using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
 
-public sealed class ReferenceDataRowTests
+public sealed class TableDataRowTests
 {
     [Fact]
     public void GetValue_ReturnsNestedObjectProperty_ByDottedPath()
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -28,7 +28,7 @@ public sealed class ReferenceDataRowTests
     [Fact]
     public void GetValue_ReturnsNestedValues_FromArrayPath()
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -66,7 +66,7 @@ public sealed class ReferenceDataRowTests
     [Fact]
     public void GetValue_PrefersDirectTopLevelValue_WhenExactKeyExists()
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {

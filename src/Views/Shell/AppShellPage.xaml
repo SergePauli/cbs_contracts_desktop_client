@@ -24,7 +24,7 @@
             </Grid.RowDefinitions>
 
             <shell:TopBarView x:Name="TopBarControl" Grid.Row="0" />
-            <shell:ContentHostView Grid.Row="1" Margin="{StaticResource ShellContentHostMargin}" />
+            <shell:ContentHostRouterView Grid.Row="1" Margin="{StaticResource ShellContentHostMargin}" />
             <shell:FooterBarView Grid.Row="2" />
         </Grid>
 

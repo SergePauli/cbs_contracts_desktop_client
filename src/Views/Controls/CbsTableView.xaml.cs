@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -138,7 +138,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         public static readonly DependencyProperty SelectedItemProperty =
             DependencyProperty.Register(
                 nameof(SelectedItem),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(CbsTableView),
                 new PropertyMetadata(null));
 
@@ -464,9 +464,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(SupportsMultipleRowSelectionProperty, value);
         }
 
-        public ReferenceDataRow? SelectedItem
+        public TableDataRow? SelectedItem
         {
-            get => (ReferenceDataRow?)GetValue(SelectedItemProperty);
+            get => (TableDataRow?)GetValue(SelectedItemProperty);
             set => SetValue(SelectedItemProperty, value);
         }
 
@@ -794,19 +794,19 @@ namespace CbsContractsDesktopClient.Views.Controls
             _lastItemsSourceReference = null;
         }
 
-        private IReadOnlyList<ReferenceDataRow> GetSourceRows()
+        private IReadOnlyList<TableDataRow> GetSourceRows()
         {
-            if (ItemsSource is IReadOnlyList<ReferenceDataRow> readOnlyList)
+            if (ItemsSource is IReadOnlyList<TableDataRow> readOnlyList)
             {
                 return readOnlyList;
             }
 
-            if (ItemsSource is IList<ReferenceDataRow> list)
+            if (ItemsSource is IList<TableDataRow> list)
             {
                 return list.ToList();
             }
 
-            return ItemsSource?.OfType<ReferenceDataRow>().ToList() ?? [];
+            return ItemsSource?.OfType<TableDataRow>().ToList() ?? [];
         }
 
         private (int Start, int End) CalculateWindow(int totalRows)
@@ -2464,27 +2464,27 @@ namespace CbsContractsDesktopClient.Views.Controls
 
     public sealed class CbsTableRowDoubleTappedEventArgs : EventArgs
     {
-        public CbsTableRowDoubleTappedEventArgs(ReferenceDataRow row, int rowIndex)
+        public CbsTableRowDoubleTappedEventArgs(TableDataRow row, int rowIndex)
         {
             Row = row;
             RowIndex = rowIndex;
         }
 
-        public ReferenceDataRow Row { get; }
+        public TableDataRow Row { get; }
 
         public int RowIndex { get; }
     }
 
     public sealed class CbsTableRowSelectionChangedEventArgs : EventArgs
     {
-        public CbsTableRowSelectionChangedEventArgs(ReferenceDataRow? row, int rowIndex, bool isSelected)
+        public CbsTableRowSelectionChangedEventArgs(TableDataRow? row, int rowIndex, bool isSelected)
         {
             Row = row;
             RowIndex = rowIndex;
             IsSelected = isSelected;
         }
 
-        public ReferenceDataRow? Row { get; }
+        public TableDataRow? Row { get; }
 
         public int RowIndex { get; }
 

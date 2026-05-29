@@ -47,9 +47,9 @@ public sealed class ContragentEditStateFactoryTests
         Assert.Contains($"внесено: {expected}", item.PeriodText);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,

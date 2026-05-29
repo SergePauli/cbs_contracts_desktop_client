@@ -31,26 +31,26 @@ public abstract class ContractRowDetailStrategy
 
     public string Route { get; }
 
-    public long? ResolveContractId(ReferenceDataRow row)
+    public long? ResolveContractId(TableDataRow row)
     {
         return TryGetLong(row.GetValue(_contractIdFieldKey));
     }
 
-    public long? ResolveContragentId(ReferenceDataRow row)
+    public long? ResolveContragentId(TableDataRow row)
     {
         return TryGetLong(row.GetValue(_contragentIdFieldKey));
     }
 
-    public bool IsSameSelection(ReferenceDataRow row, long? contractId)
+    public bool IsSameSelection(TableDataRow row, long? contractId)
     {
         return contractId is null || ResolveContractId(row) == contractId;
     }
 
     public void ApplySelection(
         ContractWorkflowStore store,
-        ReferenceDataRow selectedRow,
-        ReferenceDataRow? contract,
-        ReferenceDataRow? contragent)
+        TableDataRow selectedRow,
+        TableDataRow? contract,
+        TableDataRow? contragent)
     {
         store.SetRowDetailSelection(
             _selectionKind,
@@ -60,16 +60,16 @@ public abstract class ContractRowDetailStrategy
             BuildSelectedRowHeader(selectedRow));
     }
 
-    protected abstract string BuildSelectedRowHeader(ReferenceDataRow row);
+    protected abstract string BuildSelectedRowHeader(TableDataRow row);
 
-    protected static string BuildTaskKindHeader(ReferenceDataRow row)
+    protected static string BuildTaskKindHeader(TableDataRow row)
     {
         return FirstText(
             row.GetValue("task_kind.name"),
             row.GetValue("contract.task_kind.name"));
     }
 
-    protected static IReadOnlyList<string> ReadNameList(ReferenceDataRow row, string fieldKey)
+    protected static IReadOnlyList<string> ReadNameList(TableDataRow row, string fieldKey)
     {
         var array = TryGetArray(row, fieldKey);
         if (array is null)
@@ -111,7 +111,7 @@ public sealed class RevisionRowDetailStrategy : ContractRowDetailStrategy
     {
     }
 
-    protected override string BuildSelectedRowHeader(ReferenceDataRow row)
+    protected override string BuildSelectedRowHeader(TableDataRow row)
     {
         return FirstText(row.GetValue("description"));
     }
@@ -124,7 +124,7 @@ public sealed class StageRowDetailStrategy : ContractRowDetailStrategy
     {
     }
 
-    protected override string BuildSelectedRowHeader(ReferenceDataRow row)
+    protected override string BuildSelectedRowHeader(TableDataRow row)
     {
         var parts = new List<string>();
         var taskKind = BuildTaskKindHeader(row);
@@ -157,7 +157,7 @@ public sealed class ContractTableRowDetailStrategy : ContractRowDetailStrategy
     {
     }
 
-    protected override string BuildSelectedRowHeader(ReferenceDataRow row)
+    protected override string BuildSelectedRowHeader(TableDataRow row)
     {
         return BuildTaskKindHeader(row);
     }

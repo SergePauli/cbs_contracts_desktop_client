@@ -70,9 +70,9 @@ public sealed class ContractEditStateTests
         Assert.Contains("Task", title);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,

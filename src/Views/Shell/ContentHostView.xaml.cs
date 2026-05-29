@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
@@ -18,15 +17,13 @@ using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.ViewModels.References;
-using CbsContractsDesktopClient.ViewModels.Shell;
+using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.Functional;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -37,32 +34,32 @@ using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
-    public sealed partial class ContentHostView : UserControl
+    public sealed partial class ContentHostView : ContentHostViewBase
     {
-        private readonly ReferencesContentViewModel _viewModel;
+        private readonly TablePageStore _viewModel;
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
-        private readonly IFnsContragentService _fnsContragentService;
         private readonly IDataQueryService _dataQueryService;
         private readonly IUserService _userService;
         private readonly ILocalUserSettingsService _localUserSettingsService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
-        private readonly ContentHostDialogCoordinator _dialogCoordinator;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
         private CancellationTokenSource? _contragentDetailCts;
         private CancellationTokenSource? _rowDetailCts;
+        private CancellationTokenSource? _routeCts;
+        private string? _route;
         private bool _isViewportSubscribed;
+        private bool _isLoaded;
         private bool _isHolidayRecalcInProgress;
-        private bool _isFnsCompareInProgress;
         private bool _showStageCostFraction;
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
         private const int FinDepartmentId = 3;
         private const string AddressModel = "Address";
-        private const string RevisionTitle = "Дополнительное соглашение";
+        private const string RevisionTitle = "Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅРѕРµ СЃРѕРіР»Р°С€РµРЅРёРµ";
         private const string ContractModel = "Contract";
         private const string ProfileModel = "Profile";
         private static readonly IReadOnlyList<ContractRowDetailStrategy> RowDetailStrategies =
@@ -74,17 +71,15 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         public ContentHostView()
         {
-            _viewModel = App.Services.GetRequiredService<ReferencesContentViewModel>();
+            _viewModel = App.Services.GetRequiredService<TablePageStore>();
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
-            _fnsContragentService = App.Services.GetRequiredService<IFnsContragentService>();
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _userService = App.Services.GetRequiredService<IUserService>();
             _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
-            _dialogCoordinator = new ContentHostDialogCoordinator(() => XamlRoot);
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             InitializeComponent();
             DataContext = _viewModel;
@@ -96,16 +91,44 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore.PropertyChanged += OnContractWorkflowStorePropertyChanged;
         }
 
+        public string? Route
+        {
+            get => _route;
+            set
+            {
+                if (string.Equals(_route, value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _route = value;
+                if (_isLoaded)
+                {
+                    _ = NavigateToRouteAsync(value);
+                }
+            }
+        }
+
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
+            _isLoaded = true;
             UpdateSelectionActionButtons();
             UpdateTableRowStyle();
             EnsureViewportSubscription();
-            await _viewModel.EnsureLoadedAsync();
+            if (string.IsNullOrWhiteSpace(Route))
+            {
+                await _viewModel.EnsureLoadedAsync();
+            }
+            else
+            {
+                await NavigateToRouteAsync(Route);
+            }
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
+            _isLoaded = false;
+            _routeCts?.Cancel();
             _filterDebounceCts?.Cancel();
             _viewportCts?.Cancel();
             _contragentDetailCts?.Cancel();
@@ -114,31 +137,44 @@ namespace CbsContractsDesktopClient.Views.Shell
             RemoveViewportSubscription();
         }
 
+        private async Task NavigateToRouteAsync(string? route)
+        {
+            _routeCts?.Cancel();
+            _routeCts = new CancellationTokenSource();
+            try
+            {
+                await _viewModel.NavigateToRouteAsync(route, _routeCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
         private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow)
-                || e.PropertyName == nameof(ReferencesContentViewModel.HasSelectedRow)
-                || e.PropertyName == nameof(ReferencesContentViewModel.HasActiveReference)
-                || e.PropertyName == nameof(ReferencesContentViewModel.CurrentTablePage)
-                || e.PropertyName == nameof(ReferencesContentViewModel.CanEditRows)
-                || e.PropertyName == nameof(ReferencesContentViewModel.CanDeleteRows))
+            if (e.PropertyName == nameof(TablePageStore.SelectedRow)
+                || e.PropertyName == nameof(TablePageStore.HasSelectedRow)
+                || e.PropertyName == nameof(TablePageStore.HasActiveReference)
+                || e.PropertyName == nameof(TablePageStore.CurrentTablePage)
+                || e.PropertyName == nameof(TablePageStore.CanEditRows)
+                || e.PropertyName == nameof(TablePageStore.CanDeleteRows))
             {
                 UpdateSelectionActionButtons();
             }
 
-            if (e.PropertyName == nameof(ReferencesContentViewModel.CurrentTablePage)
-                || e.PropertyName == nameof(ReferencesContentViewModel.CurrentRowStyleKey))
+            if (e.PropertyName == nameof(TablePageStore.CurrentTablePage)
+                || e.PropertyName == nameof(TablePageStore.CurrentRowStyleKey))
             {
                 UpdateTableRowStyle();
             }
 
-            if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow)
-                || e.PropertyName == nameof(ReferencesContentViewModel.ShowContragentDetailView))
+            if (e.PropertyName == nameof(TablePageStore.SelectedRow)
+                || e.PropertyName == nameof(TablePageStore.ShowContragentDetailView))
             {
                 _ = RefreshContragentDetailContractsAsync();
             }
 
-            if (e.PropertyName == nameof(ReferencesContentViewModel.SelectedRow))
+            if (e.PropertyName == nameof(TablePageStore.SelectedRow))
             {
                 _ = RefreshRowDetailAsync();
             }
@@ -233,13 +269,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                         "Contract/edit",
                         () => LoadRevisionContractCardAsync(selectedContractId, cancellationTokenSource.Token),
                         cancellationTokenSource.Token)
-                    : Task.FromResult<ReferenceDataRow?>(null);
+                    : Task.FromResult<TableDataRow?>(null);
                 var contragentTask = listContragentId is long selectedContragentId
                     ? LoadRowDetailRowSafelyAsync(
                         "Contragent/card",
                         () => LoadRevisionContragentCardAsync(selectedContragentId, cancellationTokenSource.Token),
                         cancellationTokenSource.Token)
-                    : Task.FromResult<ReferenceDataRow?>(null);
+                    : Task.FromResult<TableDataRow?>(null);
 
                 var contract = await contractTask;
                 var contragent = await contragentTask;
@@ -279,9 +315,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        private static async Task<ReferenceDataRow?> LoadRowDetailRowSafelyAsync(
+        private static async Task<TableDataRow?> LoadRowDetailRowSafelyAsync(
             string title,
-            Func<Task<ReferenceDataRow?>> loadAsync,
+            Func<Task<TableDataRow?>> loadAsync,
             CancellationToken cancellationToken)
         {
             try
@@ -337,11 +373,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             await RecalculateHolidayStagesAsync();
         }
 
-        private async void FnsCompareButton_Click(object sender, RoutedEventArgs e)
-        {
-            await CompareSelectedContragentWithFnsAsync();
-        }
-
         private void CopyContragentDetailsButton_Click(object sender, RoutedEventArgs e)
         {
             if (IsContractDetailTableActive())
@@ -355,7 +386,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 var contractDataPackage = new DataPackage();
                 contractDataPackage.SetText(contractText);
                 Clipboard.SetContent(contractDataPackage);
-                ShowSuccessNotification("Данные скопированы", "Карточка контракта скопирована в буфер обмена.");
+                ShowSuccessNotification("Р”Р°РЅРЅС‹Рµ СЃРєРѕРїРёСЂРѕРІР°РЅС‹", "РљР°СЂС‚РѕС‡РєР° РєРѕРЅС‚СЂР°РєС‚Р° СЃРєРѕРїРёСЂРѕРІР°РЅР° РІ Р±СѓС„РµСЂ РѕР±РјРµРЅР°.");
                 return;
             }
 
@@ -368,7 +399,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var dataPackage = new DataPackage();
             dataPackage.SetText(text);
             Clipboard.SetContent(dataPackage);
-            ShowSuccessNotification("Данные скопированы", "Карточка контрагента скопирована в буфер обмена.");
+            ShowSuccessNotification("Р”Р°РЅРЅС‹Рµ СЃРєРѕРїРёСЂРѕРІР°РЅС‹", "РљР°СЂС‚РѕС‡РєР° РєРѕРЅС‚СЂР°РіРµРЅС‚Р° СЃРєРѕРїРёСЂРѕРІР°РЅР° РІ Р±СѓС„РµСЂ РѕР±РјРµРЅР°.");
         }
 
         private void CopyStageInfoButton_Click(object sender, RoutedEventArgs e)
@@ -382,7 +413,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var dataPackage = new DataPackage();
             dataPackage.SetText(text);
             Clipboard.SetContent(dataPackage);
-            ShowSuccessNotification("Данные скопированы", "Этап скопирован в буфер обмена.");
+            ShowSuccessNotification("Р”Р°РЅРЅС‹Рµ СЃРєРѕРїРёСЂРѕРІР°РЅС‹", "Р­С‚Р°Рї СЃРєРѕРїРёСЂРѕРІР°РЅ РІ Р±СѓС„РµСЂ РѕР±РјРµРЅР°.");
         }
 
         private void CommentStageButton_Click(object sender, RoutedEventArgs e)
@@ -395,7 +426,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var commentBox = new TextBox
             {
                 Width = 400,
-                PlaceholderText = "Введите комментарий + Enter"
+                PlaceholderText = "Р’РІРµРґРёС‚Рµ РєРѕРјРјРµРЅС‚Р°СЂРёР№ + Enter"
             };
             var flyout = new Flyout
             {
@@ -433,13 +464,13 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (_viewModel.SelectedRow is null || TryGetSelectedRowId(_viewModel.SelectedRow) is not long stageId)
             {
-                await ShowErrorDialogAsync("Комментарий к этапу", "Не удалось определить выбранный этап.");
+                await ShowErrorDialogAsync("РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє СЌС‚Р°РїСѓ", "РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСЂРµРґРµР»РёС‚СЊ РІС‹Р±СЂР°РЅРЅС‹Р№ СЌС‚Р°Рї.");
                 return;
             }
 
             if (_userService.CurrentUser?.ProfileId is not int profileId)
             {
-                await ShowErrorDialogAsync("Комментарий к этапу", "Не удалось определить profile_id пользователя.");
+                await ShowErrorDialogAsync("РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє СЌС‚Р°РїСѓ", "РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСЂРµРґРµР»РёС‚СЊ profile_id РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ.");
                 return;
             }
 
@@ -459,12 +490,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await SaveStagePayloadAsync(payload);
                 flyout.Hide();
-                ShowSuccessNotification("Комментарий сохранён", "Комментарий к этапу добавлен.");
+                ShowSuccessNotification("РљРѕРјРјРµРЅС‚Р°СЂРёР№ СЃРѕС…СЂР°РЅС‘РЅ", "РљРѕРјРјРµРЅС‚Р°СЂРёР№ Рє СЌС‚Р°РїСѓ РґРѕР±Р°РІР»РµРЅ.");
                 await RefreshRowDetailAsync();
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось сохранить комментарий", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РєРѕРјРјРµРЅС‚Р°СЂРёР№", ex.Message);
             }
         }
 
@@ -477,7 +508,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (!_referenceDefinitionService.TryGetByRoute("/employees", out var employeeDefinition))
             {
-                await ShowErrorDialogAsync("Не удалось создать сотрудника.", "Справочник сотрудников не подключен.");
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°.", "РЎРїСЂР°РІРѕС‡РЅРёРє СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ РЅРµ РїРѕРґРєР»СЋС‡РµРЅ.");
                 return;
             }
 
@@ -494,7 +525,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (contragentId is null || string.IsNullOrWhiteSpace(contragentName))
             {
-                await ShowErrorDialogAsync("Не удалось создать сотрудника.", "В выбранном этапе отсутствует контрагент.");
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°.", "Р’ РІС‹Р±СЂР°РЅРЅРѕРј СЌС‚Р°РїРµ РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚ РєРѕРЅС‚СЂР°РіРµРЅС‚.");
                 return;
             }
 
@@ -543,41 +574,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             var menu = new MenuFlyout();
 
-            if (_viewModel.HasSelectedRow)
-            {
-                var legalEntityChangeItem = new MenuFlyoutSubItem
-                {
-                    Text = "Смена юр.лица"
-                };
-                var importLegalEntityFnsItem = new MenuFlyoutItem
-                {
-                    Text = "Импорт из ФНС"
-                };
-                importLegalEntityFnsItem.Click += async (_, _) => await ChangeContragentLegalEntityFromFnsAsync();
-                legalEntityChangeItem.Items.Add(importLegalEntityFnsItem);
-
-                var manualLegalEntityItem = new MenuFlyoutItem
-                {
-                    Text = "Ручной ввод"
-                };
-                manualLegalEntityItem.Click += async (_, _) => await ChangeContragentLegalEntityManuallyAsync();
-                legalEntityChangeItem.Items.Add(manualLegalEntityItem);
-
-                menu.Items.Add(legalEntityChangeItem);
-
-                menu.Items.Add(new MenuFlyoutSeparator());
-            }
-
-            var importFnsItem = new MenuFlyoutItem
-            {
-                Text = "Импорт из ФНС"
-            };
-            importFnsItem.Click += async (_, _) => await ImportContragentFromFnsAsync();
-            menu.Items.Add(importFnsItem);
-
             var manualItem = new MenuFlyoutItem
             {
-                Text = "Ручной ввод"
+                Text = "Р СѓС‡РЅРѕР№ РІРІРѕРґ"
             };
             manualItem.Click += async (_, _) => await ShowContragentEditDialogAsync(isCreateMode: true);
             menu.Items.Add(manualItem);
@@ -594,7 +593,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (!_referenceDefinitionService.TryGetByRoute("/employees", out var employeeDefinition))
             {
-                await ShowErrorDialogAsync("Не удалось открыть сотрудника.", "Справочник сотрудников не подключен.");
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°.", "РЎРїСЂР°РІРѕС‡РЅРёРє СЃРѕС‚СЂСѓРґРЅРёРєРѕРІ РЅРµ РїРѕРґРєР»СЋС‡РµРЅ.");
                 return;
             }
 
@@ -645,8 +644,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (!_viewModel.IsStagesTable)
             {
                 await ShowInfoDialogAsync(
-                    "Сохранение фильтров",
-                    "Сохранение избранных фильтров поддержано только для таблицы этапов.");
+                    "РЎРѕС…СЂР°РЅРµРЅРёРµ С„РёР»СЊС‚СЂРѕРІ",
+                    "РЎРѕС…СЂР°РЅРµРЅРёРµ РёР·Р±СЂР°РЅРЅС‹С… С„РёР»СЊС‚СЂРѕРІ РїРѕРґРґРµСЂР¶Р°РЅРѕ С‚РѕР»СЊРєРѕ РґР»СЏ С‚Р°Р±Р»РёС†С‹ СЌС‚Р°РїРѕРІ.");
                 return;
             }
 
@@ -663,13 +662,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 if (!settingsPayload.HasChanges)
                 {
                     await ShowInfoDialogAsync(
-                        "Сохранение фильтров",
-                        "Избранные фильтры не изменены.");
+                        "РЎРѕС…СЂР°РЅРµРЅРёРµ С„РёР»СЊС‚СЂРѕРІ",
+                        "РР·Р±СЂР°РЅРЅС‹Рµ С„РёР»СЊС‚СЂС‹ РЅРµ РёР·РјРµРЅРµРЅС‹.");
                     return;
                 }
 
                 var confirmed = await ConfirmSettingsChangeAsync(
-                    "Сохранить текущие фильтры этапов как начальные установки фильтрации?");
+                    "РЎРѕС…СЂР°РЅРёС‚СЊ С‚РµРєСѓС‰РёРµ С„РёР»СЊС‚СЂС‹ СЌС‚Р°РїРѕРІ РєР°Рє РЅР°С‡Р°Р»СЊРЅС‹Рµ СѓСЃС‚Р°РЅРѕРІРєРё С„РёР»СЊС‚СЂР°С†РёРё?");
                 if (!confirmed)
                 {
                     return;
@@ -688,12 +687,12 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                 _viewModel.AppendUiTrace("STAGE FILTER SETTINGS SAVED");
                 ShowSuccessNotification(
-                    "Настройки сохранены",
-                    "Начальные установки фильтрации этапов обновлены.");
+                    "РќР°СЃС‚СЂРѕР№РєРё СЃРѕС…СЂР°РЅРµРЅС‹",
+                    "РќР°С‡Р°Р»СЊРЅС‹Рµ СѓСЃС‚Р°РЅРѕРІРєРё С„РёР»СЊС‚СЂР°С†РёРё СЌС‚Р°РїРѕРІ РѕР±РЅРѕРІР»РµРЅС‹.");
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось сохранить фильтры", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ С„РёР»СЊС‚СЂС‹", ex.Message);
             }
         }
 
@@ -866,7 +865,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             var isContractDetailTable = IsContractDetailTableActive();
             var hasWorkflowContract = _contractWorkflowStore.Contract is { IsPlaceholder: false };
             var canRecalculateHoliday = hasSelectedRow && isHolidayReference && !_isHolidayRecalcInProgress;
-            var canCompareFns = hasSelectedRow && isContragentReference && !_isFnsCompareInProgress;
             var canCopyStageInfo = hasSelectedRow && isStagesTable;
             var canCommentStage = hasSelectedRow && isStagesTable && _userService.CurrentUser?.ProfileId is not null;
             var canCreateStageEmployee = hasSelectedRow && isStagesTable;
@@ -901,15 +899,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
 
-            if (FnsCompareButton is not null)
-            {
-                FnsCompareButton.Visibility = isContragentReference ? Visibility.Visible : Visibility.Collapsed;
-                FnsCompareButton.IsEnabled = canCompareFns;
-                FnsCompareButton.Foreground = canCompareFns
-                    ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.SeaGreen)
-                    : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
-            }
-
             if (CopyContragentDetailsButton is not null)
             {
                 CopyContragentDetailsButton.Visibility = isContragentReference || showContractCopyDetails ? Visibility.Visible : Visibility.Collapsed;
@@ -917,8 +906,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ToolTipService.SetToolTip(
                     CopyContragentDetailsButton,
                     showContractCopyDetails
-                        ? "Скопировать данные контракта"
-                        : "Скопировать данные контрагента");
+                        ? "РЎРєРѕРїРёСЂРѕРІР°С‚СЊ РґР°РЅРЅС‹Рµ РєРѕРЅС‚СЂР°РєС‚Р°"
+                        : "РЎРєРѕРїРёСЂРѕРІР°С‚СЊ РґР°РЅРЅС‹Рµ РєРѕРЅС‚СЂР°РіРµРЅС‚Р°");
                 CopyContragentDetailsButton.Foreground = canCopyDetails
                     ? new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.DarkSlateBlue)
                     : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
@@ -1051,7 +1040,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 XamlRoot = XamlRoot
             };
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
@@ -1089,7 +1078,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(reference.Model);
             await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
-                isCreateMode ? "Запись создана" : "Изменения сохранены",
+                isCreateMode ? "Р—Р°РїРёСЃСЊ СЃРѕР·РґР°РЅР°" : "РР·РјРµРЅРµРЅРёСЏ СЃРѕС…СЂР°РЅРµРЅС‹",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
         }
 
@@ -1110,11 +1099,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось открыть ревизию.", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СЂРµРІРёР·РёСЋ.", ex.Message);
                 return;
             }
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? revisionPayload = null;
             dialog.PrimaryButtonClick += async (_, args) =>
             {
@@ -1146,7 +1135,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             await RefreshReferenceAfterSaveAsync(false, savedRow, revisionPayload);
             ShowSuccessNotification(
-                "Ревизия сохранена",
+                "Р РµРІРёР·РёСЏ СЃРѕС…СЂР°РЅРµРЅР°",
                 BuildReferenceNotificationMessage(RevisionTitle, TryGetSelectedRowId(savedRow)));
         }
 
@@ -1176,8 +1165,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             await ShowErrorDialogAsync(
-                "Редактирование этапа",
-                "Диалог редактирования этапа для вашего отдела пока не реализован.");
+                "Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЌС‚Р°РїР°",
+                "Р”РёР°Р»РѕРі СЂРµРґР°РєС‚РёСЂРѕРІР°РЅРёСЏ СЌС‚Р°РїР° РґР»СЏ РІР°С€РµРіРѕ РѕС‚РґРµР»Р° РїРѕРєР° РЅРµ СЂРµР°Р»РёР·РѕРІР°РЅ.");
         }
 
         private async Task ShowStageOziEditDialogAsync()
@@ -1185,7 +1174,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var sourceRow = await LoadStageEditRowAsync();
             if (sourceRow is null)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЌС‚Р°РїР°", "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°СЂС‚РѕС‡РєСѓ РІС‹Р±СЂР°РЅРЅРѕРіРѕ СЌС‚Р°РїР°.");
                 return;
             }
 
@@ -1211,11 +1200,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СЌС‚Р°Рї.", ex.Message);
                 return;
             }
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             bool shouldRefreshSelectedRowDetails = false;
             dialog.SaveRequestedAsync += async args =>
             {
@@ -1224,7 +1213,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var stagePayload = dialog.BuildPayload();
                     if (!HasUpdatePayloadChanges(stagePayload))
                     {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        dialog.ShowErrorInfo("РќРµС‚ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ.");
                         args.Cancel = true;
                         return;
                     }
@@ -1255,8 +1244,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
-                "Этап сохранён",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+                "Р­С‚Р°Рї СЃРѕС…СЂР°РЅС‘РЅ",
+                BuildReferenceNotificationMessage("Р­С‚Р°Рї", TryGetSelectedRowId(savedRow)));
             if (shouldRefreshSelectedRowDetails)
             {
                 await RefreshRowDetailAsync();
@@ -1268,7 +1257,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var sourceRow = await LoadStageEditRowAsync();
             if (sourceRow is null)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЌС‚Р°РїР°", "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°СЂС‚РѕС‡РєСѓ РІС‹Р±СЂР°РЅРЅРѕРіРѕ СЌС‚Р°РїР°.");
                 return;
             }
 
@@ -1294,11 +1283,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СЌС‚Р°Рї.", ex.Message);
                 return;
             }
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             bool shouldRefreshSelectedRowDetails = false;
             dialog.SaveRequestedAsync += async args =>
             {
@@ -1307,7 +1296,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var stagePayload = dialog.BuildPayload();
                     if (!HasUpdatePayloadChanges(stagePayload))
                     {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        dialog.ShowErrorInfo("РќРµС‚ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ.");
                         args.Cancel = true;
                         return;
                     }
@@ -1338,8 +1327,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
-                "Этап сохранён",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+                "Р­С‚Р°Рї СЃРѕС…СЂР°РЅС‘РЅ",
+                BuildReferenceNotificationMessage("Р­С‚Р°Рї", TryGetSelectedRowId(savedRow)));
             if (shouldRefreshSelectedRowDetails)
             {
                 await RefreshRowDetailAsync();
@@ -1351,7 +1340,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var sourceRow = await LoadStageEditRowAsync();
             if (sourceRow is null)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Р РµРґР°РєС‚РёСЂРѕРІР°РЅРёРµ СЌС‚Р°РїР°", "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РєР°СЂС‚РѕС‡РєСѓ РІС‹Р±СЂР°РЅРЅРѕРіРѕ СЌС‚Р°РїР°.");
                 return;
             }
 
@@ -1375,11 +1364,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СЌС‚Р°Рї.", ex.Message);
                 return;
             }
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             bool shouldRefreshSelectedRowDetails = false;
             dialog.SaveRequestedAsync += async args =>
             {
@@ -1390,7 +1379,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var hasContractChanges = dialog.HasContractExternalNumberChanges();
                     if (!hasStageChanges && !hasContractChanges)
                     {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        dialog.ShowErrorInfo("РќРµС‚ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ.");
                         args.Cancel = true;
                         return;
                     }
@@ -1426,8 +1415,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
             _viewModel.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
             ShowSuccessNotification(
-                "Этап сохранён",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+                "Р­С‚Р°Рї СЃРѕС…СЂР°РЅС‘РЅ",
+                BuildReferenceNotificationMessage("Р­С‚Р°Рї", TryGetSelectedRowId(savedRow)));
             if (shouldRefreshSelectedRowDetails)
             {
                 await RefreshRowDetailAsync();
@@ -1444,14 +1433,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             var id = TryGetSelectedRowId(_viewModel.SelectedRow);
             if (id is null)
             {
-                await ShowErrorDialogAsync("Не удалось удалить запись.", "У выбранной записи отсутствует корректный ID.");
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р·Р°РїРёСЃСЊ.", "РЈ РІС‹Р±СЂР°РЅРЅРѕР№ Р·Р°РїРёСЃРё РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚ РєРѕСЂСЂРµРєС‚РЅС‹Р№ ID.");
                 return;
             }
 
-            if (!await _dialogCoordinator.ConfirmAsync(
-                    "Удаление записи",
-                    "Удалить выбранную запись?",
-                    "Удалить",
+            if (!await ConfirmDialogAsync(
+                    "РЈРґР°Р»РµРЅРёРµ Р·Р°РїРёСЃРё",
+                    "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅСѓСЋ Р·Р°РїРёСЃСЊ?",
+                    "РЈРґР°Р»РёС‚СЊ",
                     defaultButton: ContentDialogButton.Close,
                     applyChrome: true))
             {
@@ -1464,895 +1453,29 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
                 await _viewModel.ReloadCurrentReferenceAsync();
                 ShowSuccessNotification(
-                    "Запись удалена",
+                    "Р—Р°РїРёСЃСЊ СѓРґР°Р»РµРЅР°",
                     BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, id.Value));
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось удалить запись.", ex.Message);
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р·Р°РїРёСЃСЊ.", ex.Message);
             }
-        }
-
-        private async Task ShowErrorDialogAsync(string title, string message)
-        {
-            await _dialogCoordinator.ShowErrorAsync(title, message);
-        }
-
-        private async Task ShowInfoDialogAsync(string title, string message)
-        {
-            await _dialogCoordinator.ShowInfoAsync(title, message);
         }
 
         private async Task<bool> ConfirmSettingsChangeAsync(string message)
         {
-            return await _dialogCoordinator.ConfirmAsync(
-                "Изменение настроек",
+            return await ConfirmDialogAsync(
+                "РР·РјРµРЅРµРЅРёРµ РЅР°СЃС‚СЂРѕРµРє",
                 message,
-                "Сохранить");
+                "РЎРѕС…СЂР°РЅРёС‚СЊ");
         }
 
         private async Task<bool> ConfirmFilterClearAsync()
         {
-            return await _dialogCoordinator.ConfirmAsync(
-                "Сброс фильтров",
-                "Очистить все фильтры текущей таблицы?",
-                "Очистить");
-        }
-
-        private async Task CompareSelectedContragentWithFnsAsync()
-        {
-            if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null || !_viewModel.IsContragentReference)
-            {
-                return;
-            }
-
-            _isFnsCompareInProgress = true;
-            UpdateSelectionActionButtons();
-
-            try
-            {
-                var sourceRow = await LoadContragentEditRowAsync();
-                if (sourceRow is null)
-                {
-                    await ShowErrorDialogAsync("Не удалось выполнить сверку", "Не удалось загрузить свежую карточку контрагента.");
-                    return;
-                }
-
-                var ownershipOptions = await LoadSimpleReferenceOptionsAsync("Ownership", "card");
-                var regionOptions = await LoadSimpleReferenceOptionsAsync("Area", "item");
-                var state = ContragentEditStateFactory.Create(
-                    _viewModel.CurrentReference,
-                    isCreateMode: false,
-                    sourceRow,
-                    ownershipOptions,
-                    regionOptions);
-
-                if (string.IsNullOrWhiteSpace(state.Inn) || !IsValidInn(state.Inn))
-                {
-                    await ShowErrorDialogAsync("Сверка с ФНС", "Укажите корректный ИНН для сверки.");
-                    return;
-                }
-
-                var fnsResults = await _fnsContragentService.SearchByReqAsync(state.Inn.Trim(), state.Kpp);
-                if (fnsResults.Count == 0)
-                {
-                    await ShowErrorDialogAsync("Сверка с ФНС", "Данные в ФНС не найдены.");
-                    return;
-                }
-
-                var remote = SelectFnsResult(fnsResults, state.Kpp);
-                var editViewModel = new ContragentEditViewModel(state, LoadAddressOptionsAsync);
-                var compareRows = BuildFnsCompareRows(editViewModel, remote);
-                if (compareRows.Count == 0 || compareRows.All(static row => string.IsNullOrWhiteSpace(row.RemoteValue)))
-                {
-                    await ShowErrorDialogAsync("Сверка с ФНС", "ФНС не вернула данных, которые можно применить к карточке.");
-                    return;
-                }
-
-                var compareContent = BuildFnsCompareDialogContent(compareRows);
-                await Task.Yield();
-
-                var dialog = new ContentDialog
-                {
-                    XamlRoot = XamlRoot,
-                    Title = BuildFnsCompareDialogHeader(),
-                    PrimaryButtonText = "Применить",
-                    CloseButtonText = "Отмена",
-                    DefaultButton = ContentDialogButton.Primary,
-                    Content = compareContent
-                };
-                dialog.Resources["ContentDialogMinWidth"] = 1180d;
-                dialog.Resources["ContentDialogMaxWidth"] = 1280d;
-                DialogChrome.Apply(dialog, "Сверка с ФНС");
-
-                if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-                {
-                    return;
-                }
-
-                foreach (var row in compareRows.Where(static row => row.IsChecked))
-                {
-                    row.Apply(editViewModel);
-                }
-
-                await EnsureContragentAddressAsync(editViewModel);
-                if (!editViewModel.CanSubmit)
-                {
-                    await ShowErrorDialogAsync("Сверка с ФНС", "Отмеченные строки не меняют карточку контрагента.");
-                    return;
-                }
-
-                var payload = ContragentEditPayloadBuilder.BuildForUpdate(editViewModel);
-                if (payload.Count <= 1)
-                {
-                    await ShowErrorDialogAsync("Сверка с ФНС", "Отмеченные строки не меняют карточку контрагента.");
-                    return;
-                }
-
-                var savedRow = await _modelMutationService.UpdateAsync(_viewModel.CurrentReference.Model, payload);
-                _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-                await RefreshReferenceAfterSaveAsync(false, savedRow, payload);
-                ShowSuccessNotification(
-                    "Данные обновлены",
-                    BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync("Не удалось выполнить сверку с ФНС", ex.Message);
-            }
-            finally
-            {
-                _isFnsCompareInProgress = false;
-                UpdateSelectionActionButtons();
-            }
-        }
-
-        private static FnsContragentLookupResult SelectFnsResult(
-            IReadOnlyList<FnsContragentLookupResult> results,
-            string? kpp)
-        {
-            if (!string.IsNullOrWhiteSpace(kpp))
-            {
-                var byKpp = results.FirstOrDefault(result =>
-                    string.Equals(result.Organization.Kpp, kpp.Trim(), StringComparison.OrdinalIgnoreCase));
-
-                if (byKpp is not null)
-                {
-                    return byKpp;
-                }
-            }
-
-            return results[0];
-        }
-
-        private async Task ImportContragentFromFnsAsync()
-        {
-            if (_viewModel.CurrentReference is null || !_viewModel.IsContragentReference)
-            {
-                return;
-            }
-
-            var criteria = await ShowFnsImportCriteriaDialogAsync();
-            if (criteria is null)
-            {
-                return;
-            }
-
-            if (!IsValidInn(criteria.Inn))
-            {
-                await ShowErrorDialogAsync("Импорт из ФНС", "Укажите корректный ИНН.");
-                return;
-            }
-
-            try
-            {
-                var results = await _fnsContragentService.SearchByReqAsync(criteria.Inn);
-                if (results.Count == 0)
-                {
-                    await ShowErrorDialogAsync("Импорт из ФНС", "Данные в ФНС не найдены.");
-                    return;
-                }
-
-                var filteredResults = FilterFnsImportResults(results, criteria);
-                if (filteredResults.Count == 0)
-                {
-                    await ShowErrorDialogAsync("Импорт из ФНС", "По указанным КПП или наименованию данные не найдены.");
-                    return;
-                }
-
-                var selectedResult = filteredResults.Count == 1
-                    ? filteredResults[0]
-                    : await ShowFnsImportResultSelectionDialogAsync(filteredResults);
-                if (selectedResult is null)
-                {
-                    return;
-                }
-
-                var state = await CreateContragentImportStateAsync(selectedResult);
-                await ShowContragentEditDialogAsync(isCreateMode: true, state);
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync("Не удалось импортировать данные из ФНС", ex.Message);
-            }
-        }
-
-        private async Task ChangeContragentLegalEntityManuallyAsync()
-        {
-            if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null || !_viewModel.IsContragentReference)
-            {
-                return;
-            }
-
-            var state = await CreateLegalEntityChangeStateAsync();
-            if (state is null)
-            {
-                return;
-            }
-
-            await ShowContragentEditDialogAsync(
-                isCreateMode: false,
-                state,
-                isLegalEntityChangeMode: true);
-        }
-
-        private async Task ChangeContragentLegalEntityFromFnsAsync()
-        {
-            if (_viewModel.CurrentReference is null || _viewModel.SelectedRow is null || !_viewModel.IsContragentReference)
-            {
-                return;
-            }
-
-            try
-            {
-                var fnsResult = await SelectFnsImportResultAsync();
-                if (fnsResult is null)
-                {
-                    return;
-                }
-
-                var state = await CreateLegalEntityChangeStateAsync(fnsResult);
-                if (state is null)
-                {
-                    return;
-                }
-
-                await ShowContragentEditDialogAsync(
-                    isCreateMode: false,
-                    state,
-                    isLegalEntityChangeMode: true);
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync("Не удалось сменить юр.лицо через ФНС", ex.Message);
-            }
-        }
-
-        private async Task<FnsContragentLookupResult?> SelectFnsImportResultAsync()
-        {
-            var criteria = await ShowFnsImportCriteriaDialogAsync();
-            if (criteria is null)
-            {
-                return null;
-            }
-
-            if (!IsValidInn(criteria.Inn))
-            {
-                await ShowErrorDialogAsync("Импорт из ФНС", "Укажите корректный ИНН.");
-                return null;
-            }
-
-            var results = await _fnsContragentService.SearchByReqAsync(criteria.Inn);
-            if (results.Count == 0)
-            {
-                await ShowErrorDialogAsync("Импорт из ФНС", "Данные в ФНС не найдены.");
-                return null;
-            }
-
-            var filteredResults = FilterFnsImportResults(results, criteria);
-            if (filteredResults.Count == 0)
-            {
-                await ShowErrorDialogAsync("Импорт из ФНС", "По указанным КПП или наименованию данные не найдены.");
-                return null;
-            }
-
-            return filteredResults.Count == 1
-                ? filteredResults[0]
-                : await ShowFnsImportResultSelectionDialogAsync(filteredResults);
-        }
-
-        private async Task<FnsImportCriteria?> ShowFnsImportCriteriaDialogAsync()
-        {
-            var innBox = new TextBox
-            {
-                Header = "ИНН",
-                PlaceholderText = "Введите ИНН",
-                MinWidth = 360
-            };
-            var kppBox = new TextBox
-            {
-                Header = "КПП",
-                PlaceholderText = "Необязательно",
-                MinWidth = 360
-            };
-            var nameBox = new TextBox
-            {
-                Header = "Наименование",
-                PlaceholderText = "Короткое или полное имя",
-                MinWidth = 360
-            };
-            var content = new StackPanel
-            {
-                Spacing = 10,
-                Children =
-                {
-                    innBox,
-                    kppBox,
-                    nameBox
-                }
-            };
-
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = "Импорт из ФНС",
-                PrimaryButtonText = "Найти",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary,
-                Content = content
-            };
-            DialogChrome.Apply(dialog);
-
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
-            {
-                return null;
-            }
-
-            var inn = NormalizeSingleLine(innBox.Text);
-            if (string.IsNullOrWhiteSpace(inn))
-            {
-                return null;
-            }
-
-            return new FnsImportCriteria(
-                inn,
-                NormalizeSingleLine(kppBox.Text),
-                NormalizeSingleLine(nameBox.Text));
-        }
-
-        private static IReadOnlyList<FnsContragentLookupResult> FilterFnsImportResults(
-            IReadOnlyList<FnsContragentLookupResult> results,
-            FnsImportCriteria criteria)
-        {
-            if (string.IsNullOrWhiteSpace(criteria.Kpp) && string.IsNullOrWhiteSpace(criteria.Name))
-            {
-                return results;
-            }
-
-            return results
-                .Where(result =>
-                    MatchesFnsImportKpp(result, criteria.Kpp)
-                    || MatchesFnsImportName(result, criteria.Name))
-                .ToList();
-        }
-
-        private static bool MatchesFnsImportKpp(FnsContragentLookupResult result, string kpp)
-        {
-            return !string.IsNullOrWhiteSpace(kpp)
-                && string.Equals(
-                    NormalizeSingleLine(result.Organization.Kpp),
-                    kpp,
-                    StringComparison.CurrentCultureIgnoreCase);
-        }
-
-        private static bool MatchesFnsImportName(FnsContragentLookupResult result, string name)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return false;
-            }
-
-            var fullName = NormalizeSingleLine(result.Organization.FullName);
-            var shortName = NormalizeSingleLine(result.Organization.Name);
-            return fullName.Contains(name, StringComparison.CurrentCultureIgnoreCase)
-                || shortName.Contains(name, StringComparison.CurrentCultureIgnoreCase);
-        }
-
-        private async Task<FnsContragentLookupResult?> ShowFnsImportResultSelectionDialogAsync(
-            IReadOnlyList<FnsContragentLookupResult> results)
-        {
-            var items = results
-                .Select(static result => new FnsImportSelectionItem(BuildFnsImportSelectionLabel(result), result))
-                .ToList();
-            var comboBox = new ComboBox
-            {
-                Header = "КПП / подразделение",
-                ItemsSource = items,
-                DisplayMemberPath = nameof(FnsImportSelectionItem.Label),
-                SelectedIndex = 0,
-                MinWidth = 680
-            };
-
-            var dialog = new ContentDialog
-            {
-                XamlRoot = XamlRoot,
-                Title = "Выберите регистрацию",
-                PrimaryButtonText = "Продолжить",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary,
-                Content = comboBox
-            };
-            dialog.Resources["ContentDialogMinWidth"] = 760d;
-            DialogChrome.Apply(dialog);
-
-            return await dialog.ShowAsync() == ContentDialogResult.Primary
-                ? (comboBox.SelectedItem as FnsImportSelectionItem)?.Result
-                : null;
-        }
-
-        private async Task<ContragentEditDialogState> CreateContragentImportStateAsync(
-            FnsContragentLookupResult result)
-        {
-            var ownershipOptions = await LoadSimpleReferenceOptionsAsync("Ownership", "card");
-            var regionOptions = await LoadSimpleReferenceOptionsAsync("Area", "item");
-
-            return new ContragentEditDialogState
-            {
-                Definition = _viewModel.CurrentReference!,
-                IsCreateMode = true,
-                ObjUuid = string.IsNullOrWhiteSpace(result.ObjUuid) ? Guid.NewGuid().ToString() : result.ObjUuid,
-                RequisitesListKey = result.RequisitesListKey,
-                Inn = NormalizeSingleLine(result.Organization.Inn),
-                Kpp = NormalizeSingleLine(result.Organization.Kpp),
-                OwnershipId = result.Organization.OwnershipId,
-                Name = NormalizeSingleLine(result.Organization.Name),
-                FullName = NormalizeSingleLine(result.Organization.FullName),
-                RegionId = result.Region?.Id ?? result.RealAddress.AreaId,
-                RegionName = result.Region?.Name ?? string.Empty,
-                AddressReal = NormalizeSingleLine(result.RealAddress.Value),
-                Description = NormalizeSingleLine(result.Description),
-                Ogrn = NormalizeSingleLine(result.Organization.Ogrn),
-                Okfc = NormalizeSingleLine(result.Organization.Okfc),
-                Okopf = NormalizeSingleLine(result.Organization.Okopf),
-                Okpo = NormalizeSingleLine(result.Organization.Okpo),
-                Okogu = NormalizeSingleLine(result.Organization.Okogu),
-                Oktmo = NormalizeSingleLine(result.Organization.Oktmo),
-                Contacts = result.Contacts
-                    .Where(static contact => !string.IsNullOrWhiteSpace(contact.Value))
-                    .Select(static contact => new EmployeeContactEditItem
-                    {
-                        ListKey = contact.ListKey,
-                        Value = NormalizeSingleLine(contact.Value),
-                        Type = NormalizeSingleLine(contact.Type)
-                    })
-                    .ToList(),
-                ContactsText = string.Join(
-                    Environment.NewLine,
-                    result.Contacts
-                        .Select(static contact => NormalizeSingleLine(contact.Value))
-                        .Where(static value => !string.IsNullOrWhiteSpace(value))
-                        .Distinct(StringComparer.CurrentCultureIgnoreCase)),
-                OwnershipOptions = ownershipOptions,
-                RegionOptions = regionOptions
-            };
-        }
-
-        private async Task<ContragentEditDialogState?> CreateLegalEntityChangeStateAsync(
-            FnsContragentLookupResult? result = null)
-        {
-            if (_viewModel.CurrentReference is null)
-            {
-                return null;
-            }
-
-            var sourceRow = await LoadContragentEditRowAsync();
-            if (sourceRow is null)
-            {
-                await ShowErrorDialogAsync("Смена юр.лица", "Не удалось загрузить свежую карточку контрагента.");
-                return null;
-            }
-
-            var ownershipOptions = await LoadSimpleReferenceOptionsAsync("Ownership", "card");
-            var regionOptions = await LoadSimpleReferenceOptionsAsync("Area", "item");
-            var currentState = ContragentEditStateFactory.Create(
-                _viewModel.CurrentReference,
-                isCreateMode: false,
-                sourceRow,
-                ownershipOptions,
-                regionOptions);
-            var newRegistration = CreateNewLegalEntityRegistration(result);
-            var organizationHistory = currentState.OrganizationHistory
-                .Select(static registration => CopyRegistrationForLegalEntityChange(registration))
-                .Prepend(newRegistration)
-                .ToList();
-
-            return new ContragentEditDialogState
-            {
-                Definition = currentState.Definition,
-                IsCreateMode = false,
-                Id = currentState.Id,
-                ObjUuid = currentState.ObjUuid,
-                RequisitesId = currentState.RequisitesId,
-                RequisitesListKey = currentState.RequisitesListKey,
-                OrganizationId = currentState.OrganizationId,
-                Inn = newRegistration.Inn,
-                Kpp = newRegistration.Kpp,
-                Division = newRegistration.Division,
-                OwnershipId = newRegistration.OwnershipId,
-                OwnershipName = newRegistration.OwnershipName,
-                Name = newRegistration.Name,
-                RegionId = currentState.RegionId,
-                RegionName = currentState.RegionName,
-                RealAddressId = currentState.RealAddressId,
-                RealAddressListKey = currentState.RealAddressListKey,
-                AddressRealAddressId = currentState.AddressRealAddressId,
-                AddressReal = currentState.AddressReal,
-                FullName = newRegistration.FullName,
-                Description = currentState.Description,
-                Ogrn = newRegistration.Ogrn,
-                Okfc = newRegistration.Okfc,
-                Okopf = newRegistration.Okopf,
-                Okpo = newRegistration.Okpo,
-                Okogu = newRegistration.Okogu,
-                Okved = newRegistration.Okved,
-                Oktmo = newRegistration.Oktmo,
-                BankName = currentState.BankName,
-                BankBik = currentState.BankBik,
-                BankAccount = currentState.BankAccount,
-                BankCorAccount = currentState.BankCorAccount,
-                Contacts = currentState.Contacts,
-                ContactsText = currentState.ContactsText,
-                OrganizationHistory = organizationHistory,
-                OwnershipOptions = ownershipOptions,
-                RegionOptions = regionOptions,
-                InitialAddressOption = currentState.InitialAddressOption
-            };
-        }
-
-        private static ContragentOrganizationHistoryItem CreateNewLegalEntityRegistration(
-            FnsContragentLookupResult? result)
-        {
-            return new ContragentOrganizationHistoryItem
-            {
-                ListKey = Guid.NewGuid().ToString(),
-                IsActive = true,
-                OriginalIsActive = false,
-                Name = NormalizeSingleLine(result?.Organization.Name),
-                FullName = NormalizeSingleLine(result?.Organization.FullName),
-                Inn = NormalizeSingleLine(result?.Organization.Inn),
-                Kpp = NormalizeSingleLine(result?.Organization.Kpp),
-                OwnershipId = result?.Organization.OwnershipId,
-                Ogrn = NormalizeSingleLine(result?.Organization.Ogrn),
-                Okfc = NormalizeSingleLine(result?.Organization.Okfc),
-                Okopf = NormalizeSingleLine(result?.Organization.Okopf),
-                Okpo = NormalizeSingleLine(result?.Organization.Okpo),
-                Okogu = NormalizeSingleLine(result?.Organization.Okogu),
-                Oktmo = NormalizeSingleLine(result?.Organization.Oktmo)
-            };
-        }
-
-        private static ContragentOrganizationHistoryItem CopyRegistrationForLegalEntityChange(
-            ContragentOrganizationHistoryItem registration)
-        {
-            return new ContragentOrganizationHistoryItem
-            {
-                Id = registration.Id,
-                OrganizationId = registration.OrganizationId,
-                Name = registration.Name,
-                FullName = registration.FullName,
-                Inn = registration.Inn,
-                Kpp = registration.Kpp,
-                Division = registration.Division,
-                OwnershipName = registration.OwnershipName,
-                OwnershipId = registration.OwnershipId,
-                OwnershipCode = registration.OwnershipCode,
-                Ogrn = registration.Ogrn,
-                Okfc = registration.Okfc,
-                Okopf = registration.Okopf,
-                Okpo = registration.Okpo,
-                Okogu = registration.Okogu,
-                Okved = registration.Okved,
-                Oktmo = registration.Oktmo,
-                ListKey = registration.ListKey,
-                CreatedAt = registration.CreatedAt,
-                UpdatedAt = registration.UpdatedAt,
-                OriginalIsActive = registration.OriginalIsActive,
-                IsActive = false,
-                IsMarkedForDestroy = registration.IsMarkedForDestroy
-            };
-        }
-
-        private static string BuildFnsImportSelectionLabel(FnsContragentLookupResult result)
-        {
-            var requisites = string.Join(
-                " / ",
-                new[] { result.Organization.Inn, result.Organization.Kpp }
-                    .Select(NormalizeSingleLine)
-                    .Where(static value => !string.IsNullOrWhiteSpace(value)));
-            var name = NormalizeSingleLine(result.Organization.Name);
-            var address = NormalizeSingleLine(result.RealAddress.Value);
-
-            return string.Join(
-                " · ",
-                new[] { requisites, name, address }
-                    .Where(static value => !string.IsNullOrWhiteSpace(value)));
-        }
-
-        private static string NormalizeSingleLine(string? value)
-        {
-            return string.IsNullOrWhiteSpace(value)
-                ? string.Empty
-                : string.Join(" ", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
-        }
-
-        private static IReadOnlyList<FnsCompareRow> BuildFnsCompareRows(
-            ContragentEditViewModel local,
-            FnsContragentLookupResult remote)
-        {
-            var remoteContacts = remote.Contacts
-                .Where(static contact => !string.IsNullOrWhiteSpace(contact.Value) && !string.IsNullOrWhiteSpace(contact.Type))
-                .ToList();
-            var localContactValues = SplitContactText(local.ContactsText).ToHashSet(StringComparer.CurrentCultureIgnoreCase);
-            var newRemoteContacts = remoteContacts
-                .Where(contact => !localContactValues.Contains(contact.Value.Trim()))
-                .ToList();
-
-            return
-            [
-                TextRow("name", "Наименование", local.Name, remote.Organization.Name, (viewModel, value) => viewModel.Name = value),
-                TextRow("full_name", "Полное наименование", local.FullName, remote.Organization.FullName, (viewModel, value) => viewModel.FullName = value),
-                TextRow("inn", "ИНН", local.Inn, remote.Organization.Inn, (viewModel, value) => viewModel.Inn = value),
-                TextRow("kpp", "КПП", local.Kpp, remote.Organization.Kpp, (viewModel, value) => viewModel.Kpp = value),
-                TextRow("ogrn", "ОГРН", local.Ogrn, remote.Organization.Ogrn, (viewModel, value) => viewModel.Ogrn = value),
-                TextRow("okopf", "ОКОПФ", local.Okopf, remote.Organization.Okopf, (viewModel, value) => viewModel.Okopf = value),
-                TextRow("okpo", "ОКПО", local.Okpo, remote.Organization.Okpo, (viewModel, value) => viewModel.Okpo = value),
-                TextRow("okogu", "ОКОГУ", local.Okogu, remote.Organization.Okogu, (viewModel, value) => viewModel.Okogu = value),
-                TextRow("okfc", "ОКФС", local.Okfc, remote.Organization.Okfc, (viewModel, value) => viewModel.Okfc = value),
-                TextRow("oktmo", "ОКТМО", local.Oktmo, remote.Organization.Oktmo, (viewModel, value) => viewModel.Oktmo = value),
-                LookupRow(
-                    "ownership",
-                    "Форма собственности",
-                    GetOptionLabel(local.OwnershipOptions, local.SelectedOwnershipId),
-                    GetOptionLabel(local.OwnershipOptions, remote.Organization.OwnershipId) ?? remote.Organization.OwnershipOkopf,
-                    remote.Organization.OwnershipId,
-                    (viewModel, value) => viewModel.SelectedOwnershipId = value),
-                LookupRow(
-                    "region",
-                    "Регион",
-                    GetOptionLabel(local.RegionOptions, local.SelectedRegionId),
-                    GetOptionLabel(local.RegionOptions, remote.Region?.Id) ?? remote.Region?.Name,
-                    remote.Region?.Id,
-                    (viewModel, value) => viewModel.SelectedRegionId = value),
-                TextRow("address", "Адрес", local.AddressReal, remote.RealAddress.Value, (viewModel, value) => viewModel.CommitAddressInput(value)),
-                new FnsCompareRow
-                {
-                    Key = "contacts",
-                    Label = "Контакты",
-                    LocalValue = string.Join(", ", SplitContactText(local.ContactsText)),
-                    RemoteValue = string.Join(", ", remoteContacts.Select(static contact => contact.Value)),
-                    CanApply = newRemoteContacts.Count > 0,
-                    IsChecked = newRemoteContacts.Count > 0,
-                    Apply = viewModel =>
-                    {
-                        if (newRemoteContacts.Count == 0)
-                        {
-                            return;
-                        }
-
-                        var values = SplitContactText(viewModel.ContactsText).ToList();
-                        values.AddRange(newRemoteContacts.Select(static contact => contact.Value.Trim()));
-                        viewModel.ContactsText = string.Join(Environment.NewLine, values.Distinct(StringComparer.CurrentCultureIgnoreCase));
-                    }
-                }
-            ];
-        }
-
-        private static FnsCompareRow TextRow(
-            string key,
-            string label,
-            string localValue,
-            string? remoteValue,
-            Action<ContragentEditViewModel, string> apply)
-        {
-            var normalizedRemote = remoteValue?.Trim() ?? string.Empty;
-            return new FnsCompareRow
-            {
-                Key = key,
-                Label = label,
-                LocalValue = localValue.Trim(),
-                RemoteValue = normalizedRemote,
-                CanApply = !string.IsNullOrWhiteSpace(normalizedRemote),
-                IsChecked = !string.IsNullOrWhiteSpace(normalizedRemote)
-                    && !string.Equals(localValue.Trim(), normalizedRemote, StringComparison.CurrentCulture),
-                Apply = viewModel => apply(viewModel, normalizedRemote)
-            };
-        }
-
-        private static FnsCompareRow LookupRow(
-            string key,
-            string label,
-            string? localValue,
-            string? remoteValue,
-            long? remoteId,
-            Action<ContragentEditViewModel, long?> apply)
-        {
-            return new FnsCompareRow
-            {
-                Key = key,
-                Label = label,
-                LocalValue = localValue?.Trim() ?? string.Empty,
-                RemoteValue = remoteValue?.Trim() ?? string.Empty,
-                CanApply = remoteId is not null,
-                IsChecked = remoteId is not null && !string.Equals(localValue?.Trim(), remoteValue?.Trim(), StringComparison.CurrentCulture),
-                Apply = viewModel => apply(viewModel, remoteId)
-            };
-        }
-
-        private static FrameworkElement BuildFnsCompareDialogContent(IReadOnlyList<FnsCompareRow> rows)
-        {
-            var root = new StackPanel
-            {
-                Spacing = 0,
-                Width = 1180
-            };
-
-            root.Children.Add(BuildFnsCompareHeaderRow());
-
-            for (var index = 0; index < rows.Count; index++)
-            {
-                root.Children.Add(BuildFnsCompareValueRow(rows[index], index));
-            }
-
-            return new ScrollViewer
-            {
-                MaxHeight = 580,
-                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                HorizontalScrollMode = ScrollMode.Enabled,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollMode = ScrollMode.Enabled,
-                Content = root
-            };
-        }
-
-        private static Grid BuildFnsCompareDialogHeader()
-        {
-            var header = new Grid
-            {
-                Width = 1180,
-                Padding = new Thickness(4, 4, 4, 4)
-            };
-
-            header.Children.Add(new TextBlock
-            {
-                Text = "Сверка с ФНС",
-                VerticalAlignment = VerticalAlignment.Center,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                FontSize = 16,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
-            });
-
-            return header;
-        }
-
-        private static Grid BuildFnsCompareHeaderRow()
-        {
-            var grid = CreateFnsCompareGrid();
-            grid.Padding = new Thickness(0, 0, 0, 6);
-            grid.Background = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellMutedPanelBackgroundBrush"];
-
-            AddCompareText(grid, "Поле", 0, isHeader: true);
-            AddCompareText(grid, "Локально", 1, isHeader: true);
-            AddCompareText(grid, "ФНС", 2, isHeader: true);
-            AddCompareText(grid, "Обн", 3, isHeader: true, horizontalAlignment: HorizontalAlignment.Center);
-            return grid;
-        }
-
-        private static Grid BuildFnsCompareValueRow(FnsCompareRow row, int index)
-        {
-            var grid = CreateFnsCompareGrid();
-            grid.Padding = new Thickness(0, 4, 0, 4);
-            grid.Background = index % 2 == 1
-                ? (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellMutedPanelBackgroundBrush"]
-                : (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["ShellPanelBackgroundBrush"];
-
-            AddCompareText(grid, row.Label, 0);
-            AddCompareText(grid, string.IsNullOrWhiteSpace(row.LocalValue) ? "-" : row.LocalValue, 1);
-            AddCompareText(grid, string.IsNullOrWhiteSpace(row.RemoteValue) ? "-" : row.RemoteValue, 2);
-
-            var checkBox = new CheckBox
-            {
-                Content = null,
-                IsChecked = row.IsChecked,
-                IsEnabled = row.CanApply,
-                MinWidth = 0,
-                Width = 20,
-                Padding = new Thickness(0),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Tag = row
-            };
-            checkBox.Checked += FnsCompareCheckBoxChanged;
-            checkBox.Unchecked += FnsCompareCheckBoxChanged;
-
-            var checkBoxHost = new Grid
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch
-            };
-            checkBoxHost.Children.Add(checkBox);
-            Grid.SetColumn(checkBoxHost, 3);
-            grid.Children.Add(checkBoxHost);
-            return grid;
-        }
-
-        private static Grid CreateFnsCompareGrid()
-        {
-            var grid = new Grid
-            {
-                ColumnSpacing = 10,
-                Width = 1180
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(200) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
-            return grid;
-        }
-
-        private static void AddCompareText(
-            Grid grid,
-            string text,
-            int column,
-            bool isHeader = false,
-            HorizontalAlignment horizontalAlignment = HorizontalAlignment.Left)
-        {
-            var textBlock = new TextBlock
-            {
-                Text = text,
-                TextWrapping = TextWrapping.WrapWholeWords,
-                VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = horizontalAlignment,
-                FontWeight = isHeader ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal
-            };
-
-            Grid.SetColumn(textBlock, column);
-            grid.Children.Add(textBlock);
-        }
-
-        private static void FnsCompareCheckBoxChanged(object sender, RoutedEventArgs e)
-        {
-            if (sender is CheckBox { Tag: FnsCompareRow row } checkBox)
-            {
-                row.IsChecked = checkBox.IsChecked == true;
-            }
-        }
-
-        private static IReadOnlyList<string> SplitContactText(string contactsText)
-        {
-            return contactsText
-                .Split([Environment.NewLine, "\n", ";", ","], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Where(static value => !string.IsNullOrWhiteSpace(value))
-                .Select(static value => value.Trim())
-                .ToList();
-        }
-
-        private static string? GetOptionLabel(IReadOnlyList<CbsTableFilterOptionDefinition> options, object? value)
-        {
-            if (value is null)
-            {
-                return null;
-            }
-
-            var normalizedValue = value.ToString();
-            return options.FirstOrDefault(option =>
-                string.Equals(option.Value?.ToString(), normalizedValue, StringComparison.OrdinalIgnoreCase))?.Label;
-        }
-
-        private static bool IsValidInn(string value)
-        {
-            var text = value.Trim();
-            return (text.Length == 10 || text.Length == 12)
-                && text.All(char.IsDigit);
+            return await ConfirmDialogAsync(
+                "РЎР±СЂРѕСЃ С„РёР»СЊС‚СЂРѕРІ",
+                "РћС‡РёСЃС‚РёС‚СЊ РІСЃРµ С„РёР»СЊС‚СЂС‹ С‚РµРєСѓС‰РµР№ С‚Р°Р±Р»РёС†С‹?",
+                "РћС‡РёСЃС‚РёС‚СЊ");
         }
 
         private async Task RecalculateHolidayStagesAsync()
@@ -2365,7 +1488,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var holiday = TryCreateHolidayInterval(_viewModel.SelectedRow);
             if (holiday is null)
             {
-                await ShowErrorDialogAsync("Не удалось пересчитать сроки.", "Не удалось определить период выбранного календарного дня.");
+                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РїРµСЂРµСЃС‡РёС‚Р°С‚СЊ СЃСЂРѕРєРё.", "РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСЂРµРґРµР»РёС‚СЊ РїРµСЂРёРѕРґ РІС‹Р±СЂР°РЅРЅРѕРіРѕ РєР°Р»РµРЅРґР°СЂРЅРѕРіРѕ РґРЅСЏ.");
                 return;
             }
 
@@ -2377,7 +1500,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 var affectedStages = await LoadAffectedStagesAsync(holiday);
                 if (affectedStages.Count == 0)
                 {
-                    await ShowErrorDialogAsync("Пересчёт не требуется", "Этапы в выбранном интервале не найдены.");
+                    await ShowErrorDialogAsync("РџРµСЂРµСЃС‡С‘С‚ РЅРµ С‚СЂРµР±СѓРµС‚СЃСЏ", "Р­С‚Р°РїС‹ РІ РІС‹Р±СЂР°РЅРЅРѕРј РёРЅС‚РµСЂРІР°Р»Рµ РЅРµ РЅР°Р№РґРµРЅС‹.");
                     return;
                 }
 
@@ -2390,11 +1513,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                 var confirmDialog = new ContentDialog
                 {
                     XamlRoot = XamlRoot,
-                    Title = "Пересчитать сроки",
-                    PrimaryButtonText = "Пересчитать",
-                    CloseButtonText = "Отмена",
+                    Title = "РџРµСЂРµСЃС‡РёС‚Р°С‚СЊ СЃСЂРѕРєРё",
+                    PrimaryButtonText = "РџРµСЂРµСЃС‡РёС‚Р°С‚СЊ",
+                    CloseButtonText = "РћС‚РјРµРЅР°",
                     DefaultButton = ContentDialogButton.Primary,
-                    Content = $"Будут затронуты {affectedStages.Count} этапа(ов) в {uniqueContracts} контракте(ах). Продолжить?"
+                    Content = $"Р‘СѓРґСѓС‚ Р·Р°С‚СЂРѕРЅСѓС‚С‹ {affectedStages.Count} СЌС‚Р°РїР°(РѕРІ) РІ {uniqueContracts} РєРѕРЅС‚СЂР°РєС‚Рµ(Р°С…). РџСЂРѕРґРѕР»Р¶РёС‚СЊ?"
                 };
                 DialogChrome.Apply(confirmDialog);
 
@@ -2430,7 +1553,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
                     catch (Exception ex)
                     {
-                        errors.Add($"Этап #{stage.Id}: ошибка обновления - {ex.Message}");
+                        errors.Add($"Р­С‚Р°Рї #{stage.Id}: РѕС€РёР±РєР° РѕР±РЅРѕРІР»РµРЅРёСЏ - {ex.Message}");
                     }
                 }
 
@@ -2439,19 +1562,19 @@ namespace CbsContractsDesktopClient.Views.Shell
                 if (errors.Count > 0)
                 {
                     await ShowErrorDialogAsync(
-                        "Пересчёт завершён с ошибками",
-                        $"Обработано: {processedCount}. Изменено: {updatedCount}. Контрактов затронуто: {touchedContracts.Count}.{Environment.NewLine}{Environment.NewLine}{string.Join(Environment.NewLine, errors.Take(10))}");
+                        "РџРµСЂРµСЃС‡С‘С‚ Р·Р°РІРµСЂС€С‘РЅ СЃ РѕС€РёР±РєР°РјРё",
+                        $"РћР±СЂР°Р±РѕС‚Р°РЅРѕ: {processedCount}. РР·РјРµРЅРµРЅРѕ: {updatedCount}. РљРѕРЅС‚СЂР°РєС‚РѕРІ Р·Р°С‚СЂРѕРЅСѓС‚Рѕ: {touchedContracts.Count}.{Environment.NewLine}{Environment.NewLine}{string.Join(Environment.NewLine, errors.Take(10))}");
                 }
                 else
                 {
                     ShowSuccessNotification(
-                        "Пересчёт завершён",
-                        $"Этапов обработано: {processedCount}, изменено: {updatedCount}, контрактов затронуто: {touchedContracts.Count}");
+                        "РџРµСЂРµСЃС‡С‘С‚ Р·Р°РІРµСЂС€С‘РЅ",
+                        $"Р­С‚Р°РїРѕРІ РѕР±СЂР°Р±РѕС‚Р°РЅРѕ: {processedCount}, РёР·РјРµРЅРµРЅРѕ: {updatedCount}, РєРѕРЅС‚СЂР°РєС‚РѕРІ Р·Р°С‚СЂРѕРЅСѓС‚Рѕ: {touchedContracts.Count}");
                 }
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Ошибки при пересчёте сроков", ex.Message);
+                await ShowErrorDialogAsync("РћС€РёР±РєРё РїСЂРё РїРµСЂРµСЃС‡С‘С‚Рµ СЃСЂРѕРєРѕРІ", ex.Message);
             }
             finally
             {
@@ -2482,7 +1605,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 .ToList();
         }
 
-        private static HolidayInterval? TryCreateHolidayInterval(ReferenceDataRow row)
+        private static HolidayInterval? TryCreateHolidayInterval(TableDataRow row)
         {
             var beginAt = TryParseDate(row.GetValue("begin_at"));
             if (beginAt is null)
@@ -2499,7 +1622,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 EndDate: endAt);
         }
 
-        private static StageRecalcCandidate? TryCreateStageCandidate(ReferenceDataRow row)
+        private static StageRecalcCandidate? TryCreateStageCandidate(TableDataRow row)
         {
             var id = TryGetLong(row.GetValue("id"));
             if (id is null)
@@ -2577,7 +1700,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (stage.Duration is null)
             {
-                errors.Add($"Этап #{stage.Id}: пропущен - нет длительности исполнения.");
+                errors.Add($"Р­С‚Р°Рї #{stage.Id}: РїСЂРѕРїСѓС‰РµРЅ - РЅРµС‚ РґР»РёС‚РµР»СЊРЅРѕСЃС‚Рё РёСЃРїРѕР»РЅРµРЅРёСЏ.");
                 return null;
             }
 
@@ -2590,7 +1713,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (baseDate is null)
             {
-                errors.Add($"Этап #{stage.Id}: пропущен - нет базовой даты для срока исполнения.");
+                errors.Add($"Р­С‚Р°Рї #{stage.Id}: РїСЂРѕРїСѓС‰РµРЅ - РЅРµС‚ Р±Р°Р·РѕРІРѕР№ РґР°С‚С‹ РґР»СЏ СЃСЂРѕРєР° РёСЃРїРѕР»РЅРµРЅРёСЏ.");
                 return null;
             }
 
@@ -2604,7 +1727,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (stage.PaymentDuration is null)
             {
-                errors.Add($"Этап #{stage.Id}: пропущен - нет длительности оплаты.");
+                errors.Add($"Р­С‚Р°Рї #{stage.Id}: РїСЂРѕРїСѓС‰РµРЅ - РЅРµС‚ РґР»РёС‚РµР»СЊРЅРѕСЃС‚Рё РѕРїР»Р°С‚С‹.");
                 return null;
             }
 
@@ -2616,7 +1739,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var baseDate = TryParseDate(stage.FundedAt);
             if (baseDate is null)
             {
-                errors.Add($"Этап #{stage.Id}: пропущен - нет базовой даты для срока оплаты.");
+                errors.Add($"Р­С‚Р°Рї #{stage.Id}: РїСЂРѕРїСѓС‰РµРЅ - РЅРµС‚ Р±Р°Р·РѕРІРѕР№ РґР°С‚С‹ РґР»СЏ СЃСЂРѕРєР° РѕРїР»Р°С‚С‹.");
                 return null;
             }
 
@@ -2698,7 +1821,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 XamlRoot = XamlRoot
             };
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
@@ -2714,7 +1837,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (!isCreateMode && payload.Count <= 1)
                     {
-                        viewModel.ShowErrorInfo("Нет изменений для сохранения.");
+                        viewModel.ShowErrorInfo("РќРµС‚ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ.");
                         args.Cancel = true;
                         return;
                     }
@@ -2739,7 +1862,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
             await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
-                isCreateMode ? "Запись создана" : "Изменения сохранены",
+                isCreateMode ? "Р—Р°РїРёСЃСЊ СЃРѕР·РґР°РЅР°" : "РР·РјРµРЅРµРЅРёСЏ СЃРѕС…СЂР°РЅРµРЅС‹",
                 BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
         }
 
@@ -2755,13 +1878,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            ReferenceDataRow? sourceRow = null;
+            TableDataRow? sourceRow = null;
             if (!isCreateMode)
             {
                 sourceRow = await LoadEmployeeEditRowAsync(employeeId);
                 if (sourceRow is null)
                 {
-                    await ShowErrorDialogAsync("Не удалось открыть сотрудника.", "Не удалось загрузить свежую карточку сотрудника.");
+                    await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ СЃРѕС‚СЂСѓРґРЅРёРєР°.", "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРІРµР¶СѓСЋ РєР°СЂС‚РѕС‡РєСѓ СЃРѕС‚СЂСѓРґРЅРёРєР°.");
                     return;
                 }
             }
@@ -2773,7 +1896,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 XamlRoot = XamlRoot
             };
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
@@ -2789,7 +1912,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (!isCreateMode && payload.Count <= 1)
                     {
-                        viewModel.ShowErrorInfo("Нет изменений для сохранения.");
+                        viewModel.ShowErrorInfo("РќРµС‚ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ.");
                         args.Cancel = true;
                         return;
                     }
@@ -2814,7 +1937,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(definition.Model);
             await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
-                isCreateMode ? "Сотрудник создан" : "Изменения сотрудника сохранены",
+                isCreateMode ? "РЎРѕС‚СЂСѓРґРЅРёРє СЃРѕР·РґР°РЅ" : "РР·РјРµРЅРµРЅРёСЏ СЃРѕС‚СЂСѓРґРЅРёРєР° СЃРѕС…СЂР°РЅРµРЅС‹",
                 BuildReferenceNotificationMessage(definition.Title, TryGetSelectedRowId(savedRow)));
         }
 
@@ -2828,13 +1951,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            ReferenceDataRow? sourceRow = null;
+            TableDataRow? sourceRow = null;
             if (!isCreateMode && initialState is null)
             {
                 sourceRow = await LoadContragentEditRowAsync();
                 if (sourceRow is null)
                 {
-                    await ShowErrorDialogAsync("Не удалось открыть контрагента.", "Не удалось загрузить свежую карточку контрагента.");
+                    await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‚РєСЂС‹С‚СЊ РєРѕРЅС‚СЂР°РіРµРЅС‚Р°.", "РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРІРµР¶СѓСЋ РєР°СЂС‚РѕС‡РєСѓ РєРѕРЅС‚СЂР°РіРµРЅС‚Р°.");
                     return;
                 }
             }
@@ -2854,7 +1977,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 XamlRoot = XamlRoot
             };
 
-            ReferenceDataRow? savedRow = null;
+            TableDataRow? savedRow = null;
             IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
@@ -2873,7 +1996,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (!isCreateMode && !isLegalEntityChangeMode && payload.Count <= 1)
                     {
-                        viewModel.ShowErrorInfo("Нет изменений для сохранения.");
+                        viewModel.ShowErrorInfo("РќРµС‚ РёР·РјРµРЅРµРЅРёР№ РґР»СЏ СЃРѕС…СЂР°РЅРµРЅРёСЏ.");
                         args.Cancel = true;
                         return;
                     }
@@ -2899,14 +2022,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode
-                    ? "Контрагент создан"
+                    ? "РљРѕРЅС‚СЂР°РіРµРЅС‚ СЃРѕР·РґР°РЅ"
                     : isLegalEntityChangeMode
-                        ? "Юр.лицо контрагента изменено"
-                        : "Изменения контрагента сохранены",
+                        ? "Р®СЂ.Р»РёС†Рѕ РєРѕРЅС‚СЂР°РіРµРЅС‚Р° РёР·РјРµРЅРµРЅРѕ"
+                        : "РР·РјРµРЅРµРЅРёСЏ РєРѕРЅС‚СЂР°РіРµРЅС‚Р° СЃРѕС…СЂР°РЅРµРЅС‹",
                 BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, TryGetSelectedRowId(savedRow)));
         }
 
-        private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync(
+        private async Task<TableDataRow?> LoadEmployeeEditRowAsync(
             long? employeeId = null,
             CancellationToken cancellationToken = default)
         {
@@ -2916,7 +2039,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return null;
             }
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Employee",
@@ -2932,7 +2055,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
-        private async Task<ReferenceDataRow?> LoadStageEditRowAsync(CancellationToken cancellationToken = default)
+        private async Task<TableDataRow?> LoadStageEditRowAsync(CancellationToken cancellationToken = default)
         {
             if (_viewModel.SelectedRow is null)
             {
@@ -2945,7 +2068,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return null;
             }
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Stage",
@@ -2961,7 +2084,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
-        private async Task<ReferenceDataRow?> LoadRevisionContractCardAsync(
+        private async Task<TableDataRow?> LoadRevisionContractCardAsync(
             long contractId,
             CancellationToken cancellationToken = default)
         {
@@ -2975,14 +2098,14 @@ namespace CbsContractsDesktopClient.Views.Shell
                 },
                 Limit = 1
             };
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 request,
                 cancellationToken);
 
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
-        private async Task<ReferenceDataRow?> LoadRevisionContragentCardAsync(
+        private async Task<TableDataRow?> LoadRevisionContragentCardAsync(
             long contragentId,
             CancellationToken cancellationToken = default)
         {
@@ -2996,14 +2119,14 @@ namespace CbsContractsDesktopClient.Views.Shell
                 },
                 Limit = 1
             };
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 request,
                 cancellationToken);
 
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
-        private async Task<ReferenceDataRow?> LoadContragentEditRowAsync(CancellationToken cancellationToken = default)
+        private async Task<TableDataRow?> LoadContragentEditRowAsync(CancellationToken cancellationToken = default)
         {
             if (_viewModel.SelectedRow is null)
             {
@@ -3019,9 +2142,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             return await LoadContragentEditRowAsync(id.Value, cancellationToken);
         }
 
-        private async Task<ReferenceDataRow?> LoadContragentEditRowAsync(long id, CancellationToken cancellationToken = default)
+        private async Task<TableDataRow?> LoadContragentEditRowAsync(long id, CancellationToken cancellationToken = default)
         {
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Contragent",
@@ -3063,7 +2186,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async Task<IReadOnlyList<ReferenceLookupItem>> LoadOziEmployeeItemsAsync(
             CancellationToken cancellationToken = default)
         {
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Employee",
@@ -3128,7 +2251,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             var createdId = TryGetSelectedRowId(createdAddress);
             if (createdId is null)
             {
-                throw new InvalidOperationException("Не удалось получить ID созданного адреса.");
+                throw new InvalidOperationException("РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕР»СѓС‡РёС‚СЊ ID СЃРѕР·РґР°РЅРЅРѕРіРѕ Р°РґСЂРµСЃР°.");
             }
 
             viewModel.SelectAddressOption(new CbsTableFilterOptionDefinition
@@ -3148,7 +2271,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return null;
             }
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Address",
@@ -3177,7 +2300,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return [];
             }
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Address",
@@ -3201,7 +2324,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 .ToList();
         }
 
-        private static CbsTableFilterOptionDefinition? ToAddressOption(ReferenceDataRow row)
+        private static CbsTableFilterOptionDefinition? ToAddressOption(TableDataRow row)
         {
             var id = row.GetValue("id");
             var label = row.GetValue("value")?.ToString();
@@ -3240,7 +2363,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return [];
             }
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "Position",
@@ -3289,7 +2412,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Limit = 25
             };
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 request,
                 cancellationToken);
 
@@ -3316,44 +2439,12 @@ namespace CbsContractsDesktopClient.Views.Shell
                 : referenceTitle;
         }
 
-        private static void ShowSuccessNotification(string title, string message)
-        {
-            try
-            {
-                var notification = new AppNotificationBuilder()
-                    .AddText(title)
-                    .AddText(message)
-                    .BuildNotification();
-
-                AppNotificationManager.Default.Show(notification);
-            }
-            catch (COMException)
-            {
-            }
-            catch (InvalidOperationException)
-            {
-            }
-        }
-
-        private static long? TryGetSelectedRowId(ReferenceDataRow row)
-        {
-            var rawId = row.GetValue("id");
-            return rawId switch
-            {
-                long int64Value => int64Value,
-                int int32Value => int32Value,
-                decimal decimalValue => (long)decimalValue,
-                string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
-
         private static bool ContainsNestedAttributes(IReadOnlyDictionary<string, object?> payload)
         {
             return payload.Keys.Any(static key => key.EndsWith("_attributes", StringComparison.OrdinalIgnoreCase));
         }
 
-        private Task<ReferenceDataRow> SaveStagePayloadAsync(IReadOnlyDictionary<string, object?> payload)
+        private Task<TableDataRow> SaveStagePayloadAsync(IReadOnlyDictionary<string, object?> payload)
         {
             return _modelMutationService.UpdateAsync(GetCurrentTableModel(), payload);
         }
@@ -3373,7 +2464,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task RefreshReferenceAfterSaveAsync(
             bool isCreateMode,
-            ReferenceDataRow savedRow,
+            TableDataRow savedRow,
             IReadOnlyDictionary<string, object?>? payload)
         {
             if (isCreateMode
@@ -3384,7 +2475,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        private static long? TryGetLongValue(ReferenceDataRow row, string fieldKey)
+        private static long? TryGetLongValue(TableDataRow row, string fieldKey)
         {
             var value = row.GetValue(fieldKey);
             return value switch
@@ -3429,25 +2520,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             string? PaymentDeadlineAt,
             long? ContractId);
 
-        private sealed record FnsImportCriteria(string Inn, string Kpp, string Name);
-
-        private sealed record FnsImportSelectionItem(string Label, FnsContragentLookupResult Result);
-
-        private sealed class FnsCompareRow
-        {
-            public required string Key { get; init; }
-
-            public required string Label { get; init; }
-
-            public string LocalValue { get; init; } = string.Empty;
-
-            public string RemoteValue { get; init; } = string.Empty;
-
-            public bool CanApply { get; init; }
-
-            public bool IsChecked { get; set; }
-
-            public required Action<ContragentEditViewModel> Apply { get; init; }
-        }
     }
 }
+

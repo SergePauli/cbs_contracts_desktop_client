@@ -37,9 +37,9 @@ public sealed class StageClipboardFormatterTests
         Assert.Equal(" -  | АО Полное имя | 12/26/001", text);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,

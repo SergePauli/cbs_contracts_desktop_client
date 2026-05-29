@@ -11,7 +11,7 @@ public sealed class EmployeeEditStateFactoryTests
     public void Create_ForEdit_FlattensFreshEmployeeRowWithContacts()
     {
         var definition = CreateDefinition();
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {

@@ -149,7 +149,7 @@
 - navigation menu rules
 - ContentHostView settings-menu regression checks
 - регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
-- `ReferenceDataRow` nested-path resolution
+- `TableDataRow` nested-path resolution
 - `CbsTableRowView` formatting для date/time и boolean icon rendering
 - `CbsTableView` multiselect filter UI и options-source wiring
 - `CbsTableView` date/time filter modes, masked input и `CalendarDatePicker` switch

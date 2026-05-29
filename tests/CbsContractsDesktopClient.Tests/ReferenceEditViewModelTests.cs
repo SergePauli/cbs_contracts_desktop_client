@@ -28,7 +28,7 @@ public sealed class ReferenceEditViewModelTests
     public void CreateForEdit_KeepsIdFieldReadOnly()
     {
         var definition = CreateDefinition();
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -50,7 +50,7 @@ public sealed class ReferenceEditViewModelTests
     public void DirtyFields_ThenPayloadBuilder_ReturnsDirtyEditableFieldsAndId()
     {
         var definition = CreateDefinition();
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -123,7 +123,7 @@ public sealed class ReferenceEditViewModelTests
             ]
         };
 
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {
@@ -160,7 +160,7 @@ public sealed class ReferenceEditViewModelTests
     public void EditMode_UsesShortDescriptionText()
     {
         var definition = CreateDefinition();
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {

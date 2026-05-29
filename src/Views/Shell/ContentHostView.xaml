@@ -1,10 +1,10 @@
-﻿<UserControl
+<shell:ContentHostViewBase
     x:Class="CbsContractsDesktopClient.Views.Shell.ContentHostView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:controls="using:CbsContractsDesktopClient.Views.Controls"
     xmlns:functional="using:CbsContractsDesktopClient.Views.Functional"
     xmlns:references="using:CbsContractsDesktopClient.Views.References"
+    xmlns:shell="using:CbsContractsDesktopClient.Views.Shell"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
@@ -89,22 +89,6 @@
                             Visibility="Collapsed"
                             ToolTipService.ToolTip="Пересчитать сроки этапов"
                             Content="&#xE9D9;" />
-
-                        <Button
-                            x:Name="FnsCompareButton"
-                            Width="{StaticResource ShellActionButtonSize}"
-                            Height="{StaticResource ShellActionButtonSize}"
-                            Padding="0"
-                            Background="Transparent"
-                            BorderBrush="{x:Null}"
-                            Click="FnsCompareButton_Click"
-                            FontFamily="Segoe Fluent Icons"
-                            FontSize="14"
-                            Foreground="{StaticResource ShellSecondaryTextBrush}"
-                            IsEnabled="False"
-                            Visibility="Collapsed"
-                            ToolTipService.ToolTip="Сверить данные с ФНС"
-                            Content="&#xE895;" />
 
                         <Button
                             x:Name="CopyContragentDetailsButton"
@@ -285,29 +269,19 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <controls:CbsTableView
+                    <shell:TableHostView
                         x:Name="ReferenceTableView"
                         Grid.Row="0"
-                        Columns="{Binding CurrentColumns}"
-                        CurrentSortDirection="{Binding CurrentSortDirection}"
-                        CurrentSortField="{Binding CurrentSortField}"
-                        MultiSelectOptionsSources="{Binding CurrentFilterOptionsSources}"
-                        TableStateKey="{Binding CurrentTableStateKey}"
                         Density="Compact"
-                        HasMoreItems="{Binding HasMoreItems}"
-                        IsLoading="{Binding IsLoading}"
-                        ItemsSource="{Binding Items}"
-                        LoadedCount="{Binding LoadedCount}"
                         LoadMoreRequested="ReferenceTableView_LoadMoreRequested"
                         Margin="0"
-                        SelectedItem="{Binding SelectedRow, Mode=TwoWay}"
+                        Store="{Binding}"
                         SupportsMultipleRowSelection="False"
                         SupportsRowSelection="True"
                         ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"
                         FilterRequested="ReferenceTableView_FilterRequested"
                         RowSelectionChanged="ReferenceTableView_RowSelectionChanged"
                         SortRequested="ReferenceTableView_SortRequested"
-                        TotalCount="{Binding TotalCount}"
                         RowDoubleTapped="ReferenceTableView_RowDoubleTapped"
                         TraceGenerated="ReferenceTableView_TraceGenerated"
                         Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
@@ -357,4 +331,4 @@
             </Grid>
         </Border>
     </Grid>
-</UserControl>
+</shell:ContentHostViewBase>

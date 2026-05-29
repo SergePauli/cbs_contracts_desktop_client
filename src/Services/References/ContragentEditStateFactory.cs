@@ -10,7 +10,7 @@ namespace CbsContractsDesktopClient.Services.References
         public static ContragentEditDialogState Create(
             ReferenceDefinition definition,
             bool isCreateMode,
-            ReferenceDataRow? sourceRow,
+            TableDataRow? sourceRow,
             IReadOnlyList<CbsTableFilterOptionDefinition>? ownershipOptions = null,
             IReadOnlyList<CbsTableFilterOptionDefinition>? regionOptions = null)
         {
@@ -86,7 +86,7 @@ namespace CbsContractsDesktopClient.Services.References
                 };
         }
 
-        private static IReadOnlyList<ContragentOrganizationHistoryItem> ReadOrganizationHistory(ReferenceDataRow row)
+        private static IReadOnlyList<ContragentOrganizationHistoryItem> ReadOrganizationHistory(TableDataRow row)
         {
             var organizationsElement = TryGetArray(row, "organizations")
                 ?? TryGetArray(row, "contragent.organizations")
@@ -110,7 +110,7 @@ namespace CbsContractsDesktopClient.Services.References
                 .ToList();
         }
 
-        private static ContragentOrganizationHistoryItem? ReadCurrentOrganizationHistoryItem(ReferenceDataRow row)
+        private static ContragentOrganizationHistoryItem? ReadCurrentOrganizationHistoryItem(TableDataRow row)
         {
             var id = TryGetLong(row.GetValue("requisites.organization.id"));
             var name = GetSingleLineText(row, "requisites.organization.name");
@@ -183,7 +183,7 @@ namespace CbsContractsDesktopClient.Services.References
             };
         }
 
-        private static IReadOnlyList<EmployeeContactEditItem> ReadContacts(ReferenceDataRow row)
+        private static IReadOnlyList<EmployeeContactEditItem> ReadContacts(TableDataRow row)
         {
             return EnumerateObjectArray(row, "contacts")
                 .Select(ReadContact)

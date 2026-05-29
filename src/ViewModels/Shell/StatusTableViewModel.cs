@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
@@ -74,7 +74,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 ErrorMessage = string.IsNullOrWhiteSpace(_state.Items.ErrorMessage)
                     ? string.Empty
-                    : $"Не удалось загрузить справочник Status: {_state.Items.ErrorMessage}";
+                    : $"РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ СЃРїСЂР°РІРѕС‡РЅРёРє Status: {_state.Items.ErrorMessage}";
             }
             else if (e.PropertyName == nameof(CbsContractsDesktopClient.Collections.LazyDataCollection<StatusItem>.TotalCount))
             {
@@ -83,3 +83,5 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         }
     }
 }
+
+

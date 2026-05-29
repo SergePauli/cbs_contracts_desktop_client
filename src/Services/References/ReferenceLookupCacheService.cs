@@ -159,7 +159,7 @@ namespace CbsContractsDesktopClient.Services.References
             string preset,
             CancellationToken cancellationToken)
         {
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = model,
@@ -176,7 +176,7 @@ namespace CbsContractsDesktopClient.Services.References
                 .ToList();
         }
 
-        private static ReferenceLookupItem ToLookupItem(string model, string preset, ReferenceDataRow row)
+        private static ReferenceLookupItem ToLookupItem(string model, string preset, TableDataRow row)
         {
             var name = GetText(row, "name", "short_name", "title", "display_name", "full_name");
             var fullName = GetText(row, "full_name", "name", "title", "display_name");

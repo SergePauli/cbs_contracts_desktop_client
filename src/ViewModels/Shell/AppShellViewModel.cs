@@ -150,3 +150,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         }
     }
 }
+
+
+
+
+

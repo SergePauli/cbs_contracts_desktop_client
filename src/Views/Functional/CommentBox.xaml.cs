@@ -17,9 +17,9 @@ namespace CbsContractsDesktopClient.Views.Functional
         public static readonly DependencyProperty CommentsProperty =
             DependencyProperty.Register(
                 nameof(Comments),
-                typeof(IReadOnlyList<ReferenceDataRow>),
+                typeof(IReadOnlyList<TableDataRow>),
                 typeof(CommentBox),
-                new PropertyMetadata(Array.Empty<ReferenceDataRow>(), OnCommentsChanged));
+                new PropertyMetadata(Array.Empty<TableDataRow>(), OnCommentsChanged));
 
         public CommentBox()
         {
@@ -28,9 +28,9 @@ namespace CbsContractsDesktopClient.Views.Functional
             Render();
         }
 
-        public IReadOnlyList<ReferenceDataRow> Comments
+        public IReadOnlyList<TableDataRow> Comments
         {
-            get => (IReadOnlyList<ReferenceDataRow>)GetValue(CommentsProperty);
+            get => (IReadOnlyList<TableDataRow>)GetValue(CommentsProperty);
             set => SetValue(CommentsProperty, value);
         }
 
@@ -52,7 +52,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private FrameworkElement BuildCommentRow(ReferenceDataRow comment)
+        private FrameworkElement BuildCommentRow(TableDataRow comment)
         {
             var departmentId = TryGetInt(comment.GetValue("profile.department.id"));
             var profileId = TryGetInt(comment.GetValue("profile.id"));
@@ -139,7 +139,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : (Brush)Application.Current.Resources["ShellPanelBorderBrush"];
         }
 
-        private static string BuildMetaText(ReferenceDataRow comment, bool isOut)
+        private static string BuildMetaText(TableDataRow comment, bool isOut)
         {
             var when = comment.GetValue("when")?.ToString() ?? string.Empty;
             if (isOut)

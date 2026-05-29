@@ -1,10 +1,10 @@
-﻿using System;
+﻿using CbsContractsDesktopClient.ViewModels.Shell;
+using System;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using CbsContractsDesktopClient.Models.Shell;
-using CbsContractsDesktopClient.ViewModels.Shell;
 using System.ComponentModel;
 
 namespace CbsContractsDesktopClient.Views.Shell
@@ -71,3 +71,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         }
     }
 }
+
+
+
+

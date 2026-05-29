@@ -1,4 +1,5 @@
-﻿using System;
+﻿using CbsContractsDesktopClient.ViewModels.Shell;
+using System;
 using System.Collections.Generic;
 using System.Collections.Specialized;
 using System.ComponentModel;
@@ -9,7 +10,6 @@ using CbsContractsDesktopClient.Models.Navigation;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
-using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -59,7 +59,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             foreach (var section in _sections)
             {
                 if (!section.IsSessionSection
-                    && string.Equals(section.Title, "Справочники", StringComparison.OrdinalIgnoreCase))
+                    && string.Equals(section.Title, "РЎРїСЂР°РІРѕС‡РЅРёРєРё", StringComparison.OrdinalIgnoreCase))
                 {
                     AddFileSection();
                 }
@@ -103,7 +103,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
                 {
-                    Content = "Контекст"
+                    Content = "РљРѕРЅС‚РµРєСЃС‚"
                 });
 
                 foreach (var item in _viewModel.ContextNavigationItems)
@@ -194,7 +194,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
             {
-                Content = "Файлы"
+                Content = "Р¤Р°Р№Р»С‹"
             });
 
             foreach (var item in fileItems)
@@ -221,15 +221,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             foreach (var revision in revisions)
             {
                 var priority = ReadIntProperty(revision, "priority") ?? 0;
-                AddFileItem(result, priority == 0 ? "договор" : $"допсогл_{priority}", "\uE8A5", ReadStringProperty(revision, "doc_link"));
-                AddFileItem(result, priority == 0 ? "скан" : $"скан_{priority}", "\uE8A7", ReadStringProperty(revision, "scan_link"));
-                AddFileItem(result, priority == 0 ? "протокол" : $"протокол_{priority}", "\uE9D2", ReadStringProperty(revision, "protocol_link"));
+                AddFileItem(result, priority == 0 ? "РґРѕРіРѕРІРѕСЂ" : $"РґРѕРїСЃРѕРіР»_{priority}", "\uE8A5", ReadStringProperty(revision, "doc_link"));
+                AddFileItem(result, priority == 0 ? "СЃРєР°РЅ" : $"СЃРєР°РЅ_{priority}", "\uE8A7", ReadStringProperty(revision, "scan_link"));
+                AddFileItem(result, priority == 0 ? "РїСЂРѕС‚РѕРєРѕР»" : $"РїСЂРѕС‚РѕРєРѕР»_{priority}", "\uE9D2", ReadStringProperty(revision, "protocol_link"));
             }
 
             var folderPath = BuildFolderPath(revisions);
             if (!string.IsNullOrWhiteSpace(folderPath))
             {
-                AddFileItem(result, "каталог", "\uE8B7", folderPath);
+                AddFileItem(result, "РєР°С‚Р°Р»РѕРі", "\uE8B7", folderPath);
             }
 
             return result;
@@ -275,7 +275,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             return index < 0 ? null : firstPath[..(index + 1)];
         }
 
-        private static IReadOnlyList<JsonElement> ReadRevisions(ReferenceDataRow contract)
+        private static IReadOnlyList<JsonElement> ReadRevisions(TableDataRow contract)
         {
             if (!contract.Values.TryGetValue("revisions", out var revisions)
                 || revisions.ValueKind != JsonValueKind.Array)
@@ -407,3 +407,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         }
     }
 }
+
+
+
+

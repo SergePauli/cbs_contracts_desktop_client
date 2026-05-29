@@ -129,9 +129,9 @@ public sealed class StageOziEditPayloadBuilderTests
         Assert.Equal("stage-key", payload["list_key"]);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,

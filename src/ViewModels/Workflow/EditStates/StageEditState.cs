@@ -267,7 +267,7 @@ public sealed class StageEditState : IEditState
             profileId);
     }
 
-    public static StageEditState FromRow(ReferenceDataRow row)
+    public static StageEditState FromRow(TableDataRow row)
     {
         ArgumentNullException.ThrowIfNull(row);
 
@@ -311,7 +311,7 @@ public sealed class StageEditState : IEditState
             Performers: ReadPerformers(row)));
     }
 
-    private static IReadOnlyList<StageTaskEditState> ReadTasks(ReferenceDataRow row)
+    private static IReadOnlyList<StageTaskEditState> ReadTasks(TableDataRow row)
     {
         return EnumerateObjectArray(row, "tasks")
             .Select(static task => new StageTaskEditState(
@@ -322,7 +322,7 @@ public sealed class StageEditState : IEditState
             .ToList();
     }
 
-    private static IReadOnlyList<StagePerformerEditState> ReadPerformers(ReferenceDataRow row)
+    private static IReadOnlyList<StagePerformerEditState> ReadPerformers(TableDataRow row)
     {
         return EnumerateObjectArray(row, "performers")
             .Select(static performer => new StagePerformerEditState(

@@ -139,7 +139,7 @@ public sealed class FnsContragentServiceTests
 
     private static ReferenceLookupItem LookupItem(string model, string preset, long id, string name, string? okopf)
     {
-        var row = new ReferenceDataRow
+        var row = new TableDataRow
         {
             Values =
             {

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
@@ -8,17 +8,18 @@ using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
+using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
 
-public sealed class ReferencesContentViewModelTests : IDisposable
+public sealed class TablePageStoreTests : IDisposable
 {
     private readonly string _temporaryDirectory;
     private readonly string _settingsFilePath;
 
-    public ReferencesContentViewModelTests()
+    public TablePageStoreTests()
     {
         _temporaryDirectory = Path.Combine(Path.GetTempPath(), "CbsContractsDesktopClient.Tests", Guid.NewGuid().ToString("N"));
         _settingsFilePath = Path.Combine(_temporaryDirectory, "user-settings.json");
@@ -33,14 +34,14 @@ public sealed class ReferencesContentViewModelTests : IDisposable
             {
                 ["Status"] =
                 [
-                    CreateRow(("id", 1), ("name", "Подписан")),
-                    CreateRow(("id", 2), ("name", "Ожидается")),
-                    CreateRow(("id", 0), ("name", "В проекте")),
-                    CreateRow(("id", 7), ("name", "Заморожен")),
-                    CreateRow(("id", 4), ("name", "Выполнен")),
-                    CreateRow(("id", 5), ("name", "Закрыт")),
-                    CreateRow(("id", 3), ("name", "Профинансирован")),
-                    CreateRow(("id", 6), ("name", "Отменен"))
+                    CreateRow(("id", 1), ("name", "РџРѕРґРїРёСЃР°РЅ")),
+                    CreateRow(("id", 2), ("name", "РћР¶РёРґР°РµС‚СЃСЏ")),
+                    CreateRow(("id", 0), ("name", "Р’ РїСЂРѕРµРєС‚Рµ")),
+                    CreateRow(("id", 7), ("name", "Р—Р°РјРѕСЂРѕР¶РµРЅ")),
+                    CreateRow(("id", 4), ("name", "Р’С‹РїРѕР»РЅРµРЅ")),
+                    CreateRow(("id", 5), ("name", "Р—Р°РєСЂС‹С‚")),
+                    CreateRow(("id", 3), ("name", "РџСЂРѕС„РёРЅР°РЅСЃРёСЂРѕРІР°РЅ")),
+                    CreateRow(("id", 6), ("name", "РћС‚РјРµРЅРµРЅ"))
                 ],
                 ["Stage"] = []
             }
@@ -52,7 +53,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         {
             CurrentRoute = "/stages"
         };
-        var viewModel = new ReferencesContentViewModel(
+        var viewModel = new TablePageStore(
             shellViewModel,
             dataQueryService,
             referenceDefinitionService,
@@ -63,7 +64,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
 
         var options = viewModel.CurrentFilterOptionsSources["StageStatus"];
         Assert.Equal([null, 2L, 4L, 5L, 6L, 7L], options.Select(static option => option.Value));
-        Assert.Equal("Пустой", options[0].Label);
+        Assert.Equal("РџСѓСЃС‚РѕР№", options[0].Label);
         Assert.DoesNotContain(options, static option => option.Value is 0L or 1L or 3L);
     }
 
@@ -76,16 +77,16 @@ public sealed class ReferencesContentViewModelTests : IDisposable
             {
                 ["Status"] =
                 [
-                    CreateRow(("id", 2), ("name", "Ожидается")),
-                    CreateRow(("id", 4), ("name", "Выполнен")),
-                    CreateRow(("id", 5), ("name", "Закрыт")),
-                    CreateRow(("id", 6), ("name", "Отменен")),
-                    CreateRow(("id", 7), ("name", "Заморожен"))
+                    CreateRow(("id", 2), ("name", "РћР¶РёРґР°РµС‚СЃСЏ")),
+                    CreateRow(("id", 4), ("name", "Р’С‹РїРѕР»РЅРµРЅ")),
+                    CreateRow(("id", 5), ("name", "Р—Р°РєСЂС‹С‚")),
+                    CreateRow(("id", 6), ("name", "РћС‚РјРµРЅРµРЅ")),
+                    CreateRow(("id", 7), ("name", "Р—Р°РјРѕСЂРѕР¶РµРЅ"))
                 ],
                 ["TaskKind"] =
                 [
-                    CreateRow(("id", 7), ("code", "06"), ("name", "Доп. аттестация")),
-                    CreateRow(("id", 11), ("code", "11"), ("name", "Поставка ПО"))
+                    CreateRow(("id", 7), ("code", "06"), ("name", "Р”РѕРї. Р°С‚С‚РµСЃС‚Р°С†РёСЏ")),
+                    CreateRow(("id", 11), ("code", "11"), ("name", "РџРѕСЃС‚Р°РІРєР° РџРћ"))
                 ],
                 ["Stage"] = []
             }
@@ -97,7 +98,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         {
             CurrentRoute = "/stages"
         };
-        var viewModel = new ReferencesContentViewModel(
+        var viewModel = new TablePageStore(
             shellViewModel,
             dataQueryService,
             referenceDefinitionService,
@@ -107,8 +108,8 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         await viewModel.EnsureLoadedAsync();
 
         var options = viewModel.CurrentFilterOptionsSources["TaskKind"];
-        Assert.Contains(options, static option => Equals(option.Value, 7L) && option.Label == "06 - Доп. аттестация");
-        Assert.Contains(options, static option => Equals(option.Value, 11L) && option.Label == "11 - Поставка ПО");
+        Assert.Contains(options, static option => Equals(option.Value, 7L) && option.Label == "06 - Р”РѕРї. Р°С‚С‚РµСЃС‚Р°С†РёСЏ");
+        Assert.Contains(options, static option => Equals(option.Value, 11L) && option.Label == "11 - РџРѕСЃС‚Р°РІРєР° РџРћ");
     }
 
     [Fact]
@@ -229,9 +230,9 @@ public sealed class ReferencesContentViewModelTests : IDisposable
                 {
                     ["s_statuses"] = JsonSerializer.Serialize(new object?[]
                     {
-                        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "В работе" },
-                        new Dictionary<string, object?> { ["id"] = 4L, ["name"] = "Выполнено" },
-                        new Dictionary<string, object?> { ["id"] = null, ["name"] = "Пустой" }
+                        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "Р’ СЂР°Р±РѕС‚Рµ" },
+                        new Dictionary<string, object?> { ["id"] = 4L, ["name"] = "Р’С‹РїРѕР»РЅРµРЅРѕ" },
+                        new Dictionary<string, object?> { ["id"] = null, ["name"] = "РџСѓСЃС‚РѕР№" }
                     }),
                     ["s_funded"] = "false"
                 })
@@ -274,7 +275,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
                 {
                     ["s_statuses"] = JsonSerializer.Serialize(new object?[]
                     {
-                        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "В работе" }
+                        new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "Р’ СЂР°Р±РѕС‚Рµ" }
                     }),
                     ["s_funded"] = "false"
                 })
@@ -300,9 +301,9 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         }
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,
@@ -310,7 +311,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         };
     }
 
-    private ReferencesContentViewModel CreateViewModel(
+    private TablePageStore CreateViewModel(
         FakeDataQueryService dataQueryService,
         string route,
         FakeUserService? userService = null)
@@ -324,7 +325,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
             CurrentRoute = route
         };
 
-        return new ReferencesContentViewModel(
+        return new TablePageStore(
             shellViewModel,
             dataQueryService,
             referenceDefinitionService,
@@ -335,7 +336,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
 
     private sealed class FakeDataQueryService : IDataQueryService
     {
-        public Dictionary<string, IReadOnlyList<ReferenceDataRow>> RowsByModel { get; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, IReadOnlyList<TableDataRow>> RowsByModel { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public int DataRequestCount { get; private set; }
 
@@ -395,3 +396,7 @@ public sealed class ReferencesContentViewModelTests : IDisposable
         }
     }
 }
+
+
+
+

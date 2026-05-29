@@ -9,7 +9,7 @@ public static class StageClipboardFormatter
 {
     private static readonly CultureInfo RuCulture = CultureInfo.GetCultureInfo("ru-RU");
 
-    public static string BuildClipboardText(ReferenceDataRow? stageRow)
+    public static string BuildClipboardText(TableDataRow? stageRow)
     {
         if (stageRow is null || stageRow.IsPlaceholder)
         {

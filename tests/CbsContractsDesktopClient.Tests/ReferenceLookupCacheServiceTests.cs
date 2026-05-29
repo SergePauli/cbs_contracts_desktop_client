@@ -79,9 +79,9 @@ public sealed class ReferenceLookupCacheServiceTests
         Assert.Equal(2, dataQueryService.Requests.Count);
     }
 
-    private static ReferenceDataRow CreateRow(params (string Key, object? Value)[] values)
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
-        return new ReferenceDataRow
+        return new TableDataRow
         {
             Values = values.ToDictionary(
                 static value => value.Key,
@@ -91,9 +91,9 @@ public sealed class ReferenceLookupCacheServiceTests
 
     private sealed class FakeDataQueryService : IDataQueryService
     {
-        private readonly IReadOnlyList<ReferenceDataRow> _rows;
+        private readonly IReadOnlyList<TableDataRow> _rows;
 
-        public FakeDataQueryService(IReadOnlyList<ReferenceDataRow> rows)
+        public FakeDataQueryService(IReadOnlyList<TableDataRow> rows)
         {
             _rows = rows;
         }

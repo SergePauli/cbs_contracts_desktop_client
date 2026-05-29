@@ -17,14 +17,14 @@ namespace CbsContractsDesktopClient.Views.References
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
                 nameof(Row),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(ContragentDetailView),
                 new PropertyMetadata(null, OnRowChanged));
 
         public static readonly DependencyProperty ContractsRowProperty =
             DependencyProperty.Register(
                 nameof(ContractsRow),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(ContragentDetailView),
                 new PropertyMetadata(null, OnContractsRowChanged));
 
@@ -38,15 +38,15 @@ namespace CbsContractsDesktopClient.Views.References
             Refresh();
         }
 
-        public ReferenceDataRow? Row
+        public TableDataRow? Row
         {
-            get => (ReferenceDataRow?)GetValue(RowProperty);
+            get => (TableDataRow?)GetValue(RowProperty);
             set => SetValue(RowProperty, value);
         }
 
-        public ReferenceDataRow? ContractsRow
+        public TableDataRow? ContractsRow
         {
-            get => (ReferenceDataRow?)GetValue(ContractsRowProperty);
+            get => (TableDataRow?)GetValue(ContractsRowProperty);
             set => SetValue(ContractsRowProperty, value);
         }
 
@@ -139,7 +139,7 @@ namespace CbsContractsDesktopClient.Views.References
                     .Where(static value => !string.IsNullOrWhiteSpace(value)));
         }
 
-        private static string BuildContractLinksClipboardText(ReferenceDataRow? contractsRow)
+        private static string BuildContractLinksClipboardText(TableDataRow? contractsRow)
         {
             if (contractsRow is null || contractsRow.IsPlaceholder)
             {
@@ -152,7 +152,7 @@ namespace CbsContractsDesktopClient.Views.References
                 : string.Join(", ", contracts.Select(static contract => contract.Title));
         }
 
-        private static string BuildOwnershipFullNameText(ReferenceDataRow row)
+        private static string BuildOwnershipFullNameText(TableDataRow row)
         {
             return TryGetText(
                 row,
@@ -162,7 +162,7 @@ namespace CbsContractsDesktopClient.Views.References
                 "ownership.name") ?? "Форма не указана";
         }
 
-        private static string BuildOwnershipCodeText(ReferenceDataRow row)
+        private static string BuildOwnershipCodeText(TableDataRow row)
         {
             var code = TryGetText(
                 row,
@@ -177,7 +177,7 @@ namespace CbsContractsDesktopClient.Views.References
                 : $"код: {code}";
         }
 
-        private async Task RefreshOwnershipFromReferenceAsync(ReferenceDataRow row, int refreshVersion)
+        private async Task RefreshOwnershipFromReferenceAsync(TableDataRow row, int refreshVersion)
         {
             if (_referenceLookupCacheService is null)
             {
@@ -232,7 +232,7 @@ namespace CbsContractsDesktopClient.Views.References
             }
         }
 
-        private static object? GetOwnershipId(ReferenceDataRow row)
+        private static object? GetOwnershipId(TableDataRow row)
         {
             return TryGetText(
                 row,
@@ -240,7 +240,7 @@ namespace CbsContractsDesktopClient.Views.References
                 "ownership.id");
         }
 
-        private static string? GetOwnershipCode(ReferenceDataRow row)
+        private static string? GetOwnershipCode(TableDataRow row)
         {
             return TryGetText(
                 row,
@@ -292,7 +292,7 @@ namespace CbsContractsDesktopClient.Views.References
             }
         }
 
-        private static string BuildRequisitesText(ReferenceDataRow row)
+        private static string BuildRequisitesText(TableDataRow row)
         {
             var parts = new[]
             {
@@ -304,7 +304,7 @@ namespace CbsContractsDesktopClient.Views.References
             return string.Join("; ", parts.Where(static part => !string.IsNullOrWhiteSpace(part)));
         }
 
-        private static string BuildAddressesText(ReferenceDataRow row)
+        private static string BuildAddressesText(TableDataRow row)
         {
             var registered = TryGetText(
                 row,
@@ -322,7 +322,7 @@ namespace CbsContractsDesktopClient.Views.References
             return real ?? registered ?? string.Empty;
         }
 
-        private static string BuildContactsText(ReferenceDataRow row)
+        private static string BuildContactsText(TableDataRow row)
         {
             var directText = TryGetText(
                 row,
@@ -384,7 +384,7 @@ namespace CbsContractsDesktopClient.Views.References
             }
         }
 
-        private static IReadOnlyList<ContractLinkItem> ReadContractLinks(ReferenceDataRow row)
+        private static IReadOnlyList<ContractLinkItem> ReadContractLinks(TableDataRow row)
         {
             var contractsElement = TryGetArray(row, "contracts")
                 ?? TryGetArray(row, "contragent.contracts");
@@ -448,7 +448,7 @@ namespace CbsContractsDesktopClient.Views.References
                 : null;
         }
 
-        private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(ReferenceDataRow row)
+        private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(TableDataRow row)
         {
             var employeesElement = TryGetArray(row, "employees");
             if (employeesElement is null)

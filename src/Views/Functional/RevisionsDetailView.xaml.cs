@@ -21,21 +21,21 @@ namespace CbsContractsDesktopClient.Views.Functional
         public static readonly DependencyProperty RevisionRowProperty =
             DependencyProperty.Register(
                 nameof(RevisionRow),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(RevisionsDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
         public static readonly DependencyProperty ContractRowProperty =
             DependencyProperty.Register(
                 nameof(ContractRow),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(RevisionsDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
         public static readonly DependencyProperty ContragentRowProperty =
             DependencyProperty.Register(
                 nameof(ContragentRow),
-                typeof(ReferenceDataRow),
+                typeof(TableDataRow),
                 typeof(RevisionsDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
@@ -48,21 +48,21 @@ namespace CbsContractsDesktopClient.Views.Functional
             Refresh();
         }
 
-        public ReferenceDataRow? RevisionRow
+        public TableDataRow? RevisionRow
         {
-            get => (ReferenceDataRow?)GetValue(RevisionRowProperty);
+            get => (TableDataRow?)GetValue(RevisionRowProperty);
             set => SetValue(RevisionRowProperty, value);
         }
 
-        public ReferenceDataRow? ContractRow
+        public TableDataRow? ContractRow
         {
-            get => (ReferenceDataRow?)GetValue(ContractRowProperty);
+            get => (TableDataRow?)GetValue(ContractRowProperty);
             set => SetValue(ContractRowProperty, value);
         }
 
-        public ReferenceDataRow? ContragentRow
+        public TableDataRow? ContragentRow
         {
-            get => (ReferenceDataRow?)GetValue(ContragentRowProperty);
+            get => (TableDataRow?)GetValue(ContragentRowProperty);
             set => SetValue(ContragentRowProperty, value);
         }
 
@@ -181,7 +181,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private static string BuildPerformersText(ReferenceDataRow? contract)
+        private static string BuildPerformersText(TableDataRow? contract)
         {
             var stage = ReadUsedStage(contract);
             if (stage is null)
@@ -200,7 +200,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             return text;
         }
 
-        private static JsonElement? ReadUsedStage(ReferenceDataRow? contract)
+        private static JsonElement? ReadUsedStage(TableDataRow? contract)
         {
             var stages = TryGetArray(contract, "stages");
             if (stages is null)
@@ -243,7 +243,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 .ToList();
         }
 
-        private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(ReferenceDataRow? row)
+        private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(TableDataRow? row)
         {
             var employees = TryGetFirstArray(row, "employees", "emploees");
             if (employees is null)
@@ -275,7 +275,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
         }
 
-        private static IReadOnlyList<string> ReadContragentContacts(ReferenceDataRow? row)
+        private static IReadOnlyList<string> ReadContragentContacts(TableDataRow? row)
         {
             var contacts = TryGetArray(row, "contacts");
             if (contacts is null)

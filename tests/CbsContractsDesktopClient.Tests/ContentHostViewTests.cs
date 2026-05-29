@@ -28,6 +28,62 @@ public sealed class ContentHostViewTests
         "Shell",
         "ContentHostDialogCoordinator.cs");
 
+    private static readonly string ContentHostViewBasePath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ContentHostViewBase.cs");
+
+    private static readonly string ContentHostRouterViewXamlPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ContentHostRouterView.xaml");
+
+    private static readonly string ContentHostRouterViewCodeBehindPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ContentHostRouterView.xaml.cs");
+
+    private static readonly string ReferenceHostViewXamlPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ReferenceHostView.xaml");
+
+    private static readonly string ReferenceHostViewCodeBehindPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ReferenceHostView.xaml.cs");
+
+    private static readonly string TableHostViewXamlPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "TableHostView.xaml");
+
+    private static readonly string TableHostViewCodeBehindPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "TableHostView.xaml.cs");
+
+    private static readonly string AppShellPageXamlPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "AppShellPage.xaml");
+
     [Fact]
     public void ContentHostView_SettingsButton_ContainsTableSettingsTooltipAndMenuFlyout()
     {
@@ -44,9 +100,95 @@ public sealed class ContentHostViewTests
     {
         var xaml = File.ReadAllText(ContentHostViewXamlPath);
 
-        Assert.Contains("MultiSelectOptionsSources=\"{Binding CurrentFilterOptionsSources}\"", xaml);
+        Assert.Contains("Store=\"{Binding}\"", xaml);
         Assert.Contains("RowDoubleTapped=\"ReferenceTableView_RowDoubleTapped\"", xaml);
         Assert.Contains("RowSelectionChanged=\"ReferenceTableView_RowSelectionChanged\"", xaml);
+        Assert.Contains("<shell:TableHostView", xaml);
+        Assert.DoesNotContain("<controls:CbsTableView", xaml);
+        Assert.DoesNotContain("xmlns:controls=\"using:CbsContractsDesktopClient.Views.Controls\"", xaml);
+    }
+
+    [Fact]
+    public void TableHostView_OwnsCbsTableViewZone()
+    {
+        var xaml = File.ReadAllText(TableHostViewXamlPath);
+        var codeBehind = File.ReadAllText(TableHostViewCodeBehindPath);
+
+        Assert.Contains("x:Class=\"CbsContractsDesktopClient.Views.Shell.TableHostView\"", xaml);
+        Assert.Contains("x:Name=\"Root\"", xaml);
+        Assert.Contains("Background=\"{StaticResource ShellMutedPanelBackgroundBrush}\"", xaml);
+        Assert.Contains("<controls:CbsTableView", xaml);
+        Assert.Contains("x:Name=\"TableView\"", xaml);
+        Assert.Contains("Columns=\"{Binding Store.CurrentColumns, ElementName=Root}\"", xaml);
+        Assert.Contains("ItemsSource=\"{Binding Store.Items, ElementName=Root}\"", xaml);
+        Assert.Contains("SelectedItem=\"{Binding Store.SelectedRow, ElementName=Root, Mode=TwoWay}\"", xaml);
+        Assert.Contains("public static readonly DependencyProperty StoreProperty", codeBehind);
+        Assert.Contains("public static readonly DependencyProperty ColumnsProperty", codeBehind);
+        Assert.Contains("public static readonly DependencyProperty ItemsSourceProperty", codeBehind);
+        Assert.Contains("public static readonly DependencyProperty RowHeightProperty", codeBehind);
+        Assert.Contains("public static readonly DependencyProperty SelectedItemProperty", codeBehind);
+        Assert.Contains("public static readonly DependencyProperty RetainedBufferRowsProperty", codeBehind);
+        Assert.Contains("public event EventHandler<CbsTableSortRequestedEventArgs>? SortRequested;", codeBehind);
+        Assert.Contains("public event EventHandler<CbsTableRowSelectionChangedEventArgs>? RowSelectionChanged;", codeBehind);
+        Assert.Contains("TableView.RowSelectionChanged += (_, args) =>", codeBehind);
+        Assert.Contains("SelectedItem = args.Row;", codeBehind);
+        Assert.Contains("TableView.ApplyFilterInputs(filters);", codeBehind);
+        Assert.Contains("TableView.ClearFilterInputs();", codeBehind);
+    }
+
+    [Fact]
+    public void AppShellPage_UsesContentHostRouterView()
+    {
+        var xaml = File.ReadAllText(AppShellPageXamlPath);
+
+        Assert.Contains("<shell:ContentHostRouterView Grid.Row=\"1\"", xaml);
+        Assert.DoesNotContain("<shell:ContentHostView Grid.Row=\"1\"", xaml);
+    }
+
+    [Fact]
+    public void ContentHostRouterView_MapsRoutesToConcreteHosts()
+    {
+        var xaml = File.ReadAllText(ContentHostRouterViewXamlPath);
+        var codeBehind = File.ReadAllText(ContentHostRouterViewCodeBehindPath);
+
+        Assert.Contains("x:Class=\"CbsContractsDesktopClient.Views.Shell.ContentHostRouterView\"", xaml);
+        Assert.Contains("ContentControl x:Name=\"HostContentControl\"", xaml);
+        Assert.Contains("ITablePageDefinitionService", codeBehind);
+        Assert.Contains("ResolveRouteKind", codeBehind);
+        Assert.Contains("ContentHostRouteKind.Reference => GetReferenceHostView(route)", codeBehind);
+        Assert.Contains("ContentHostRouteKind.Table => GetTableHostView(route)", codeBehind);
+        Assert.Contains("UpdateCurrentHostRoute(routeKind, route);", codeBehind);
+        Assert.Contains("private static bool IsSimpleReferenceRoute", codeBehind);
+        Assert.Contains("route.StartsWith(\"/references/\", StringComparison.OrdinalIgnoreCase)", codeBehind);
+        Assert.Contains("string.Equals(route, \"/holidays\", StringComparison.OrdinalIgnoreCase)", codeBehind);
+        Assert.Contains("private ReferenceHostView GetReferenceHostView(string? route)", codeBehind);
+        Assert.Contains("private ContentHostView GetTableHostView(string? route)", codeBehind);
+        Assert.Contains("new ContentHostView()", codeBehind);
+    }
+
+    [Fact]
+    public void ReferenceHostView_AcceptsRouteInput()
+    {
+        var xaml = File.ReadAllText(ReferenceHostViewXamlPath);
+        var codeBehind = File.ReadAllText(ReferenceHostViewCodeBehindPath);
+
+        Assert.Contains("x:Class=\"CbsContractsDesktopClient.Views.Shell.ReferenceHostView\"", xaml);
+        Assert.Contains("<shell:ContentHostViewBase", xaml);
+        Assert.Contains("<shell:TableHostView", xaml);
+        Assert.Contains("x:Name=\"ReferenceTableView\"", xaml);
+        Assert.Contains("Store=\"{Binding}\"", xaml);
+        Assert.Contains("x:Name=\"DetailHost\"", xaml);
+        Assert.Contains("Click=\"CreateRowButton_Click\"", xaml);
+        Assert.Contains("Click=\"EditSelectedRowButton_Click\"", xaml);
+        Assert.Contains("Click=\"DeleteSelectedRowButton_Click\"", xaml);
+        Assert.Contains("public sealed partial class ReferenceHostView : ContentHostViewBase", codeBehind);
+        Assert.Contains("public ReferenceHostView(string route)", codeBehind);
+        Assert.Contains("public string? Route", codeBehind);
+        Assert.Contains("ITablePageDefinitionService", codeBehind);
+        Assert.Contains("IReferenceDefinitionService", codeBehind);
+        Assert.Contains("NavigateToRouteAsync(value)", codeBehind);
+        Assert.Contains("_tablePageDefinitionService.TryGetByRoute(route, out var definition)", codeBehind);
+        Assert.DoesNotContain("_tableHostView", codeBehind);
     }
 
     [Fact]
@@ -120,7 +262,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EmployeeEditRequested;", detailCode);
         Assert.Contains("EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);", detailCode);
         Assert.Contains("EmployeesBox.Employees = ReadEmployees(row);", detailCode);
-        Assert.Contains("public ReferenceDataRow? ContractsRow", detailCode);
+        Assert.Contains("public TableDataRow? ContractsRow", detailCode);
         Assert.Contains("RefreshContractLinks();", detailCode);
         Assert.Contains("ReadContractLinks(ContractsRow)", detailCode);
         Assert.Contains("ContractLinksPanel.Children.Add(new HyperlinkButton", detailCode);
@@ -209,7 +351,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("var confirmed = await ConfirmFilterClearAsync();", codeBehind);
         Assert.Contains("var filters = await _viewModel.ClearFiltersAsync();", codeBehind);
         Assert.Contains("private async Task<bool> ConfirmFilterClearAsync()", codeBehind);
-        Assert.Contains("_dialogCoordinator.ConfirmAsync(", codeBehind);
+        Assert.Contains("ConfirmDialogAsync(", codeBehind);
         Assert.Contains("Очистить все фильтры текущей таблицы?", codeBehind);
     }
 
@@ -244,7 +386,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("CreateProfileEditDialogState", codeBehind);
         Assert.Contains("ProfileEditStateFactory.Create(", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadPositionOptionsAsync(", codeBehind);
-        Assert.Contains("private async Task<ReferenceDataRow?> LoadEmployeeEditRowAsync(", codeBehind);
+        Assert.Contains("private async Task<TableDataRow?> LoadEmployeeEditRowAsync(", codeBehind);
         Assert.Contains("long? employeeId = null", codeBehind);
         Assert.Contains("Preset = \"edit\"", codeBehind);
         Assert.Contains("[\"id__eq\"] = id.Value", codeBehind);
@@ -280,7 +422,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("BuildFnsImportSelectionLabel(result)", codeBehind);
         Assert.Contains("NormalizeSingleLine(result.Organization.FullName)", codeBehind);
         Assert.Contains("private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadAddressOptionsAsync(", codeBehind);
-        Assert.Contains("private async Task<ReferenceDataRow?> LoadContragentEditRowAsync", codeBehind);
+        Assert.Contains("private async Task<TableDataRow?> LoadContragentEditRowAsync", codeBehind);
         Assert.Contains("Model = \"Contragent\"", codeBehind);
         Assert.Contains("Preset = \"edit\"", codeBehind);
         Assert.Contains("LoadSimpleReferenceOptionsAsync(\"Ownership\", \"card\")", codeBehind);
@@ -302,10 +444,18 @@ public sealed class ContentHostViewTests
     public void ContentHostDialogCoordinator_OwnsCommonShellDialogs()
     {
         var codeBehind = File.ReadAllText(ContentHostViewCodeBehindPath);
+        var hostBase = File.ReadAllText(ContentHostViewBasePath);
         var coordinator = File.ReadAllText(ContentHostDialogCoordinatorPath);
 
-        Assert.Contains("private readonly ContentHostDialogCoordinator _dialogCoordinator;", codeBehind);
-        Assert.Contains("new ContentHostDialogCoordinator(() => XamlRoot)", codeBehind);
+        Assert.Contains("public sealed partial class ContentHostView : ContentHostViewBase", codeBehind);
+        Assert.Contains("public abstract class ContentHostViewBase : UserControl", hostBase);
+        Assert.Contains("private readonly ContentHostDialogCoordinator _dialogCoordinator;", hostBase);
+        Assert.Contains("new ContentHostDialogCoordinator(() => XamlRoot)", hostBase);
+        Assert.Contains("protected async Task ShowErrorDialogAsync", hostBase);
+        Assert.Contains("protected async Task ShowInfoDialogAsync", hostBase);
+        Assert.Contains("protected async Task<bool> ConfirmDialogAsync", hostBase);
+        Assert.Contains("protected static void ShowSuccessNotification", hostBase);
+        Assert.Contains("protected static long? TryGetSelectedRowId", hostBase);
         Assert.Contains("internal sealed class ContentHostDialogCoordinator", coordinator);
         Assert.Contains("public async Task ShowErrorAsync", coordinator);
         Assert.Contains("public async Task ShowInfoAsync", coordinator);

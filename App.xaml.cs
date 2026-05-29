@@ -14,6 +14,7 @@ using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels;
+using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 
@@ -48,8 +49,11 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
+            services.AddSingleton<IEmployeeEditWorkflow, EmployeeEditWorkflow>();
+            services.AddSingleton<IContragentFnsWorkflow, ContragentFnsWorkflow>();
             services.AddSingleton<AppShellViewModel>();
-            services.AddSingleton<ReferencesContentViewModel>();
+            services.AddSingleton<AuditStore>();
+            services.AddSingleton<TablePageStore>();
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<StatusTableViewModel>();
             services.AddHttpClient(nameof(HolidayRecalculationService), client =>
@@ -115,3 +119,7 @@ namespace CbsContractsDesktopClient
         }
     }
 }
+
+
+
+

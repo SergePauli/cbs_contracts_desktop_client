@@ -1,3 +1,5 @@
+﻿using CbsContractsDesktopClient.ViewModels.Shell;
+// Owns table-page state, metadata navigation, row loading, and table commands for shell host views.
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -23,13 +25,12 @@ using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels.Data;
 
-namespace CbsContractsDesktopClient.ViewModels.Shell
+namespace CbsContractsDesktopClient.Stores.Table
 {
-    public partial class ReferencesContentViewModel : ObservableObject
+    public partial class TablePageStore : ObservableObject
     {
         private static readonly bool DiagnosticsEnabled = true;
         private const int MaxUiTraceLines = 80;
-        private const int AuditPageSize = 20;
         private static readonly long[] StageStatusIds = [2L, 4L, 5L, 6L, 7L];
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
@@ -37,23 +38,14 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private readonly ITablePageDefinitionService _tablePageDefinitionService;
         private readonly IReferenceLookupCacheService? _referenceLookupCacheService;
         private readonly IUserService? _userService;
+        private readonly AuditStore? _auditStore;
         private readonly SemaphoreSlim _navigationGate = new(1, 1);
-        private LazyDataViewState<ReferenceDataRow>? _state;
-        private ICbsTableRows<ReferenceDataRow>? _rows;
+        private LazyDataViewState<TableDataRow>? _state;
+        private ICbsTableRows<TableDataRow>? _rows;
         private INotifyPropertyChanged? _rowsNotifier;
         private CancellationTokenSource? _navigationCts;
-        private CancellationTokenSource? _auditCts;
-        private IReadOnlyList<ReferenceDataRow> _itemsSnapshot = [];
+        private IReadOnlyList<TableDataRow> _itemsSnapshot = [];
         private string _lastDiagnosticsSnapshot = string.Empty;
-        private string _lastAuditPanelKey = string.Empty;
-        private List<AuditRecord> _auditRecords = [];
-        private int _auditOffset;
-        private bool _hasPreviousAuditRecords;
-        private bool _hasNextAuditRecords = true;
-        private bool _isAuditLoading;
-        private DateTimeOffset? _auditFromDate;
-        private DateTimeOffset? _auditToDate;
-        private IReadOnlyList<string> _auditActions = [];
         private string _lastDiagnosticsStateKey = string.Empty;
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
@@ -61,13 +53,14 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         private bool _deferredItemsRefresh;
         private bool _deferredStateUpdate;
 
-        public ReferencesContentViewModel(
+        public TablePageStore(
             AppShellViewModel shellViewModel,
             IDataQueryService dataQueryService,
             IReferenceDefinitionService referenceDefinitionService,
             ITablePageDefinitionService tablePageDefinitionService,
             IReferenceLookupCacheService? referenceLookupCacheService = null,
-            IUserService? userService = null)
+            IUserService? userService = null,
+            AuditStore? auditStore = null)
         {
             _shellViewModel = shellViewModel;
             _dataQueryService = dataQueryService;
@@ -75,6 +68,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _tablePageDefinitionService = tablePageDefinitionService;
             _referenceLookupCacheService = referenceLookupCacheService;
             _userService = userService;
+            _auditStore = auditStore;
 
             FilterFields = [];
 
@@ -120,7 +114,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         public partial DataSortDirection? CurrentSortDirection { get; set; }
 
         [ObservableProperty]
-        public partial ReferenceDataRow? SelectedRow { get; set; }
+        public partial TableDataRow? SelectedRow { get; set; }
 
         public ObservableCollection<ReferenceFilterField> FilterFields { get; }
 
@@ -196,9 +190,9 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         public string CombinedTraceLog => CombineTraceLogs(UiTraceLog, TraceLog);
 
-        public ICbsTableRows<ReferenceDataRow>? Rows => _rows;
+        public ICbsTableRows<TableDataRow>? Rows => _rows;
 
-        public IReadOnlyList<ReferenceDataRow> Items => _itemsSnapshot;
+        public IReadOnlyList<TableDataRow> Items => _itemsSnapshot;
 
         public string GetDebugStateSnapshot()
         {
@@ -232,7 +226,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(HasError));
         }
 
-        partial void OnSelectedRowChanged(ReferenceDataRow? value)
+        partial void OnSelectedRowChanged(TableDataRow? value)
         {
             OnPropertyChanged(nameof(HasSelectedRow));
             OnPropertyChanged(nameof(SelectedRowInfoMessage));
@@ -243,7 +237,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             _shellViewModel.SetFooterTableStats(
                 BuildFooterTotalCountValue(),
                 BuildFooterSelectedRecordText());
-            _ = RefreshAuditPanelAsync();
+            SyncAuditContext();
+            _ = RefreshAuditAsync();
         }
 
         partial void OnCurrentReferenceChanged(ReferenceDefinition? value)
@@ -255,8 +250,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(ShowRevisionsDetailView));
             OnPropertyChanged(nameof(ShowContractDetailView));
 
-            _auditCts?.Cancel();
-            ResetAuditPagingState();
+            SyncAuditContext();
         }
 
         partial void OnCurrentTablePageChanged(TablePageDefinition? value)
@@ -270,6 +264,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             OnPropertyChanged(nameof(CurrentRowStyleKey));
             OnPropertyChanged(nameof(ShowRevisionsDetailView));
             OnPropertyChanged(nameof(ShowContractDetailView));
+            SyncAuditContext();
         }
 
         partial void OnTotalCountChanged(int value)
@@ -312,6 +307,24 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             WriteDiagnosticsSnapshot(force: true);
         }
 
+        private void SyncAuditContext()
+        {
+            _auditStore?.UpdateContext(
+                HasActiveReference,
+                CurrentTablePage,
+                CurrentReference,
+                SelectedRow);
+        }
+
+        private async Task RefreshAuditAsync(bool force = false)
+        {
+            SyncAuditContext();
+            if (_auditStore is not null)
+            {
+                await _auditStore.RefreshAsync(force);
+            }
+        }
+
         public async Task EnsureLoadedAsync(CancellationToken cancellationToken = default)
         {
             if (_rows is not null)
@@ -321,6 +334,11 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             }
 
             await NavigateAsync(_shellViewModel.CurrentRoute, cancellationToken);
+        }
+
+        public async Task NavigateToRouteAsync(string? route, CancellationToken cancellationToken = default)
+        {
+            await NavigateAsync(route, cancellationToken);
         }
 
         public async Task ReloadCurrentReferenceAsync(CancellationToken cancellationToken = default)
@@ -353,7 +371,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         }
 
         public bool ApplySavedRowUpdate(
-            ReferenceDataRow? savedRow,
+            TableDataRow? savedRow,
             IReadOnlyDictionary<string, object?> payload)
         {
             ArgumentNullException.ThrowIfNull(payload);
@@ -377,7 +395,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             return ReplaceLoadedRow(id.Value, patchedRow);
         }
 
-        private bool ReplaceLoadedRow(long id, ReferenceDataRow patchedRow)
+        private bool ReplaceLoadedRow(long id, TableDataRow patchedRow)
         {
             var replaced = _state?.Items.TryReplaceLoadedItem(
                 row => !row.IsPlaceholder && TryGetSelectedRowId(row) == id,
@@ -583,80 +601,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             return result;
         }
 
-        public async Task<bool> ShiftAuditPanelWindowAsync(int direction)
-        {
-            if (!_shellViewModel.IsAuditPanelOpen
-                || _isAuditLoading
-                || string.IsNullOrWhiteSpace(_lastAuditPanelKey))
-            {
-                return false;
-            }
-
-            if (direction > 0)
-            {
-                if (!_hasNextAuditRecords)
-                {
-                    return false;
-                }
-
-                return await LoadAuditPageAsync(_lastAuditPanelKey, _auditOffset + AuditPageSize);
-            }
-
-            if (direction < 0)
-            {
-                if (!_hasPreviousAuditRecords)
-                {
-                    return false;
-                }
-
-                return await LoadAuditPageAsync(
-                    _lastAuditPanelKey,
-                    Math.Max(0, _auditOffset - AuditPageSize));
-            }
-
-            return false;
-        }
-
-        public async Task SetAuditDateRangeAsync(DateTimeOffset? fromDate, DateTimeOffset? toDate)
-        {
-            var normalizedFrom = fromDate?.Date;
-            var normalizedTo = toDate?.Date;
-
-            if (normalizedFrom is not null
-                && normalizedTo is not null
-                && normalizedFrom > normalizedTo)
-            {
-                (normalizedFrom, normalizedTo) = (normalizedTo, normalizedFrom);
-            }
-
-            if (_auditFromDate == normalizedFrom && _auditToDate == normalizedTo)
-            {
-                return;
-            }
-
-            _auditFromDate = normalizedFrom;
-            _auditToDate = normalizedTo;
-            await RefreshAuditPanelAsync(force: true);
-        }
-
-        public async Task SetAuditActionFilterAsync(IReadOnlyList<string> actions)
-        {
-            var normalizedActions = actions
-                .Select(NormalizeAuditAction)
-                .Where(static action => !string.IsNullOrWhiteSpace(action))
-                .Distinct()
-                .Order()
-                .ToList();
-
-            if (_auditActions.SequenceEqual(normalizedActions))
-            {
-                return;
-            }
-
-            _auditActions = normalizedActions;
-            await RefreshAuditPanelAsync(force: true);
-        }
-
         public async Task SaveColumnWidthAsync(string fieldKey, string? width, CancellationToken cancellationToken = default)
         {
             if (CurrentTablePage is null || string.IsNullOrWhiteSpace(fieldKey))
@@ -824,7 +768,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             {
                 if (_shellViewModel.IsAuditPanelOpen)
                 {
-                    await RefreshAuditPanelAsync(force: true);
+                    await RefreshAuditAsync(force: true);
                 }
 
                 return;
@@ -877,7 +821,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 UiTraceLog = string.Empty;
                 _lastDiagnosticsSnapshot = string.Empty;
                 _lastDiagnosticsStateKey = string.Empty;
-                ResetAuditPagingState();
                 _shellViewModel.SetFooterTableStats(string.Empty);
 
                 var initialSorts = CurrentSortField is not null && CurrentSortDirection is DataSortDirection initialDirection
@@ -894,7 +837,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 BuildFilters(definition);
                 CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
-                var state = new LazyDataViewState<ReferenceDataRow>(
+                var state = new LazyDataViewState<TableDataRow>(
                     _dataQueryService,
                     model: definition.Model,
                     preset: definition.Preset,
@@ -905,14 +848,14 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                     sortFieldMap: definition.Columns.ToDictionary(
                         static column => column.FieldKey,
                         static column => column.SortField ?? column.FilterField ?? column.ApiField ?? column.FieldKey),
-                    placeholderFactory: ReferenceDataRow.CreatePlaceholder,
+                    placeholderFactory: TableDataRow.CreatePlaceholder,
                     isPlaceholder: static row => row.IsPlaceholder,
                     initialFilters: definition.InitialFilters,
                     initialSorts: initialSorts);
 
                 AppendUiTrace($"STATE CREATED model={definition.Model} {GetDebugStateSnapshot()}");
 
-                AttachRows(state, new CbsVirtualTableRows<ReferenceDataRow>(state.Items));
+                AttachRows(state, new CbsVirtualTableRows<TableDataRow>(state.Items));
                 AppendUiTrace($"NAVIGATE AFTER ATTACH model={definition.Model} {GetDebugStateSnapshot()}");
 
                 OnPropertyChanged(nameof(CurrentColumns));
@@ -937,7 +880,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
                 if (_shellViewModel.IsAuditPanelOpen)
                 {
-                    await RefreshAuditPanelAsync(force: true);
+                    await RefreshAuditAsync(force: true);
                 }
             }
             finally
@@ -979,14 +922,12 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             TotalCount = 0;
             UiTraceLog = string.Empty;
             _lastDiagnosticsSnapshot = string.Empty;
-            ResetAuditPagingState();
+            _auditStore?.Reset();
             CurrentSortField = null;
             CurrentSortDirection = null;
             SelectedRow = null;
             FilterFields.Clear();
             CurrentFilterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
-            _shellViewModel.ResetAuditPanelState();
-
             OnPropertyChanged(nameof(CurrentColumns));
             OnPropertyChanged(nameof(CurrentTableStateKey));
             OnPropertyChanged(nameof(CurrentFilterOptionsSources));
@@ -1135,7 +1076,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             string model,
             CancellationToken cancellationToken)
         {
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = model,
@@ -1173,7 +1114,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                     .ToList();
             }
 
-            var rows = await _dataQueryService.GetDataAsync<ReferenceDataRow>(
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
                 new DataQueryRequest
                 {
                     Model = "TaskKind",
@@ -1276,8 +1217,8 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         }
 
         private void AttachRows(
-            LazyDataViewState<ReferenceDataRow> state,
-            ICbsTableRows<ReferenceDataRow> rows)
+            LazyDataViewState<TableDataRow> state,
+            ICbsTableRows<TableDataRow> rows)
         {
             AppendUiTrace($"ATTACH ROWS ENTER incoming={rows.GetType().Name} {GetDebugStateSnapshot()}");
             if (_state is not null || _rows is not null || _rowsNotifier is not null)
@@ -1317,25 +1258,25 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
 
         private void OnItemsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            if (e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.IsLoading)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.ErrorMessage)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.TotalCount)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.HasMoreItems)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.LoadedCount)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.ResidentCount)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.LastCountRequestJson)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.LastPageRequestJson)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.TraceLog)
-                && e.PropertyName != nameof(ICbsTableRows<ReferenceDataRow>.Items))
+            if (e.PropertyName != nameof(ICbsTableRows<TableDataRow>.IsLoading)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.ErrorMessage)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.TotalCount)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.HasMoreItems)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.LoadedCount)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.ResidentCount)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.LastCountRequestJson)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.LastPageRequestJson)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.TraceLog)
+                && e.PropertyName != nameof(ICbsTableRows<TableDataRow>.Items))
             {
                 return;
             }
 
             AppendUiTrace($"STEP VM 09 items-property {e.PropertyName}");
 
-            if (e.PropertyName == nameof(ICbsTableRows<ReferenceDataRow>.LoadedCount)
-                || e.PropertyName == nameof(ICbsTableRows<ReferenceDataRow>.TotalCount)
-                || e.PropertyName == nameof(ICbsTableRows<ReferenceDataRow>.Items))
+            if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.LoadedCount)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.TotalCount)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
             {
                 if (_viewportMutationDepth > 0)
                 {
@@ -1443,30 +1384,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             var name = SelectedRow.GetValue("name")?.ToString();
             var id = SelectedRow.GetValue("id")?.ToString();
 
-            if (string.Equals(CurrentReference?.Model, "Profile", StringComparison.OrdinalIgnoreCase))
-            {
-                var login =
-                    SelectedRow.GetValue("user.name")?.ToString()
-                    ?? name;
-                var fio =
-                    SelectedRow.GetValue("user.person.full_name")?.ToString()
-                    ?? SelectedRow.GetValue("user.person.person_name.naming.fio")?.ToString()
-                    ?? SelectedRow.GetValue("full_name")?.ToString()
-                    ?? SelectedRow.GetValue("person")?.ToString();
-
-                if (!string.IsNullOrWhiteSpace(login) && !string.IsNullOrWhiteSpace(fio))
-                {
-                    return $"{login} - {fio}";
-                }
-
-                if (!string.IsNullOrWhiteSpace(login))
-                {
-                    return login;
-                }
-
-                return fio ?? string.Empty;
-            }
-
             if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(id))
             {
                 return $"{name} (ID: {id})";
@@ -1525,412 +1442,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             DiagnosticsFileLogger.AppendBlock("TABLE DIAGNOSTICS", diagnosticsText);
         }
 
-        private async Task RefreshAuditPanelAsync(bool force = false)
-        {
-            if (!_shellViewModel.IsAuditPanelOpen)
-            {
-                return;
-            }
-
-            if (HasSelectedRow && SelectedRow is not null && TryGetSelectedRowId(SelectedRow) is null)
-            {
-                _auditCts?.Cancel();
-                ResetAuditPagingState();
-                _shellViewModel.SetAuditPanelState(new AuditPanelState
-                {
-                    Title = "Аудит изменений",
-                    Description = CurrentTablePage is null
-                        ? "Выбранная запись"
-                        : BuildSelectedRecordAuditDescription(CurrentTablePage, SelectedRow),
-                    Entries =
-                    [
-                        BuildAuditPanelMessageEntry(
-                            "ID не найден",
-                            "Не удалось определить ID записи для загрузки аудита.")
-                    ]
-                });
-                _shellViewModel.SetAuditPanelText("Не удалось определить ID записи для загрузки аудита.");
-                return;
-            }
-
-            var scope = BuildAuditScope();
-            if (scope is null)
-            {
-                _auditCts?.Cancel();
-                ResetAuditPagingState();
-                _shellViewModel.SetAuditPanelState(new AuditPanelState
-                {
-                    Title = "Аудит изменений",
-                    Description = "Выберите справочник, чтобы увидеть последние события.",
-                    Entries =
-                    [
-                        BuildAuditPanelMessageEntry(
-                            "Справочник не выбран",
-                            "Последние события появятся после выбора активного справочника.")
-                    ]
-                });
-                _shellViewModel.SetAuditPanelText("Справочник не выбран.");
-                return;
-            }
-
-            if (!force && string.Equals(_lastAuditPanelKey, scope.Key, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _auditCts?.Cancel();
-            ResetAuditPagingState();
-            _lastAuditPanelKey = scope.Key;
-
-            _shellViewModel.SetAuditPanelState(new AuditPanelState
-            {
-                Title = scope.Title,
-                Description = scope.Description,
-                Entries =
-                [
-                    BuildAuditPanelMessageEntry(
-                        "Загрузка",
-                        "Загрузка событий аудита...")
-                ]
-            });
-            _shellViewModel.SetAuditPanelText("Загрузка событий аудита...");
-
-            await LoadAuditPageAsync(scope.Key, offset: 0);
-        }
-
-        private async Task<bool> LoadAuditPageAsync(string auditKey, int offset)
-        {
-            var scope = BuildAuditScope();
-            if (scope is null || !string.Equals(scope.Key, auditKey, StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            _isAuditLoading = true;
-            _auditCts?.Cancel();
-            _auditCts = new CancellationTokenSource();
-            var cancellationToken = _auditCts.Token;
-            var requestedOffset = Math.Max(0, offset);
-
-            try
-            {
-                var audits = await _dataQueryService.GetDataAsync<AuditRecord>(
-                    new DataQueryRequest
-                    {
-                        Model = "Audit",
-                        Filters = scope.Filters,
-                        Sorts = ["created_at desc"],
-                        Limit = AuditPageSize,
-                        Offset = requestedOffset,
-                        Preset = "card"
-                    },
-                    cancellationToken);
-
-                if (cancellationToken.IsCancellationRequested
-                    || !string.Equals(_lastAuditPanelKey, scope.Key, StringComparison.Ordinal))
-                {
-                    return false;
-                }
-
-                _auditRecords = audits
-                    .OrderByDescending(GetAuditSortTimestamp)
-                    .ThenByDescending(static audit => audit.Id)
-                    .ToList();
-                _auditOffset = requestedOffset;
-                _hasPreviousAuditRecords = _auditOffset > 0;
-                _hasNextAuditRecords = audits.Count == AuditPageSize;
-
-                _shellViewModel.SetAuditPanelState(new AuditPanelState
-                {
-                    Title = scope.Title,
-                    Description = BuildAuditWindowDescription(scope, _auditOffset),
-                    Entries = BuildAuditEntries(_auditRecords)
-                });
-                _shellViewModel.SetAuditPanelText(BuildAuditPanelText(_auditRecords));
-                return true;
-            }
-            catch (OperationCanceledException)
-            {
-                return false;
-            }
-            catch (Exception ex)
-            {
-                if (!cancellationToken.IsCancellationRequested)
-                {
-                    _shellViewModel.SetAuditPanelState(new AuditPanelState
-                    {
-                        Title = scope.Title,
-                        Description = $"{BuildAuditWindowDescription(scope, _auditOffset)} Не удалось загрузить страницу: {ex.Message}",
-                        Entries = _auditRecords.Count == 0
-                            ? [
-                                BuildAuditPanelMessageEntry(
-                                    "Не удалось загрузить аудит",
-                                    ex.Message)
-                            ]
-                            : BuildAuditEntries(_auditRecords)
-                    });
-                    _shellViewModel.SetAuditPanelText($"Не удалось загрузить аудит: {ex.Message}");
-                }
-
-                return false;
-            }
-            finally
-            {
-                _isAuditLoading = false;
-            }
-        }
-
-        private void ResetAuditPagingState()
-        {
-            _lastAuditPanelKey = string.Empty;
-            _auditRecords = [];
-            _auditOffset = 0;
-            _hasPreviousAuditRecords = false;
-            _hasNextAuditRecords = true;
-            _isAuditLoading = false;
-        }
-
-        private AuditScope? BuildAuditScope()
-        {
-            if (!HasActiveReference || CurrentTablePage is null)
-            {
-                return null;
-            }
-
-            var model = CurrentTablePage.AuditModel;
-            var filters = new Dictionary<string, object?>
-            {
-                ["auditable_type__eq"] = model
-            };
-            ApplyAuditDateRangeFilters(filters);
-            ApplyAuditActionFilters(filters);
-            var filterKey = BuildAuditFilterKey();
-
-            if (HasSelectedRow && SelectedRow is not null)
-            {
-                var selectedId = TryGetSelectedRowId(SelectedRow);
-                if (selectedId is null)
-                {
-                    return null;
-                }
-
-                filters["auditable_id__eq"] = selectedId.Value;
-                return new AuditScope(
-                    $"record:{model}:{selectedId.Value}:{filterKey}",
-                    "Аудит изменений",
-                    BuildSelectedRecordAuditDescription(CurrentTablePage, SelectedRow),
-                    filters);
-            }
-
-            return new AuditScope(
-                $"table:{model}:{filterKey}",
-                "Последние события аудита",
-                $"Активная таблица: {CurrentTablePage.EffectiveNavigationDescription}",
-                filters);
-        }
-
-        private void ApplyAuditDateRangeFilters(Dictionary<string, object?> filters)
-        {
-            if (_auditFromDate is DateTimeOffset fromDate)
-            {
-                filters["created_at__gte"] = fromDate
-                    .Date
-                    .ToString("yyyy-MM-dd'T'00:00:00", CultureInfo.InvariantCulture);
-            }
-
-            if (_auditToDate is DateTimeOffset toDate)
-            {
-                filters["created_at__lte"] = toDate
-                    .Date
-                    .ToString("yyyy-MM-dd'T'23:59:59", CultureInfo.InvariantCulture);
-            }
-        }
-
-        private void ApplyAuditActionFilters(Dictionary<string, object?> filters)
-        {
-            if (_auditActions.Count > 0)
-            {
-                filters["action__in"] = _auditActions
-                    .Select(AuditPanelFormatter.GetActionFilterValue)
-                    .Where(static action => action is not null)
-                    .Select(static action => action!.Value)
-                    .ToList();
-            }
-        }
-
-        private string BuildAuditFilterKey()
-        {
-            var from = _auditFromDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "any";
-            var to = _auditToDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? "any";
-            var actions = _auditActions.Count == 0
-                ? "any"
-                : string.Join(",", _auditActions);
-            return $"{from}..{to}:{actions}";
-        }
-
-        private static string BuildAuditWindowDescription(AuditScope scope, int offset)
-        {
-            return offset == 0
-                ? scope.Description
-                : $"{scope.Description}. Позиция timeline: {offset + 1}";
-        }
-
-        private static IReadOnlyList<AuditEntry> BuildAuditEntries(IReadOnlyList<AuditRecord> audits)
-        {
-            if (audits.Count == 0)
-            {
-                return
-                [
-                    BuildAuditPanelMessageEntry(
-                        "Событий не найдено",
-                        "По текущему контексту нет событий аудита.")
-                ];
-            }
-
-            return audits.Select(ToAuditEntry).ToList();
-        }
-
-        private static AuditEntry ToAuditEntry(AuditRecord audit)
-        {
-            return new AuditEntry
-            {
-                Timestamp = audit.When ?? string.Empty,
-                Title = GetAuditActionTitle(audit.Action),
-                Description = BuildAuditRecordText(audit),
-                BackgroundBrushKey = GetAuditBrushKey(audit.Action)
-            };
-        }
-
-        private static string BuildAuditPanelText(IReadOnlyList<AuditRecord> audits)
-        {
-            if (audits.Count == 0)
-            {
-                return "Событий не найдено.";
-            }
-
-            return string.Join(
-                $"{Environment.NewLine}{Environment.NewLine}",
-                audits.Select(BuildAuditRecordText));
-        }
-
-        private static AuditEntry BuildAuditPanelMessageEntry(string title, string description)
-        {
-            return new AuditEntry
-            {
-                Timestamp = "Статус",
-                Title = title,
-                Description = description,
-                BackgroundBrushKey = "ShellMutedPanelBackgroundBrush",
-                IsCopyEnabled = title.Contains("ошиб", StringComparison.OrdinalIgnoreCase)
-                    || title.Contains("не удалось", StringComparison.OrdinalIgnoreCase)
-            };
-        }
-
-        private static DateTimeOffset GetAuditSortTimestamp(AuditRecord audit)
-        {
-            return DateTimeOffset.TryParse(audit.When, out var timestamp)
-                ? timestamp
-                : DateTimeOffset.MinValue;
-        }
-
-        private static string BuildAuditRecordText(AuditRecord audit)
-        {
-            var lines = new List<string>();
-
-            if (!string.IsNullOrWhiteSpace(audit.Where))
-            {
-                lines.Add($"где: {audit.Where}");
-            }
-
-            var what = !string.IsNullOrWhiteSpace(audit.What)
-                ? audit.What
-                : audit.Detail;
-            if (!string.IsNullOrWhiteSpace(what))
-            {
-                lines.Add($"что: {what}");
-            }
-
-            if (!string.IsNullOrWhiteSpace(audit.Field))
-            {
-                lines.Add($"поле: {audit.Field}; изменено {audit.Before} на {audit.After}");
-            }
-
-            lines.Add($"кем: {audit.Who ?? string.Empty}");
-            return lines.Count == 0
-                ? "Детали события не переданы."
-                : string.Join(Environment.NewLine, lines);
-        }
-
-        private static string GetAuditActionTitle(string? action)
-        {
-            return AuditPanelFormatter.GetActionTitle(action);
-        }
-
-        private static string GetAuditBrushKey(string? action)
-        {
-            return AuditPanelFormatter.GetActionBrushKey(action);
-        }
-
-        private static string NormalizeAuditAction(string? action)
-        {
-            return AuditPanelFormatter.NormalizeAction(action);
-        }
-
-        private static string BuildEmployeeAuditDescription(ReferenceDataRow row)
-        {
-            var name =
-                row.GetValue("person.full_name")?.ToString()
-                ?? row.GetValue("name")?.ToString()
-                ?? row.GetValue("head")?.ToString()
-                ?? "Сотрудник";
-            var id = row.GetValue("id")?.ToString();
-
-            return string.IsNullOrWhiteSpace(id)
-                ? name
-                : $"{name} (ID: {id})";
-        }
-
-        private static string BuildSelectedRecordAuditDescription(
-            ReferenceDefinition definition,
-            ReferenceDataRow row)
-        {
-            if (definition.EditorKind == ReferenceEditorKind.Employee)
-            {
-                return BuildEmployeeAuditDescription(row);
-            }
-
-            var name =
-                row.GetValue("name")?.ToString()
-                ?? row.GetValue("title")?.ToString()
-                ?? row.GetValue("full_name")?.ToString()
-                ?? row.GetValue("display_name")?.ToString()
-                ?? definition.EffectiveNavigationDescription;
-            var id = row.GetValue("id")?.ToString();
-
-            return string.IsNullOrWhiteSpace(id)
-                ? name
-                : $"{name} (ID: {id})";
-        }
-
-        private static string BuildSelectedRecordAuditDescription(
-            TablePageDefinition definition,
-            ReferenceDataRow row)
-        {
-            var name =
-                row.GetValue("name")?.ToString()
-                ?? row.GetValue("contract.name")?.ToString()
-                ?? row.GetValue("title")?.ToString()
-                ?? row.GetValue("full_name")?.ToString()
-                ?? row.GetValue("display_name")?.ToString()
-                ?? definition.EffectiveNavigationDescription;
-            var id = row.GetValue("id")?.ToString();
-
-            return string.IsNullOrWhiteSpace(id)
-                ? name
-                : $"{name} (ID: {id})";
-        }
-
-        private static long? TryGetSelectedRowId(ReferenceDataRow row)
+        private static long? TryGetSelectedRowId(TableDataRow row)
         {
             var value = row.GetValue("id");
 
@@ -1943,12 +1455,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             };
         }
 
-        private sealed record AuditScope(
-            string Key,
-            string Title,
-            string Description,
-            Dictionary<string, object?> Filters);
-
         private void RefreshItemsSnapshot()
         {
             if (_rows is null)
@@ -1957,31 +1463,31 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 return;
             }
 
-            if (_rows.Items is IList<ReferenceDataRow> list)
+            if (_rows.Items is IList<TableDataRow> list)
             {
-                _itemsSnapshot = new ReadOnlyCollection<ReferenceDataRow>(list);
+                _itemsSnapshot = new ReadOnlyCollection<TableDataRow>(list);
                 return;
             }
 
             _itemsSnapshot = _rows.Items.ToList();
         }
 
-        private static ReferenceDataRow CloneRowWithPatch(
-            ReferenceDataRow sourceRow,
+        private static TableDataRow CloneRowWithPatch(
+            TableDataRow sourceRow,
             IReadOnlyDictionary<string, object?> patch)
         {
             var values = new Dictionary<string, JsonElement>(sourceRow.Values, StringComparer.OrdinalIgnoreCase);
             MergePayloadValues(values, patch);
 
-            return new ReferenceDataRow
+            return new TableDataRow
             {
                 Values = values
             };
         }
 
-        private static ReferenceDataRow CloneRowWithUpdate(
-            ReferenceDataRow sourceRow,
-            ReferenceDataRow? savedRow,
+        private static TableDataRow CloneRowWithUpdate(
+            TableDataRow sourceRow,
+            TableDataRow? savedRow,
             IReadOnlyDictionary<string, object?> payload)
         {
             var values = new Dictionary<string, JsonElement>(sourceRow.Values, StringComparer.OrdinalIgnoreCase);
@@ -1995,7 +1501,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 }
             }
 
-            return new ReferenceDataRow
+            return new TableDataRow
             {
                 Values = values
             };
@@ -2155,3 +1661,6 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
         }
     }
 }
+
+
+

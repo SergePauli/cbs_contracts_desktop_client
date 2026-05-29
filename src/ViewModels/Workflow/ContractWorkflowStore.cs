@@ -9,16 +9,16 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
     public partial class ContractWorkflowStore : ObservableObject
     {
         [ObservableProperty]
-        public partial ReferenceDataRow? SelectedRevision { get; set; }
+        public partial TableDataRow? SelectedRevision { get; set; }
 
         [ObservableProperty]
-        public partial ReferenceDataRow? SelectedStage { get; set; }
+        public partial TableDataRow? SelectedStage { get; set; }
 
         [ObservableProperty]
-        public partial ReferenceDataRow? Contract { get; set; }
+        public partial TableDataRow? Contract { get; set; }
 
         [ObservableProperty]
-        public partial ReferenceDataRow? Contragent { get; set; }
+        public partial TableDataRow? Contragent { get; set; }
 
         [ObservableProperty]
         public partial StageEditState? SelectedStageEditState { get; set; }
@@ -33,12 +33,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         public partial string SelectedRowHeader { get; set; } = string.Empty;
 
         [ObservableProperty]
-        public partial IReadOnlyList<ReferenceDataRow> Comments { get; set; } = [];
+        public partial IReadOnlyList<TableDataRow> Comments { get; set; } = [];
 
         public void SetRevisionSelection(
-            ReferenceDataRow revision,
-            ReferenceDataRow? contract,
-            ReferenceDataRow? contragent,
+            TableDataRow revision,
+            TableDataRow? contract,
+            TableDataRow? contragent,
             string? selectedRowHeader = null)
         {
             SetRowDetailSelection(
@@ -50,9 +50,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         }
 
         public void SetStageSelection(
-            ReferenceDataRow stage,
-            ReferenceDataRow? contract,
-            ReferenceDataRow? contragent,
+            TableDataRow stage,
+            TableDataRow? contract,
+            TableDataRow? contragent,
             string? selectedRowHeader = null)
         {
             SetRowDetailSelection(
@@ -64,9 +64,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         }
 
         public void SetContractSelection(
-            ReferenceDataRow selectedContract,
-            ReferenceDataRow? contract,
-            ReferenceDataRow? contragent,
+            TableDataRow selectedContract,
+            TableDataRow? contract,
+            TableDataRow? contragent,
             string? selectedRowHeader = null)
         {
             SetRowDetailSelection(
@@ -79,9 +79,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         public void SetRowDetailSelection(
             ContractRowDetailSelectionKind selectionKind,
-            ReferenceDataRow selectedRow,
-            ReferenceDataRow? contract,
-            ReferenceDataRow? contragent,
+            TableDataRow selectedRow,
+            TableDataRow? contract,
+            TableDataRow? contragent,
             string? selectedRowHeader = null)
         {
             SelectedRevision = null;
@@ -122,14 +122,14 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             Comments = [];
         }
 
-        private static IReadOnlyList<ReferenceDataRow> ReadContractComments(ReferenceDataRow? contract)
+        private static IReadOnlyList<TableDataRow> ReadContractComments(TableDataRow? contract)
         {
             if (contract is null || contract.IsPlaceholder)
             {
                 return [];
             }
 
-            var comments = new List<ReferenceDataRow>();
+            var comments = new List<TableDataRow>();
             AddComments(comments, TryGetArray(contract, "comments"));
 
             var stages = TryGetArray(contract, "stages");
@@ -149,7 +149,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 .ToList();
         }
 
-        private static void AddComments(ICollection<ReferenceDataRow> target, JsonElement? comments)
+        private static void AddComments(ICollection<TableDataRow> target, JsonElement? comments)
         {
             if (comments is null || comments.Value.ValueKind != JsonValueKind.Array)
             {
@@ -163,7 +163,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                     continue;
                 }
 
-                target.Add(ToReferenceDataRow(comment));
+                target.Add(ToTableDataRow(comment));
             }
         }
     }

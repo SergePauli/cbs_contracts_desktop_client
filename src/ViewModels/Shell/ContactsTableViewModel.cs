@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CbsContractsDesktopClient.Models.Contacts;
 
 namespace CbsContractsDesktopClient.ViewModels.Shell
@@ -10,48 +10,50 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
             new()
             {
                 Id = 1001,
-                FullName = "Анна Ковалева",
-                CompanyName = "ООО Альфа Поставка",
-                DepartmentName = "Закупки",
+                FullName = "РђРЅРЅР° РљРѕРІР°Р»РµРІР°",
+                CompanyName = "РћРћРћ РђР»СЊС„Р° РџРѕСЃС‚Р°РІРєР°",
+                DepartmentName = "Р—Р°РєСѓРїРєРё",
                 Email = "a.kovaleva@alpha.example",
-                Status = "Активен"
+                Status = "РђРєС‚РёРІРµРЅ"
             },
             new()
             {
                 Id = 1002,
-                FullName = "Сергей Ильин",
-                CompanyName = "АО ТехИмпорт",
-                DepartmentName = "Юридический отдел",
+                FullName = "РЎРµСЂРіРµР№ РР»СЊРёРЅ",
+                CompanyName = "РђРћ РўРµС…РРјРїРѕСЂС‚",
+                DepartmentName = "Р®СЂРёРґРёС‡РµСЃРєРёР№ РѕС‚РґРµР»",
                 Email = "s.ilin@techimport.example",
-                Status = "На согласовании"
+                Status = "РќР° СЃРѕРіР»Р°СЃРѕРІР°РЅРёРё"
             },
             new()
             {
                 Id = 1003,
-                FullName = "Мария Соколова",
-                CompanyName = "ООО СеверЛогистик",
-                DepartmentName = "Логистика",
+                FullName = "РњР°СЂРёСЏ РЎРѕРєРѕР»РѕРІР°",
+                CompanyName = "РћРћРћ РЎРµРІРµСЂР›РѕРіРёСЃС‚РёРє",
+                DepartmentName = "Р›РѕРіРёСЃС‚РёРєР°",
                 Email = "m.sokolova@northlog.example",
-                Status = "Активен"
+                Status = "РђРєС‚РёРІРµРЅ"
             },
             new()
             {
                 Id = 1004,
-                FullName = "Игорь Беляев",
-                CompanyName = "ПАО РегионЭнерго",
-                DepartmentName = "Финансы",
+                FullName = "РРіРѕСЂСЊ Р‘РµР»СЏРµРІ",
+                CompanyName = "РџРђРћ Р РµРіРёРѕРЅР­РЅРµСЂРіРѕ",
+                DepartmentName = "Р¤РёРЅР°РЅСЃС‹",
                 Email = "i.belyaev@regenergy.example",
-                Status = "Заблокирован"
+                Status = "Р—Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ"
             },
             new()
             {
                 Id = 1005,
-                FullName = "Екатерина Миронова",
-                CompanyName = "ООО КонтрактСервис",
-                DepartmentName = "Продажи",
+                FullName = "Р•РєР°С‚РµСЂРёРЅР° РњРёСЂРѕРЅРѕРІР°",
+                CompanyName = "РћРћРћ РљРѕРЅС‚СЂР°РєС‚РЎРµСЂРІРёСЃ",
+                DepartmentName = "РџСЂРѕРґР°Р¶Рё",
                 Email = "e.mironova@contracts.example",
-                Status = "Активен"
+                Status = "РђРєС‚РёРІРµРЅ"
             }
         ];
     }
 }
+
+

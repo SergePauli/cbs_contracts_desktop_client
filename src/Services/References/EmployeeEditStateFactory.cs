@@ -9,7 +9,7 @@ namespace CbsContractsDesktopClient.Services.References
         public static EmployeeEditDialogState Create(
             ReferenceDefinition definition,
             bool isCreateMode,
-            ReferenceDataRow? sourceRow)
+            TableDataRow? sourceRow)
         {
             ArgumentNullException.ThrowIfNull(definition);
 
@@ -47,7 +47,7 @@ namespace CbsContractsDesktopClient.Services.References
             };
         }
 
-        private static IReadOnlyList<EmployeeContactEditItem> ReadContacts(ReferenceDataRow row)
+        private static IReadOnlyList<EmployeeContactEditItem> ReadContacts(TableDataRow row)
         {
             var personElement = row.Values.TryGetValue("person", out var person)
                 && person.ValueKind == JsonValueKind.Object

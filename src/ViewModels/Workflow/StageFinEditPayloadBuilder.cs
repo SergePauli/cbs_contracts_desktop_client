@@ -53,7 +53,7 @@ public static class StageFinEditPayloadBuilder
     }
 
     public static IReadOnlyDictionary<string, object?> BuildForUpdate(
-        ReferenceDataRow sourceRow,
+        TableDataRow sourceRow,
         StageFinEditPayloadInput input)
     {
         ArgumentNullException.ThrowIfNull(sourceRow);
@@ -88,7 +88,7 @@ public static class StageFinEditPayloadBuilder
 
     private static void AppendChangedBool(
         IDictionary<string, object?> request,
-        ReferenceDataRow sourceRow,
+        TableDataRow sourceRow,
         string key,
         bool value)
     {
@@ -113,7 +113,7 @@ public static class StageFinEditPayloadBuilder
 
     private static void AppendChangedDate(
         IDictionary<string, object?> request,
-        ReferenceDataRow sourceRow,
+        TableDataRow sourceRow,
         string key,
         DateTimeOffset? value)
     {

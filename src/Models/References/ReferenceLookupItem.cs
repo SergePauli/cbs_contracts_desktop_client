@@ -16,7 +16,7 @@ namespace CbsContractsDesktopClient.Models.References
 
         public string Code { get; init; } = string.Empty;
 
-        public required ReferenceDataRow Row { get; init; }
+        public required TableDataRow Row { get; init; }
 
         public string DisplayName => !string.IsNullOrWhiteSpace(Name) ? Name : FullName;
 

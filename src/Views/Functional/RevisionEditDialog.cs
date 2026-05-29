@@ -23,7 +23,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBlock _errorText = new();
         private readonly string? _listKey;
 
-        public RevisionEditDialog(ReferenceDataRow sourceRow)
+        public RevisionEditDialog(TableDataRow sourceRow)
         {
             ArgumentNullException.ThrowIfNull(sourceRow);
 
@@ -81,7 +81,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : $"Редактирование ревизии {revisionNumber} контракта {contractName}";
         }
 
-        private UIElement BuildContent(ReferenceDataRow sourceRow)
+        private UIElement BuildContent(TableDataRow sourceRow)
         {
             var root = new Grid
             {

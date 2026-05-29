@@ -10,7 +10,7 @@ namespace CbsContractsDesktopClient.Services.References
         public static ProfileEditDialogState Create(
             ReferenceDefinition definition,
             bool isCreateMode,
-            ReferenceDataRow? sourceRow,
+            TableDataRow? sourceRow,
             IReadOnlyList<CbsTableFilterOptionDefinition>? departmentOptions = null)
         {
             ArgumentNullException.ThrowIfNull(definition);
