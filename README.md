@@ -47,12 +47,12 @@
 - `AppShellPage` с layout на 5 регионов:
   - `NavigationSidebarView`
   - `TopBarView`
-  - `ContentHostView`
+  - `ContentHostRouterView`
   - `AuditPanelView`
   - `FooterBarView`
 - breadcrumbs, footer-state и audit panel state живут в `AppShellViewModel`
 - `BreadcrumbBar` показывает иерархию `Справочники -> {Текущий справочник}`
-- `ContentHostView` больше не дублирует заголовок раздела, а использует компактный однострочный header
+- content-area маршрутизируется в отдельные host views: `ReferenceHostView`, `HolidayHostView`, `ProfileHostView`, `EmployeeHostView`, `ContragentHostView`, `RevisionHostView`, `StageHostView`
 - `NavigationSidebarView` стал компактнее и отделен от content-area отдельной более темной gradient-панелью
 - `AuditPanelView` показывает события активного справочника или выбранной записи
 
@@ -202,13 +202,13 @@ Audit panel теперь является reusable частью reference worksp
 
 Текущая работа теперь смещается с «собрать основу приложения» и перенести таблицу этапов на:
 
-- SOLID-рефакторинг `ContentHostView`, который стал перегруженным orchestration-классом
+- развитие выделенных content host views без возврата к монолитному orchestration-классу
 - шлифовку `DetailView` для сложных контрактных таблиц
 - перенос следующей функциональной таблицы `Контракты`
 
 ## Ближайшие направления
 
-- декомпозиция `ContentHostView`: table commands, dialog launching, settings persistence, notifications и workflow/detail refresh
+- развитие `ContentHostRouterView`, `ComplexHostViewBase` и конкретных host views для новых функциональных таблиц
 - подготовка content/table pattern к странице `Активность`, где возможно несколько таблиц одновременно
 - шлифовка `DetailView` для сложных таблиц
 - следующая функциональная таблица: `Контракты`
@@ -243,7 +243,7 @@ Audit panel теперь является reusable частью reference worksp
 - table multiselect/date-time filter UI regressions
 - employee/profile specialized editor payload/state
 - видимость `СЗИ` в меню для `admin` / `ОЗИ`
-- регрессия на меню настроек `ContentHostView`
+- регрессия на меню настроек `ComplexHostViewBase`
 - регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
 
 Запуск:

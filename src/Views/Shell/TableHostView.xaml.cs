@@ -1,8 +1,10 @@
-// Wraps CbsTableView as the shell-level table host boundary.
-using System.Collections;
+// Owns per-table UI state and delegates rendering to CbsTableView.
+using System.ComponentModel;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.Table;
-using CbsContractsDesktopClient.Stores.Table;
+using CbsContractsDesktopClient.Models.Workspace;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
+using CbsContractsDesktopClient.ViewModels.Data;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -11,154 +13,47 @@ namespace CbsContractsDesktopClient.Views.Shell
 {
     public sealed partial class TableHostView : UserControl
     {
-        public static readonly DependencyProperty ColumnsProperty =
-            DependencyProperty.Register(
-                nameof(Columns),
-                typeof(IReadOnlyList<CbsTableColumnDefinition>),
-                typeof(TableHostView),
-                new PropertyMetadata(Array.Empty<CbsTableColumnDefinition>(), OnColumnsChanged));
-
-        public static readonly DependencyProperty StoreProperty =
-            DependencyProperty.Register(
-                nameof(Store),
-                typeof(TablePageStore),
-                typeof(TableHostView),
-                new PropertyMetadata(null));
-
-        public static readonly DependencyProperty ItemsSourceProperty =
-            DependencyProperty.Register(
-                nameof(ItemsSource),
-                typeof(IEnumerable),
-                typeof(TableHostView),
-                new PropertyMetadata(null, OnItemsSourceChanged));
-
-        public static readonly DependencyProperty CurrentSortFieldProperty =
-            DependencyProperty.Register(
-                nameof(CurrentSortField),
-                typeof(string),
-                typeof(TableHostView),
-                new PropertyMetadata(null, OnCurrentSortFieldChanged));
-
-        public static readonly DependencyProperty CurrentSortDirectionProperty =
-            DependencyProperty.Register(
-                nameof(CurrentSortDirection),
-                typeof(DataSortDirection?),
-                typeof(TableHostView),
-                new PropertyMetadata(null, OnCurrentSortDirectionChanged));
-
-        public static readonly DependencyProperty TableStateKeyProperty =
-            DependencyProperty.Register(
-                nameof(TableStateKey),
-                typeof(string),
-                typeof(TableHostView),
-                new PropertyMetadata(string.Empty, OnTableStateKeyChanged));
-
-        public static readonly DependencyProperty MultiSelectOptionsSourcesProperty =
-            DependencyProperty.Register(
-                nameof(MultiSelectOptionsSources),
-                typeof(IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>),
-                typeof(TableHostView),
-                new PropertyMetadata(
-                    new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase),
-                    OnMultiSelectOptionsSourcesChanged));
-
-        public static readonly DependencyProperty HasMoreItemsProperty =
-            DependencyProperty.Register(
-                nameof(HasMoreItems),
-                typeof(bool),
-                typeof(TableHostView),
-                new PropertyMetadata(false, OnHasMoreItemsChanged));
-
-        public static readonly DependencyProperty IsLoadingProperty =
-            DependencyProperty.Register(
-                nameof(IsLoading),
-                typeof(bool),
-                typeof(TableHostView),
-                new PropertyMetadata(false, OnIsLoadingChanged));
-
-        public static readonly DependencyProperty LoadedCountProperty =
-            DependencyProperty.Register(
-                nameof(LoadedCount),
-                typeof(int),
-                typeof(TableHostView),
-                new PropertyMetadata(0, OnLoadedCountChanged));
-
-        public static readonly DependencyProperty TotalCountProperty =
-            DependencyProperty.Register(
-                nameof(TotalCount),
-                typeof(int),
-                typeof(TableHostView),
-                new PropertyMetadata(0, OnTotalCountChanged));
-
-        public static readonly DependencyProperty RowHeightProperty =
-            DependencyProperty.Register(
-                nameof(RowHeight),
-                typeof(double),
-                typeof(TableHostView),
-                new PropertyMetadata(22d, OnRowHeightChanged));
-
-        public static readonly DependencyProperty DensityProperty =
-            DependencyProperty.Register(
-                nameof(Density),
-                typeof(CbsTableDensity),
-                typeof(TableHostView),
-                new PropertyMetadata(CbsTableDensity.Compact, OnDensityChanged));
-
-        public static readonly DependencyProperty RowStyleKeyProperty =
-            DependencyProperty.Register(
-                nameof(RowStyleKey),
-                typeof(CbsTableRowStyleKey),
-                typeof(TableHostView),
-                new PropertyMetadata(CbsTableRowStyleKey.None, OnRowStyleKeyChanged));
-
-        public static readonly DependencyProperty ShowStageCostFractionProperty =
-            DependencyProperty.Register(
-                nameof(ShowStageCostFraction),
-                typeof(bool),
-                typeof(TableHostView),
-                new PropertyMetadata(false, OnShowStageCostFractionChanged));
-
-        public static readonly DependencyProperty SupportsRowSelectionProperty =
-            DependencyProperty.Register(
-                nameof(SupportsRowSelection),
-                typeof(bool),
-                typeof(TableHostView),
-                new PropertyMetadata(false, OnSupportsRowSelectionChanged));
-
-        public static readonly DependencyProperty SupportsMultipleRowSelectionProperty =
-            DependencyProperty.Register(
-                nameof(SupportsMultipleRowSelection),
-                typeof(bool),
-                typeof(TableHostView),
-                new PropertyMetadata(false, OnSupportsMultipleRowSelectionChanged));
-
-        public static readonly DependencyProperty SelectedItemProperty =
-            DependencyProperty.Register(
-                nameof(SelectedItem),
-                typeof(TableDataRow),
-                typeof(TableHostView),
-                new PropertyMetadata(null, OnSelectedItemChanged));
-
-        public static readonly DependencyProperty RetainedBufferRowsProperty =
-            DependencyProperty.Register(
-                nameof(RetainedBufferRows),
-                typeof(int),
-                typeof(TableHostView),
-                new PropertyMetadata(0, OnRetainedBufferRowsChanged));
+        private LazyDataViewState<TableDataRow>? _state;
+        private ICbsTableRows<TableDataRow>? _rows;
+        private INotifyPropertyChanged? _rowsNotifier;
+        private IReadOnlyList<CbsTableColumnDefinition> _columns = [];
+        private IReadOnlyList<TableDataRow> _items = [];
+        private IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> _filterOptionsSources =
+            new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+        private TablePageDefinition? _definition;
+        private string _tableStateKey = string.Empty;
+        private string? _currentSortField;
+        private DataSortDirection? _currentSortDirection;
+        private TableDataRow? _selectedRow;
+        private bool _hasMoreItems;
+        private bool _isLoading;
+        private int _loadedCount;
+        private int _totalCount;
+        private int _residentCount;
+        private int _lastViewportStart = -1;
+        private int _lastViewportEnd = -1;
+        private int _retainedBufferRows;
 
         public TableHostView()
         {
             InitializeComponent();
+            ApplyVisualOptionsToRenderer();
 
             TableView.LoadMoreRequested += (_, args) => LoadMoreRequested?.Invoke(this, args);
             TableView.SortRequested += (_, args) => SortRequested?.Invoke(this, args);
             TableView.TraceGenerated += (_, args) => TraceGenerated?.Invoke(this, args);
-            TableView.ViewportChanged += (_, args) => ViewportChanged?.Invoke(this, args);
+            TableView.ViewportChanged += (_, args) =>
+            {
+                _lastViewportStart = args.StartIndex;
+                _lastViewportEnd = args.EndIndex;
+                _retainedBufferRows = args.RetainedBufferRows;
+                ViewportChanged?.Invoke(this, args);
+            };
             TableView.ColumnWidthChanged += (_, args) => ColumnWidthChanged?.Invoke(this, args);
             TableView.FilterRequested += (_, args) => FilterRequested?.Invoke(this, args);
             TableView.RowSelectionChanged += (_, args) =>
             {
-                SelectedItem = args.Row;
+                _selectedRow = args.IsSelected ? args.Row : null;
                 RowSelectionChanged?.Invoke(this, args);
             };
             TableView.RowDoubleTapped += (_, args) => RowDoubleTapped?.Invoke(this, args);
@@ -180,118 +75,208 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         public event EventHandler<CbsTableRowDoubleTappedEventArgs>? RowDoubleTapped;
 
-        public TablePageStore? Store
-        {
-            get => (TablePageStore?)GetValue(StoreProperty);
-            set => SetValue(StoreProperty, value);
-        }
+        internal LazyDataViewState<TableDataRow>? State => _state;
 
-        public IReadOnlyList<CbsTableColumnDefinition> Columns
-        {
-            get => (IReadOnlyList<CbsTableColumnDefinition>)GetValue(ColumnsProperty);
-            set => SetValue(ColumnsProperty, value);
-        }
+        internal ICbsTableRows<TableDataRow>? Rows => _rows;
 
-        public IEnumerable? ItemsSource
-        {
-            get => (IEnumerable?)GetValue(ItemsSourceProperty);
-            set => SetValue(ItemsSourceProperty, value);
-        }
+        internal IReadOnlyList<CbsTableColumnDefinition> Columns => _columns;
 
-        public string? CurrentSortField
-        {
-            get => (string?)GetValue(CurrentSortFieldProperty);
-            set => SetValue(CurrentSortFieldProperty, value);
-        }
+        internal IReadOnlyList<TableDataRow> Items => _items;
 
-        public DataSortDirection? CurrentSortDirection
-        {
-            get => (DataSortDirection?)GetValue(CurrentSortDirectionProperty);
-            set => SetValue(CurrentSortDirectionProperty, value);
-        }
+        internal IReadOnlyList<DataFilterCriterion> Filters => _state?.Filters.ToList() ?? [];
 
-        public string TableStateKey
-        {
-            get => (string)GetValue(TableStateKeyProperty);
-            set => SetValue(TableStateKeyProperty, value);
-        }
+        internal IReadOnlyList<DataSortCriterion> Sorts => _state?.Sorts.ToList() ?? [];
 
-        public IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> MultiSelectOptionsSources
-        {
-            get => (IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>)GetValue(MultiSelectOptionsSourcesProperty);
-            set => SetValue(MultiSelectOptionsSourcesProperty, value);
-        }
+        public string TableStateKey => _tableStateKey;
 
-        public bool HasMoreItems
-        {
-            get => (bool)GetValue(HasMoreItemsProperty);
-            set => SetValue(HasMoreItemsProperty, value);
-        }
+        public string? CurrentSortField => _currentSortField;
 
-        public bool IsLoading
-        {
-            get => (bool)GetValue(IsLoadingProperty);
-            set => SetValue(IsLoadingProperty, value);
-        }
+        public DataSortDirection? CurrentSortDirection => _currentSortDirection;
 
-        public int LoadedCount
-        {
-            get => (int)GetValue(LoadedCountProperty);
-            set => SetValue(LoadedCountProperty, value);
-        }
+        public TableDataRow? SelectedRow => _selectedRow;
 
-        public int TotalCount
-        {
-            get => (int)GetValue(TotalCountProperty);
-            set => SetValue(TotalCountProperty, value);
-        }
+        public bool HasMoreItems => _hasMoreItems;
+
+        public bool IsLoading => _isLoading;
+
+        public int LoadedCount => _loadedCount;
+
+        public int TotalCount => _totalCount;
+
+        public int ResidentCount => _residentCount;
+
+        public int LastViewportStart => _lastViewportStart;
+
+        public int LastViewportEnd => _lastViewportEnd;
+
+        public int RetainedBufferRows => _retainedBufferRows;
 
         public double RowHeight
         {
-            get => (double)GetValue(RowHeightProperty);
-            set => SetValue(RowHeightProperty, value);
+            get => TableView.RowHeight;
+            set => TableView.RowHeight = value;
         }
 
         public CbsTableDensity Density
         {
-            get => (CbsTableDensity)GetValue(DensityProperty);
-            set => SetValue(DensityProperty, value);
+            get => TableView.Density;
+            set => TableView.Density = value;
         }
 
         public CbsTableRowStyleKey RowStyleKey
         {
-            get => (CbsTableRowStyleKey)GetValue(RowStyleKeyProperty);
-            set => SetValue(RowStyleKeyProperty, value);
+            get => TableView.RowStyleKey;
+            set => TableView.RowStyleKey = value;
         }
 
         public bool ShowStageCostFraction
         {
-            get => (bool)GetValue(ShowStageCostFractionProperty);
-            set => SetValue(ShowStageCostFractionProperty, value);
+            get => TableView.ShowStageCostFraction;
+            set => TableView.ShowStageCostFraction = value;
         }
 
         public bool SupportsRowSelection
         {
-            get => (bool)GetValue(SupportsRowSelectionProperty);
-            set => SetValue(SupportsRowSelectionProperty, value);
+            get => TableView.SupportsRowSelection;
+            set => TableView.SupportsRowSelection = value;
         }
 
         public bool SupportsMultipleRowSelection
         {
-            get => (bool)GetValue(SupportsMultipleRowSelectionProperty);
-            set => SetValue(SupportsMultipleRowSelectionProperty, value);
+            get => TableView.SupportsMultipleRowSelection;
+            set => TableView.SupportsMultipleRowSelection = value;
         }
 
-        public TableDataRow? SelectedItem
+        public void AttachTableState(
+            TablePageDefinition definition,
+            LazyDataViewState<TableDataRow> state,
+            ICbsTableRows<TableDataRow> rows,
+            IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>? filterOptionsSources = null)
         {
-            get => (TableDataRow?)GetValue(SelectedItemProperty);
-            set => SetValue(SelectedItemProperty, value);
+            ArgumentNullException.ThrowIfNull(definition);
+            ArgumentNullException.ThrowIfNull(state);
+            ArgumentNullException.ThrowIfNull(rows);
+
+            DetachTableState();
+
+            _definition = definition;
+            _state = state;
+            _rows = rows;
+            _rowsNotifier = rows;
+            _rowsNotifier.PropertyChanged += OnRowsPropertyChanged;
+            _columns = definition.Columns.Where(static column => column.IsVisible).ToList();
+            _tableStateKey = definition.Route;
+            RowStyleKey = definition.RowStyleKey;
+            _filterOptionsSources = filterOptionsSources
+                ?? new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+
+            RefreshSortSnapshot();
+            RefreshItemsSnapshot();
+            RefreshRowsStateSnapshot();
+            ApplyStructureToRenderer();
+            ApplyRowsStateToRenderer();
         }
 
-        public int RetainedBufferRows
+        public void AttachTableRows(
+            TablePageDefinition definition,
+            ICbsTableRows<TableDataRow> rows,
+            IReadOnlyList<DataSortCriterion>? sorts = null,
+            IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>? filterOptionsSources = null)
         {
-            get => (int)GetValue(RetainedBufferRowsProperty);
-            set => SetValue(RetainedBufferRowsProperty, value);
+            ArgumentNullException.ThrowIfNull(definition);
+            ArgumentNullException.ThrowIfNull(rows);
+
+            DetachTableState();
+
+            _definition = definition;
+            _rows = rows;
+            _rowsNotifier = rows;
+            _rowsNotifier.PropertyChanged += OnRowsPropertyChanged;
+            _columns = definition.Columns.Where(static column => column.IsVisible).ToList();
+            _tableStateKey = definition.Route;
+            RowStyleKey = definition.RowStyleKey;
+            _filterOptionsSources = filterOptionsSources
+                ?? new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+
+            RefreshSortSnapshot(sorts);
+            RefreshItemsSnapshot();
+            RefreshRowsStateSnapshot();
+            ApplyStructureToRenderer();
+            ApplyRowsStateToRenderer();
+        }
+
+        public void DetachTableState()
+        {
+            if (_rowsNotifier is not null)
+            {
+                _rowsNotifier.PropertyChanged -= OnRowsPropertyChanged;
+                _rowsNotifier = null;
+            }
+
+            _definition = null;
+            _state = null;
+            _rows = null;
+            _columns = [];
+            _items = [];
+            _filterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
+            _tableStateKey = string.Empty;
+            _currentSortField = null;
+            _currentSortDirection = null;
+            _selectedRow = null;
+            _hasMoreItems = false;
+            _isLoading = false;
+            _loadedCount = 0;
+            _totalCount = 0;
+            _residentCount = 0;
+            _lastViewportStart = -1;
+            _lastViewportEnd = -1;
+            _retainedBufferRows = 0;
+
+            ApplyStructureToRenderer();
+            ApplyRowsStateToRenderer();
+        }
+
+        public void SetFilterOptionsSources(
+            IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> filterOptionsSources)
+        {
+            ArgumentNullException.ThrowIfNull(filterOptionsSources);
+            _filterOptionsSources = filterOptionsSources;
+            TableView.MultiSelectOptionsSources = _filterOptionsSources;
+        }
+
+        public void SetSelectedRow(TableDataRow? row)
+        {
+            _selectedRow = row;
+            TableView.SelectedItem = row;
+        }
+
+        public void RefreshSortSnapshot()
+        {
+            RefreshSortSnapshot(_state?.Sorts.ToList());
+        }
+
+        public void RefreshSortSnapshot(IReadOnlyList<DataSortCriterion>? sorts)
+        {
+            var sort = sorts?.FirstOrDefault();
+            _currentSortField = sort?.FieldKey;
+            _currentSortDirection = sort?.Direction;
+            TableView.CurrentSortField = _currentSortField;
+            TableView.CurrentSortDirection = _currentSortDirection;
+        }
+
+        public void RefreshItemsSnapshot()
+        {
+            _items = _rows?.Items ?? [];
+            TableView.ItemsSource = _items;
+        }
+
+        public void RefreshRowsStateSnapshot()
+        {
+            _hasMoreItems = _rows?.HasMoreItems == true;
+            _isLoading = _rows?.IsLoading == true;
+            _loadedCount = _rows?.LoadedCount ?? 0;
+            _totalCount = _rows?.TotalCount ?? 0;
+            _residentCount = _rows?.ResidentCount ?? 0;
         }
 
         public void ClearFilterInputs()
@@ -304,95 +289,56 @@ namespace CbsContractsDesktopClient.Views.Shell
             TableView.ApplyFilterInputs(filters);
         }
 
-        private static void OnColumnsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        public void InvalidateRows(TableRenderRequest request)
         {
-            ((TableHostView)d).TableView.Columns = (IReadOnlyList<CbsTableColumnDefinition>)e.NewValue;
+            TableView.InvalidateRows(request);
         }
 
-        private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private void OnRowsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-            ((TableHostView)d).TableView.ItemsSource = (IEnumerable?)e.NewValue;
+            if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
+            {
+                RefreshItemsSnapshot();
+                TableView.RefreshVisibleRowsIfViewportHasPlaceholders();
+            }
+
+            if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.IsLoading)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.HasMoreItems)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.LoadedCount)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.TotalCount)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.ResidentCount)
+                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
+            {
+                RefreshRowsStateSnapshot();
+                ApplyRowsStateToRenderer();
+            }
         }
 
-        private static void OnCurrentSortFieldChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private void ApplyStructureToRenderer()
         {
-            ((TableHostView)d).TableView.CurrentSortField = (string?)e.NewValue;
+            TableView.Columns = _columns;
+            TableView.ItemsSource = _items;
+            TableView.TableStateKey = _tableStateKey;
+            TableView.MultiSelectOptionsSources = _filterOptionsSources;
+            TableView.CurrentSortField = _currentSortField;
+            TableView.CurrentSortDirection = _currentSortDirection;
+            TableView.SelectedItem = _selectedRow;
         }
 
-        private static void OnCurrentSortDirectionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private void ApplyRowsStateToRenderer()
         {
-            ((TableHostView)d).TableView.CurrentSortDirection = (DataSortDirection?)e.NewValue;
+            TableView.HasMoreItems = _hasMoreItems;
+            TableView.IsLoading = _isLoading;
+            TableView.LoadedCount = _loadedCount;
+            TableView.TotalCount = _totalCount;
+            TableView.SelectedItem = _selectedRow;
         }
 
-        private static void OnTableStateKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        private void ApplyVisualOptionsToRenderer()
         {
-            ((TableHostView)d).TableView.TableStateKey = (string)e.NewValue;
-        }
-
-        private static void OnMultiSelectOptionsSourcesChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.MultiSelectOptionsSources =
-                (IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>)e.NewValue;
-        }
-
-        private static void OnHasMoreItemsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.HasMoreItems = (bool)e.NewValue;
-        }
-
-        private static void OnIsLoadingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.IsLoading = (bool)e.NewValue;
-        }
-
-        private static void OnLoadedCountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.LoadedCount = (int)e.NewValue;
-        }
-
-        private static void OnTotalCountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.TotalCount = (int)e.NewValue;
-        }
-
-        private static void OnRowHeightChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.RowHeight = (double)e.NewValue;
-        }
-
-        private static void OnDensityChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.Density = (CbsTableDensity)e.NewValue;
-        }
-
-        private static void OnRowStyleKeyChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.RowStyleKey = (CbsTableRowStyleKey)e.NewValue;
-        }
-
-        private static void OnShowStageCostFractionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.ShowStageCostFraction = (bool)e.NewValue;
-        }
-
-        private static void OnSupportsRowSelectionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.SupportsRowSelection = (bool)e.NewValue;
-        }
-
-        private static void OnSupportsMultipleRowSelectionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.SupportsMultipleRowSelection = (bool)e.NewValue;
-        }
-
-        private static void OnSelectedItemChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.SelectedItem = (TableDataRow?)e.NewValue;
-        }
-
-        private static void OnRetainedBufferRowsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((TableHostView)d).TableView.RetainedBufferRows = (int)e.NewValue;
+            TableView.Density = CbsTableDensity.Compact;
+            TableView.SupportsMultipleRowSelection = false;
+            TableView.SupportsRowSelection = true;
         }
     }
 }

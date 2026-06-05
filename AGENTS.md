@@ -8,6 +8,7 @@ Workflow rules:
 - Do not mask data contract violations with defensive fallbacks, nullable workarounds, or silent checks; throw an exception at the boundary where invalid data is detected.
 - Keep API request builders next to the entity store/state they serialize.
 - Dialogs must not build API update payloads directly; they should collect UI input and delegate change serialization to the entity store/state payload builder.
+- Follow SRP strictly. This is especially important for asynchronous event handlers: memory cleanup, state updates, data loading, and UI invalidation must stay separate unless a single responsibility explicitly requires crossing that boundary.
 
 Rails API rules:
 - Treat `api/index` and `api/count` as read-only query endpoints.

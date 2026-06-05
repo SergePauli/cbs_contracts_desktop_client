@@ -1,4 +1,4 @@
-// Coordinates common shell dialogs for ContentHostView.
+// Coordinates common shell dialogs for shell host views.
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -53,7 +53,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             return new ContentDialog
             {
                 XamlRoot = _xamlRootAccessor()
-                    ?? throw new InvalidOperationException("ContentHostView XamlRoot is required to show a dialog."),
+                    ?? throw new InvalidOperationException("Shell host XamlRoot is required to show a dialog."),
                 Title = title,
                 CloseButtonText = "Закрыть",
                 DefaultButton = ContentDialogButton.Close,

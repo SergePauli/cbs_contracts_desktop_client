@@ -106,12 +106,14 @@ namespace CbsContractsDesktopClient.Views.Shell
                 if (!_tablePageDefinitionService.TryGetByRoute(route, out var definition)
                     || definition.Kind != TablePageKind.Reference)
                 {
+                    ReferenceTableView.DetachTableState();
                     await _viewModel.NavigateToRouteAsync(route, _routeCts.Token);
                     return;
                 }
 
                 _ = _referenceDefinitionService.TryGetByRoute(route, out _);
                 await _viewModel.NavigateToRouteAsync(definition.Route, _routeCts.Token);
+                AttachCurrentRowsToTableView(definition);
                 ReferenceTableView.ApplyFilterInputs(_viewModel.CurrentFilters);
             }
             catch (OperationCanceledException)
@@ -135,6 +137,22 @@ namespace CbsContractsDesktopClient.Views.Shell
                 || e.PropertyName == nameof(TablePageStore.CurrentRowStyleKey))
             {
                 ReferenceTableView.RowStyleKey = _viewModel.CurrentRowStyleKey;
+            }
+
+            if (e.PropertyName == nameof(TablePageStore.CurrentFilterOptionsSources))
+            {
+                ReferenceTableView.SetFilterOptionsSources(_viewModel.CurrentFilterOptionsSources);
+            }
+
+            if (e.PropertyName == nameof(TablePageStore.CurrentSortField)
+                || e.PropertyName == nameof(TablePageStore.CurrentSortDirection))
+            {
+                ReferenceTableView.RefreshSortSnapshot(BuildCurrentSorts());
+            }
+
+            if (e.PropertyName == nameof(TablePageStore.SelectedRow))
+            {
+                ReferenceTableView.SetSelectedRow(_viewModel.SelectedRow);
             }
         }
 
@@ -171,6 +189,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         private async void ResetSortingMenuItem_Click(object sender, RoutedEventArgs e)
         {
             await _viewModel.ClearSortsAsync();
+            ReferenceTableView.InvalidateRows(new TableRenderRequest(
+                TableRenderReason.SortChanged,
+                ResetScroll: true));
         }
 
         private async void ReferenceTableView_SortRequested(object sender, CbsTableSortRequestedEventArgs e)
@@ -183,6 +204,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _viewModel.ClearSortsAsync();
             }
+
+            ReferenceTableView.InvalidateRows(new TableRenderRequest(
+                TableRenderReason.SortChanged,
+                ResetScroll: true));
         }
 
         private async void ReferenceTableView_LoadMoreRequested(object sender, CbsTableLoadMoreRequestedEventArgs e)
@@ -192,10 +217,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void ReferenceTableView_RowSelectionChanged(object sender, CbsTableRowSelectionChangedEventArgs e)
         {
-            if (!e.IsSelected)
-            {
-                _viewModel.SelectedRow = null;
-            }
+            _viewModel.SelectedRow = e.IsSelected ? e.Row : null;
         }
 
         private async void ReferenceTableView_RowDoubleTapped(object sender, CbsTableRowDoubleTappedEventArgs e)
@@ -220,6 +242,9 @@ namespace CbsContractsDesktopClient.Views.Shell
                     e.MatchMode,
                     e.Value,
                     cancellationTokenSource.Token);
+                ReferenceTableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.FilterChanged,
+                    ResetScroll: true));
             }
             catch (OperationCanceledException)
             {
@@ -266,6 +291,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 var filters = await _viewModel.ResetFiltersAsync();
                 ReferenceTableView.ApplyFilterInputs(filters);
+                ReferenceTableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.FilterChanged,
+                    ResetScroll: true));
             }
             catch (Exception ex)
             {
@@ -287,6 +315,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 var filters = await _viewModel.ClearFiltersAsync();
                 ReferenceTableView.ApplyFilterInputs(filters);
+                ReferenceTableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.FilterChanged,
+                    ResetScroll: true));
             }
             catch (Exception ex)
             {
@@ -427,6 +458,29 @@ namespace CbsContractsDesktopClient.Views.Shell
                     ? new SolidColorBrush(Colors.Firebrick)
                     : (Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
+        }
+
+        private void AttachCurrentRowsToTableView(TablePageDefinition definition)
+        {
+            if (_viewModel.Rows is null)
+            {
+                ReferenceTableView.DetachTableState();
+                return;
+            }
+
+            ReferenceTableView.AttachTableRows(
+                definition,
+                _viewModel.Rows,
+                BuildCurrentSorts(),
+                _viewModel.CurrentFilterOptionsSources);
+        }
+
+        private IReadOnlyList<DataSortCriterion> BuildCurrentSorts()
+        {
+            return _viewModel.CurrentSortField is not null
+                && _viewModel.CurrentSortDirection is DataSortDirection direction
+                ? [new DataSortCriterion { FieldKey = _viewModel.CurrentSortField, Direction = direction }]
+                : [];
         }
 
         private static string DescribeFilterValue(object? value)

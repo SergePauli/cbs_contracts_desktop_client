@@ -6,29 +6,37 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid RowSpacing="8">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-        </Grid.RowDefinitions>
-
-        <TextBlock
-            Style="{StaticResource BodyStrongTextBlockStyle}"
-            Foreground="{StaticResource ShellTertiaryTextBrush}"
-            Text="Сотрудники" />
-
-        <Grid Grid.Row="1">
-            <ListView
-                x:Name="EmployeesListView"
-                SelectionMode="Single" />
+    <ScrollViewer
+        HorizontalScrollBarVisibility="Auto"
+        HorizontalScrollMode="Enabled"
+        VerticalScrollBarVisibility="Disabled"
+        VerticalScrollMode="Disabled">
+        <Grid
+            MinWidth="360"
+            RowSpacing="8">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
             <TextBlock
-                x:Name="EmptyTextBlock"
-                Style="{StaticResource CaptionTextBlockStyle}"
-                Margin="2,4,0,0"
-                Foreground="{StaticResource ShellCaptionTextBrush}"
-                Text="НЕТ ЗАПИСЕЙ"
-                Visibility="Collapsed" />
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Foreground="{StaticResource ShellTertiaryTextBrush}"
+                Text="Сотрудники" />
+
+            <Grid Grid.Row="1">
+                <ListView
+                    x:Name="EmployeesListView"
+                    SelectionMode="Single" />
+
+                <TextBlock
+                    x:Name="EmptyTextBlock"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Margin="2,4,0,0"
+                    Foreground="{StaticResource ShellCaptionTextBrush}"
+                    Text="НЕТ ЗАПИСЕЙ"
+                    Visibility="Collapsed" />
+            </Grid>
         </Grid>
-    </Grid>
+    </ScrollViewer>
 </UserControl>

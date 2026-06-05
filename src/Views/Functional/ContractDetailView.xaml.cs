@@ -13,7 +13,7 @@ using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.Views.Functional
 {
-    public sealed partial class RevisionsDetailView : UserControl
+    public sealed partial class ContractDetailView : UserControl
     {
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private bool _isStoreSubscribed;
@@ -22,24 +22,24 @@ namespace CbsContractsDesktopClient.Views.Functional
             DependencyProperty.Register(
                 nameof(RevisionRow),
                 typeof(TableDataRow),
-                typeof(RevisionsDetailView),
+                typeof(ContractDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
         public static readonly DependencyProperty ContractRowProperty =
             DependencyProperty.Register(
                 nameof(ContractRow),
                 typeof(TableDataRow),
-                typeof(RevisionsDetailView),
+                typeof(ContractDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
         public static readonly DependencyProperty ContragentRowProperty =
             DependencyProperty.Register(
                 nameof(ContragentRow),
                 typeof(TableDataRow),
-                typeof(RevisionsDetailView),
+                typeof(ContractDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
-        public RevisionsDetailView()
+        public ContractDetailView()
         {
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             InitializeComponent();
@@ -86,7 +86,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private static void OnDetailChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((RevisionsDetailView)d).Refresh();
+            ((ContractDetailView)d).Refresh();
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -135,7 +135,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ContractNameTextBlock.Text = "Контракт не выбран";
                 ContragentNameTextBlock.Text = string.Empty;
                 ContactsPanel.Children.Clear();
-                PerformersTextBlock.Text = string.Empty;
                 EmployeesBox.Employees = [];
                 CommentsBox.Comments = [];
                 return;
@@ -149,11 +148,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ?? string.Empty;
 
             RenderContacts(ReadContragentContacts(contragent));
-            var performersText = string.IsNullOrWhiteSpace(_contractWorkflowStore.SelectedRowHeader)
-                ? BuildPerformersText(contract)
-                : _contractWorkflowStore.SelectedRowHeader;
             var employees = ReadEmployees(contragent);
-            PerformersTextBlock.Text = performersText;
             EmployeesBox.Employees = employees;
             CommentsBox.Comments = _contractWorkflowStore.Comments;
         }

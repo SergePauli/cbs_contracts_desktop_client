@@ -64,7 +64,7 @@ public sealed class TablePageStoreTests : IDisposable
 
         var options = viewModel.CurrentFilterOptionsSources["StageStatus"];
         Assert.Equal([null, 2L, 4L, 5L, 6L, 7L], options.Select(static option => option.Value));
-        Assert.Equal("РџСѓСЃС‚РѕР№", options[0].Label);
+        Assert.Equal("Пустой", options[0].Label);
         Assert.DoesNotContain(options, static option => option.Value is 0L or 1L or 3L);
     }
 
@@ -232,7 +232,7 @@ public sealed class TablePageStoreTests : IDisposable
                     {
                         new Dictionary<string, object?> { ["id"] = 2L, ["name"] = "Р’ СЂР°Р±РѕС‚Рµ" },
                         new Dictionary<string, object?> { ["id"] = 4L, ["name"] = "Р’С‹РїРѕР»РЅРµРЅРѕ" },
-                        new Dictionary<string, object?> { ["id"] = null, ["name"] = "РџСѓСЃС‚РѕР№" }
+                        new Dictionary<string, object?> { ["id"] = null, ["name"] = "Пустой" }
                     }),
                     ["s_funded"] = "false"
                 })
@@ -293,6 +293,30 @@ public sealed class TablePageStoreTests : IDisposable
         Assert.All(viewModel.FilterFields, static filter => Assert.Null(filter.Value));
     }
 
+    [Fact]
+    public async Task EnsureViewportWindowLoadedAsync_SkipsEmptyVisibleWindow()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] = Enumerable.Range(1, 120)
+                    .Select(id => CreateRow(("id", id), ("name", $"Position {id}")))
+                    .ToList()
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+        dataQueryService.ResetRequestCounters();
+
+        await viewModel.EnsureViewportWindowLoadedAsync(256, 256, 1);
+
+        Assert.Equal(0, dataQueryService.DataRequestCount);
+        Assert.Equal(0, dataQueryService.CountRequestCount);
+        Assert.Empty(dataQueryService.DataRequests);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_temporaryDirectory))
@@ -342,13 +366,25 @@ public sealed class TablePageStoreTests : IDisposable
 
         public int CountRequestCount { get; private set; }
 
+        public List<(string Model, int? Offset, int? Limit)> DataRequests { get; } = [];
+
+        public void ResetRequestCounters()
+        {
+            DataRequestCount = 0;
+            CountRequestCount = 0;
+            DataRequests.Clear();
+        }
+
         public Task<IReadOnlyList<TItem>> GetDataAsync<TItem>(
             DataQueryRequest request,
             CancellationToken cancellationToken = default)
         {
             DataRequestCount++;
+            DataRequests.Add((request.Model, request.Offset, request.Limit));
             var rows = RowsByModel.GetValueOrDefault(request.Model) ?? [];
-            return Task.FromResult<IReadOnlyList<TItem>>(rows.Cast<TItem>().ToList());
+            var offset = request.Offset ?? 0;
+            var limit = request.Limit ?? rows.Count;
+            return Task.FromResult<IReadOnlyList<TItem>>(rows.Skip(offset).Take(limit).Cast<TItem>().ToList());
         }
 
         public Task<int> GetCountAsync(DataQueryRequest request, CancellationToken cancellationToken = default)

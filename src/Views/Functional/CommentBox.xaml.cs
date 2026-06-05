@@ -70,7 +70,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var bubble = new Border
             {
-                Padding = new Thickness(9, 6, 9, 5),
+                Padding = new Thickness(3, 0, 3, 0),
                 CornerRadius = new CornerRadius(7),
                 Background = ResolveBubbleBrush(isOut, isContract),
                 BorderBrush = ResolveBubbleBorderBrush(isContract),
@@ -79,35 +79,78 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var content = new StackPanel
             {
-                Spacing = 3
+                Spacing = 0
             };
 
             content.Children.Add(new TextBlock
             {
                 Text = comment.GetValue("content")?.ToString() ?? string.Empty,
                 Style = (Style)Application.Current.Resources["BodyTextBlockStyle"],
+                FontSize = 13,
                 Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
                 TextWrapping = TextWrapping.WrapWholeWords,
+                Margin = new Thickness(0),
                 IsTextSelectionEnabled = true
             });
 
-            var metaText = BuildMetaText(comment, isOut);
-            if (!string.IsNullOrWhiteSpace(metaText))
+            var meta = BuildMeta(comment, isOut);
+            if (!string.IsNullOrWhiteSpace(meta.Author) || !string.IsNullOrWhiteSpace(meta.When))
             {
-                content.Children.Add(new TextBlock
-                {
-                    Text = metaText,
-                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                    Foreground = (Brush)Application.Current.Resources["ShellCaptionTextBrush"],
-                    HorizontalAlignment = HorizontalAlignment.Right,
-                    TextWrapping = TextWrapping.NoWrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                });
+                content.Children.Add(BuildMetaPanel(meta));
             }
 
             bubble.Child = content;
             row.Children.Add(bubble);
             return row;
+        }
+
+        private static FrameworkElement BuildMetaPanel(CommentMeta meta)
+        {
+            var panel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Spacing = 4
+            };
+
+            if (!string.IsNullOrWhiteSpace(meta.Author))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = meta.Author,
+                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                    FontSize = 10,
+                    Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
+                    TextWrapping = TextWrapping.NoWrap,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(meta.Author) && !string.IsNullOrWhiteSpace(meta.When))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = "|",
+                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                    FontSize = 10,
+                    Foreground = (Brush)Application.Current.Resources["ShellCaptionTextBrush"]
+                });
+            }
+
+            if (!string.IsNullOrWhiteSpace(meta.When))
+            {
+                panel.Children.Add(new TextBlock
+                {
+                    Text = meta.When,
+                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
+                    FontSize = 10,
+                    Foreground = (Brush)Application.Current.Resources["ShellCaptionTextBrush"],
+                    TextWrapping = TextWrapping.NoWrap,
+                    TextTrimming = TextTrimming.CharacterEllipsis
+                });
+            }
+
+            return panel;
         }
 
         private static HorizontalAlignment ResolveRowAlignment(int? departmentId)
@@ -139,12 +182,12 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : (Brush)Application.Current.Resources["ShellPanelBorderBrush"];
         }
 
-        private static string BuildMetaText(TableDataRow comment, bool isOut)
+        private static CommentMeta BuildMeta(TableDataRow comment, bool isOut)
         {
             var when = comment.GetValue("when")?.ToString() ?? string.Empty;
             if (isOut)
             {
-                return when;
+                return new CommentMeta(string.Empty, when);
             }
 
             var department = comment.GetValue("profile.department.name")?.ToString();
@@ -156,13 +199,12 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             if (string.IsNullOrWhiteSpace(author))
             {
-                return when;
+                return new CommentMeta(string.Empty, when);
             }
 
-            return string.IsNullOrWhiteSpace(when)
-                ? author
-                : $"{author} | {when}";
+            return new CommentMeta(author, when);
         }
 
+        private sealed record CommentMeta(string Author, string When);
     }
 }

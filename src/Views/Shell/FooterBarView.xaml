@@ -49,6 +49,19 @@
                     FontWeight="SemiBold"
                     Foreground="{StaticResource ShellTableRowSelectedBorderBrush}"
                     Text="{x:Bind ViewModel.FooterState.SelectedRecordText, Mode=OneWay}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource ShellTertiaryTextBrush}"
+                    Margin="6,0,6,0"
+                    Text="|"
+                    Visibility="{x:Bind ViewModel.FooterState.HasSelectedRecordFooterText, Mode=OneWay, Converter={StaticResource BoolVisibilityConverter}}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource ShellSecondaryTextBrush}"
+                    Text="{x:Bind ViewModel.FooterState.SelectedRecordFooterText, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
             </StackPanel>
             <TextBlock
                 Grid.Column="1"

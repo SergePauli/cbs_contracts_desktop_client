@@ -6,16 +6,17 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid>
+    <Grid
+        Padding="4,4,4,4">
         <ScrollViewer
             x:Name="CommentsScrollViewer"
-            MaxHeight="112"
             HorizontalScrollBarVisibility="Disabled"
+            VerticalAlignment="Stretch"
             VerticalScrollBarVisibility="Visible">
             <StackPanel
                 x:Name="CommentsPanel"
-                Spacing="5"
-                Padding="0,2,4,2" />
+                Spacing="2"
+                Padding="0,0,2,0" />
         </ScrollViewer>
 
         <TextBlock

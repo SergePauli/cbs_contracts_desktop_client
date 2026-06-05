@@ -110,7 +110,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
             && column.FilterField == "contract.contragent.org.name_or_contract.contragent.org.full_name");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "name"
             && column.DisplayField == "name"
-            && column.FilterField == "name"
+            && column.FilterField == "contract.name"
             && column.SortField == "name");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "region"
             && column.BodyTemplateKey == "StageRegion");

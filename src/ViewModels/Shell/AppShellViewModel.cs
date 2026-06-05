@@ -144,9 +144,23 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 DepartmentOrRole = departmentOrRole,
                 UserName = userName,
                 TotalCountValue = totalCountValue,
-                SelectedRecordText = selectedRecordText,
+                SelectedRecordText = SplitFooterSelectedRecordText(selectedRecordText).MainText,
+                SelectedRecordFooterText = SplitFooterSelectedRecordText(selectedRecordText).FooterText,
                 VersionText = "v1.0.0"
             };
+        }
+
+        private static (string MainText, string FooterText) SplitFooterSelectedRecordText(string value)
+        {
+            var separatorIndex = value.IndexOf('|', StringComparison.Ordinal);
+            if (separatorIndex < 0)
+            {
+                return (value, string.Empty);
+            }
+
+            return (
+                value[..separatorIndex].TrimEnd(),
+                value[(separatorIndex + 1)..].Trim());
         }
     }
 }

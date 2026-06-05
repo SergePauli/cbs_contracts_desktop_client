@@ -11,6 +11,12 @@ public sealed class CbsTableViewTests
         "Controls",
         "CbsTableView.xaml.cs");
 
+    private static readonly string TableRenderRequestPath = TestProjectPaths.FromRepositoryRoot(
+        "src",
+        "Views",
+        "Controls",
+        "TableRenderRequest.cs");
+
     [Fact]
     public void CbsTableView_BuildsMultiSelectFilterFlyoutWithSearchAndCheckboxList()
     {
@@ -184,5 +190,75 @@ public sealed class CbsTableViewTests
         Assert.Contains("nameof(ShowStageCostFraction)", code);
         Assert.Contains("OnShowStageCostFractionChanged", code);
         Assert.Contains("ShowStageCostFraction);", code);
+    }
+
+    [Fact]
+    public void CbsTableView_UsesSpecificRenderPathsForScrollAndFullRender()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("private enum RowsRenderPath", code);
+        Assert.Contains("RowsRenderPath.Full", code);
+        Assert.Contains("RowsRenderPath.ScrollDown", code);
+        Assert.Contains("RowsRenderPath.ScrollUp", code);
+        Assert.Contains("ResolveRowsRenderPath", code);
+        Assert.Contains("ConfigureScrolledRowsDown", code);
+        Assert.Contains("ConfigureScrolledRowsUp", code);
+        Assert.Contains("MoveFirstRowViewToEnd", code);
+        Assert.Contains("MoveLastRowViewToStart", code);
+    }
+
+    [Fact]
+    public void CbsTableView_RepaintsRenderedPlaceholdersFromRowPoolAfterItemsArrive()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("RefreshVisibleRowsIfViewportHasPlaceholders", code);
+        Assert.Contains("rowView.Row?.IsPlaceholder != true", code);
+        Assert.Contains("rowView.Tag is not int absoluteIndex", code);
+        Assert.Contains("sourceRows[absoluteIndex].IsPlaceholder", code);
+        Assert.Contains("ConfigureRowPoolRange(sourceRows, poolIndex, absoluteIndex, 1)", code);
+        Assert.Contains("TABLE ITEMS REPAINT renderedPlaceholders=", code);
+        Assert.DoesNotContain("RefreshVisibleRowsIfViewportHasPlaceholders()\r\n        {\r\n            var sourceRows = GetSourceRows();\r\n            if (!TryGetCurrentWindowPlaceholderCount(sourceRows, out var rowCount, out var placeholderCount))", code);
+    }
+
+    [Fact]
+    public void CbsTableView_SuppressesRepeatedEmptyInitialRenderWithoutClearingNonEmptyRows()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("TrySuppressEmptyRowsRender", code);
+        Assert.Contains("if (totalRows != 0 || _rowPool.Count > 0 || _lastSourceCount > 0)", code);
+        Assert.Contains("UpdateSpacerHeights(0, 0, 0);", code);
+        Assert.Contains("if (control._lastSourceCount == 0 && control._rowPool.Count == 0)", code);
+    }
+
+    [Fact]
+    public void CbsTableView_UsesExplicitRenderRequestForFilterAndSortInvalidation()
+    {
+        var tableCode = File.ReadAllText(CbsTableViewPath);
+        var requestCode = File.ReadAllText(TableRenderRequestPath);
+
+        Assert.Contains("public enum TableRenderReason", requestCode);
+        Assert.Contains("FilterChanged", requestCode);
+        Assert.Contains("SortChanged", requestCode);
+        Assert.Contains("public sealed record TableRenderRequest", requestCode);
+        Assert.Contains("bool ResetScroll = false", requestCode);
+        Assert.Contains("public void InvalidateRows(TableRenderRequest request)", tableCode);
+        Assert.Contains("RowsScrollViewer.ChangeView(null, 0d, null, disableAnimation: true);", tableCode);
+        Assert.Contains("InvalidateWindowCache();", tableCode);
+        Assert.Contains("RebuildRows();", tableCode);
+    }
+
+    [Fact]
+    public void CbsTableView_ClearsPendingLoadWhenRenderInvalidatesOrLoadingCompletes()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("public void InvalidateRows(TableRenderRequest request)", code);
+        Assert.Contains("_isLoadPending = false;", code);
+        Assert.Contains("private static void OnIsLoadingChanged", code);
+        Assert.Contains("if (!control.IsLoading)", code);
+        Assert.Contains("control._isLoadPending = false;", code);
     }
 }

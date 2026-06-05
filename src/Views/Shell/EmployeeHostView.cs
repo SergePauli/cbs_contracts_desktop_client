@@ -31,7 +31,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
-            SetDetailContent(_detailView);
+            SetDetailContent(_detailView, isVisible: false);
         }
 
         protected override IEnumerable<FrameworkElement> BuildHeaderActions()
@@ -53,6 +53,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             UpdateActionButtonState();
             UpdateDetailView();
+            SetDetailContentVisible(true);
             return Task.CompletedTask;
         }
 

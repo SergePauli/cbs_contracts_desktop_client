@@ -77,7 +77,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 nameof(IsLoading),
                 typeof(bool),
                 typeof(CbsTableView),
-                new PropertyMetadata(false));
+                new PropertyMetadata(false, OnIsLoadingChanged));
 
         public static readonly DependencyProperty LoadedCountProperty =
             DependencyProperty.Register(
@@ -179,6 +179,13 @@ namespace CbsContractsDesktopClient.Views.Controls
         private const double MultiSelectFilterButtonHeight = 22d;
         private const double MultiSelectFilterFlyoutWidth = 260d;
         private const double MultiSelectFilterFlyoutMaxHeight = 180d;
+        private enum RowsRenderPath
+        {
+            Full,
+            ScrollDown,
+            ScrollUp
+        }
+
         private int _activeResizeColumnIndex = -1;
         private double _activeResizeStartWidth;
         private bool _suppressNextHeaderClick;
@@ -206,6 +213,23 @@ namespace CbsContractsDesktopClient.Views.Controls
         public event EventHandler<CbsTableRowSelectionChangedEventArgs>? RowSelectionChanged;
 
         public event EventHandler<CbsTableRowDoubleTappedEventArgs>? RowDoubleTapped;
+
+        public void InvalidateRows(TableRenderRequest request)
+        {
+            ArgumentNullException.ThrowIfNull(request);
+
+            AppendTrace(
+                $"TABLE INVALIDATE reason={request.Reason} resetScroll={request.ResetScroll}");
+            _isLoadPending = false;
+
+            if (request.ResetScroll)
+            {
+                RowsScrollViewer.ChangeView(null, 0d, null, disableAnimation: true);
+            }
+
+            InvalidateWindowCache();
+            RebuildRows();
+        }
 
         public void ClearFilterInputs()
         {
@@ -598,51 +622,53 @@ namespace CbsContractsDesktopClient.Views.Controls
             var totalRows = sourceRows.Count;
             var window = CalculateWindow(totalRows);
 
+            if (TrySuppressEmptyRowsRender(totalRows, window.Start, window.End))
+            {
+                return;
+            }
+
             if (window.Start == _lastWindowStart
                 && window.End == _lastWindowEnd
                 && totalRows == _lastSourceCount
                 && ReferenceEquals(ItemsSource, _lastItemsSourceReference))
             {
+                AppendTrace(
+                    $"TABLE REBUILD SKIP {BuildWindowTrace(sourceRows, window.Start, window.End, totalRows)}");
                 UpdateSpacerHeights(totalRows, window.Start, window.End);
                 return;
+            }
+
+            var sequence = ++_rebuildSequence;
+            var stopwatch = Stopwatch.StartNew();
+            var rowCount = Math.Max(0, window.End - window.Start);
+            var renderPath = ResolveRowsRenderPath(window.Start, window.End, totalRows);
+            AppendTrace(
+                $"TABLE REBUILD START seq={sequence} path={renderPath} window={window.Start}..{window.End} total={totalRows}");
+
+            UpdateSpacerHeights(totalRows, window.Start, window.End);
+            if (renderPath == RowsRenderPath.ScrollDown)
+            {
+                ConfigureScrolledRowsDown(sourceRows, window.Start, window.End);
+            }
+            else if (renderPath == RowsRenderPath.ScrollUp)
+            {
+                ConfigureScrolledRowsUp(sourceRows, window.Start, window.End);
+            }
+            else
+            {
+                ConfigureVisibleRows(sourceRows, window.Start, rowCount);
             }
 
             _lastWindowStart = window.Start;
             _lastWindowEnd = window.End;
             _lastSourceCount = totalRows;
             _lastItemsSourceReference = ItemsSource;
-            var retainedBufferRows = GetEffectiveRetainedBufferRows(window.End - window.Start);
-            AppendTrace(
-                $"VIEWPORT CHANGED start={window.Start} end={window.End} buffer={retainedBufferRows} total={totalRows}");
-            ViewportChanged?.Invoke(this, new CbsTableViewportChangedEventArgs(
-                window.Start,
-                window.End,
-                retainedBufferRows));
-
-            var sequence = ++_rebuildSequence;
-            var stopwatch = Stopwatch.StartNew();
-            var rowCount = Math.Max(0, window.End - window.Start);
-            AppendTrace($"TABLE REBUILD START seq={sequence} window={window.Start}..{window.End} total={totalRows}");
-
-            UpdateSpacerHeights(totalRows, window.Start, window.End);
-            EnsureRowPool(rowCount);
-
-            for (var index = 0; index < rowCount; index++)
-            {
-                var absoluteIndex = window.Start + index;
-                _rowPool[index].Configure(
-                    sourceRows[absoluteIndex],
-                    Columns,
-                    RowHeight,
-                    RowStyleKey,
-                    ShowStageCostFraction);
-                _rowPool[index].Tag = absoluteIndex;
-                ApplyRowSelectionState(_rowPool[index], absoluteIndex);
-            }
 
             stopwatch.Stop();
-            AppendTrace($"TABLE REBUILD END seq={sequence} rows={rowCount} elapsed={stopwatch.Elapsed.TotalMilliseconds:F1}ms");
+            AppendTrace(
+                $"TABLE REBUILD END seq={sequence} path={renderPath} rows={rowCount} elapsed={stopwatch.Elapsed.TotalMilliseconds:F1}ms");
             TrackLayoutCompletion(sequence, rowCount);
+            PublishViewportChanged(window.Start, window.End, totalRows);
         }
 
         private void OnHeaderButtonClick(object sender, RoutedEventArgs e)
@@ -689,6 +715,13 @@ namespace CbsContractsDesktopClient.Views.Controls
             var control = (CbsTableView)d;
             control.InvalidateWindowCache();
             control.RebuildRows();
+            if (control._lastSourceCount == 0 && control._rowPool.Count == 0)
+            {
+                return;
+            }
+
+            control.AppendTrace(
+                $"TABLE ITEMS REFRESH {control.BuildCurrentWindowTrace()}");
         }
 
         private static void OnSortStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -733,6 +766,25 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnShowStageCostFractionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((CbsTableView)d).RebuildRows();
+        }
+
+        private static void OnIsLoadingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            var control = (CbsTableView)d;
+            if (!control.IsLoading)
+            {
+                control._isLoadPending = false;
+            }
+
+            if (control._lastSourceCount == 0 && control._rowPool.Count == 0)
+            {
+                return;
+            }
+
+            control.AppendTrace($"TABLE SKELETON REPAINT REQUEST isLoading={control.IsLoading}");
+            control.RefreshVisibleRowsWithoutViewportChange();
+            control.AppendTrace(
+                $"TABLE LOADING REFRESH {control.BuildCurrentWindowTrace()}");
         }
 
         private static ColumnDefinition CreateDataColumnDefinition(CbsTableColumnDefinition column)
@@ -794,6 +846,296 @@ namespace CbsContractsDesktopClient.Views.Controls
             _lastItemsSourceReference = null;
         }
 
+        public bool RefreshVisibleRowsIfViewportHasPlaceholders()
+        {
+            var sourceRows = GetSourceRows();
+            if (!TryGetCurrentWindowPlaceholderCount(sourceRows, out var rowCount, out _))
+            {
+                AppendTrace(
+                    $"TABLE ITEMS REPAINT SKIP invalid-window window={_lastWindowStart}..{_lastWindowEnd} total={sourceRows.Count}");
+                return false;
+            }
+
+            var configuredCount = 0;
+            var renderedPlaceholderCount = 0;
+            var safeRowCount = Math.Min(rowCount, _rowPool.Count);
+            for (var poolIndex = 0; poolIndex < safeRowCount; poolIndex++)
+            {
+                var rowView = _rowPool[poolIndex];
+                if (rowView.Row?.IsPlaceholder != true)
+                {
+                    continue;
+                }
+
+                renderedPlaceholderCount++;
+                if (rowView.Tag is not int absoluteIndex
+                    || absoluteIndex < 0
+                    || absoluteIndex >= sourceRows.Count
+                    || sourceRows[absoluteIndex].IsPlaceholder)
+                {
+                    continue;
+                }
+
+                ConfigureRowPoolRange(sourceRows, poolIndex, absoluteIndex, 1);
+                configuredCount++;
+            }
+
+            if (renderedPlaceholderCount <= 0)
+            {
+                AppendTrace(
+                    $"TABLE ITEMS REPAINT SKIP no-placeholders window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount}");
+                return false;
+            }
+
+            AppendTrace(
+                $"TABLE ITEMS REPAINT renderedPlaceholders={renderedPlaceholderCount} configured={configuredCount} window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount}");
+            return configuredCount > 0;
+        }
+
+        private void RefreshVisibleRowsWithoutViewportChange()
+        {
+            var sourceRows = GetSourceRows();
+            if (!TryGetCurrentWindowPlaceholderCount(sourceRows, out var rowCount, out var placeholderCount))
+            {
+                AppendTrace(
+                    $"TABLE SKELETON REPAINT SKIP isLoading={IsLoading} window={_lastWindowStart}..{_lastWindowEnd} total={sourceRows.Count}");
+                return;
+            }
+
+            RefreshVisibleRowsWithoutViewportChange(sourceRows, rowCount, placeholderCount);
+        }
+
+        private void RefreshVisibleRowsWithoutViewportChange(
+            IReadOnlyList<TableDataRow> sourceRows,
+            int rowCount,
+            int placeholderCount)
+        {
+            AppendTrace(
+                $"TABLE SKELETON REPAINT START isLoading={IsLoading} window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount} placeholders={placeholderCount} rowPool={_rowPool.Count}");
+            ConfigureVisibleRows(sourceRows, _lastWindowStart, rowCount);
+            AppendTrace(
+                $"TABLE SKELETON REPAINT END isLoading={IsLoading} window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount} placeholders={placeholderCount} rowPool={_rowPool.Count}");
+        }
+
+        private bool TryGetCurrentWindowPlaceholderCount(
+            IReadOnlyList<TableDataRow> sourceRows,
+            out int rowCount,
+            out int placeholderCount)
+        {
+            rowCount = 0;
+            placeholderCount = 0;
+            if (_lastWindowStart < 0
+                || _lastWindowEnd < _lastWindowStart
+                || _lastWindowEnd > sourceRows.Count)
+            {
+                return false;
+            }
+
+            rowCount = _lastWindowEnd - _lastWindowStart;
+            placeholderCount = CountPlaceholders(sourceRows, _lastWindowStart, rowCount);
+            return true;
+        }
+
+        private bool TrySuppressEmptyRowsRender(int totalRows, int windowStart, int windowEnd)
+        {
+            if (totalRows != 0 || _rowPool.Count > 0 || _lastSourceCount > 0)
+            {
+                return false;
+            }
+
+            UpdateSpacerHeights(0, 0, 0);
+            _lastWindowStart = windowStart;
+            _lastWindowEnd = windowEnd;
+            _lastSourceCount = 0;
+            _lastItemsSourceReference = ItemsSource;
+            return true;
+        }
+
+        private RowsRenderPath ResolveRowsRenderPath(int nextStart, int nextEnd, int totalRows)
+        {
+            if (_lastWindowStart < 0
+                || _lastWindowEnd < _lastWindowStart
+                || _lastSourceCount != totalRows
+                || !ReferenceEquals(ItemsSource, _lastItemsSourceReference))
+            {
+                return RowsRenderPath.Full;
+            }
+
+            var previousRowCount = _lastWindowEnd - _lastWindowStart;
+            var nextRowCount = nextEnd - nextStart;
+            if (previousRowCount <= 0
+                || nextRowCount <= 0
+                || previousRowCount != nextRowCount
+                || _rowPool.Count != previousRowCount)
+            {
+                return RowsRenderPath.Full;
+            }
+
+            if (nextStart > _lastWindowStart && nextStart < _lastWindowEnd)
+            {
+                return RowsRenderPath.ScrollDown;
+            }
+
+            if (nextStart < _lastWindowStart && nextEnd > _lastWindowStart)
+            {
+                return RowsRenderPath.ScrollUp;
+            }
+
+            return RowsRenderPath.Full;
+        }
+
+        private void ConfigureScrolledRowsDown(IReadOnlyList<TableDataRow> sourceRows, int nextStart, int nextEnd)
+        {
+            var shift = nextStart - _lastWindowStart;
+            var rowCount = nextEnd - nextStart;
+            if (shift <= 0 || shift >= rowCount)
+            {
+                ConfigureVisibleRows(sourceRows, nextStart, rowCount);
+                return;
+            }
+
+            for (var index = 0; index < shift; index++)
+            {
+                MoveFirstRowViewToEnd();
+            }
+
+            var firstNewIndex = Math.Max(_lastWindowEnd, nextStart);
+            var newRowCount = Math.Max(0, nextEnd - firstNewIndex);
+            var poolStart = rowCount - newRowCount;
+            ConfigureRowPoolRange(sourceRows, poolStart, firstNewIndex, newRowCount);
+            AppendTrace(
+                $"TABLE SCROLL DOWN shift={shift} preserved={rowCount - newRowCount} configured={newRowCount}");
+        }
+
+        private void ConfigureScrolledRowsUp(IReadOnlyList<TableDataRow> sourceRows, int nextStart, int nextEnd)
+        {
+            var shift = _lastWindowStart - nextStart;
+            var rowCount = nextEnd - nextStart;
+            if (shift <= 0 || shift >= rowCount)
+            {
+                ConfigureVisibleRows(sourceRows, nextStart, rowCount);
+                return;
+            }
+
+            for (var index = 0; index < shift; index++)
+            {
+                MoveLastRowViewToStart();
+            }
+
+            var firstNewIndex = nextStart;
+            var newRowCount = Math.Max(0, _lastWindowStart - nextStart);
+            ConfigureRowPoolRange(sourceRows, 0, firstNewIndex, newRowCount);
+            AppendTrace(
+                $"TABLE SCROLL UP shift={shift} preserved={rowCount - newRowCount} configured={newRowCount}");
+        }
+
+        private void ConfigureVisibleRows(IReadOnlyList<TableDataRow> sourceRows, int start, int rowCount)
+        {
+            EnsureRowPool(rowCount);
+
+            ConfigureRowPoolRange(sourceRows, 0, start, rowCount);
+        }
+
+        private void ConfigureRowPoolRange(
+            IReadOnlyList<TableDataRow> sourceRows,
+            int poolStart,
+            int sourceStart,
+            int rowCount)
+        {
+            for (var index = 0; index < rowCount; index++)
+            {
+                var poolIndex = poolStart + index;
+                var absoluteIndex = sourceStart + index;
+                _rowPool[poolIndex].Configure(
+                    sourceRows[absoluteIndex],
+                    Columns,
+                    RowHeight,
+                    RowStyleKey,
+                    ShowStageCostFraction);
+                _rowPool[poolIndex].Tag = absoluteIndex;
+                ApplyRowSelectionState(_rowPool[poolIndex], absoluteIndex);
+            }
+        }
+
+        private void MoveFirstRowViewToEnd()
+        {
+            if (_rowPool.Count == 0)
+            {
+                return;
+            }
+
+            var rowView = _rowPool[0];
+            _rowPool.RemoveAt(0);
+            _rowPool.Add(rowView);
+            RowsHost.Children.Remove(rowView);
+            RowsHost.Children.Add(rowView);
+        }
+
+        private void MoveLastRowViewToStart()
+        {
+            if (_rowPool.Count == 0)
+            {
+                return;
+            }
+
+            var lastIndex = _rowPool.Count - 1;
+            var rowView = _rowPool[lastIndex];
+            _rowPool.RemoveAt(lastIndex);
+            _rowPool.Insert(0, rowView);
+            RowsHost.Children.Remove(rowView);
+            RowsHost.Children.Insert(0, rowView);
+        }
+
+        private void PublishViewportChanged(int start, int end, int totalRows)
+        {
+            var retainedBufferRows = GetEffectiveRetainedBufferRows(end - start);
+            AppendTrace(
+                $"VIEWPORT CHANGED start={start} end={end} buffer={retainedBufferRows} total={totalRows} offset={RowsScrollViewer.VerticalOffset:F1}");
+            ViewportChanged?.Invoke(this, new CbsTableViewportChangedEventArgs(
+                start,
+                end,
+                retainedBufferRows));
+        }
+
+        private static int CountPlaceholders(IReadOnlyList<TableDataRow> sourceRows, int start, int rowCount)
+        {
+            var count = 0;
+            var end = Math.Min(sourceRows.Count, start + rowCount);
+            for (var index = Math.Max(0, start); index < end; index++)
+            {
+                if (sourceRows[index].IsPlaceholder)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private string BuildCurrentWindowTrace()
+        {
+            var sourceRows = GetSourceRows();
+            var totalRows = sourceRows.Count;
+            var window = CalculateWindow(totalRows);
+            return BuildWindowTrace(sourceRows, window.Start, window.End, totalRows);
+        }
+
+        private string BuildWindowTrace(
+            IReadOnlyList<TableDataRow> sourceRows,
+            int windowStart,
+            int windowEnd,
+            int totalRows)
+        {
+            var rowCount = Math.Max(0, windowEnd - windowStart);
+            var placeholderCount = CountPlaceholders(sourceRows, windowStart, rowCount);
+            return
+                $"window={windowStart}..{windowEnd} " +
+                $"totalRows={totalRows} " +
+                $"placeholders={placeholderCount} " +
+                $"loaded={LoadedCount}/{TotalCount} " +
+                $"hasMore={HasMoreItems}";
+        }
+
         private IReadOnlyList<TableDataRow> GetSourceRows()
         {
             if (ItemsSource is IReadOnlyList<TableDataRow> readOnlyList)
@@ -826,7 +1168,8 @@ namespace CbsContractsDesktopClient.Views.Controls
             var visibleRowCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / RowHeight));
             var rawStart = Math.Max(0, firstVisibleIndex - WindowBufferRows);
             var alignedStart = (rawStart / WindowStepRows) * WindowStepRows;
-            var start = Math.Max(0, alignedStart);
+            var maxStart = Math.Max(0, totalRows - 1);
+            var start = Math.Min(Math.Max(0, alignedStart), maxStart);
             var end = Math.Min(totalRows, start + visibleRowCount + (WindowBufferRows * 2));
             return (start, Math.Max(start, end));
         }

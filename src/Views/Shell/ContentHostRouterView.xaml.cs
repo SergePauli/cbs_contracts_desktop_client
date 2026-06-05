@@ -2,7 +2,6 @@
 // Routes shell content routes to the concrete content host view.
 using System;
 using System.ComponentModel;
-using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -12,19 +11,18 @@ namespace CbsContractsDesktopClient.Views.Shell
     public sealed partial class ContentHostRouterView : UserControl
     {
         private readonly AppShellViewModel _shellViewModel;
-        private readonly ITablePageDefinitionService _tablePageDefinitionService;
         private ContentHostRouteKind _currentRouteKind = ContentHostRouteKind.None;
-        private ContentHostView? _tableHostView;
         private ReferenceHostView? _referenceHostView;
         private HolidayHostView? _holidayHostView;
         private ProfileHostView? _profileHostView;
         private EmployeeHostView? _employeeHostView;
         private ContragentHostView? _contragentHostView;
+        private RevisionHostView? _revisionHostView;
+        private StageHostView? _stageHostView;
 
         public ContentHostRouterView()
         {
             _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
-            _tablePageDefinitionService = App.Services.GetRequiredService<ITablePageDefinitionService>();
 
             InitializeComponent();
 
@@ -69,7 +67,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ContentHostRouteKind.Profile => GetProfileHostView(route),
                 ContentHostRouteKind.Employee => GetEmployeeHostView(route),
                 ContentHostRouteKind.Contragent => GetContragentHostView(route),
-                ContentHostRouteKind.Table => GetTableHostView(route),
+                ContentHostRouteKind.Revision => GetRevisionHostView(route),
+                ContentHostRouteKind.Stage => GetStageHostView(route),
                 _ => CreatePlaceholder()
             };
         }
@@ -82,13 +81,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     if (_referenceHostView is not null)
                     {
                         _referenceHostView.Route = route;
-                    }
-
-                    break;
-                case ContentHostRouteKind.Table:
-                    if (_tableHostView is not null)
-                    {
-                        _tableHostView.Route = route;
                     }
 
                     break;
@@ -120,6 +112,20 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     break;
+                case ContentHostRouteKind.Revision:
+                    if (_revisionHostView is not null)
+                    {
+                        _revisionHostView.Route = route;
+                    }
+
+                    break;
+                case ContentHostRouteKind.Stage:
+                    if (_stageHostView is not null)
+                    {
+                        _stageHostView.Route = route;
+                    }
+
+                    break;
             }
         }
 
@@ -145,14 +151,22 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return ContentHostRouteKind.Contragent;
             }
 
+            if (string.Equals(route, "/revisions", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Revision;
+            }
+
+            if (string.Equals(route, "/stages", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Stage;
+            }
+
             if (IsSimpleReferenceRoute(route))
             {
                 return ContentHostRouteKind.Reference;
             }
 
-            return _tablePageDefinitionService.TryGetByRoute(route, out _)
-                ? ContentHostRouteKind.Table
-                : ContentHostRouteKind.Placeholder;
+            return ContentHostRouteKind.Placeholder;
         }
 
         private static bool IsSimpleReferenceRoute(string? route)
@@ -166,13 +180,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceHostView ??= new ReferenceHostView();
             _referenceHostView.Route = route;
             return _referenceHostView;
-        }
-
-        private ContentHostView GetTableHostView(string? route)
-        {
-            _tableHostView ??= new ContentHostView();
-            _tableHostView.Route = route;
-            return _tableHostView;
         }
 
         private HolidayHostView GetHolidayHostView(string? route)
@@ -201,6 +208,20 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contragentHostView ??= new ContragentHostView();
             _contragentHostView.Route = route;
             return _contragentHostView;
+        }
+
+        private RevisionHostView GetRevisionHostView(string? route)
+        {
+            _revisionHostView ??= new RevisionHostView();
+            _revisionHostView.Route = route;
+            return _revisionHostView;
+        }
+
+        private StageHostView GetStageHostView(string? route)
+        {
+            _stageHostView ??= new StageHostView();
+            _stageHostView.Route = route;
+            return _stageHostView;
         }
 
         private static FrameworkElement CreatePlaceholder()
@@ -232,7 +253,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             Profile,
             Employee,
             Contragent,
-            Table
+            Revision,
+            Stage
         }
     }
 }

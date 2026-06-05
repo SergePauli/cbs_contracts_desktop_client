@@ -55,15 +55,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             SidebarNavigationView.FooterMenuItems.Clear();
 
             NavigationViewItem? selectedItem = null;
+            var fileSectionAdded = false;
 
             foreach (var section in _sections)
             {
-                if (!section.IsSessionSection
-                    && string.Equals(section.Title, "РЎРїСЂР°РІРѕС‡РЅРёРєРё", StringComparison.OrdinalIgnoreCase))
-                {
-                    AddFileSection();
-                }
-
                 if (!section.IsSessionSection)
                 {
                     if (section.IsCollapsible)
@@ -97,13 +92,19 @@ namespace CbsContractsDesktopClient.Views.Shell
                         selectedItem = navigationItem;
                     }
                 }
+
+                if (!fileSectionAdded && !section.IsSessionSection)
+                {
+                    AddFileSection();
+                    fileSectionAdded = true;
+                }
             }
 
             if (_viewModel.ContextNavigationItems.Count > 0)
             {
                 SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
                 {
-                    Content = "РљРѕРЅС‚РµРєСЃС‚"
+                    Content = "Контекст"
                 });
 
                 foreach (var item in _viewModel.ContextNavigationItems)
@@ -194,7 +195,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
             {
-                Content = "Р¤Р°Р№Р»С‹"
+                Content = "Файлы"
             });
 
             foreach (var item in fileItems)
@@ -221,15 +222,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             foreach (var revision in revisions)
             {
                 var priority = ReadIntProperty(revision, "priority") ?? 0;
-                AddFileItem(result, priority == 0 ? "РґРѕРіРѕРІРѕСЂ" : $"РґРѕРїСЃРѕРіР»_{priority}", "\uE8A5", ReadStringProperty(revision, "doc_link"));
-                AddFileItem(result, priority == 0 ? "СЃРєР°РЅ" : $"СЃРєР°РЅ_{priority}", "\uE8A7", ReadStringProperty(revision, "scan_link"));
-                AddFileItem(result, priority == 0 ? "РїСЂРѕС‚РѕРєРѕР»" : $"РїСЂРѕС‚РѕРєРѕР»_{priority}", "\uE9D2", ReadStringProperty(revision, "protocol_link"));
+                AddFileItem(result, priority == 0 ? "договор" : $"допсогл_{priority}", "\uE8A5", ReadStringProperty(revision, "doc_link"));
+                AddFileItem(result, priority == 0 ? "скан" : $"скан_{priority}", "\uE8A7", ReadStringProperty(revision, "scan_link"));
+                AddFileItem(result, priority == 0 ? "протокол" : $"протокол_{priority}", "\uE9D2", ReadStringProperty(revision, "protocol_link"));
             }
 
             var folderPath = BuildFolderPath(revisions);
             if (!string.IsNullOrWhiteSpace(folderPath))
             {
-                AddFileItem(result, "РєР°С‚Р°Р»РѕРі", "\uE8B7", folderPath);
+                AddFileItem(result, "каталог", "\uE8B7", folderPath);
             }
 
             return result;

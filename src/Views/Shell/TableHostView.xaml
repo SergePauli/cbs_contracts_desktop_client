@@ -1,6 +1,8 @@
 <UserControl
     x:Class="CbsContractsDesktopClient.Views.Shell.TableHostView"
     x:Name="Root"
+    HorizontalAlignment="Stretch"
+    VerticalAlignment="Stretch"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:CbsContractsDesktopClient.Views.Controls"
@@ -9,28 +11,15 @@
     mc:Ignorable="d">
 
     <Grid
+        HorizontalAlignment="Stretch"
+        VerticalAlignment="Stretch"
         Background="{StaticResource ShellMutedPanelBackgroundBrush}"
         Padding="0">
         <controls:CbsTableView
             x:Name="TableView"
-            Columns="{Binding Store.CurrentColumns, ElementName=Root}"
-            CurrentSortDirection="{Binding Store.CurrentSortDirection, ElementName=Root}"
-            CurrentSortField="{Binding Store.CurrentSortField, ElementName=Root}"
-            Density="{Binding Density, ElementName=Root}"
-            HasMoreItems="{Binding Store.HasMoreItems, ElementName=Root}"
-            IsLoading="{Binding Store.IsLoading, ElementName=Root}"
-            ItemsSource="{Binding Store.Items, ElementName=Root}"
-            LoadedCount="{Binding Store.LoadedCount, ElementName=Root}"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
             Margin="0"
-            MultiSelectOptionsSources="{Binding Store.CurrentFilterOptionsSources, ElementName=Root}"
-            RetainedBufferRows="{Binding RetainedBufferRows, ElementName=Root}"
-            RowHeight="{Binding RowHeight, ElementName=Root}"
-            RowStyleKey="{Binding Store.CurrentRowStyleKey, ElementName=Root}"
-            SelectedItem="{Binding Store.SelectedRow, ElementName=Root, Mode=TwoWay}"
-            ShowStageCostFraction="{Binding ShowStageCostFraction, ElementName=Root}"
-            SupportsMultipleRowSelection="{Binding SupportsMultipleRowSelection, ElementName=Root}"
-            SupportsRowSelection="{Binding SupportsRowSelection, ElementName=Root}"
-            TableStateKey="{Binding Store.CurrentTableStateKey, ElementName=Root}"
-            TotalCount="{Binding Store.TotalCount, ElementName=Root}" />
+            Padding="0" />
     </Grid>
 </UserControl>

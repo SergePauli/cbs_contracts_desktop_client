@@ -28,12 +28,14 @@ namespace CbsContractsDesktopClient.Views.Shell
         private CancellationTokenSource? _viewportCts;
         private readonly StackPanel _headerActionsPanel;
         private readonly ContentControl _detailContentControl;
+        private readonly Grid _tableHost;
         private readonly TextBlock _headerTitleTextBlock;
         private readonly TextBlock _placeholderTextBlock;
         private readonly ProgressRing _progressRing;
         private readonly InfoBar _errorInfoBar;
         private string? _route;
         private bool _isLoaded;
+        private bool _isStoreEventsSubscribed;
 
         protected ComplexHostViewBase()
         {
@@ -41,14 +43,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             _tablePageDefinitionService = App.Services.GetRequiredService<ITablePageDefinitionService>();
             _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
 
-            TableView = new TableHostView
+            _tableHost = new Grid
             {
-                Density = CbsTableDensity.Compact,
-                Store = Store,
-                SupportsMultipleRowSelection = false,
-                SupportsRowSelection = true,
-                Margin = new Thickness(0)
+                Padding = new Thickness(0),
+                Background = GetBrush("ShellMutedPanelBackgroundBrush"),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
             };
+            TableView = CreateTableHostView();
 
             _headerTitleTextBlock = new TextBlock
             {
@@ -90,7 +92,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             WireTableEvents();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
-            Store.PropertyChanged += OnStorePropertyChanged;
+            SubscribeStoreEvents();
             RefreshHeaderState();
         }
 
@@ -114,7 +116,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected TablePageStore Store { get; }
 
-        protected TableHostView TableView { get; }
+        protected TableHostView TableView { get; private set; }
 
         protected TablePageDefinition? CurrentDefinition { get; private set; }
 
@@ -150,13 +152,25 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected void SetDetailContent(UIElement? content)
         {
+            SetDetailContent(content, isVisible: content is not null);
+        }
+
+        protected void SetDetailContent(UIElement? content, bool isVisible)
+        {
             if (content is FrameworkElement element)
             {
                 element.HorizontalAlignment = HorizontalAlignment.Stretch;
             }
 
             _detailContentControl.Content = content;
-            _detailContentControl.Visibility = content is null ? Visibility.Collapsed : Visibility.Visible;
+            SetDetailContentVisible(content is not null && isVisible);
+        }
+
+        protected void SetDetailContentVisible(bool isVisible)
+        {
+            _detailContentControl.Visibility = isVisible && _detailContentControl.Content is not null
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         protected void RebuildHeaderActions()
@@ -228,14 +242,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             errorHost.Children.Add(_errorInfoBar);
             hostGrid.Children.Add(errorHost);
 
-            var tableHost = new Grid
-            {
-                Padding = new Thickness(0),
-                Background = GetBrush("ShellMutedPanelBackgroundBrush")
-            };
-            Grid.SetRow(tableHost, 2);
-            tableHost.Children.Add(TableView);
-            hostGrid.Children.Add(tableHost);
+            Grid.SetRow(_tableHost, 2);
+            _tableHost.Children.Add(TableView);
+            hostGrid.Children.Add(_tableHost);
 
             Grid.SetRow(_detailContentControl, 3);
             _detailContentControl.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -256,9 +265,45 @@ namespace CbsContractsDesktopClient.Views.Shell
             TableView.ViewportChanged += TableView_ViewportChanged;
         }
 
+        private void UnwireTableEvents()
+        {
+            TableView.ColumnWidthChanged -= TableView_ColumnWidthChanged;
+            TableView.FilterRequested -= TableView_FilterRequested;
+            TableView.LoadMoreRequested -= TableView_LoadMoreRequested;
+            TableView.RowDoubleTapped -= TableView_RowDoubleTapped;
+            TableView.RowSelectionChanged -= TableView_RowSelectionChanged;
+            TableView.SortRequested -= TableView_SortRequested;
+            TableView.TraceGenerated -= TableView_TraceGenerated;
+            TableView.ViewportChanged -= TableView_ViewportChanged;
+        }
+
+        private TableHostView CreateTableHostView()
+        {
+            return new TableHostView
+            {
+                Density = CbsTableDensity.Compact,
+                SupportsMultipleRowSelection = false,
+                SupportsRowSelection = true,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Margin = new Thickness(0)
+            };
+        }
+
+        private void RecreateTableHostView()
+        {
+            _viewportCts?.Cancel();
+            UnwireTableEvents();
+            _tableHost.Children.Clear();
+            TableView = CreateTableHostView();
+            _tableHost.Children.Add(TableView);
+            WireTableEvents();
+        }
+
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             _isLoaded = true;
+            SubscribeStoreEvents();
             RebuildHeaderActions();
 
             if (!string.IsNullOrWhiteSpace(Route))
@@ -273,7 +318,29 @@ namespace CbsContractsDesktopClient.Views.Shell
             _routeCts?.Cancel();
             _filterDebounceCts?.Cancel();
             _viewportCts?.Cancel();
+            UnsubscribeStoreEvents();
+        }
+
+        private void SubscribeStoreEvents()
+        {
+            if (_isStoreEventsSubscribed)
+            {
+                return;
+            }
+
+            Store.PropertyChanged += OnStorePropertyChanged;
+            _isStoreEventsSubscribed = true;
+        }
+
+        private void UnsubscribeStoreEvents()
+        {
+            if (!_isStoreEventsSubscribed)
+            {
+                return;
+            }
+
             Store.PropertyChanged -= OnStorePropertyChanged;
+            _isStoreEventsSubscribed = false;
         }
 
         private async Task NavigateToRouteAsync(string? route)
@@ -286,13 +353,16 @@ namespace CbsContractsDesktopClient.Views.Shell
                 if (!_tablePageDefinitionService.TryGetByRoute(route, out var definition))
                 {
                     CurrentDefinition = null;
+                    TableView.DetachTableState();
                     await Store.NavigateToRouteAsync(route, _routeCts.Token);
                     RefreshHeaderState();
                     return;
                 }
 
                 CurrentDefinition = definition;
+                RecreateTableHostView();
                 await Store.NavigateToRouteAsync(definition.Route, _routeCts.Token);
+                AttachCurrentStoreRowsToTableView(definition);
                 TableView.ApplyFilterInputs(Store.CurrentFilters);
                 RefreshHeaderState();
                 await OnRouteLoaded(definition);
@@ -308,7 +378,22 @@ namespace CbsContractsDesktopClient.Views.Shell
                 || e.PropertyName == nameof(TablePageStore.CurrentRowStyleKey))
             {
                 CurrentDefinition = Store.CurrentTablePage;
-                TableView.RowStyleKey = Store.CurrentRowStyleKey;
+            }
+
+            if (e.PropertyName == nameof(TablePageStore.CurrentFilterOptionsSources))
+            {
+                TableView.SetFilterOptionsSources(Store.CurrentFilterOptionsSources);
+            }
+
+            if (e.PropertyName == nameof(TablePageStore.CurrentSortField)
+                || e.PropertyName == nameof(TablePageStore.CurrentSortDirection))
+            {
+                TableView.RefreshSortSnapshot(BuildCurrentSorts());
+            }
+
+            if (e.PropertyName == nameof(TablePageStore.SelectedRow))
+            {
+                TableView.SetSelectedRow(Store.SelectedRow);
             }
 
             if (e.PropertyName == nameof(TablePageStore.SelectedRow))
@@ -347,6 +432,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await Store.ClearSortsAsync();
             }
+
+            TableView.InvalidateRows(new TableRenderRequest(
+                TableRenderReason.SortChanged,
+                ResetScroll: true));
         }
 
         private async void TableView_LoadMoreRequested(object? sender, CbsTableLoadMoreRequestedEventArgs e)
@@ -385,6 +474,9 @@ namespace CbsContractsDesktopClient.Views.Shell
                     e.MatchMode,
                     e.Value,
                     cancellationTokenSource.Token);
+                TableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.FilterChanged,
+                    ResetScroll: true));
             }
             catch (OperationCanceledException)
             {
@@ -399,6 +491,28 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void TableView_TraceGenerated(object? sender, CbsTableTraceEventArgs e)
         {
             Store.AppendUiTrace(e.Message);
+        }
+
+        private void AttachCurrentStoreRowsToTableView(TablePageDefinition definition)
+        {
+            if (Store.Rows is null)
+            {
+                TableView.DetachTableState();
+                return;
+            }
+
+            TableView.AttachTableRows(
+                definition,
+                Store.Rows,
+                BuildCurrentSorts(),
+                Store.CurrentFilterOptionsSources);
+        }
+
+        private IReadOnlyList<DataSortCriterion> BuildCurrentSorts()
+        {
+            return Store.CurrentSortField is not null && Store.CurrentSortDirection is DataSortDirection direction
+                ? [new DataSortCriterion { FieldKey = Store.CurrentSortField, Direction = direction }]
+                : [];
         }
 
         private async void TableView_ViewportChanged(object? sender, CbsTableViewportChangedEventArgs e)
@@ -431,6 +545,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 var filters = await Store.ResetFiltersAsync();
                 TableView.ApplyFilterInputs(filters);
+                TableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.FilterChanged,
+                    ResetScroll: true));
             }
             catch (Exception ex)
             {
@@ -452,6 +569,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 var filters = await Store.ClearFiltersAsync();
                 TableView.ApplyFilterInputs(filters);
+                TableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.FilterChanged,
+                    ResetScroll: true));
             }
             catch (Exception ex)
             {
@@ -476,6 +596,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 await Store.ClearSortsAsync();
+                TableView.InvalidateRows(new TableRenderRequest(
+                    TableRenderReason.SortChanged,
+                    ResetScroll: true));
             }
             catch (Exception ex)
             {

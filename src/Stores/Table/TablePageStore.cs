@@ -718,6 +718,12 @@ namespace CbsContractsDesktopClient.Stores.Table
                 return;
             }
 
+            if (visibleEnd <= visibleStart)
+            {
+                AppendUiTrace($"STEP VM 01b skip-empty-window visible={visibleStart}..{visibleEnd}");
+                return;
+            }
+
             if (_lastViewportEnsureStart == visibleStart && _lastViewportEnsureEnd == visibleEnd)
             {
                 AppendUiTrace($"STEP VM 01a skip-same-window visible={visibleStart}..{visibleEnd}");
@@ -1274,6 +1280,13 @@ namespace CbsContractsDesktopClient.Stores.Table
 
             AppendUiTrace($"STEP VM 09 items-property {e.PropertyName}");
 
+            if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.IsLoading))
+            {
+                UpdateStateProperties();
+                AppendUiTrace($"STEP VM 12 loading-state-updated {e.PropertyName}");
+                return;
+            }
+
             if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.LoadedCount)
                 || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.TotalCount)
                 || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
@@ -1614,6 +1627,10 @@ namespace CbsContractsDesktopClient.Stores.Table
                 || message.StartsWith("DATA QUERY ", StringComparison.Ordinal)
                 || message.StartsWith("STEP API ", StringComparison.Ordinal)
                 || message.StartsWith("STEP VM ", StringComparison.Ordinal)
+                || message.StartsWith("TABLE ", StringComparison.Ordinal)
+                || message.StartsWith("VIEWPORT CHANGED ", StringComparison.Ordinal)
+                || message.StartsWith("Trigger load more ", StringComparison.Ordinal)
+                || message.StartsWith("Attached explicit table ScrollViewer", StringComparison.Ordinal)
                 || message.StartsWith("FILTER ", StringComparison.Ordinal)
                 || message.StartsWith("STAGE FILTER DEFAULTS ", StringComparison.Ordinal)
                 || message.StartsWith("STAGE FILTER SETTINGS ", StringComparison.Ordinal)

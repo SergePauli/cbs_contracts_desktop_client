@@ -161,13 +161,16 @@
 
                 <Grid
                     Grid.Row="2"
+                    HorizontalAlignment="Stretch"
+                    VerticalAlignment="Stretch"
                     Background="{StaticResource ShellMutedPanelBackgroundBrush}"
                     Padding="0">
                     <shell:TableHostView
                         x:Name="ReferenceTableView"
                         Density="Compact"
+                        HorizontalAlignment="Stretch"
+                        VerticalAlignment="Stretch"
                         Margin="0"
-                        Store="{Binding}"
                         SupportsMultipleRowSelection="False"
                         SupportsRowSelection="True"
                         ColumnWidthChanged="ReferenceTableView_ColumnWidthChanged"

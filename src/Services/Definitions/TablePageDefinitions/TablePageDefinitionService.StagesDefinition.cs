@@ -33,7 +33,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                 [
                     CreateStageNumberColumn("id", "ID", "id", "4rem", immutable: true),
                     CreateStageTaskColumn(),
-                    CreateStageTextColumn("name", "Номер", "name", "name", "name", "5rem", immutable: true),
+                    CreateStageTextColumn("name", "Номер", "name", "contract.name", "name", "5rem", immutable: true),
                     CreateStageDateColumn("start_at", "Старт", "start_at", "start_at", "6rem", immutable: true),
                     CreateStageDateColumn("deadline_at", "Срок", "deadline_at", "deadline_at", "6rem", immutable: true),
                     CreateStageTextColumn("contragent", "Контрагент", "contract.contragent.name", "contract.contragent.org.name_or_contract.contragent.org.full_name", "contract.contragent.org.name", "19rem", immutable: true),

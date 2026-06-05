@@ -3,6 +3,7 @@ using System;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.References;
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
@@ -15,6 +16,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected ContentHostViewBase()
         {
+            HorizontalAlignment = HorizontalAlignment.Stretch;
+            VerticalAlignment = VerticalAlignment.Stretch;
             _dialogCoordinator = new ContentHostDialogCoordinator(() => XamlRoot);
         }
 

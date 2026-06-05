@@ -50,7 +50,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
-            SetDetailContent(_detailView);
+            SetDetailContent(_detailView, isVisible: false);
         }
 
         protected override IEnumerable<FrameworkElement> BuildHeaderActions()
@@ -85,6 +85,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             UpdateActionButtonState();
             UpdateDetailView();
+            SetDetailContentVisible(true);
             return Task.CompletedTask;
         }
 

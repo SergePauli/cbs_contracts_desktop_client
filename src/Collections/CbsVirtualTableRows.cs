@@ -54,12 +54,6 @@ namespace CbsContractsDesktopClient.Collections
         private void OnItemsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(e.PropertyName));
-            if (e.PropertyName == nameof(LazyDataCollection<TItem>.LoadedCount)
-                || e.PropertyName == nameof(LazyDataCollection<TItem>.ResidentCount)
-                || e.PropertyName == nameof(LazyDataCollection<TItem>.TotalCount))
-            {
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Items)));
-            }
         }
     }
 }

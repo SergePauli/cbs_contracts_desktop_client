@@ -49,7 +49,7 @@
   - `/users`
   - модель `Profile`
   - nested columns для `email`, `ФИО`, `department`, `position`, `last_login`
-  - route открывается в том же `ContentHostView`, без отдельного shell-path
+  - route открывается через `ContentHostRouterView` в `ProfileHostView`
 - complex reference screen сотрудников:
   - `/employees`
   - модель `Employee`, preset `card`
@@ -79,7 +79,7 @@
   - модель `Revision`, preset `list`
   - подключена к общей `TablePageDefinition` platform
   - metadata перенесена из web-версии
-  - contract-oriented `RevisionsDetailView`
+  - contract-oriented `ContractDetailView`
   - общий `ContractWorkflowStore`
   - `EmployeeBox` для карточки контрагента
   - `CommentBox` для комментариев
@@ -147,7 +147,7 @@
 - settings persistence
 - auth/user/login базовые сценарии
 - navigation menu rules
-- ContentHostView settings-menu regression checks
+- ComplexHostViewBase settings-menu regression checks
 - регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
 - `TableDataRow` nested-path resolution
 - `CbsTableRowView` formatting для date/time и boolean icon rendering
@@ -176,11 +176,11 @@
 
 - общий диагностический слой lazy/table/API-пайплайна сохранен и штатно выключен
 - временная диагностика `ReferenceEditDialog` снята после фикса регрессии с `PrimaryButton`
-- `ContentHostView` стал ключевым архитектурным долгом: в нем смешались orchestration UI, table actions, dialogs, workflow-store refresh, notifications и часть settings-flow
+- монолитный `ContentHostView` удален; content-area разбита на router, общий table-host слой и конкретные host views
 
 ## Что еще не является завершенным
 
-- SOLID-декомпозиция `ContentHostView` и вынос сценариев таблиц/диалогов/settings в отдельные владельцы
+- дальнейшая чистка конкретных host views и вынос повторяющихся detail/workflow-паттернов по мере появления контрактов и активности
 - полировка `DetailView` для сложных таблиц, где одновременно нужны contract/stage/revision-specific summaries
 - функциональная таблица `Контракты`
 - доменные действия над строками
@@ -193,7 +193,7 @@
 
 ## Что логично делать дальше
 
-1. Провести SOLID-рефакторинг `ContentHostView`: разделить content orchestration, table commands, dialog launching, settings persistence, notifications и workflow refresh.
+1. Продолжить развитие `ContentHostRouterView`, `ComplexHostViewBase` и конкретных host views без возврата к монолитному content host.
 2. Отполировать `DetailView` для сложных таблиц и подготовить его к нескольким таблицам на одной странице, особенно для будущей страницы `Активность`.
 3. Начать разработку функциональной таблицы `Контракты`.
 4. Довести CRUD справочников до details/archive и backend-aware ограничений.

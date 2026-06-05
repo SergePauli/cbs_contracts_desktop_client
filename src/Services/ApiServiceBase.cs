@@ -28,13 +28,28 @@ namespace CbsContractsDesktopClient.Services
 
         protected async Task<TResponse> PutAsync<TRequest, TResponse>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(DiagnosticRequestTimeout);
+            var requestPayload = SerializeForTrace(request);
             EmitTrace(FormatRequestTrace("HTTP PUT", requestUri, request));
             using var message = CreateJsonRequest(HttpMethod.Put, requestUri, request);
             EmitApiSend(message.Method, requestUri);
-            using var response = await _httpClient.SendAsync(message, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            using var response = await SendAsyncWithWatchdog(
+                message,
+                requestUri,
+                requestPayload,
+                HttpCompletionOption.ResponseContentRead,
+                timeoutCts.Token,
+                cancellationToken);
+            await EnsureSuccessAsync(response, requestUri, requestPayload, timeoutCts.Token, cancellationToken);
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = await ReadResponseBodyAsync(
+                response,
+                requestUri,
+                requestPayload,
+                timeoutCts.Token,
+                cancellationToken,
+                "STEP API PUT");
             EmitResponseTrace(requestUri, body);
             var result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
             if (result is null)
@@ -47,13 +62,28 @@ namespace CbsContractsDesktopClient.Services
 
         protected async Task<TResponse> DeleteAsync<TResponse>(string requestUri, CancellationToken cancellationToken = default)
         {
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(DiagnosticRequestTimeout);
+            const string requestPayload = "<empty>";
             EmitTrace($"HTTP DELETE uri={requestUri}");
             using var message = CreateRequest(HttpMethod.Delete, requestUri);
             EmitApiSend(message.Method, requestUri);
-            using var response = await _httpClient.SendAsync(message, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            using var response = await SendAsyncWithWatchdog(
+                message,
+                requestUri,
+                requestPayload,
+                HttpCompletionOption.ResponseContentRead,
+                timeoutCts.Token,
+                cancellationToken);
+            await EnsureSuccessAsync(response, requestUri, requestPayload, timeoutCts.Token, cancellationToken);
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = await ReadResponseBodyAsync(
+                response,
+                requestUri,
+                requestPayload,
+                timeoutCts.Token,
+                cancellationToken,
+                "STEP API DELETE");
             EmitResponseTrace(requestUri, body);
             var result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
             if (result is null)
@@ -69,6 +99,7 @@ namespace CbsContractsDesktopClient.Services
             using var message = CreatePostRequest(requestUri, request);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(DiagnosticRequestTimeout);
+            var requestPayload = SerializeForTrace(request);
             EmitTrace(FormatRequestTrace("HTTP POST", requestUri, request));
             EmitApiSend(message.Method, requestUri);
             EmitTrace($"STEP API 01 before-send uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
@@ -76,10 +107,13 @@ namespace CbsContractsDesktopClient.Services
             HttpResponseMessage response;
             try
             {
-                response = await _httpClient.SendAsync(
+                response = await SendAsyncWithWatchdog(
                     message,
+                    requestUri,
+                    requestPayload,
                     HttpCompletionOption.ResponseHeadersRead,
-                    timeoutCts.Token);
+                    timeoutCts.Token,
+                    cancellationToken);
             }
             catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
@@ -97,16 +131,48 @@ namespace CbsContractsDesktopClient.Services
             using var _ = response;
             EmitTrace($"STEP API 02 after-headers uri={requestUri} status={(int)response.StatusCode}");
             EmitTrace($"STEP API 03 before-ensure-success uri={requestUri}");
-            await EnsureSuccessAsync(response, cancellationToken);
+            await EnsureSuccessAsync(response, requestUri, requestPayload, timeoutCts.Token, cancellationToken);
             EmitTrace($"STEP API 04 after-ensure-success uri={requestUri}");
 
             EmitTrace($"STEP API 05 before-read-json uri={requestUri}");
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = await ReadResponseBodyAsync(
+                response,
+                requestUri,
+                requestPayload,
+                timeoutCts.Token,
+                cancellationToken,
+                "STEP API 05");
             EmitResponseTrace(requestUri, body);
-            var result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
+            TResponse? result;
+            try
+            {
+                result = JsonSerializer.Deserialize<TResponse>(body, JsonOptions);
+            }
+            catch (Exception ex)
+            {
+                LogApiBodyFailure(
+                    "API RESPONSE DESERIALIZATION FAILED",
+                    requestUri,
+                    requestPayload,
+                    response,
+                    body,
+                    ex);
+                EmitTrace($"STEP API 06 deserialize-error uri={requestUri} type={ex.GetType().Name} message={ex.Message}");
+                throw;
+            }
+
             EmitTrace($"STEP API 06 after-read-json uri={requestUri} isNull={(result is null ? "true" : "false")}");
             if (result is null)
             {
+                var exception = new InvalidOperationException(
+                    $"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
+                LogApiBodyFailure(
+                    "API RESPONSE DESERIALIZATION FAILED",
+                    requestUri,
+                    requestPayload,
+                    response,
+                    body,
+                    exception);
                 throw new InvalidOperationException($"Ответ '{requestUri}' не удалось десериализовать в {typeof(TResponse).Name}.");
             }
 
@@ -118,13 +184,44 @@ namespace CbsContractsDesktopClient.Services
         {
             EmitTrace(FormatRequestTrace("HTTP POST JSON", requestUri, request));
             using var message = CreatePostRequest(requestUri, request);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(DiagnosticRequestTimeout);
+            var requestPayload = SerializeForTrace(request);
             EmitApiSend(message.Method, requestUri);
-            using var response = await _httpClient.SendAsync(message, cancellationToken);
-            await EnsureSuccessAsync(response, cancellationToken);
+            using var response = await SendAsyncWithWatchdog(
+                message,
+                requestUri,
+                requestPayload,
+                HttpCompletionOption.ResponseContentRead,
+                timeoutCts.Token,
+                cancellationToken);
+            await EnsureSuccessAsync(response, requestUri, requestPayload, timeoutCts.Token, cancellationToken);
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = await ReadResponseBodyAsync(
+                response,
+                requestUri,
+                requestPayload,
+                timeoutCts.Token,
+                cancellationToken,
+                "STEP API JSON");
             EmitResponseTrace(requestUri, body);
-            var document = JsonDocument.Parse(body);
+            JsonDocument document;
+            try
+            {
+                document = JsonDocument.Parse(body);
+            }
+            catch (Exception ex)
+            {
+                LogApiBodyFailure(
+                    "API JSON RESPONSE PARSE FAILED",
+                    requestUri,
+                    requestPayload,
+                    response,
+                    body,
+                    ex);
+                throw;
+            }
+
             return document.RootElement.Clone();
         }
 
@@ -155,18 +252,182 @@ namespace CbsContractsDesktopClient.Services
             return message;
         }
 
-        private static async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        private async Task<HttpResponseMessage> SendAsyncWithWatchdog(
+            HttpRequestMessage message,
+            string requestUri,
+            string requestPayload,
+            HttpCompletionOption completionOption,
+            CancellationToken timeoutToken,
+            CancellationToken cancellationToken)
+        {
+            var sendTask = _httpClient.SendAsync(message, completionOption, timeoutToken);
+            var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutToken);
+
+            var completedTask = await Task.WhenAny(sendTask, timeoutTask);
+            if (ReferenceEquals(completedTask, sendTask))
+            {
+                return await sendTask;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                throw new OperationCanceledException(cancellationToken);
+            }
+
+            EmitTrace($"STEP API 01 timeout-send-watchdog uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
+            var timeoutException = new TimeoutException(
+                $"HTTP request '{requestUri}' did not receive response headers after {DiagnosticRequestTimeout.TotalSeconds:0} seconds.");
+            DiagnosticsFileLogger.AppendBlock(
+                "API SEND WATCHDOG TIMEOUT",
+                $"uri={requestUri}{Environment.NewLine}"
+                + $"method={message.Method.Method}{Environment.NewLine}"
+                + $"completion={completionOption}{Environment.NewLine}"
+                + $"request={requestPayload}{Environment.NewLine}"
+                + $"error={timeoutException.GetType().Name}: {timeoutException.Message}");
+            ObserveAbandonedSendTask(sendTask);
+            throw timeoutException;
+        }
+
+        private static async Task EnsureSuccessAsync(
+            HttpResponseMessage response,
+            string requestUri,
+            string requestPayload,
+            CancellationToken timeoutToken,
+            CancellationToken cancellationToken)
         {
             if (response.IsSuccessStatusCode)
             {
                 return;
             }
 
-            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var body = await ReadResponseBodyAsync(
+                response,
+                requestUri,
+                requestPayload,
+                timeoutToken,
+                cancellationToken,
+                "STEP API ERROR");
             throw new HttpRequestException(
                 $"HTTP {(int)response.StatusCode} ({response.StatusCode}). {body}".Trim(),
                 inner: null,
                 response.StatusCode);
+        }
+
+        private static async Task<string> ReadResponseBodyAsync(
+            HttpResponseMessage response,
+            string requestUri,
+            string requestPayload,
+            CancellationToken timeoutToken,
+            CancellationToken cancellationToken,
+            string traceStep)
+        {
+            var readTask = response.Content.ReadAsStringAsync(timeoutToken);
+            var timeoutTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutToken);
+
+            try
+            {
+                var completedTask = await Task.WhenAny(readTask, timeoutTask);
+                if (!ReferenceEquals(completedTask, readTask))
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        throw new OperationCanceledException(cancellationToken);
+                    }
+
+                    EmitTrace($"{traceStep} timeout-read-json-watchdog uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
+                    var timeoutException = new TimeoutException(
+                        $"HTTP response body '{requestUri}' timed out after {DiagnosticRequestTimeout.TotalSeconds:0} seconds.");
+                    LogApiBodyFailure(
+                        "API RESPONSE BODY READ WATCHDOG TIMEOUT",
+                        requestUri,
+                        requestPayload,
+                        response,
+                        "<response body read task did not complete before timeout>",
+                        timeoutException);
+                    ObserveAbandonedReadTask(readTask);
+                    throw timeoutException;
+                }
+
+                return await readTask;
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                EmitTrace($"{traceStep} timeout-read-json uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
+                LogApiBodyFailure(
+                    "API RESPONSE BODY READ TIMEOUT",
+                    requestUri,
+                    requestPayload,
+                    response,
+                    "<response body was not read before timeout>",
+                    ex);
+                throw new TimeoutException(
+                    $"HTTP response body '{requestUri}' timed out after {DiagnosticRequestTimeout.TotalSeconds:0} seconds.",
+                    ex);
+            }
+            catch (Exception ex)
+            {
+                EmitTrace($"{traceStep} read-json-error uri={requestUri} type={ex.GetType().Name} message={ex.Message}");
+                LogApiBodyFailure(
+                    "API RESPONSE BODY READ FAILED",
+                    requestUri,
+                    requestPayload,
+                    response,
+                    "<response body read failed>",
+                    ex);
+                throw;
+            }
+        }
+
+        private static void ObserveAbandonedReadTask(Task<string> readTask)
+        {
+            _ = readTask.ContinueWith(
+                static task =>
+                {
+                    _ = task.Exception;
+                },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        }
+
+        private static void ObserveAbandonedSendTask(Task<HttpResponseMessage> sendTask)
+        {
+            _ = sendTask.ContinueWith(
+                static task =>
+                {
+                    task.Result.Dispose();
+                },
+                TaskContinuationOptions.OnlyOnRanToCompletion | TaskContinuationOptions.ExecuteSynchronously);
+            _ = sendTask.ContinueWith(
+                static task =>
+                {
+                    _ = task.Exception;
+                },
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        }
+
+        private static void LogApiBodyFailure(
+            string title,
+            string requestUri,
+            string requestPayload,
+            HttpResponseMessage response,
+            string responseBody,
+            Exception exception)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                title,
+                $"uri={requestUri}{Environment.NewLine}"
+                + $"status={(int)response.StatusCode} ({response.StatusCode}){Environment.NewLine}"
+                + $"request={requestPayload}{Environment.NewLine}"
+                + $"responseHeaders={FormatHeaders(response)}{Environment.NewLine}"
+                + $"responseBody={TruncateForTrace(responseBody)}{Environment.NewLine}"
+                + $"error={exception.GetType().Name}: {exception.Message}");
+        }
+
+        private static string FormatHeaders(HttpResponseMessage response)
+        {
+            var headers = response.Headers
+                .Concat(response.Content.Headers)
+                .Select(static header => $"{header.Key}: {string.Join(", ", header.Value)}");
+            return string.Join("; ", headers);
         }
 
         protected static void EmitTrace(string message)

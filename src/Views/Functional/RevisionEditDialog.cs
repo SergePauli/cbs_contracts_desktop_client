@@ -1,16 +1,16 @@
 using System.Diagnostics;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media;
 using Windows.Storage.Pickers;
 
 namespace CbsContractsDesktopClient.Views.Functional
 {
-    public sealed class RevisionEditDialog : ContentDialog
+    public sealed class RevisionEditDialog : AppEditDialog
     {
         private readonly TextBox _descriptionBox = new();
         private readonly CheckBox _isSignedBox = new();
@@ -20,7 +20,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _scanLinkBox = new();
         private readonly TextBox _protocolLinkBox = new();
         private readonly TextBox _zipLinkBox = new();
-        private readonly TextBlock _errorText = new();
         private readonly string? _listKey;
 
         public RevisionEditDialog(TableDataRow sourceRow)
@@ -34,16 +33,21 @@ namespace CbsContractsDesktopClient.Views.Functional
             var contractName = sourceRow.GetValue("contract.name")?.ToString() ?? string.Empty;
             var revisionNumber = FormatRevisionNumber(sourceRow.GetValue("priority"));
 
-            PrimaryButtonText = "Сохранить";
-            CloseButtonText = "Отмена";
-            DefaultButton = ContentDialogButton.Primary;
+            FullSizeDesired = false;
+            HorizontalAlignment = HorizontalAlignment.Center;
+            Title = BuildTitleText(contractName, revisionNumber);
             Resources["ContentDialogMinWidth"] = 720d;
             Resources["ContentDialogMaxWidth"] = 920d;
-            Content = BuildContent(sourceRow);
-            DialogChrome.Apply(this, BuildTitleText(contractName, revisionNumber));
+            Content = BuildEditContent(BuildContent(sourceRow));
+            DialogChrome.Apply(this);
         }
 
         public long Id { get; }
+
+        public override bool Validate()
+        {
+            return true;
+        }
 
         public IReadOnlyDictionary<string, object?> BuildPayload()
         {
@@ -68,12 +72,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return payload;
         }
 
-        public void ShowErrorInfo(string message)
-        {
-            _errorText.Text = message;
-            _errorText.Visibility = Visibility.Visible;
-        }
-
         private static string BuildTitleText(string contractName, string revisionNumber)
         {
             return string.IsNullOrWhiteSpace(contractName)
@@ -81,7 +79,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : $"Редактирование ревизии {revisionNumber} контракта {contractName}";
         }
 
-        private UIElement BuildContent(TableDataRow sourceRow)
+        private FrameworkElement BuildContent(TableDataRow sourceRow)
         {
             var root = new Grid
             {
@@ -124,11 +122,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             stack.Children.Add(flagsGrid);
 
             _descriptionBox.Text = sourceRow.GetValue("description")?.ToString() ?? string.Empty;
-            _descriptionBox.AcceptsReturn = true;
-            _descriptionBox.TextWrapping = TextWrapping.Wrap;
-            _descriptionBox.MinHeight = 92;
-            _descriptionBox.MaxHeight = 160;
-            stack.Children.Add(BuildLabeledControl("Комментарий", _descriptionBox));
+            stack.Children.Add(BuildLabeledControl("Описание документа", _descriptionBox));
 
             _docLinkBox.Text = sourceRow.GetValue("doc_link")?.ToString() ?? string.Empty;
             _scanLinkBox.Text = sourceRow.GetValue("scan_link")?.ToString() ?? string.Empty;
@@ -139,11 +133,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             stack.Children.Add(BuildFileLinkEditor("Скан", _scanLinkBox));
             stack.Children.Add(BuildFileLinkEditor("Протокол", _protocolLinkBox));
             stack.Children.Add(BuildFileLinkEditor("Архив", _zipLinkBox));
-
-            _errorText.Foreground = new SolidColorBrush(Microsoft.UI.Colors.IndianRed);
-            _errorText.TextWrapping = TextWrapping.Wrap;
-            _errorText.Visibility = Visibility.Collapsed;
-            stack.Children.Add(_errorText);
 
             root.Children.Add(scrollViewer);
             return root;

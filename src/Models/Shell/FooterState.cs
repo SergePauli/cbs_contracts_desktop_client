@@ -19,7 +19,11 @@ namespace CbsContractsDesktopClient.Models.Shell
 
         public string SelectedRecordText { get; init; } = string.Empty;
 
+        public string SelectedRecordFooterText { get; init; } = string.Empty;
+
         public string VersionText { get; init; } = string.Empty;
+
+        public bool HasSelectedRecordFooterText => !string.IsNullOrWhiteSpace(SelectedRecordFooterText);
 
         public string SelectedRecordSeparator =>
             string.IsNullOrWhiteSpace(SelectedRecordText)

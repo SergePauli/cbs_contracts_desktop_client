@@ -67,6 +67,98 @@ public class LazyDataCollectionTests
         Assert.Equal(4, collection[^1].Id);
     }
 
+    [Fact]
+    public async Task ReleaseOutsideRange_KeepsTrailingPartialPage()
+    {
+        var collection = CreateCollection(114, pageSize: 50);
+
+        await collection.InitializeAsync();
+        await collection.EnsureRangeLoadedAsync(72, 114);
+
+        var released = collection.ReleaseOutsideRange(0, 75);
+
+        Assert.False(released);
+        Assert.False(collection[100].IsPlaceholder);
+        Assert.False(collection[113].IsPlaceholder);
+        Assert.Equal(114, collection.ResidentCount);
+    }
+
+    [Fact]
+    public async Task ReleaseOutsideRange_ReleasesOnlyFullPagesOutsideRange()
+    {
+        var collection = CreateCollection(150, pageSize: 50);
+
+        await collection.InitializeAsync();
+        await collection.EnsureRangeLoadedAsync(72, 150);
+
+        var released = collection.ReleaseOutsideRange(0, 75);
+
+        Assert.True(released);
+        Assert.False(collection[0].IsPlaceholder);
+        Assert.False(collection[74].IsPlaceholder);
+        Assert.True(collection[100].IsPlaceholder);
+        Assert.True(collection[149].IsPlaceholder);
+        Assert.Equal(100, collection.ResidentCount);
+    }
+
+    [Fact]
+    public async Task VirtualRows_DoNotReportItemsChangedWhenReleaseOnlyChangesResidentCount()
+    {
+        var collection = CreateCollection(150, pageSize: 50);
+        var rows = new CbsVirtualTableRows<TestItem>(collection);
+        var propertyNames = new List<string?>();
+        rows.PropertyChanged += (_, e) => propertyNames.Add(e.PropertyName);
+
+        await collection.InitializeAsync();
+        await collection.EnsureRangeLoadedAsync(72, 150);
+        propertyNames.Clear();
+
+        collection.ReleaseOutsideRange(0, 75);
+
+        Assert.Contains(nameof(rows.ResidentCount), propertyNames);
+        Assert.DoesNotContain(nameof(rows.Items), propertyNames);
+    }
+
+    [Fact]
+    public async Task VirtualRows_ReportItemsChangedWhenReleasedPageIsLoadedAgain()
+    {
+        var collection = CreateCollection(150, pageSize: 50);
+        var rows = new CbsVirtualTableRows<TestItem>(collection);
+        var propertyNames = new List<string?>();
+        rows.PropertyChanged += (_, e) => propertyNames.Add(e.PropertyName);
+
+        await collection.InitializeAsync();
+        await collection.EnsureRangeLoadedAsync(72, 150);
+        collection.ReleaseOutsideRange(0, 75);
+        propertyNames.Clear();
+
+        await collection.EnsureRangeLoadedAsync(100, 114);
+
+        Assert.Equal(150, collection.LoadedCount);
+        Assert.False(collection[100].IsPlaceholder);
+        Assert.Contains(nameof(rows.Items), propertyNames);
+        Assert.Contains(nameof(rows.ResidentCount), propertyNames);
+    }
+
+    private static LazyDataCollection<TestItem> CreateCollection(int count, int pageSize)
+    {
+        var service = new FakeDataQueryService(Enumerable.Range(0, count).Select(i => new TestItem
+        {
+            Id = i + 1,
+            Name = $"Item {i + 1}"
+        }).ToList());
+
+        return new LazyDataCollection<TestItem>(
+            service,
+            new LazyDataQuery
+            {
+                Model = "Status",
+                Preset = "item",
+                PageSize = pageSize
+            },
+            static () => new TestItem());
+    }
+
     private sealed class FakeDataQueryService : IDataQueryService
     {
         private readonly List<TestItem> _items;

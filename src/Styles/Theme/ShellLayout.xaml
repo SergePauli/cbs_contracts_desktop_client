@@ -8,7 +8,7 @@
     <GridLength x:Key="ShellFooterHeight">32</GridLength>
 
     <Thickness x:Key="ShellContentRegionMargin">0,0,12,0</Thickness>
-    <Thickness x:Key="ShellContentHostMargin">0,4,0,2</Thickness>
+    <Thickness x:Key="ShellContentHostMargin">0,4,0,0</Thickness>
     <Thickness x:Key="ShellAuditMargin">0,12,12,12</Thickness>
 
     <Thickness x:Key="ShellSidebarOuterPadding">2,4,2,4</Thickness>

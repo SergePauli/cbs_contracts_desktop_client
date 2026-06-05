@@ -70,6 +70,7 @@ namespace CbsContractsDesktopClient.Views.References
                 var listViewItem = new ListViewItem
                 {
                     Content = BuildEmployeeRow(employee, itemIndex),
+                    HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Padding = new Thickness(2),
                     MinHeight = 42
                 };
@@ -87,7 +88,8 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var row = new Grid
             {
-                ColumnSpacing = 6,
+                ColumnSpacing = 4,
+                MinWidth = 340,
                 Padding = new Thickness(2, 4, 2, 4),
                 Background = itemIndex % 2 == 1
                     ? (Brush)Application.Current.Resources["ShellAccentPanelBackgroundAltBrush"]
@@ -167,7 +169,9 @@ namespace CbsContractsDesktopClient.Views.References
             var info = new Grid
             {
                 RowSpacing = 1,
-                VerticalAlignment = VerticalAlignment.Center
+                MaxWidth = 200,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Left,
             };
             info.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             info.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

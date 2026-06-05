@@ -13,7 +13,7 @@ Shell уже больше не является только каркасом п
 - `AppShellPage` с 5 регионами:
   - `NavigationSidebarView`
   - `TopBarView`
-  - `ContentHostView`
+  - `ContentHostRouterView`
   - `AuditPanelView`
   - `FooterBarView`
 
@@ -75,7 +75,7 @@ Shell уже больше не является только каркасом п
 
 Теперь следующий этап уже не “сделать shell” и не “доказать table platform”, а:
 
-1. Снизить архитектурную сложность `ContentHostView`, который стал супер-классом и смешал несколько слоев ответственности
+1. Развивать выделенные host views без возврата к монолитному content host
 2. Подготовить shell/content слой к страницам с несколькими таблицами одновременно, в первую очередь к будущей странице `Активность`
 3. Отполировать contract-oriented `DetailView` для сложных таблиц
 4. Начать следующую функциональную таблицу: `Контракты`
@@ -85,18 +85,18 @@ Shell уже больше не является только каркасом п
 
 ## Ближайшая следующая задача
 
-Следующий production-шаг: архитектурная декомпозиция `ContentHostView` перед дальнейшим расширением функциональных таблиц.
+Следующий production-шаг: использовать завершенную декомпозицию content host при переносе следующих функциональных таблиц.
 
 Почему это сейчас важнее новой таблицы:
 
-- таблица `Этапы контрактов` довела текущий подход до production-функционала, но одновременно показала пределы монолитного `ContentHostView`
-- внутри одного класса сейчас сосуществуют table commands, dialog launching, settings persistence, notifications, workflow-store refresh, detail-view updates и часть API orchestration
+- таблица `Этапы контрактов` довела старый подход до production-функционала и после рефакторинга получила отдельный `StageHostView`
+- table commands, dialog launching, settings persistence, notifications, workflow-store refresh и detail-view updates разнесены между `ComplexHostViewBase` и конкретными host views
 - следующий крупный экран `Активность` потенциально будет использовать несколько таблиц одновременно, и текущая модель content host усложнит развитие
 - таблица `Контракты` должна опираться на более чистые владельцы поведения, а не увеличивать уже перегруженный класс
 
 Ожидаемый первый scope:
 
-1. Описать границы ответственности текущего `ContentHostView`.
+1. Поддерживать границы ответственности текущих host views.
 2. Выделить table command layer: reset/apply defaults, sorting, column layout, save settings, copy/comment/actions.
 3. Выделить dialog launching layer для reference/stage/revision/domain dialogs.
 4. Выделить workflow/detail refresh layer поверх `ContractWorkflowStore`.
@@ -180,7 +180,7 @@ Shell уже больше не является только каркасом п
    - boolean icon columns
    - начальный фильтр `priority > 0`
    - начальная сортировка по `contract.id desc`
-3. Реализован contract-oriented `RevisionsDetailView`:
+3. Реализован contract-oriented `ContractDetailView`:
    - строка контекста текущей ревизии/контракта
    - карточка контрагента через reusable `EmployeeBox`
    - список исполнителей и задач этапа
@@ -317,7 +317,7 @@ Shell уже больше не является только каркасом п
 
 ### Что переиспользуем без изменения концепции
 
-- route-driven reference workspace в `ContentHostView`
+- route-driven reference workspace в `ContentHostRouterView` и конкретных host views
 - `ReferencesContentViewModel`
 - `CbsTableView` и lazy loading pipeline
 - filters / sorting / width persistence
@@ -358,7 +358,7 @@ Shell уже больше не является только каркасом п
 
 1. Добавить definition для `Profile` / `Users` в desktop reference registry
 2. Описать table columns и `ApiField` mapping по аналогии с web `ProfilesPage`
-3. Поддержать route для открытия этого справочника через текущий `ContentHostView`
+3. Поддержать route для открытия этого справочника через content host router
 4. Проверить filters / sorts / width persistence на nested fields
 
 Ожидаемый результат:
@@ -369,7 +369,7 @@ Shell уже больше не является только каркасом п
 
 - выполнено
 - `Profile` definition добавлен
-- route `/users` подключен в текущий `ContentHostView`
+- route `/users` подключен через `ProfileHostView`
 - nested display/filter/sort metadata работает
 - widths и sorting persistence протянуты на complex columns
 
@@ -384,7 +384,7 @@ Shell уже больше не является только каркасом п
 1. Добавить в definition признак editor strategy / editor kind
 2. Оставить `Generic` как дефолт для текущих справочников
 3. Добавить `Profile` как specialized editor kind
-4. В `ContentHostView` переключать открываемый dialog по kind
+4. В host layer переключать открываемый dialog по kind
 
 Ожидаемый результат:
 
@@ -395,7 +395,7 @@ Shell уже больше не является только каркасом п
 
 - выполнено
 - добавлен `ReferenceEditorKind`
-- `ContentHostView` выбирает generic/profile/employee dialog по kind
+- выделенные host views выбирают generic/profile/employee dialog по kind
 
 ### Phase 3. Реализовать специализированный `ProfileEditDialog`
 
@@ -812,7 +812,7 @@ Shell уже больше не является только каркасом п
 
 Цель:
 
-- открыть `/employees` в том же `ContentHostView`, что и остальные справочники
+- открыть `/employees` через выделенный `EmployeeHostView`
 
 Шаги:
 

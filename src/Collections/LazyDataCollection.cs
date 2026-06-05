@@ -392,8 +392,9 @@ namespace CbsContractsDesktopClient.Collections
             var residentBefore = ResidentCount;
             var normalizedStart = Math.Max(0, keepStart);
             var normalizedEnd = Math.Max(normalizedStart, Math.Min(TotalCount, keepEnd));
+            var pageSize = _query.PageSize;
             var indexesToRelease = _residentIndexes
-                .Where(index => index < normalizedStart || index >= normalizedEnd)
+                .Where(index => IsFullPageOutsideRange(index, pageSize, normalizedStart, normalizedEnd))
                 .ToList();
 
             if (indexesToRelease.Count == 0)
@@ -413,6 +414,20 @@ namespace CbsContractsDesktopClient.Collections
             return true;
         }
 
+        private bool IsFullPageOutsideRange(int index, int pageSize, int keepStart, int keepEnd)
+        {
+            if (pageSize <= 0)
+            {
+                return false;
+            }
+
+            var pageStart = AlignDown(index, pageSize);
+            var pageEnd = Math.Min(TotalCount, pageStart + pageSize);
+            var isFullPage = pageEnd - pageStart >= pageSize;
+            var isOutsideRange = pageEnd <= keepStart || pageStart >= keepEnd;
+            return isFullPage && isOutsideRange;
+        }
+
         private void ReplaceRange(int startIndex, IReadOnlyList<TItem> items)
         {
             AppendTrace($"STEP REPLACE 01 enter start={startIndex} count={items.Count}");
@@ -429,6 +444,12 @@ namespace CbsContractsDesktopClient.Collections
                     $"STEP REPLACE 01b trim-range start={startIndex} requested={items.Count} applied={safeCount} collectionCount={Count}");
             }
 
+            if (safeCount <= 0)
+            {
+                AppendTrace("STEP REPLACE 01c skip-empty-safe-range");
+                return;
+            }
+
             for (var index = 0; index < safeCount; index++)
             {
                 var targetIndex = startIndex + index;
@@ -442,6 +463,7 @@ namespace CbsContractsDesktopClient.Collections
             AppendTrace($"STEP REPLACE 05 before-loadedcount start={startIndex} count={safeCount} currentLoaded={LoadedCount}");
             LoadedCount = Math.Max(LoadedCount, startIndex + safeCount);
             AppendTrace($"STEP REPLACE 06 after-loadedcount loaded={LoadedCount}");
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(Items)));
             OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
             AppendTrace($"STEP REPLACE 07 exit resident={ResidentCount}");
         }
