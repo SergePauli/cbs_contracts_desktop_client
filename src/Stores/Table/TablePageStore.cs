@@ -31,7 +31,6 @@ namespace CbsContractsDesktopClient.Stores.Table
     {
         private static readonly bool DiagnosticsEnabled = true;
         private const int MaxUiTraceLines = 80;
-        private static readonly long[] StageStatusIds = [2L, 4L, 5L, 6L, 7L];
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
@@ -134,12 +133,6 @@ namespace CbsContractsDesktopClient.Stores.Table
 
         public bool HasSelectedRow => SelectedRow is not null && !SelectedRow.IsPlaceholder;
 
-        public bool IsEmployeeReference => CurrentReference?.EditorKind == ReferenceEditorKind.Employee;
-
-        public bool IsContragentReference => string.Equals(CurrentReference?.Route, "/contragents", StringComparison.OrdinalIgnoreCase);
-
-        public bool IsStagesTable => string.Equals(CurrentTablePage?.Route, "/stages", StringComparison.OrdinalIgnoreCase);
-
         public IReadOnlyList<DataFilterCriterion> CurrentFilters => _state?.Filters.ToList() ?? [];
 
         public bool CanCreateRows => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.Create) == true;
@@ -151,22 +144,6 @@ namespace CbsContractsDesktopClient.Stores.Table
         public bool CanConfigureColumns => CurrentTablePage?.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns) == true;
 
         public CbsTableRowStyleKey CurrentRowStyleKey => CurrentTablePage?.RowStyleKey ?? CbsTableRowStyleKey.None;
-
-        public bool ShowEmployeeDetailView => IsEmployeeReference && HasSelectedRow;
-
-        public bool ShowContragentDetailView => IsContragentReference && HasSelectedRow;
-
-        public bool ShowRevisionsDetailView =>
-            string.Equals(CurrentTablePage?.Route, "/revisions", StringComparison.OrdinalIgnoreCase)
-            && HasSelectedRow;
-
-        public bool ShowContractDetailView =>
-            (string.Equals(CurrentTablePage?.Route, "/revisions", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(CurrentTablePage?.Route, "/stages", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(CurrentTablePage?.Route, "/contracts", StringComparison.OrdinalIgnoreCase))
-            && HasSelectedRow;
-
-        public string SelectedRowInfoMessage => BuildSelectedRowInfoMessage();
 
         public bool HasMoreItems => _rows?.HasMoreItems == true;
 
@@ -215,10 +192,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             OnPropertyChanged(nameof(CanEditRows));
             OnPropertyChanged(nameof(CanDeleteRows));
             OnPropertyChanged(nameof(CanConfigureColumns));
-            OnPropertyChanged(nameof(ShowEmployeeDetailView));
-            OnPropertyChanged(nameof(ShowContragentDetailView));
-            OnPropertyChanged(nameof(ShowRevisionsDetailView));
-            OnPropertyChanged(nameof(ShowContractDetailView));
         }
 
         partial void OnErrorMessageChanged(string value)
@@ -229,27 +202,12 @@ namespace CbsContractsDesktopClient.Stores.Table
         partial void OnSelectedRowChanged(TableDataRow? value)
         {
             OnPropertyChanged(nameof(HasSelectedRow));
-            OnPropertyChanged(nameof(SelectedRowInfoMessage));
-            OnPropertyChanged(nameof(ShowEmployeeDetailView));
-            OnPropertyChanged(nameof(ShowContragentDetailView));
-            OnPropertyChanged(nameof(ShowRevisionsDetailView));
-            OnPropertyChanged(nameof(ShowContractDetailView));
-            _shellViewModel.SetFooterTableStats(
-                BuildFooterTotalCountValue(),
-                BuildFooterSelectedRecordText());
             SyncAuditContext();
             _ = RefreshAuditAsync();
         }
 
         partial void OnCurrentReferenceChanged(ReferenceDefinition? value)
         {
-            OnPropertyChanged(nameof(IsEmployeeReference));
-            OnPropertyChanged(nameof(IsContragentReference));
-            OnPropertyChanged(nameof(ShowEmployeeDetailView));
-            OnPropertyChanged(nameof(ShowContragentDetailView));
-            OnPropertyChanged(nameof(ShowRevisionsDetailView));
-            OnPropertyChanged(nameof(ShowContractDetailView));
-
             SyncAuditContext();
         }
 
@@ -262,8 +220,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             OnPropertyChanged(nameof(CanDeleteRows));
             OnPropertyChanged(nameof(CanConfigureColumns));
             OnPropertyChanged(nameof(CurrentRowStyleKey));
-            OnPropertyChanged(nameof(ShowRevisionsDetailView));
-            OnPropertyChanged(nameof(ShowContractDetailView));
             SyncAuditContext();
         }
 
@@ -349,25 +305,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             }
 
             await NavigateAsync(CurrentTablePage.Route, cancellationToken);
-        }
-
-        public bool ApplyRowPatch(long id, IReadOnlyDictionary<string, object?> patch)
-        {
-            ArgumentNullException.ThrowIfNull(patch);
-            if (id <= 0 || patch.Count == 0)
-            {
-                return false;
-            }
-
-            var sourceRow = _itemsSnapshot.FirstOrDefault(row =>
-                !row.IsPlaceholder && TryGetSelectedRowId(row) == id);
-            if (sourceRow is null)
-            {
-                return false;
-            }
-
-            var patchedRow = CloneRowWithPatch(sourceRow, patch);
-            return ReplaceLoadedRow(id, patchedRow);
         }
 
         public bool ApplySavedRowUpdate(
@@ -1041,20 +978,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             string sourceKey,
             CancellationToken cancellationToken)
         {
-            if (string.Equals(sourceKey, "StageStatus", StringComparison.OrdinalIgnoreCase))
-            {
-                var statusOptions = _referenceLookupCacheService is not null
-                    ? await _referenceLookupCacheService.GetOptionsAsync("Status", cancellationToken: cancellationToken)
-                    : await LoadLookupOptionsFromApiAsync("Status", cancellationToken);
-
-                return NormalizeStageStatusOptions(statusOptions);
-            }
-
-            if (string.Equals(sourceKey, "TaskKind", StringComparison.OrdinalIgnoreCase))
-            {
-                return await LoadTaskKindOptionsAsync(cancellationToken);
-            }
-
             var model = sourceKey switch
             {
                 var key when string.Equals(key, "Department", StringComparison.OrdinalIgnoreCase) => "Department",
@@ -1101,95 +1024,6 @@ namespace CbsContractsDesktopClient.Stores.Table
                 })
                 .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
                 .ToList();
-        }
-
-        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadTaskKindOptionsAsync(CancellationToken cancellationToken)
-        {
-            if (_referenceLookupCacheService is not null)
-            {
-                var items = await _referenceLookupCacheService.GetItemsAsync("TaskKind", cancellationToken: cancellationToken);
-                return items
-                    .Select(static item => new CbsTableFilterOptionDefinition
-                    {
-                        Value = item.Id,
-                        Label = FormatTaskKindOptionLabel(item.Code, item.DisplayName)
-                    })
-                    .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
-                    .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
-                    .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
-                    .ToList();
-            }
-
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = "TaskKind",
-                    Preset = "item",
-                    Sorts = ["name asc"],
-                    Limit = 500
-                },
-                cancellationToken);
-
-            return rows
-                .Where(static row => !row.IsPlaceholder)
-                .Select(static row => new CbsTableFilterOptionDefinition
-                {
-                    Value = row.GetValue("id"),
-                    Label = FormatTaskKindOptionLabel(
-                        row.GetValue("code")?.ToString(),
-                        row.GetValue("name")?.ToString())
-                })
-                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
-                .ToList();
-        }
-
-        private static string FormatTaskKindOptionLabel(string? code, string? name)
-        {
-            var normalizedCode = string.IsNullOrWhiteSpace(code) ? "ХХ" : code.Trim();
-            var normalizedName = name?.Trim() ?? string.Empty;
-            return string.IsNullOrWhiteSpace(normalizedName)
-                ? normalizedCode
-                : $"{normalizedCode} - {normalizedName}";
-        }
-
-        private static IReadOnlyList<CbsTableFilterOptionDefinition> NormalizeStageStatusOptions(
-            IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
-        {
-            var optionsById = statusOptions
-                .Where(static option => TryNormalizeLong(option.Value) is not null)
-                .GroupBy(static option => TryNormalizeLong(option.Value)!.Value)
-                .ToDictionary(static group => group.Key, static group => group.First());
-
-            var result = new List<CbsTableFilterOptionDefinition>
-            {
-                new()
-                {
-                    Value = null,
-                    Label = "Пустой"
-                }
-            };
-
-            foreach (var statusId in StageStatusIds)
-            {
-                if (optionsById.TryGetValue(statusId, out var option))
-                {
-                    result.Add(option);
-                }
-            }
-
-            return result;
-        }
-
-        private static long? TryNormalizeLong(object? value)
-        {
-            return value switch
-            {
-                long longValue => longValue,
-                int intValue => intValue,
-                decimal decimalValue => (long)decimalValue,
-                string text when long.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
         }
 
         private static string DescribeFilterValue(object? value)
@@ -1371,9 +1205,7 @@ namespace CbsContractsDesktopClient.Stores.Table
             OnPropertyChanged(nameof(LastPageRequestJson));
             OnPropertyChanged(nameof(TraceLog));
             OnPropertyChanged(nameof(CombinedTraceLog));
-            _shellViewModel.SetFooterTableStats(
-                BuildFooterTotalCountValue(),
-                BuildFooterSelectedRecordText());
+            _shellViewModel.SetFooterTableStats(BuildFooterTotalCountValue());
             WriteDiagnosticsSnapshot();
         }
 
@@ -1385,31 +1217,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             }
 
             return TotalCount.ToString();
-        }
-
-        private string BuildFooterSelectedRecordText()
-        {
-            if (!HasSelectedRow || SelectedRow is null)
-            {
-                return string.Empty;
-            }
-
-            var name = SelectedRow.GetValue("name")?.ToString();
-            var id = SelectedRow.GetValue("id")?.ToString();
-
-            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(id))
-            {
-                return $"{name} (ID: {id})";
-            }
-
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                return name;
-            }
-
-            return string.IsNullOrWhiteSpace(id)
-                ? string.Empty
-                : $"ID: {id}";
         }
 
         private void WriteDiagnosticsSnapshot(bool force = false)
@@ -1485,19 +1292,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             _itemsSnapshot = _rows.Items.ToList();
         }
 
-        private static TableDataRow CloneRowWithPatch(
-            TableDataRow sourceRow,
-            IReadOnlyDictionary<string, object?> patch)
-        {
-            var values = new Dictionary<string, JsonElement>(sourceRow.Values, StringComparer.OrdinalIgnoreCase);
-            MergePayloadValues(values, patch);
-
-            return new TableDataRow
-            {
-                Values = values
-            };
-        }
-
         private static TableDataRow CloneRowWithUpdate(
             TableDataRow sourceRow,
             TableDataRow? savedRow,
@@ -1514,10 +1308,17 @@ namespace CbsContractsDesktopClient.Stores.Table
                 }
             }
 
-            return new TableDataRow
+            return CreatePatchedRow(values);
+        }
+
+        private static TableDataRow CreatePatchedRow(Dictionary<string, JsonElement> values)
+        {
+            var row = new TableDataRow
             {
                 Values = values
             };
+            row.RefreshResolvedValues();
+            return row;
         }
 
         private static void MergePayloadValues(
@@ -1638,44 +1439,6 @@ namespace CbsContractsDesktopClient.Stores.Table
                 || message.StartsWith("VIEWMODEL RETENTION STATE NULL", StringComparison.Ordinal);
         }
 
-        private string BuildSelectedRowInfoMessage()
-        {
-            if (!HasSelectedRow || SelectedRow is null)
-            {
-                return string.Empty;
-            }
-
-            var id = SelectedRow.GetValue("id")?.ToString();
-            var primaryText =
-                SelectedRow.GetValue("name")?.ToString()
-                ?? SelectedRow.GetValue("full_name")?.ToString()
-                ?? SelectedRow.GetValue("description")?.ToString()
-                ?? ContentTitle;
-
-            if (!string.IsNullOrWhiteSpace(id) && !string.IsNullOrWhiteSpace(primaryText))
-            {
-                return $"{TruncateSelectedRowText(primaryText, 30)} (ID: {id})";
-            }
-
-            if (!string.IsNullOrWhiteSpace(primaryText))
-            {
-                return TruncateSelectedRowText(primaryText, 30);
-            }
-
-            return !string.IsNullOrWhiteSpace(id)
-                ? $"ID: {id}"
-                : "Запись выбрана";
-        }
-
-        private static string TruncateSelectedRowText(string value, int maxLength)
-        {
-            if (string.IsNullOrWhiteSpace(value) || value.Length <= maxLength)
-            {
-                return value;
-            }
-
-            return $"{value[..maxLength].TrimEnd()}...";
-        }
     }
 }
 

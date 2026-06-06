@@ -278,7 +278,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     return;
                 }
 
-                await RefreshAfterSaveAsync(result.IsCreateMode, result.SavedRow, result.SavedPayload);
+                await RefreshTableRowAfterSaveAsync(result.IsCreateMode, result.SavedRow, result.SavedPayload);
                 ShowSuccessNotification(
                     result.SuccessTitle,
                     BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
@@ -365,7 +365,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode ? "Контрагент создан" : "Изменения контрагента сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
@@ -479,21 +479,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task RefreshSelectedContragentRowAsync(long contragentId)
         {
-            var freshRow = await LoadContragentEditRowAsync(contragentId);
-            if (freshRow is null)
-            {
-                return;
-            }
-
-            Store.ApplySavedRowUpdate(
-                freshRow,
-                new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase));
-
-            if (Store.SelectedRow is not null && TryGetSelectedRowId(Store.SelectedRow) == contragentId)
-            {
-                _detailView.Row = Store.SelectedRow;
-                _detailView.ContractsRow = freshRow;
-            }
+            await RefreshTableRowByIdAsync(contragentId);
         }
 
         private async void DetailView_EmployeeEditRequested(object? sender, EmployeeBoxEditRequestedEventArgs e)
@@ -563,31 +549,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
-        private async Task RefreshAfterSaveAsync(
-            bool isCreateMode,
-            TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? payload)
+        protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
         {
-            if (isCreateMode)
-            {
-                await Store.ReloadCurrentReferenceAsync();
-                return;
-            }
+            UpdateDetailView();
+            await RefreshDetailContractsAsync();
+        }
 
-            var contragentId = TryGetSelectedRowId(savedRow)
-                ?? (Store.SelectedRow is null ? null : TryGetSelectedRowId(Store.SelectedRow));
-            if (contragentId is not null)
-            {
-                await RefreshSelectedContragentRowAsync(contragentId.Value);
-                return;
-            }
-
-            if (payload is null || !Store.ApplySavedRowUpdate(savedRow, payload))
-            {
-                await Store.ReloadCurrentReferenceAsync();
-                return;
-            }
-
+        protected override async Task OnTableReloadedAfterSaveAsync()
+        {
+            UpdateDetailView();
             await RefreshDetailContractsAsync();
         }
 

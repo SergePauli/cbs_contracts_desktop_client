@@ -77,6 +77,20 @@ public sealed class ContentHostViewTests
         "Shell",
         "ReferenceHostView.xaml.cs");
 
+    private static readonly string StageHostViewPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "StageHostView.cs");
+
+    private static readonly string TablePageStorePath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Stores",
+        "Table",
+        "TablePageStore.cs");
+
     private static readonly string AppShellPageXamlPath = Path.Combine(
         ProjectRoot,
         "src",
@@ -173,6 +187,36 @@ public sealed class ContentHostViewTests
         Assert.Contains("TableView.ShowStageCostFraction", codeBehind);
         Assert.Contains("public event EventHandler<CbsTableSortRequestedEventArgs>? SortRequested;", codeBehind);
         Assert.Contains("public event EventHandler<CbsTableRowSelectionChangedEventArgs>? RowSelectionChanged;", codeBehind);
+    }
+
+    [Fact]
+    public void TableHostView_HandlesRowReplacementSeparatelyFromItemsRefresh()
+    {
+        var codeBehind = File.ReadAllText(TableHostViewCodeBehindPath);
+
+        Assert.Contains("private ITableRowReplacementSource? _rowReplacementSource;", codeBehind);
+        Assert.Contains("_rowReplacementSource.RowReplaced += OnRowReplaced;", codeBehind);
+        Assert.Contains("_rowReplacementSource.RowReplaced -= OnRowReplaced;", codeBehind);
+        Assert.Contains("private void OnRowReplaced", codeBehind);
+        Assert.Contains("TableView.RefreshVisibleRow(e.Index, row);", codeBehind);
+        Assert.Contains("TableView.RefreshVisibleRowsIfViewportHasPlaceholders();", codeBehind);
+    }
+
+    [Fact]
+    public void StageHostView_OwnsStageSpecificOptionsSources()
+    {
+        var stageHost = File.ReadAllText(StageHostViewPath);
+        var tablePageStore = File.ReadAllText(TablePageStorePath);
+
+        Assert.Contains("OptionsRegistry.Set(\"StageStatus\"", stageHost);
+        Assert.Contains("OptionsRegistry.Set(\"TaskKind\"", stageHost);
+        Assert.Contains("LoadStageStatusOptionsAsync", stageHost);
+        Assert.Contains("LoadStageTaskKindOptionsAsync", stageHost);
+        Assert.Contains("FormatTaskKindOptionLabel", stageHost);
+        Assert.Contains("OptionsRegistry.Get(\"StageStatus\")", stageHost);
+        Assert.DoesNotContain("NormalizeStageStatusOptions", tablePageStore);
+        Assert.DoesNotContain("LoadTaskKindOptionsAsync", tablePageStore);
+        Assert.DoesNotContain("FormatTaskKindOptionLabel", tablePageStore);
     }
 
     [Fact]

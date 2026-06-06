@@ -26,7 +26,7 @@ public sealed class TablePageStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task EnsureLoadedAsync_UsesStageSpecificStatusOptions()
+    public async Task EnsureLoadedAsync_DoesNotLoadStageSpecificStatusOptions()
     {
         var dataQueryService = new FakeDataQueryService
         {
@@ -63,13 +63,12 @@ public sealed class TablePageStoreTests : IDisposable
         await viewModel.EnsureLoadedAsync();
 
         var options = viewModel.CurrentFilterOptionsSources["StageStatus"];
-        Assert.Equal([null, 2L, 4L, 5L, 6L, 7L], options.Select(static option => option.Value));
-        Assert.Equal("Пустой", options[0].Label);
-        Assert.DoesNotContain(options, static option => option.Value is 0L or 1L or 3L);
+        Assert.Empty(options);
+        Assert.DoesNotContain(dataQueryService.DataRequests, static request => request.Model == "Status");
     }
 
     [Fact]
-    public async Task EnsureLoadedAsync_FormatsStageTaskKindOptionsWithCodeAndName()
+    public async Task EnsureLoadedAsync_DoesNotFormatStageTaskKindOptions()
     {
         var dataQueryService = new FakeDataQueryService
         {
@@ -108,8 +107,8 @@ public sealed class TablePageStoreTests : IDisposable
         await viewModel.EnsureLoadedAsync();
 
         var options = viewModel.CurrentFilterOptionsSources["TaskKind"];
-        Assert.Contains(options, static option => Equals(option.Value, 7L) && option.Label == "06 - Р”РѕРї. Р°С‚С‚РµСЃС‚Р°С†РёСЏ");
-        Assert.Contains(options, static option => Equals(option.Value, 11L) && option.Label == "11 - РџРѕСЃС‚Р°РІРєР° РџРћ");
+        Assert.Empty(options);
+        Assert.DoesNotContain(dataQueryService.DataRequests, static request => request.Model == "TaskKind");
     }
 
     [Fact]

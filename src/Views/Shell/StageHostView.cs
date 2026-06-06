@@ -16,6 +16,7 @@ using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
@@ -106,13 +107,72 @@ namespace CbsContractsDesktopClient.Views.Shell
             ];
         }
 
-        protected override Task OnRouteLoaded(TablePageDefinition definition)
+        protected override async Task OnRouteLoaded(TablePageDefinition definition)
         {
+            await LoadStageOptionsSourcesAsync();
             ApplyStageCostFractionMode();
             UpdateActionButtonState();
             UpdateDetailView(Store.SelectedRow);
             _ = RefreshDetailAsync();
-            return Task.CompletedTask;
+        }
+
+        private async Task LoadStageOptionsSourcesAsync()
+        {
+            OptionsRegistry.Set("StageStatus", await LoadStageStatusOptionsAsync());
+            OptionsRegistry.Set("TaskKind", await LoadStageTaskKindOptionsAsync());
+            TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot());
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageStatusOptionsAsync()
+        {
+            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var optionsById = statusOptions
+                .Where(static option => JsonDataReader.TryGetLong(option.Value) is not null)
+                .GroupBy(static option => JsonDataReader.TryGetLong(option.Value)!.Value)
+                .ToDictionary(static group => group.Key, static group => group.First());
+
+            var result = new List<CbsTableFilterOptionDefinition>
+            {
+                new()
+                {
+                    Value = null,
+                    Label = "Пустой"
+                }
+            };
+
+            foreach (var statusId in StageContractStatusDialogControls.StageStatusIds.Order())
+            {
+                if (optionsById.TryGetValue(statusId, out var option))
+                {
+                    result.Add(option);
+                }
+            }
+
+            return result;
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageTaskKindOptionsAsync()
+        {
+            var items = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
+            return items
+                .Select(static item => new CbsTableFilterOptionDefinition
+                {
+                    Value = item.Id,
+                    Label = FormatTaskKindOptionLabel(item.Code, item.DisplayName)
+                })
+                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
+                .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        private static string FormatTaskKindOptionLabel(string? code, string? name)
+        {
+            var normalizedCode = string.IsNullOrWhiteSpace(code) ? "ХХ" : code.Trim();
+            var normalizedName = name?.Trim() ?? string.Empty;
+            return string.IsNullOrWhiteSpace(normalizedName)
+                ? normalizedCode
+                : $"{normalizedCode} - {normalizedName}";
         }
 
         protected override Task OnRowSelected(TableDataRow? row)
@@ -279,6 +339,18 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
+        protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
+        {
+            UpdateDetailView(Store.SelectedRow);
+            await RefreshDetailAsync();
+        }
+
+        protected override async Task OnTableReloadedAfterSaveAsync()
+        {
+            UpdateDetailView(Store.SelectedRow);
+            await RefreshDetailAsync();
+        }
+
         private void ClearDetailView()
         {
             _detailCts?.Cancel();
@@ -351,7 +423,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _contractWorkflowStore.Contract,
                 _contractWorkflowStore.Contragent);
 
-            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var statusOptions = OptionsRegistry.Get("StageStatus");
             var employeeItems = await LoadOziEmployeeItemsAsync();
             StageOziEditDialog dialog;
             try
@@ -373,12 +445,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            bool shouldRefreshSelectedRowDetails = false;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
                     var stagePayload = dialog.BuildPayload();
+                    savedPayload = stagePayload;
                     if (!HasUpdatePayloadChanges(stagePayload))
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
@@ -386,7 +459,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                         return;
                     }
 
-                    shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
                     savedRow = await SaveStagePayloadAsync(stagePayload);
 
                     if (dialog.ShouldCloseContract())
@@ -410,14 +482,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            Store.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
+            await RefreshTableRowAfterSaveAsync(false, savedRow, savedPayload);
             ShowSuccessNotification(
                 "Этап сохранен",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
-            if (shouldRefreshSelectedRowDetails)
-            {
-                await RefreshDetailAsync();
-            }
         }
 
         private async Task ShowStageCommerEditDialogAsync()
@@ -434,7 +502,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _contractWorkflowStore.Contract,
                 _contractWorkflowStore.Contragent);
 
-            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var statusOptions = OptionsRegistry.Get("StageStatus");
             var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
             StageCommerEditDialog dialog;
             try
@@ -456,12 +524,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            bool shouldRefreshSelectedRowDetails = false;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
                     var stagePayload = dialog.BuildPayload();
+                    savedPayload = stagePayload;
                     if (!HasUpdatePayloadChanges(stagePayload))
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
@@ -469,7 +538,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                         return;
                     }
 
-                    shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
                     savedRow = await SaveStagePayloadAsync(stagePayload);
 
                     if (dialog.ShouldCloseContract())
@@ -493,14 +561,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            Store.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
+            await RefreshTableRowAfterSaveAsync(false, savedRow, savedPayload);
             ShowSuccessNotification(
                 "Этап сохранен",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
-            if (shouldRefreshSelectedRowDetails)
-            {
-                await RefreshDetailAsync();
-            }
         }
 
         private async Task ShowStageFinEditDialogAsync()
@@ -517,7 +581,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _contractWorkflowStore.Contract,
                 _contractWorkflowStore.Contragent);
 
-            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var statusOptions = OptionsRegistry.Get("StageStatus");
             StageFinEditDialog dialog;
             try
             {
@@ -537,12 +601,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            bool shouldRefreshSelectedRowDetails = false;
+            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
                     var stagePayload = dialog.BuildPayload();
+                    savedPayload = stagePayload;
                     var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
                     var hasContractChanges = dialog.HasContractExternalNumberChanges();
                     if (!hasStageChanges && !hasContractChanges)
@@ -554,7 +619,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     if (hasStageChanges)
                     {
-                        shouldRefreshSelectedRowDetails = ContainsNestedAttributes(stagePayload);
                         savedRow = await SaveStagePayloadAsync(stagePayload);
                     }
 
@@ -563,7 +627,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                         await _modelMutationService.UpdateAsync(
                             ContractModel,
                             dialog.BuildContractExternalNumberPayload());
-                        shouldRefreshSelectedRowDetails = true;
                         savedRow ??= sourceRow;
                     }
                 }
@@ -581,14 +644,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            Store.ApplyRowPatch(dialog.Id, dialog.BuildTablePatch());
+            await RefreshTableRowAfterSaveAsync(false, savedRow, savedPayload);
             ShowSuccessNotification(
                 "Этап сохранен",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
-            if (shouldRefreshSelectedRowDetails)
-            {
-                await RefreshDetailAsync();
-            }
         }
 
         private void CopyStageInfo()
@@ -767,7 +826,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     user?.Statuses,
                     user?.ContractsTypes,
                     Store.CurrentFilters,
-                    Store.CurrentFilterOptionsSources);
+                    OptionsRegistry.Snapshot());
 
                 if (!settingsPayload.HasChanges)
                 {

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
+using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using Microsoft.UI.Xaml.Data;
 using Windows.Foundation;
@@ -107,6 +108,8 @@ namespace CbsContractsDesktopClient.Collections
 
         public bool HasMoreItems => LoadedCount < TotalCount;
 
+        public event EventHandler<TableRowReplacedEventArgs>? RowReplaced;
+
         public bool TryReplaceLoadedItem(Func<TItem, bool> predicate, TItem item)
         {
             ArgumentNullException.ThrowIfNull(predicate);
@@ -121,7 +124,7 @@ namespace CbsContractsDesktopClient.Collections
 
                 this[index] = item;
                 _residentIndexes.Add(index);
-                OnPropertyChanged(new PropertyChangedEventArgs(nameof(Items)));
+                RowReplaced?.Invoke(this, new TableRowReplacedEventArgs(index, item));
                 OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
                 return true;
             }

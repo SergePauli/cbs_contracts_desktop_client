@@ -951,6 +951,43 @@ namespace CbsContractsDesktopClient.Views.Controls
             return true;
         }
 
+        public bool RefreshVisibleRow(int absoluteIndex, TableDataRow row)
+        {
+            ArgumentNullException.ThrowIfNull(row);
+
+            if (_lastWindowStart < 0
+                || absoluteIndex < _lastWindowStart
+                || absoluteIndex >= _lastWindowEnd)
+            {
+                AppendTrace(
+                    $"TABLE ROW REPAINT SKIP index={absoluteIndex} window={_lastWindowStart}..{_lastWindowEnd}");
+                return false;
+            }
+
+            var poolIndex = absoluteIndex - _lastWindowStart;
+            if (poolIndex < 0
+                || poolIndex >= _rowPool.Count
+                || _rowPool[poolIndex].Tag is not int renderedIndex
+                || renderedIndex != absoluteIndex)
+            {
+                AppendTrace(
+                    $"TABLE ROW REPAINT SKIP stale-pool index={absoluteIndex} pool={poolIndex} window={_lastWindowStart}..{_lastWindowEnd}");
+                return false;
+            }
+
+            _rowPool[poolIndex].Configure(
+                row,
+                Columns,
+                RowHeight,
+                RowStyleKey,
+                ShowStageCostFraction);
+            _rowPool[poolIndex].Tag = absoluteIndex;
+            ApplyRowSelectionState(_rowPool[poolIndex], absoluteIndex);
+            AppendTrace(
+                $"TABLE ROW REPAINT index={absoluteIndex} pool={poolIndex} window={_lastWindowStart}..{_lastWindowEnd}");
+            return true;
+        }
+
         private RowsRenderPath ResolveRowsRenderPath(int nextStart, int nextEnd, int totalRows)
         {
             if (_lastWindowStart < 0

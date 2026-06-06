@@ -89,18 +89,6 @@ public sealed class StageFinEditDialog : AppEditDialog
         return StageFinEditPayloadBuilder.BuildForUpdate(_stage, _commentBox.Text, _profileId);
     }
 
-    public IReadOnlyDictionary<string, object?> BuildTablePatch()
-    {
-        var patch = new Dictionary<string, object?>(BuildPayload(), StringComparer.OrdinalIgnoreCase);
-        patch.Remove("comments_attributes");
-        if (HasContractExternalNumberChanges())
-        {
-            patch["contract.external_number"] = NormalizeText(_externalNumberBox.Text);
-        }
-
-        return patch;
-    }
-
     public override bool Validate()
     {
         ShowErrorInfo(string.Empty);
@@ -388,11 +376,6 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         return label;
-    }
-
-    private static string? NormalizeText(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
 }

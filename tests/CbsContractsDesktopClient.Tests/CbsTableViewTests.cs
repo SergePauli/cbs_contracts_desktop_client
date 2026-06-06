@@ -223,6 +223,19 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
+    public void CbsTableView_RepaintsSingleVisibleRowByAbsoluteIndex()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("public bool RefreshVisibleRow(int absoluteIndex, TableDataRow row)", code);
+        Assert.Contains("var poolIndex = absoluteIndex - _lastWindowStart;", code);
+        Assert.Contains("renderedIndex != absoluteIndex", code);
+        Assert.Contains("_rowPool[poolIndex].Configure(", code);
+        Assert.Contains("ApplyRowSelectionState(_rowPool[poolIndex], absoluteIndex);", code);
+        Assert.Contains("TABLE ROW REPAINT index=", code);
+    }
+
+    [Fact]
     public void CbsTableView_SuppressesRepeatedEmptyInitialRenderWithoutClearingNonEmptyRows()
     {
         var code = File.ReadAllText(CbsTableViewPath);

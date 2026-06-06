@@ -80,4 +80,33 @@ public sealed class TableDataRowTests
 
         Assert.Equal("flattened", row.GetValue("user.name"));
     }
+
+    [Fact]
+    public void RefreshResolvedValues_RebuildsCachedValuesAfterValuesMutation()
+    {
+        var row = new TableDataRow
+        {
+            Values =
+            {
+                ["name"] = JsonSerializer.SerializeToElement("old"),
+                ["user"] = JsonSerializer.SerializeToElement(new
+                {
+                    name = "old nested"
+                })
+            }
+        };
+
+        Assert.Equal("old", row.GetValue("name"));
+        Assert.Equal("old nested", row.GetValue("user.name"));
+
+        row.Values["name"] = JsonSerializer.SerializeToElement("new");
+        row.Values["user"] = JsonSerializer.SerializeToElement(new
+        {
+            name = "new nested"
+        });
+        row.RefreshResolvedValues();
+
+        Assert.Equal("new", row.GetValue("name"));
+        Assert.Equal("new nested", row.GetValue("user.name"));
+    }
 }

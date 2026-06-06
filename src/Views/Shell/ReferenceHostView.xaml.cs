@@ -14,6 +14,7 @@ using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
@@ -32,6 +33,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
+        private readonly AppShellViewModel _shellViewModel;
+        private readonly OptionsSourceRegistry _optionsRegistry = new();
         private CancellationTokenSource? _routeCts;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
@@ -45,6 +48,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
+            _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
 
             InitializeComponent();
             DataContext = _viewModel;
@@ -113,8 +117,10 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                 _ = _referenceDefinitionService.TryGetByRoute(route, out _);
                 await _viewModel.NavigateToRouteAsync(definition.Route, _routeCts.Token);
+                _optionsRegistry.ReplaceWith(_viewModel.CurrentFilterOptionsSources);
                 AttachCurrentRowsToTableView(definition);
                 ReferenceTableView.ApplyFilterInputs(_viewModel.CurrentFilters);
+                UpdateFooterStats();
             }
             catch (OperationCanceledException)
             {
@@ -126,11 +132,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (e.PropertyName == nameof(TablePageStore.SelectedRow)
                 || e.PropertyName == nameof(TablePageStore.HasSelectedRow)
                 || e.PropertyName == nameof(TablePageStore.HasActiveReference)
+                || e.PropertyName == nameof(TablePageStore.TotalCount)
                 || e.PropertyName == nameof(TablePageStore.CurrentTablePage)
                 || e.PropertyName == nameof(TablePageStore.CanEditRows)
                 || e.PropertyName == nameof(TablePageStore.CanDeleteRows))
             {
                 UpdateSelectionActionButtons();
+                UpdateFooterStats();
             }
 
             if (e.PropertyName == nameof(TablePageStore.CurrentTablePage)
@@ -141,7 +149,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (e.PropertyName == nameof(TablePageStore.CurrentFilterOptionsSources))
             {
-                ReferenceTableView.SetFilterOptionsSources(_viewModel.CurrentFilterOptionsSources);
+                _optionsRegistry.ReplaceWith(_viewModel.CurrentFilterOptionsSources);
+                ReferenceTableView.SetFilterOptionsSources(_optionsRegistry.Snapshot());
             }
 
             if (e.PropertyName == nameof(TablePageStore.CurrentSortField)
@@ -218,11 +227,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ReferenceTableView_RowSelectionChanged(object sender, CbsTableRowSelectionChangedEventArgs e)
         {
             _viewModel.SelectedRow = e.IsSelected ? e.Row : null;
+            UpdateFooterStats();
         }
 
         private async void ReferenceTableView_RowDoubleTapped(object sender, CbsTableRowDoubleTappedEventArgs e)
         {
             _viewModel.SelectedRow = e.Row;
+            UpdateFooterStats();
             await ShowReferenceEditDialogAsync(isCreateMode: false);
         }
 
@@ -460,6 +471,44 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
+        private void UpdateFooterStats()
+        {
+            if (!_viewModel.HasActiveReference)
+            {
+                _shellViewModel.SetFooterTableStats(string.Empty);
+                return;
+            }
+
+            _shellViewModel.SetFooterTableStats(
+                _viewModel.TotalCount.ToString(),
+                BuildSelectedFooterText(_viewModel.SelectedRow));
+        }
+
+        private static string BuildSelectedFooterText(TableDataRow? row)
+        {
+            if (row is null || row.IsPlaceholder)
+            {
+                return string.Empty;
+            }
+
+            var name = row.GetValue("name")?.ToString();
+            var id = row.GetValue("id")?.ToString();
+
+            if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(id))
+            {
+                return $"{name} (ID: {id})";
+            }
+
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            return string.IsNullOrWhiteSpace(id)
+                ? string.Empty
+                : $"ID: {id}";
+        }
+
         private void AttachCurrentRowsToTableView(TablePageDefinition definition)
         {
             if (_viewModel.Rows is null)
@@ -472,7 +521,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 definition,
                 _viewModel.Rows,
                 BuildCurrentSorts(),
-                _viewModel.CurrentFilterOptionsSources);
+                _optionsRegistry.Snapshot());
         }
 
         private IReadOnlyList<DataSortCriterion> BuildCurrentSorts()

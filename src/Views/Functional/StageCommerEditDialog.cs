@@ -124,32 +124,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 _profileId);
         }
 
-        public IReadOnlyDictionary<string, object?> BuildTablePatch()
-        {
-            var patch = new Dictionary<string, object?>(BuildPayload(), StringComparer.OrdinalIgnoreCase);
-
-            patch.Remove("comments_attributes");
-            patch.Remove("tasks_attributes");
-
-            var selectedStatus = GetSelectedStatusOption();
-            if (patch.ContainsKey("status_id") && selectedStatus?.Value is long statusId)
-            {
-                patch["status"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["id"] = statusId,
-                    ["name"] = selectedStatus.Label
-                };
-            }
-
-            var tasks = BuildSelectedTaskReadModels();
-            if (tasks is not null)
-            {
-                patch["tasks"] = tasks;
-            }
-
-            return patch;
-        }
-
         public override bool Validate()
         {
             if (_deadlineAtEditedManually
@@ -611,28 +585,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             {
                 _selectedTaskKindIds.Add(option.TaskKindId);
             }
-        }
-
-        private IReadOnlyList<Dictionary<string, object?>>? BuildSelectedTaskReadModels()
-        {
-            var originalKinds = _originalTasks
-                .Select(static item => item.TaskKindId)
-                .Where(static id => id is not null)
-                .Select(static id => id!.Value)
-                .ToHashSet();
-            if (_selectedTaskKindIds.SetEquals(originalKinds))
-            {
-                return null;
-            }
-
-            return _taskOptions
-                .Where(option => _selectedTaskKindIds.Contains(option.TaskKindId))
-                .Select(option => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["task_kind_id"] = option.TaskKindId,
-                    ["name"] = option.Name
-                })
-                .ToList();
         }
 
         private static IReadOnlyList<StageTaskOption> CreateTaskOptions(

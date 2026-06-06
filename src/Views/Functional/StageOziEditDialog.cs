@@ -86,36 +86,6 @@ public sealed class StageOziEditDialog : AppEditDialog
             _profileId);
     }
 
-    public IReadOnlyDictionary<string, object?> BuildTablePatch()
-    {
-        var patch = new Dictionary<string, object?>(BuildPayload(), StringComparer.OrdinalIgnoreCase);
-        patch.Remove("comments_attributes");
-        patch.Remove("performers_attributes");
-
-        var selectedStatus = GetSelectedStatusOption();
-        if (patch.ContainsKey("status_id") && selectedStatus?.Value is long statusId)
-        {
-            patch["status"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = statusId,
-                ["name"] = selectedStatus.Label
-            };
-        }
-
-        patch["performers"] = BuildSelectedPerformers()
-            .Select(static performer => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = performer.Id,
-                ["list_key"] = performer.ListKey,
-                ["employee_id"] = performer.EmployeeId,
-                ["name"] = performer.Name,
-                ["priority"] = performer.Priority
-            })
-            .ToList();
-
-        return patch;
-    }
-
     public override bool Validate()
     {
         if (_isRideOutBox.IsChecked == true && _rideOutAtEditor.Date is null)

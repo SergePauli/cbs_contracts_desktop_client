@@ -176,7 +176,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode ? "Пользователь создан" : "Изменения сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
@@ -186,15 +186,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             ReferenceDefinition reference,
             bool isCreateMode)
         {
-            var departmentOptions = Store.CurrentFilterOptionsSources.TryGetValue("Department", out var options)
-                ? options
-                : [];
-
             return ProfileEditStateFactory.Create(
                 reference,
                 isCreateMode,
                 isCreateMode ? null : Store.SelectedRow,
-                departmentOptions);
+                OptionsRegistry.Get("Department"));
         }
 
         private async Task DeleteSelectedProfileAsync()
@@ -235,19 +231,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             catch (Exception ex)
             {
                 await ShowErrorDialogAsync("Не удалось удалить пользователя.", ex.Message);
-            }
-        }
-
-        private async Task RefreshAfterSaveAsync(
-            bool isCreateMode,
-            TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? payload)
-        {
-            if (isCreateMode
-                || payload is null
-                || !Store.ApplySavedRowUpdate(savedRow, payload))
-            {
-                await Store.ReloadCurrentReferenceAsync();
             }
         }
 

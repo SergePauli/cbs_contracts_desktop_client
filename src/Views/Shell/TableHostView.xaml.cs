@@ -16,6 +16,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private LazyDataViewState<TableDataRow>? _state;
         private ICbsTableRows<TableDataRow>? _rows;
         private INotifyPropertyChanged? _rowsNotifier;
+        private ITableRowReplacementSource? _rowReplacementSource;
         private IReadOnlyList<CbsTableColumnDefinition> _columns = [];
         private IReadOnlyList<TableDataRow> _items = [];
         private IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> _filterOptionsSources =
@@ -164,6 +165,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _rows = rows;
             _rowsNotifier = rows;
             _rowsNotifier.PropertyChanged += OnRowsPropertyChanged;
+            AttachRowReplacementSource(rows);
             _columns = definition.Columns.Where(static column => column.IsVisible).ToList();
             _tableStateKey = definition.Route;
             RowStyleKey = definition.RowStyleKey;
@@ -192,6 +194,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _rows = rows;
             _rowsNotifier = rows;
             _rowsNotifier.PropertyChanged += OnRowsPropertyChanged;
+            AttachRowReplacementSource(rows);
             _columns = definition.Columns.Where(static column => column.IsVisible).ToList();
             _tableStateKey = definition.Route;
             RowStyleKey = definition.RowStyleKey;
@@ -212,6 +215,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _rowsNotifier.PropertyChanged -= OnRowsPropertyChanged;
                 _rowsNotifier = null;
             }
+
+            DetachRowReplacementSource();
 
             _definition = null;
             _state = null;
@@ -312,6 +317,39 @@ namespace CbsContractsDesktopClient.Views.Shell
                 RefreshRowsStateSnapshot();
                 ApplyRowsStateToRenderer();
             }
+        }
+
+        private void AttachRowReplacementSource(ICbsTableRows<TableDataRow> rows)
+        {
+            if (rows is not ITableRowReplacementSource source)
+            {
+                return;
+            }
+
+            _rowReplacementSource = source;
+            _rowReplacementSource.RowReplaced += OnRowReplaced;
+        }
+
+        private void DetachRowReplacementSource()
+        {
+            if (_rowReplacementSource is null)
+            {
+                return;
+            }
+
+            _rowReplacementSource.RowReplaced -= OnRowReplaced;
+            _rowReplacementSource = null;
+        }
+
+        private void OnRowReplaced(object? sender, TableRowReplacedEventArgs e)
+        {
+            if (e.Row is not TableDataRow row)
+            {
+                return;
+            }
+
+            RefreshItemsSnapshot();
+            TableView.RefreshVisibleRow(e.Index, row);
         }
 
         private void ApplyStructureToRenderer()

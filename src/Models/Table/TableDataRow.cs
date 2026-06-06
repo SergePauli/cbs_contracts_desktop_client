@@ -3,12 +3,25 @@ using System.Text.Json.Serialization;
 
 namespace CbsContractsDesktopClient.Models.Table
 {
-    public sealed class TableDataRow
+    public sealed class TableDataRow : IJsonOnDeserialized
     {
+        private Dictionary<string, JsonElement> _values = [];
+        private Dictionary<string, object?> _resolvedValues = [];
+
         public bool IsPlaceholder { get; init; }
 
         [JsonExtensionData]
-        public Dictionary<string, JsonElement> Values { get; set; } = [];
+        public Dictionary<string, JsonElement> Values
+        {
+            get => _values;
+            set
+            {
+                _values = value ?? [];
+                RebuildResolvedValues();
+            }
+        }
+
+        public IReadOnlyDictionary<string, object?> ResolvedValues => _resolvedValues;
 
         public object? this[string fieldKey] => GetValue(fieldKey);
 
@@ -20,6 +33,11 @@ namespace CbsContractsDesktopClient.Models.Table
             };
         }
 
+        public void RefreshResolvedValues()
+        {
+            RebuildResolvedValues();
+        }
+
         public object? GetValue(string fieldKey)
         {
             if (IsPlaceholder)
@@ -27,12 +45,18 @@ namespace CbsContractsDesktopClient.Models.Table
                 return "...";
             }
 
-            if (Values.TryGetValue(fieldKey, out var directValue))
+            if (string.IsNullOrWhiteSpace(fieldKey))
             {
-                return ConvertValue(directValue);
+                return null;
             }
 
-            if (string.IsNullOrWhiteSpace(fieldKey) || !fieldKey.Contains('.', StringComparison.Ordinal))
+            EnsureResolvedValues();
+            if (_resolvedValues.TryGetValue(fieldKey, out var resolvedValue))
+            {
+                return resolvedValue;
+            }
+
+            if (!fieldKey.Contains('.', StringComparison.Ordinal))
             {
                 return null;
             }
@@ -43,7 +67,91 @@ namespace CbsContractsDesktopClient.Models.Table
                 return null;
             }
 
-            return ResolveNestedValue(rootValue, pathSegments, 1);
+            var value = ResolveNestedValue(rootValue, pathSegments, 1);
+            _resolvedValues[fieldKey] = value;
+            return value;
+        }
+
+        void IJsonOnDeserialized.OnDeserialized()
+        {
+            RebuildResolvedValues();
+        }
+
+        private void EnsureResolvedValues()
+        {
+            if (_resolvedValues.Count == 0 && Values.Count > 0)
+            {
+                RebuildResolvedValues();
+            }
+        }
+
+        private void RebuildResolvedValues()
+        {
+            _resolvedValues = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var (key, value) in Values)
+            {
+                _resolvedValues[key] = ConvertValue(value);
+                AddNestedResolvedValues(key, value);
+            }
+        }
+
+        private void AddNestedResolvedValues(string prefix, JsonElement value)
+        {
+            switch (value.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in value.EnumerateObject())
+                    {
+                        var key = $"{prefix}.{property.Name}";
+                        _resolvedValues.TryAdd(key, ConvertValue(property.Value));
+                        AddNestedResolvedValues(key, property.Value);
+                    }
+
+                    break;
+                case JsonValueKind.Array:
+                    AddArrayNestedResolvedValues(prefix, value);
+                    break;
+            }
+        }
+
+        private void AddArrayNestedResolvedValues(string prefix, JsonElement array)
+        {
+            var groupedValues = new Dictionary<string, List<object?>>(StringComparer.Ordinal);
+            foreach (var item in array.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object)
+                {
+                    continue;
+                }
+
+                foreach (var property in item.EnumerateObject())
+                {
+                    var key = $"{prefix}.{property.Name}";
+                    if (!groupedValues.TryGetValue(key, out var values))
+                    {
+                        values = [];
+                        groupedValues[key] = values;
+                    }
+
+                    values.Add(ConvertValue(property.Value));
+                }
+            }
+
+            foreach (var (key, values) in groupedValues)
+            {
+                var displayValues = values
+                    .Where(HasDisplayValue)
+                    .Select(static value => value!.ToString())
+                    .Where(static value => !string.IsNullOrWhiteSpace(value))
+                    .ToList();
+
+                _resolvedValues.TryAdd(key, displayValues.Count switch
+                {
+                    0 => null,
+                    1 => displayValues[0],
+                    _ => string.Join(", ", displayValues)
+                });
+            }
         }
 
         private static object? ConvertValue(JsonElement value)

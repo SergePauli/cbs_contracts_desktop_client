@@ -278,7 +278,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshAfterSaveAsync(savedRow, revisionPayload);
+            await RefreshTableRowAfterSaveAsync(false, savedRow, revisionPayload);
             ShowSuccessNotification(
                 "Доп. соглашение сохранено",
                 BuildReferenceNotificationMessage(RevisionTitle, TryGetSelectedRowId(savedRow)));
@@ -300,15 +300,14 @@ namespace CbsContractsDesktopClient.Views.Shell
                 "Карточка контракта скопирована в буфер обмена.");
         }
 
-        private async Task RefreshAfterSaveAsync(
-            TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? payload)
+        protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
         {
-            if (payload is null || !Store.ApplySavedRowUpdate(savedRow, payload))
-            {
-                await Store.ReloadCurrentReferenceAsync();
-            }
+            UpdateDetailView(Store.SelectedRow);
+            await RefreshDetailAsync();
+        }
 
+        protected override async Task OnTableReloadedAfterSaveAsync()
+        {
             UpdateDetailView(Store.SelectedRow);
             await RefreshDetailAsync();
         }

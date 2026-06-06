@@ -3,7 +3,7 @@ using CbsContractsDesktopClient.Models.Table;
 
 namespace CbsContractsDesktopClient.Collections
 {
-    public sealed class CbsVirtualTableRows<TItem> : ICbsTableRows<TItem>
+    public sealed class CbsVirtualTableRows<TItem> : ICbsTableRows<TItem>, ITableRowReplacementSource
         where TItem : class
     {
         private readonly LazyDataCollection<TItem> _items;
@@ -12,9 +12,12 @@ namespace CbsContractsDesktopClient.Collections
         {
             _items = items;
             ((INotifyPropertyChanged)_items).PropertyChanged += OnItemsPropertyChanged;
+            _items.RowReplaced += OnRowReplaced;
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        public event EventHandler<TableRowReplacedEventArgs>? RowReplaced;
 
         public IReadOnlyList<TItem> Items => _items;
 
@@ -54,6 +57,11 @@ namespace CbsContractsDesktopClient.Collections
         private void OnItemsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(e.PropertyName));
+        }
+
+        private void OnRowReplaced(object? sender, TableRowReplacedEventArgs e)
+        {
+            RowReplaced?.Invoke(this, e);
         }
     }
 }

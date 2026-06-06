@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Shell;
@@ -22,6 +23,7 @@ namespace CbsContractsDesktopClient.Views.Shell
     public abstract class ComplexHostViewBase : ContentHostViewBase
     {
         private readonly ITablePageDefinitionService _tablePageDefinitionService;
+        private readonly IDataQueryService _dataQueryService;
         private readonly AppShellViewModel _shellViewModel;
         private CancellationTokenSource? _routeCts;
         private CancellationTokenSource? _filterDebounceCts;
@@ -41,6 +43,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             Store = App.Services.GetRequiredService<TablePageStore>();
             _tablePageDefinitionService = App.Services.GetRequiredService<ITablePageDefinitionService>();
+            _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
 
             _tableHost = new Grid
@@ -116,6 +119,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected TablePageStore Store { get; }
 
+        protected OptionsSourceRegistry OptionsRegistry { get; } = new();
+
         protected TableHostView TableView { get; private set; }
 
         protected TablePageDefinition? CurrentDefinition { get; private set; }
@@ -148,6 +153,16 @@ namespace CbsContractsDesktopClient.Views.Shell
         protected virtual string BuildSelectedFooterText(TableDataRow row)
         {
             return string.Empty;
+        }
+
+        protected virtual Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
+        {
+            return Task.CompletedTask;
+        }
+
+        protected virtual Task OnTableReloadedAfterSaveAsync()
+        {
+            return Task.CompletedTask;
         }
 
         protected void SetDetailContent(UIElement? content)
@@ -185,6 +200,75 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             _headerActionsPanel.Children.Add(CreateResetFiltersButton());
             _headerActionsPanel.Children.Add(CreateSettingsButton());
+        }
+
+        protected virtual async Task RefreshTableRowAfterSaveAsync(
+            bool isCreateMode,
+            TableDataRow? savedRow,
+            IReadOnlyDictionary<string, object?>? payload,
+            CancellationToken cancellationToken = default)
+        {
+            if (isCreateMode)
+            {
+                await ReloadTableAfterSaveAsync(cancellationToken);
+                return;
+            }
+
+            var id = (savedRow is null ? null : TryGetSelectedRowId(savedRow))
+                ?? TryGetPayloadId(payload)
+                ?? (Store.SelectedRow is null ? null : TryGetSelectedRowId(Store.SelectedRow));
+            if (id is null)
+            {
+                await ReloadTableAfterSaveAsync(cancellationToken);
+                return;
+            }
+
+            if (await RefreshTableRowByIdAsync(id.Value, cancellationToken))
+            {
+                return;
+            }
+
+            await ReloadTableAfterSaveAsync(cancellationToken);
+        }
+
+        protected virtual async Task<bool> RefreshTableRowByIdAsync(
+            long id,
+            CancellationToken cancellationToken = default)
+        {
+            var definition = CurrentDefinition ?? Store.CurrentTablePage;
+            if (definition is null)
+            {
+                return false;
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
+                new DataQueryRequest
+                {
+                    Model = definition.Model,
+                    Preset = definition.Preset,
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["id__eq"] = id
+                    },
+                    Limit = 1
+                },
+                cancellationToken);
+
+            var freshRow = rows.FirstOrDefault(static row => !row.IsPlaceholder);
+            if (freshRow is null
+                || !Store.ApplySavedRowUpdate(freshRow, new Dictionary<string, object?>()))
+            {
+                return false;
+            }
+
+            await OnTableRowRefreshedAfterSaveAsync(freshRow);
+            return true;
+        }
+
+        private async Task ReloadTableAfterSaveAsync(CancellationToken cancellationToken)
+        {
+            await Store.ReloadCurrentReferenceAsync(cancellationToken);
+            await OnTableReloadedAfterSaveAsync();
         }
 
         private FrameworkElement BuildLayout()
@@ -362,6 +446,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 CurrentDefinition = definition;
                 RecreateTableHostView();
                 await Store.NavigateToRouteAsync(definition.Route, _routeCts.Token);
+                OptionsRegistry.ReplaceWith(Store.CurrentFilterOptionsSources);
                 AttachCurrentStoreRowsToTableView(definition);
                 TableView.ApplyFilterInputs(Store.CurrentFilters);
                 RefreshHeaderState();
@@ -382,7 +467,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (e.PropertyName == nameof(TablePageStore.CurrentFilterOptionsSources))
             {
-                TableView.SetFilterOptionsSources(Store.CurrentFilterOptionsSources);
+                OptionsRegistry.ReplaceWith(Store.CurrentFilterOptionsSources);
+                TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot());
             }
 
             if (e.PropertyName == nameof(TablePageStore.CurrentSortField)
@@ -505,7 +591,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 definition,
                 Store.Rows,
                 BuildCurrentSorts(),
-                Store.CurrentFilterOptionsSources);
+                OptionsRegistry.Snapshot());
         }
 
         private IReadOnlyList<DataSortCriterion> BuildCurrentSorts()
@@ -674,10 +760,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             var text = BuildSelectedFooterText(Store.SelectedRow);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                _shellViewModel.SetFooterTableStats(Store.TotalCount.ToString(), text);
-            }
+            _shellViewModel.SetFooterTableStats(Store.TotalCount.ToString(), text);
         }
 
         private void QueueSelectedFooterTextUpdate()
@@ -711,6 +794,23 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             return value.ToString() ?? "<empty>";
+        }
+
+        private static long? TryGetPayloadId(IReadOnlyDictionary<string, object?>? payload)
+        {
+            if (payload is null || !payload.TryGetValue("id", out var id))
+            {
+                return null;
+            }
+
+            return id switch
+            {
+                long int64Value => int64Value,
+                int int32Value => int32Value,
+                decimal decimalValue => (long)decimalValue,
+                string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
+                _ => null
+            };
         }
     }
 }

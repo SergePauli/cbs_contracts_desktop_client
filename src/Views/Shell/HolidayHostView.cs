@@ -156,7 +156,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow, savedPayload);
             ShowSuccessNotification(
                 isCreateMode ? "Запись создана" : "Изменения сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
@@ -200,19 +200,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             catch (Exception ex)
             {
                 await ShowErrorDialogAsync("Не удалось удалить запись.", ex.Message);
-            }
-        }
-
-        private async Task RefreshAfterSaveAsync(
-            bool isCreateMode,
-            TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? payload)
-        {
-            if (isCreateMode
-                || payload is null
-                || !Store.ApplySavedRowUpdate(savedRow, payload))
-            {
-                await Store.ReloadCurrentReferenceAsync();
             }
         }
 

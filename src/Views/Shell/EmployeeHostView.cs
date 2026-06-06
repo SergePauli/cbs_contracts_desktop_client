@@ -146,7 +146,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            await RefreshAfterSaveAsync(isCreateMode, result.SavedRow, result.SavedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, result.SavedRow, result.SavedPayload);
             ShowSuccessNotification(
                 isCreateMode ? "Сотрудник создан" : "Изменения сотрудника сохранены",
                 BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
@@ -190,19 +190,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             catch (Exception ex)
             {
                 await ShowErrorDialogAsync("Не удалось удалить сотрудника.", ex.Message);
-            }
-        }
-
-        private async Task RefreshAfterSaveAsync(
-            bool isCreateMode,
-            TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? payload)
-        {
-            if (isCreateMode
-                || payload is null
-                || !Store.ApplySavedRowUpdate(savedRow, payload))
-            {
-                await Store.ReloadCurrentReferenceAsync();
             }
         }
 
