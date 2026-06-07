@@ -189,7 +189,21 @@ public sealed class CbsTableViewTests
         Assert.Contains("ShowStageCostFractionProperty", code);
         Assert.Contains("nameof(ShowStageCostFraction)", code);
         Assert.Contains("OnShowStageCostFractionChanged", code);
+        Assert.Contains("new TableRenderRequest(TableRenderReason.ValueStyleChanged)", code);
         Assert.Contains("ShowStageCostFraction);", code);
+    }
+
+    [Fact]
+    public void CbsTableView_UsesValueStyleInvalidationWithoutReloadingRows()
+    {
+        var tableCode = File.ReadAllText(CbsTableViewPath);
+        var requestCode = File.ReadAllText(TableRenderRequestPath);
+
+        Assert.Contains("ValueStyleChanged", requestCode);
+        Assert.Contains("request.Reason == TableRenderReason.ValueStyleChanged", tableCode);
+        Assert.Contains("RefreshVisibleRowsForValueStyleChange();", tableCode);
+        Assert.Contains("TABLE VALUE STYLE REPAINT START", tableCode);
+        Assert.Contains("ConfigureVisibleRows(sourceRows, _lastWindowStart, rowCount);", tableCode);
     }
 
     [Fact]

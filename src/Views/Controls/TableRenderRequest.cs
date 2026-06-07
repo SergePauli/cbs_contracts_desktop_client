@@ -9,7 +9,8 @@ namespace CbsContractsDesktopClient.Views.Controls
         PageLoaded,
         ScrollMoved,
         LayoutChanged,
-        LoadingChanged
+        LoadingChanged,
+        ValueStyleChanged
     }
 
     public sealed record TableRenderRequest(

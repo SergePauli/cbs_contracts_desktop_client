@@ -220,6 +220,13 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             AppendTrace(
                 $"TABLE INVALIDATE reason={request.Reason} resetScroll={request.ResetScroll}");
+
+            if (request.Reason == TableRenderReason.ValueStyleChanged)
+            {
+                RefreshVisibleRowsForValueStyleChange();
+                return;
+            }
+
             _isLoadPending = false;
 
             if (request.ResetScroll)
@@ -321,27 +328,44 @@ namespace CbsContractsDesktopClient.Views.Controls
                 if (textBox.Tag is CbsTableColumnDefinition column && IsDateFilterMode(column.Filter.Mode))
                 {
                     textBox.Text = string.Empty;
+                    textBox.BorderBrush = GetFilterBorderBrush(column);
+                    textBox.Background = GetFilterBackgroundBrush(column);
+                    textBox.Foreground = GetFilterForegroundBrush(column);
                 }
                 else if (!string.IsNullOrEmpty(textBox.Text))
                 {
                     textBox.Text = string.Empty;
+                    if (textBox.Tag is CbsTableColumnDefinition textColumn)
+                    {
+                        textBox.BorderBrush = GetFilterBorderBrush(textColumn);
+                        textBox.Background = GetFilterBackgroundBrush(textColumn);
+                        textBox.Foreground = GetFilterForegroundBrush(textColumn);
+                    }
                 }
             }
 
             foreach (var checkBox in _filterBooleanCheckBoxes.Values)
             {
                 checkBox.IsChecked = null;
+                if (checkBox.Tag is CbsTableColumnDefinition column)
+                {
+                    checkBox.Foreground = GetFilterForegroundBrush(column);
+                    checkBox.Background = GetFilterBackgroundBrush(column);
+                }
             }
         }
 
         private void ApplyFilterInput(CbsTableColumnDefinition column, object? value)
         {
+            column.Filter.Value = value;
+
             if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
             {
                 if (_filterMultiSelectStates.TryGetValue(column.FieldKey, out var state))
                 {
                     var selectedValues = NormalizeFilterSelectedValues(value);
                     var allOptions = GetMultiSelectOptions(column);
+                    column.Filter.Value = selectedValues;
                     state.SelectedValues = selectedValues;
                     state.SelectedOptions = allOptions
                         .Where(option => selectedValues.Any(selected => AreFilterValuesEqual(selected, option.Value)))
@@ -360,6 +384,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 if (_filterBooleanCheckBoxes.TryGetValue(column.FieldKey, out var checkBox))
                 {
                     checkBox.IsChecked = TryGetBooleanFilterValue(value);
+                    checkBox.Foreground = GetFilterForegroundBrush(column);
+                    checkBox.Background = GetFilterBackgroundBrush(column);
                 }
 
                 return;
@@ -383,6 +409,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             if (_filterTextBoxes.TryGetValue(column.FieldKey, out var textBox))
             {
                 textBox.Text = text;
+                textBox.BorderBrush = GetFilterBorderBrush(column);
+                textBox.Background = GetFilterBackgroundBrush(column);
+                textBox.Foreground = GetFilterForegroundBrush(column);
             }
         }
 
@@ -792,7 +821,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private static void OnShowStageCostFractionChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((CbsTableView)d).RebuildRows();
+            ((CbsTableView)d).InvalidateRows(new TableRenderRequest(TableRenderReason.ValueStyleChanged));
         }
 
         private static void OnIsLoadingChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -942,6 +971,23 @@ namespace CbsContractsDesktopClient.Views.Controls
             ConfigureVisibleRows(sourceRows, _lastWindowStart, rowCount);
             AppendTrace(
                 $"TABLE SKELETON REPAINT END isLoading={IsLoading} window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount} placeholders={placeholderCount} rowPool={_rowPool.Count}");
+        }
+
+        private void RefreshVisibleRowsForValueStyleChange()
+        {
+            var sourceRows = GetSourceRows();
+            if (!TryGetCurrentWindowPlaceholderCount(sourceRows, out var rowCount, out var placeholderCount))
+            {
+                AppendTrace(
+                    $"TABLE VALUE STYLE REPAINT SKIP window={_lastWindowStart}..{_lastWindowEnd} total={sourceRows.Count}");
+                return;
+            }
+
+            AppendTrace(
+                $"TABLE VALUE STYLE REPAINT START window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount} placeholders={placeholderCount} rowPool={_rowPool.Count}");
+            ConfigureVisibleRows(sourceRows, _lastWindowStart, rowCount);
+            AppendTrace(
+                $"TABLE VALUE STYLE REPAINT END window={_lastWindowStart}..{_lastWindowEnd} rows={rowCount} placeholders={placeholderCount} rowPool={_rowPool.Count}");
         }
 
         private bool TryGetCurrentWindowPlaceholderCount(
@@ -1709,8 +1755,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 VerticalAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Margin = new Thickness(0),
-                Foreground = (Brush)Application.Current.Resources["ShellPanelBackgroundBrush"],
-                Background = (Brush)Application.Current.Resources["ShellTableHeaderBackgroundBrush"],                
+                Foreground = GetFilterForegroundBrush(column),
+                Background = GetFilterBackgroundBrush(column)
             };
             ToolTipService.SetToolTip(checkBox, "Фильтр: все / да / нет");
             checkBox.Checked += OnBooleanFilterCheckBoxChanged;
@@ -1737,6 +1783,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 VerticalAlignment = VerticalAlignment.Center,
                 VerticalContentAlignment = VerticalAlignment.Center,
                 BorderThickness = new Thickness(1),
+                BorderBrush = GetFilterBorderBrush(column),
+                Background = GetFilterBackgroundBrush(column),
+                Foreground = GetFilterForegroundBrush(column),
                 MinWidth = 24
             };
             if (column.Filter.Mode == DataFilterMode.Numeric)
@@ -1789,7 +1838,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                 MinWidth = 24,
                 Date = TryGetDateFilterValue(column.Filter.Value),
                 PlaceholderText = string.Empty,
-                Padding = new Thickness(0, 0, 24, 0)
+                Padding = new Thickness(0, 0, 24, 0),
+                BorderBrush = GetFilterBorderBrush(column),
+                Background = GetFilterBackgroundBrush(column),
+                Foreground = GetFilterForegroundBrush(column)
             };
 
             datePicker.DateChanged += OnDateTimeFilterDateChanged;
@@ -1834,6 +1886,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Center,
                 BorderThickness = new Thickness(1),
+                BorderBrush = GetFilterBorderBrush(column),
+                Background = GetFilterBackgroundBrush(column),
+                Foreground = GetFilterForegroundBrush(column),
                 MinWidth = 24
             };
 
@@ -2046,6 +2101,10 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             _filterTexts[GetFilterStateKey(column)] = textBox.Text;
+            column.Filter.Value = GetFilterValue(column);
+            textBox.BorderBrush = GetFilterBorderBrush(column);
+            textBox.Background = GetFilterBackgroundBrush(column);
+            textBox.Foreground = GetFilterForegroundBrush(column);
 
             if (_suppressFilterNotifications)
             {
@@ -2083,12 +2142,18 @@ namespace CbsContractsDesktopClient.Views.Controls
                 state.DatePicker.Visibility = Visibility.Collapsed;
                 state.ClearButton.Visibility = Visibility.Collapsed;
                 state.TextBox.PlaceholderText = GetDateTimePlaceholder(column);
+                state.TextBox.BorderBrush = GetFilterBorderBrush(column);
+                state.TextBox.Background = GetFilterBackgroundBrush(column);
+                state.TextBox.Foreground = GetFilterForegroundBrush(column);
                 return;
             }
 
             state.TextBox.Visibility = Visibility.Collapsed;
             state.DatePicker.Visibility = Visibility.Visible;
             state.DatePicker.PlaceholderText = string.Empty;
+            state.DatePicker.BorderBrush = GetFilterBorderBrush(column);
+            state.DatePicker.Background = GetFilterBackgroundBrush(column);
+            state.DatePicker.Foreground = GetFilterForegroundBrush(column);
             state.ClearButton.Visibility = state.DatePicker.Date.HasValue
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -2101,6 +2166,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            column.Filter.Value = GetFilterValue(column);
             RefreshDateTimeFilterTextBox(column);
 
             if (_suppressFilterNotifications)
@@ -2125,6 +2191,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             state.DatePicker.Date = null;
+            column.Filter.Value = null;
             RefreshDateTimeFilterTextBox(column);
         }
 
@@ -2134,6 +2201,10 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 return;
             }
+
+            column.Filter.Value = checkBox.IsChecked;
+            checkBox.Foreground = GetFilterForegroundBrush(column);
+            checkBox.Background = GetFilterBackgroundBrush(column);
 
             if (_suppressFilterNotifications)
             {
@@ -2203,6 +2274,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             state.SelectedOptions = GetMultiSelectOptions(state.Column)
                 .Where(optionItem => state.SelectedValues.Any(value => AreFilterValuesEqual(value, optionItem.Value)))
                 .ToList();
+            state.Column.Filter.Value = state.SelectedValues;
             UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
 
             if (_suppressFilterNotifications)
@@ -2393,6 +2465,62 @@ namespace CbsContractsDesktopClient.Views.Controls
             return string.IsNullOrWhiteSpace(text) ? null : text;
         }
 
+        private bool HasActiveFilter(CbsTableColumnDefinition column)
+        {
+            if (!column.IsFilterable)
+            {
+                return false;
+            }
+
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect)
+            {
+                return column.Filter.Value is CbsTableMultiSelectFilterValue multiSelectValue
+                    ? multiSelectValue.SelectedValues.Count > 0
+                    : NormalizeFilterSelectedValues(column.Filter.Value).Count > 0;
+            }
+
+            if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
+            {
+                return TryGetBooleanFilterValue(column.Filter.Value).HasValue;
+            }
+
+            if (_filterTexts.TryGetValue(GetFilterStateKey(column), out var filterText))
+            {
+                return !string.IsNullOrWhiteSpace(filterText);
+            }
+
+            return column.Filter.Value switch
+            {
+                null => false,
+                string text => !string.IsNullOrWhiteSpace(text),
+                _ => true
+            };
+        }
+
+        private Brush GetFilterBorderBrush(CbsTableColumnDefinition column)
+        {
+            return (Brush)Application.Current.Resources[
+                HasActiveFilter(column)
+                    ? "ShellTableFilterActiveBorderBrush"
+                    : "ShellTableGridLineBrush"];
+        }
+
+        private Brush GetFilterBackgroundBrush(CbsTableColumnDefinition column)
+        {
+            return (Brush)Application.Current.Resources[
+                HasActiveFilter(column)
+                    ? "ShellTableFilterActiveBackgroundBrush"
+                    : "ShellTableHeaderBackgroundBrush"];
+        }
+
+        private Brush GetFilterForegroundBrush(CbsTableColumnDefinition column)
+        {
+            return (Brush)Application.Current.Resources[
+                HasActiveFilter(column)
+                    ? "ShellTableFilterActiveTextBrush"
+                    : "ShellPrimaryTextBrush"];
+        }
+
         private string GetFilterStateKey(CbsTableColumnDefinition column)
         {
             return $"{TableStateKey}|{column.FieldKey}";
@@ -2487,6 +2615,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            button.BorderBrush = GetFilterBorderBrush(column);
+            button.Background = GetFilterBackgroundBrush(column);
+            button.Foreground = GetFilterForegroundBrush(column);
+
             var selectedCount = state.SelectedOptions.Count;
             var text = selectedCount == 0
                 ? column.Filter.EmptySelectionText
@@ -2504,6 +2636,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Text = text,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 FontSize = Math.Max(11, GetHeaderFontSize() - 1),
+                Foreground = GetFilterForegroundBrush(column),
                 VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(textBlock, 0);

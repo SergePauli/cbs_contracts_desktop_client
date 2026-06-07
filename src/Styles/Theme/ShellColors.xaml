@@ -23,6 +23,9 @@
     <SolidColorBrush x:Key="ShellTableRowPressedBackgroundBrush" Color="#FFECEFF3" />
     <SolidColorBrush x:Key="ShellTableRowSelectedBackgroundBrush" Color="#FFEAF4EA" />
     <SolidColorBrush x:Key="ShellTableRowSelectedBorderBrush" Color="#FF2E8B57" />
+    <SolidColorBrush x:Key="ShellTableFilterActiveBackgroundBrush" Color="#1AB455FF" />
+    <SolidColorBrush x:Key="ShellTableFilterActiveBorderBrush" Color="#FFB455FF" />
+    <SolidColorBrush x:Key="ShellTableFilterActiveTextBrush" Color="#FF6D22C8" />
     <SolidColorBrush x:Key="StageDeadlineAlertBackgroundBrush" Color="#FFFFE5E5" />
     <SolidColorBrush x:Key="StageDeadlineAlertBorderBrush" Color="#FFD14343" />
     <SolidColorBrush x:Key="StageDeadlineWarningBackgroundBrush" Color="#FFFFF7D6" />
