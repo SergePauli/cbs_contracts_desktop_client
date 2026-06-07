@@ -6,7 +6,6 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -48,6 +47,9 @@ namespace CbsContractsDesktopClient.Stores.Table
         private string _lastDiagnosticsStateKey = string.Empty;
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
+        private int _lastViewportVisibleStart = -1;
+        private int _lastViewportVisibleEnd = -1;
+        private int _lastViewportRetainedBufferRows;
         private int _viewportMutationDepth;
         private bool _deferredItemsRefresh;
         private bool _deferredStateUpdate;
@@ -307,15 +309,11 @@ namespace CbsContractsDesktopClient.Stores.Table
             await NavigateAsync(CurrentTablePage.Route, cancellationToken);
         }
 
-        public bool ApplySavedRowUpdate(
-            TableDataRow? savedRow,
-            IReadOnlyDictionary<string, object?> payload)
+        public bool ApplySavedRowUpdate(TableDataRow savedRow)
         {
-            ArgumentNullException.ThrowIfNull(payload);
+            ArgumentNullException.ThrowIfNull(savedRow);
 
-            var id = savedRow is null ? null : TryGetSelectedRowId(savedRow)
-                ?? TryGetPayloadId(payload)
-                ?? (SelectedRow is null ? null : TryGetSelectedRowId(SelectedRow));
+            var id = TryGetSelectedRowId(savedRow);
             if (id is null || id.Value <= 0)
             {
                 return false;
@@ -328,8 +326,7 @@ namespace CbsContractsDesktopClient.Stores.Table
                 return false;
             }
 
-            var patchedRow = CloneRowWithUpdate(sourceRow, savedRow, payload);
-            return ReplaceLoadedRow(id.Value, patchedRow);
+            return ReplaceLoadedRow(id.Value, savedRow);
         }
 
         private bool ReplaceLoadedRow(long id, TableDataRow patchedRow)
@@ -636,10 +633,130 @@ namespace CbsContractsDesktopClient.Stores.Table
             int visibleEnd,
             int retainedBufferRows)
         {
+            _lastViewportVisibleStart = visibleStart;
+            _lastViewportVisibleEnd = visibleEnd;
+            _lastViewportRetainedBufferRows = retainedBufferRows;
+
             if (_state is null)
             {
                 AppendUiTrace($"VIEWMODEL RETENTION STATE NULL {GetDebugStateSnapshot()}");
             }
+        }
+
+        public async Task<bool> RefreshCountAfterCreateAsync(CancellationToken cancellationToken = default)
+        {
+            if (_state is null)
+            {
+                throw new InvalidOperationException("Cannot refresh count after create because table state is not loaded.");
+            }
+
+            return await _state.Items.RefreshCountIfChangedAsync(cancellationToken);
+        }
+
+        public async Task RefreshViewportAfterCreateAsync(CancellationToken cancellationToken = default)
+        {
+            if (_state is null)
+            {
+                throw new InvalidOperationException("Cannot refresh viewport after create because table state is not loaded.");
+            }
+
+            if (_lastViewportVisibleStart < 0
+                || _lastViewportVisibleEnd <= _lastViewportVisibleStart)
+            {
+                throw new InvalidOperationException("Cannot refresh viewport after create because viewport range is not known.");
+            }
+
+            var visibleStart = _lastViewportVisibleStart;
+            var visibleRowCount = _lastViewportVisibleEnd - visibleStart;
+            var shouldExpandVisibleRange = visibleStart == 0
+                && visibleRowCount == _state.Items.ResidentCount
+                && visibleRowCount == _state.Items.TotalCount - 1;
+            var visibleEnd = shouldExpandVisibleRange
+                ? _lastViewportVisibleEnd + 1
+                : _lastViewportVisibleEnd;
+            _lastViewportVisibleEnd = visibleEnd;
+
+            var effectiveBufferRows = Math.Max(
+                Math.Max(1, visibleEnd - visibleStart),
+                _lastViewportRetainedBufferRows);
+            var bufferStart = Math.Max(0, visibleStart - effectiveBufferRows);
+            var bufferEnd = visibleEnd + effectiveBufferRows;
+            var selectedId = SelectedRow is null || SelectedRow.IsPlaceholder
+                ? null
+                : TryGetSelectedRowId(SelectedRow);
+
+            await _state.Items.RefreshRangeAsync(
+                bufferStart,
+                bufferEnd,
+                cancellationToken);
+
+            var normalizedBufferEnd = Math.Min(_state.Items.TotalCount, Math.Max(bufferStart, bufferEnd));
+            _state.Items.ReleaseOutsideRange(bufferStart, normalizedBufferEnd);
+            RefreshItemsSnapshot();
+            OnPropertyChanged(nameof(Items));
+            UpdateStateProperties();
+
+            TableDataRow? freshSelectedRow = null;
+            if (selectedId.HasValue
+                && !TryFindLoadedRowByIdInRange(
+                    selectedId.Value,
+                    bufferStart,
+                    normalizedBufferEnd,
+                    out freshSelectedRow,
+                    out _))
+            {
+                SelectedRow = null;
+                return;
+            }
+
+            if (selectedId.HasValue)
+            {
+                SelectedRow = freshSelectedRow;
+            }
+        }
+
+        public void ApplyDeletedRowUpdate(long deletedId)
+        {
+            if (_state is null)
+            {
+                throw new InvalidOperationException("Cannot apply delete because table state is not loaded.");
+            }
+
+            if (_lastViewportVisibleStart < 0
+                || _lastViewportVisibleEnd <= _lastViewportVisibleStart)
+            {
+                throw new InvalidOperationException("Cannot apply delete because viewport range is not known.");
+            }
+
+            var visibleStart = _lastViewportVisibleStart;
+            var visibleEnd = _lastViewportVisibleEnd;
+            var effectiveBufferRows = Math.Max(
+                Math.Max(1, visibleEnd - visibleStart),
+                _lastViewportRetainedBufferRows);
+            var bufferStart = Math.Max(0, visibleStart - effectiveBufferRows);
+            var bufferEnd = visibleEnd + effectiveBufferRows;
+            var normalizedBufferEnd = Math.Min(_state.Items.TotalCount, Math.Max(bufferStart, bufferEnd));
+
+            if (TryFindLoadedRowByIdInRange(
+                    deletedId,
+                    bufferStart,
+                    normalizedBufferEnd,
+                    out _,
+                    out var deletedIndex))
+            {
+                _state.Items.ApplyDeleteShift(deletedIndex, normalizedBufferEnd);
+            }
+            else
+            {
+                _state.Items.ApplyDeleteOutsideLoadedRange();
+            }
+
+            RefreshItemsSnapshot();
+            OnPropertyChanged(nameof(Items));
+            UpdateStateProperties();
+            _lastViewportVisibleEnd = Math.Min(_lastViewportVisibleEnd, _state.Items.TotalCount);
+            _lastViewportEnsureEnd = Math.Min(_lastViewportEnsureEnd, _state.Items.TotalCount);
+            SelectedRow = null;
         }
 
         public async Task EnsureViewportWindowLoadedAsync(
@@ -660,6 +777,10 @@ namespace CbsContractsDesktopClient.Stores.Table
                 AppendUiTrace($"STEP VM 01b skip-empty-window visible={visibleStart}..{visibleEnd}");
                 return;
             }
+
+            _lastViewportVisibleStart = visibleStart;
+            _lastViewportVisibleEnd = visibleEnd;
+            _lastViewportRetainedBufferRows = retainedBufferRows;
 
             if (_lastViewportEnsureStart == visibleStart && _lastViewportEnsureEnd == visibleEnd)
             {
@@ -1275,6 +1396,31 @@ namespace CbsContractsDesktopClient.Stores.Table
             };
         }
 
+        private bool TryFindLoadedRowByIdInRange(
+            long id,
+            int startIndex,
+            int endExclusive,
+            out TableDataRow row,
+            out int rowIndex)
+        {
+            var start = Math.Max(0, startIndex);
+            var end = Math.Min(_itemsSnapshot.Count, Math.Max(start, endExclusive));
+            for (var index = start; index < end; index++)
+            {
+                var candidate = _itemsSnapshot[index];
+                if (!candidate.IsPlaceholder && TryGetSelectedRowId(candidate) == id)
+                {
+                    row = candidate;
+                    rowIndex = index;
+                    return true;
+                }
+            }
+
+            row = null!;
+            rowIndex = -1;
+            return false;
+        }
+
         private void RefreshItemsSnapshot()
         {
             if (_rows is null)
@@ -1290,73 +1436,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             }
 
             _itemsSnapshot = _rows.Items.ToList();
-        }
-
-        private static TableDataRow CloneRowWithUpdate(
-            TableDataRow sourceRow,
-            TableDataRow? savedRow,
-            IReadOnlyDictionary<string, object?> payload)
-        {
-            var values = new Dictionary<string, JsonElement>(sourceRow.Values, StringComparer.OrdinalIgnoreCase);
-            MergePayloadValues(values, payload);
-
-            if (savedRow is not null && !savedRow.IsPlaceholder)
-            {
-                foreach (var item in savedRow.Values)
-                {
-                    values[item.Key] = item.Value;
-                }
-            }
-
-            return CreatePatchedRow(values);
-        }
-
-        private static TableDataRow CreatePatchedRow(Dictionary<string, JsonElement> values)
-        {
-            var row = new TableDataRow
-            {
-                Values = values
-            };
-            row.RefreshResolvedValues();
-            return row;
-        }
-
-        private static void MergePayloadValues(
-            IDictionary<string, JsonElement> values,
-            IReadOnlyDictionary<string, object?> payload)
-        {
-            foreach (var item in payload)
-            {
-                if (ShouldSkipReadModelPatchKey(item.Key))
-                {
-                    continue;
-                }
-
-                values[item.Key] = JsonSerializer.SerializeToElement(item.Value);
-            }
-        }
-
-        private static bool ShouldSkipReadModelPatchKey(string key)
-        {
-            return string.IsNullOrWhiteSpace(key)
-                || key.EndsWith("_attributes", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static long? TryGetPayloadId(IReadOnlyDictionary<string, object?> payload)
-        {
-            if (!payload.TryGetValue("id", out var id))
-            {
-                return null;
-            }
-
-            return id switch
-            {
-                long longValue => longValue,
-                int intValue => intValue,
-                decimal decimalValue => (long)decimalValue,
-                string text when long.TryParse(text, out var parsedValue) => parsedValue,
-                _ => null
-            };
         }
 
         private static string TrimTrace(string trace)

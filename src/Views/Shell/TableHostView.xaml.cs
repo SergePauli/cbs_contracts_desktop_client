@@ -252,7 +252,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         public void SetSelectedRow(TableDataRow? row)
         {
             _selectedRow = row;
-            TableView.SelectedItem = row;
+            if (row is null)
+            {
+                TableView.ClearSelection();
+                return;
+            }
+
+            TableView.SetSelectedItem(row);
         }
 
         public void RefreshSortSnapshot()

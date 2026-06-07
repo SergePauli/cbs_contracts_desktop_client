@@ -254,12 +254,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? revisionPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
-                    revisionPayload = dialog.BuildPayload();
+                    var revisionPayload = dialog.BuildPayload();
                     savedRow = await _modelMutationService.UpdateAsync(
                         GetCurrentTableModel(),
                         revisionPayload);
@@ -278,7 +277,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow, revisionPayload);
+            await RefreshTableRowAfterSaveAsync(false, savedRow);
             ShowSuccessNotification(
                 "Доп. соглашение сохранено",
                 BuildReferenceNotificationMessage(RevisionTitle, TryGetSelectedRowId(savedRow)));

@@ -110,7 +110,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                 if (!_tablePageDefinitionService.TryGetByRoute(route, out var definition)
                     || definition.Kind != TablePageKind.Reference)
                 {
-                    ReferenceTableView.DetachTableState();
                     await _viewModel.NavigateToRouteAsync(route, _routeCts.Token);
                     return;
                 }
@@ -308,16 +307,16 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СЃР±СЂРѕСЃРёС‚СЊ С„РёР»СЊС‚СЂС‹", ex.Message);
+                await ShowErrorDialogAsync("Не удалось сбросить фильтры", ex.Message);
             }
         }
 
         private async Task ClearFiltersAsync()
         {
             if (!await ConfirmDialogAsync(
-                    "РЎР±СЂРѕСЃ С„РёР»СЊС‚СЂРѕРІ",
-                    "РћС‡РёСЃС‚РёС‚СЊ РІСЃРµ С„РёР»СЊС‚СЂС‹ С‚РµРєСѓС‰РµР№ С‚Р°Р±Р»РёС†С‹?",
-                    "РћС‡РёСЃС‚РёС‚СЊ"))
+                    "Сброс фильтров",
+                    "Очистить все фильтры текущей таблицы?",
+                    "Очистить"))
             {
                 return;
             }
@@ -332,7 +331,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ РѕС‡РёСЃС‚РёС‚СЊ С„РёР»СЊС‚СЂС‹", ex.Message);
+                await ShowErrorDialogAsync("Не удалось очистить фильтры", ex.Message);
             }
         }
 
@@ -359,14 +358,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
             {
                 var values = isCreateMode
                     ? ReferenceEditPayloadBuilder.BuildForCreate(dialogViewModel)
                     : ReferenceEditPayloadBuilder.BuildForUpdate(dialogViewModel);
-                savedPayload = values;
 
                 try
                 {
@@ -388,9 +385,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshReferenceAfterSaveAsync(isCreateMode, savedRow);
             ShowSuccessNotification(
-                isCreateMode ? "Р—Р°РїРёСЃСЊ СЃРѕР·РґР°РЅР°" : "РР·РјРµРЅРµРЅРёСЏ СЃРѕС…СЂР°РЅРµРЅС‹",
+                isCreateMode ? "Запись создана" : "Изменения сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
         }
 
@@ -405,15 +402,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (id is null)
             {
                 await ShowErrorDialogAsync(
-                    "РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р·Р°РїРёСЃСЊ.",
-                    "РЈ РІС‹Р±СЂР°РЅРЅРѕР№ Р·Р°РїРёСЃРё РѕС‚СЃСѓС‚СЃС‚РІСѓРµС‚ РєРѕСЂСЂРµРєС‚РЅС‹Р№ ID.");
+                    "Не удалось удалить запись.",
+                    "У выбранной записи отсутствует корректный ID.");
                 return;
             }
 
             if (!await ConfirmDialogAsync(
-                    "РЈРґР°Р»РµРЅРёРµ Р·Р°РїРёСЃРё",
-                    "РЈРґР°Р»РёС‚СЊ РІС‹Р±СЂР°РЅРЅСѓСЋ Р·Р°РїРёСЃСЊ?",
-                    "РЈРґР°Р»РёС‚СЊ",
+                    "Удаление записи",
+                    "Удалить выбранную запись?",
+                    "Удалить",
                     defaultButton: ContentDialogButton.Close,
                     applyChrome: true))
             {
@@ -424,25 +421,40 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _modelMutationService.DeleteAsync(_viewModel.CurrentReference.Model, id.Value);
                 _referenceLookupCacheService.Invalidate(_viewModel.CurrentReference.Model);
-                await _viewModel.ReloadCurrentReferenceAsync();
+                ApplyDeletedRowUpdate(id.Value);
                 ShowSuccessNotification(
-                    "Р—Р°РїРёСЃСЊ СѓРґР°Р»РµРЅР°",
+                    "Запись удалена",
                     BuildReferenceNotificationMessage(_viewModel.CurrentReference.Title, id.Value));
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ Р·Р°РїРёСЃСЊ.", ex.Message);
+                await ShowErrorDialogAsync("Не удалось удалить запись.", ex.Message);
             }
+        }
+
+        private void ApplyDeletedRowUpdate(long id)
+        {
+            _viewModel.ApplyDeletedRowUpdate(id);
+            ReferenceTableView.InvalidateRows(new TableRenderRequest(TableRenderReason.PageLoaded));
         }
 
         private async Task RefreshReferenceAfterSaveAsync(
             bool isCreateMode,
-            TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? payload)
+            TableDataRow savedRow)
         {
-            if (isCreateMode
-                || payload is null
-                || !_viewModel.ApplySavedRowUpdate(savedRow, payload))
+            var isCountChanged = isCreateMode && await _viewModel.RefreshCountAfterCreateAsync();
+            if (isCountChanged)
+            {
+                await _viewModel.RefreshViewportAfterCreateAsync();
+                ReferenceTableView.InvalidateRows(new TableRenderRequest(TableRenderReason.PageLoaded));
+            }
+
+            if (isCreateMode)
+            {
+                return;
+            }
+
+            if (!_viewModel.ApplySavedRowUpdate(savedRow))
             {
                 await _viewModel.ReloadCurrentReferenceAsync();
             }
@@ -513,7 +525,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (_viewModel.Rows is null)
             {
-                ReferenceTableView.DetachTableState();
                 return;
             }
 

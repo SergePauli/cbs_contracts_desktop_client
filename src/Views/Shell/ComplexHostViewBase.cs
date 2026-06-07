@@ -205,18 +205,21 @@ namespace CbsContractsDesktopClient.Views.Shell
         protected virtual async Task RefreshTableRowAfterSaveAsync(
             bool isCreateMode,
             TableDataRow? savedRow,
-            IReadOnlyDictionary<string, object?>? payload,
             CancellationToken cancellationToken = default)
         {
+            var isCountChanged = isCreateMode && await Store.RefreshCountAfterCreateAsync(cancellationToken);
+            if (isCountChanged)
+            {
+                await Store.RefreshViewportAfterCreateAsync(cancellationToken);
+                TableView.InvalidateRows(new TableRenderRequest(TableRenderReason.PageLoaded));
+            }
+
             if (isCreateMode)
             {
-                await ReloadTableAfterSaveAsync(cancellationToken);
                 return;
             }
 
-            var id = (savedRow is null ? null : TryGetSelectedRowId(savedRow))
-                ?? TryGetPayloadId(payload)
-                ?? (Store.SelectedRow is null ? null : TryGetSelectedRowId(Store.SelectedRow));
+            var id = savedRow is null ? null : TryGetSelectedRowId(savedRow);
             if (id is null)
             {
                 await ReloadTableAfterSaveAsync(cancellationToken);
@@ -229,6 +232,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             await ReloadTableAfterSaveAsync(cancellationToken);
+        }
+
+        protected void ApplyDeletedRowUpdate(long id)
+        {
+            Store.ApplyDeletedRowUpdate(id);
+            TableView.InvalidateRows(new TableRenderRequest(TableRenderReason.PageLoaded));
         }
 
         protected virtual async Task<bool> RefreshTableRowByIdAsync(
@@ -256,7 +265,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             var freshRow = rows.FirstOrDefault(static row => !row.IsPlaceholder);
             if (freshRow is null
-                || !Store.ApplySavedRowUpdate(freshRow, new Dictionary<string, object?>()))
+                || !Store.ApplySavedRowUpdate(freshRow))
             {
                 return false;
             }
@@ -796,21 +805,5 @@ namespace CbsContractsDesktopClient.Views.Shell
             return value.ToString() ?? "<empty>";
         }
 
-        private static long? TryGetPayloadId(IReadOnlyDictionary<string, object?>? payload)
-        {
-            if (payload is null || !payload.TryGetValue("id", out var id))
-            {
-                return null;
-            }
-
-            return id switch
-            {
-                long int64Value => int64Value,
-                int int32Value => int32Value,
-                decimal decimalValue => (long)decimalValue,
-                string stringValue when long.TryParse(stringValue, out var parsedValue) => parsedValue,
-                _ => null
-            };
-        }
     }
 }

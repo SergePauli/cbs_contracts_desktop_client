@@ -445,13 +445,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
                     var stagePayload = dialog.BuildPayload();
-                    savedPayload = stagePayload;
                     if (!HasUpdatePayloadChanges(stagePayload))
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
@@ -482,7 +480,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(false, savedRow);
             ShowSuccessNotification(
                 "Этап сохранен",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
@@ -524,13 +522,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
                     var stagePayload = dialog.BuildPayload();
-                    savedPayload = stagePayload;
                     if (!HasUpdatePayloadChanges(stagePayload))
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
@@ -561,7 +557,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(false, savedRow);
             ShowSuccessNotification(
                 "Этап сохранен",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
@@ -601,13 +597,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
                     var stagePayload = dialog.BuildPayload();
-                    savedPayload = stagePayload;
                     var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
                     var hasContractChanges = dialog.HasContractExternalNumberChanges();
                     if (!hasStageChanges && !hasContractChanges)
@@ -644,7 +638,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(false, savedRow);
             ShowSuccessNotification(
                 "Этап сохранен",
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));

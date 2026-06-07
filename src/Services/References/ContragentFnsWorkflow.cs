@@ -118,7 +118,7 @@ namespace CbsContractsDesktopClient.Services.References
 
                 var savedRow = await _modelMutationService.UpdateAsync(request.Definition.Model, payload, cancellationToken);
                 _referenceLookupCacheService.Invalidate(request.Definition.Model);
-                return CreateResult(request.Definition, isCreateMode: false, savedRow, payload, "Данные обновлены");
+                return CreateResult(request.Definition, isCreateMode: false, savedRow, "Данные обновлены");
             }
             catch (Exception ex)
             {
@@ -250,7 +250,6 @@ namespace CbsContractsDesktopClient.Services.References
             };
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
@@ -263,7 +262,6 @@ namespace CbsContractsDesktopClient.Services.References
                         : isCreateMode
                             ? ContragentEditPayloadBuilder.BuildForCreate(viewModel)
                             : ContragentEditPayloadBuilder.BuildForUpdate(viewModel);
-                    savedPayload = payload;
 
                     if (!isCreateMode && !isLegalEntityChangeMode && payload.Count <= 1)
                     {
@@ -290,7 +288,7 @@ namespace CbsContractsDesktopClient.Services.References
             }
 
             _referenceLookupCacheService.Invalidate(definition.Model);
-            return CreateResult(definition, isCreateMode, savedRow, savedPayload, successTitle);
+            return CreateResult(definition, isCreateMode, savedRow, successTitle);
         }
 
         private async Task<ContragentEditDialogState> CreateEditStateAsync(
@@ -1145,7 +1143,6 @@ namespace CbsContractsDesktopClient.Services.References
             ReferenceDefinition definition,
             bool isCreateMode,
             TableDataRow savedRow,
-            IReadOnlyDictionary<string, object?>? savedPayload,
             string successTitle)
         {
             return new ContragentFnsWorkflowResult
@@ -1153,7 +1150,6 @@ namespace CbsContractsDesktopClient.Services.References
                 Definition = definition,
                 IsCreateMode = isCreateMode,
                 SavedRow = savedRow,
-                SavedPayload = savedPayload,
                 SuccessTitle = successTitle
             };
         }

@@ -146,7 +146,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            await RefreshTableRowAfterSaveAsync(isCreateMode, result.SavedRow, result.SavedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, result.SavedRow);
             ShowSuccessNotification(
                 isCreateMode ? "Сотрудник создан" : "Изменения сотрудника сохранены",
                 BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
@@ -182,7 +182,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _modelMutationService.DeleteAsync(definition.Model, id.Value);
                 _referenceLookupCacheService.Invalidate(definition.Model);
-                await Store.ReloadCurrentReferenceAsync();
+                ApplyDeletedRowUpdate(id.Value);
                 ShowSuccessNotification(
                     "Сотрудник удален",
                     BuildReferenceNotificationMessage(definition.Title, id.Value));

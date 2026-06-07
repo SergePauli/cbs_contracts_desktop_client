@@ -132,25 +132,18 @@ public sealed class TablePageStoreTests : IDisposable
         var countRequestCount = dataQueryService.CountRequestCount;
 
         var applied = viewModel.ApplySavedRowUpdate(
-            CreateRow(("id", 1), ("name", "Server")),
-            new Dictionary<string, object?>
-            {
-                ["id"] = 1L,
-                ["name"] = "Local",
-                ["person_attributes"] = new Dictionary<string, object?>()
-            });
+            CreateRow(("id", 1), ("name", "Server")));
 
         Assert.True(applied);
         Assert.Equal(dataRequestCount, dataQueryService.DataRequestCount);
         Assert.Equal(countRequestCount, dataQueryService.CountRequestCount);
         Assert.Equal("Server", viewModel.Items[0].GetValue("name"));
-        Assert.Equal("Keep", viewModel.Items[0].GetValue("description"));
-        Assert.Null(viewModel.Items[0].GetValue("person_attributes"));
+        Assert.Null(viewModel.Items[0].GetValue("description"));
         Assert.Same(viewModel.Items[0], viewModel.SelectedRow);
     }
 
     [Fact]
-    public async Task ApplySavedRowUpdate_UsesPayloadWhenResponseOmitsChangedField()
+    public async Task ApplySavedRowUpdate_UsesServerRowWhenResponseOmitsChangedField()
     {
         var dataQueryService = new FakeDataQueryService
         {
@@ -167,15 +160,10 @@ public sealed class TablePageStoreTests : IDisposable
         await viewModel.EnsureLoadedAsync();
 
         var applied = viewModel.ApplySavedRowUpdate(
-            CreateRow(("id", 2)),
-            new Dictionary<string, object?>
-            {
-                ["id"] = 2L,
-                ["name"] = "Local"
-            });
+            CreateRow(("id", 2)));
 
         Assert.True(applied);
-        Assert.Equal("Local", viewModel.Items[0].GetValue("name"));
+        Assert.Null(viewModel.Items[0].GetValue("name"));
     }
 
     [Fact]
@@ -196,12 +184,7 @@ public sealed class TablePageStoreTests : IDisposable
         await viewModel.EnsureLoadedAsync();
 
         var applied = viewModel.ApplySavedRowUpdate(
-            CreateRow(("id", 99), ("name", "Missing")),
-            new Dictionary<string, object?>
-            {
-                ["id"] = 99L,
-                ["name"] = "Missing"
-            });
+            CreateRow(("id", 99), ("name", "Missing")));
 
         Assert.False(applied);
         Assert.Equal("Old", viewModel.Items[0].GetValue("name"));
@@ -314,6 +297,108 @@ public sealed class TablePageStoreTests : IDisposable
         Assert.Equal(0, dataQueryService.DataRequestCount);
         Assert.Equal(0, dataQueryService.CountRequestCount);
         Assert.Empty(dataQueryService.DataRequests);
+    }
+
+    [Fact]
+    public async Task RefreshCountAfterCreateAsync_ReturnsFalseAndDoesNotRefreshViewportWhenCountIsUnchanged()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] =
+                [
+                    CreateRow(("id", 1), ("name", "One")),
+                    CreateRow(("id", 2), ("name", "Two"))
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+        viewModel.UpdateViewportRetention(0, 2, 2);
+        dataQueryService.ResetRequestCounters();
+
+        var isCountChanged = await viewModel.RefreshCountAfterCreateAsync();
+
+        Assert.False(isCountChanged);
+        Assert.Equal(1, dataQueryService.CountRequestCount);
+        Assert.Equal(0, dataQueryService.DataRequestCount);
+        Assert.Equal(2, viewModel.TotalCount);
+    }
+
+    [Fact]
+    public async Task RefreshViewportAfterCreateAsync_ExpandsFullyVisibleSmallReference()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] =
+                [
+                    CreateRow(("id", 1), ("name", "One")),
+                    CreateRow(("id", 2), ("name", "Two")),
+                    CreateRow(("id", 3), ("name", "Three")),
+                    CreateRow(("id", 4), ("name", "Four")),
+                    CreateRow(("id", 5), ("name", "Five"))
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+        viewModel.UpdateViewportRetention(0, 5, 5);
+        dataQueryService.RowsByModel["Position"] =
+        [
+            ..dataQueryService.RowsByModel["Position"],
+            CreateRow(("id", 6), ("name", "Six"))
+        ];
+        dataQueryService.ResetRequestCounters();
+
+        var isCountChanged = await viewModel.RefreshCountAfterCreateAsync();
+        await viewModel.RefreshViewportAfterCreateAsync();
+
+        Assert.True(isCountChanged);
+        Assert.Equal(6, viewModel.TotalCount);
+        Assert.Equal(6, viewModel.LoadedCount);
+        Assert.Equal(6, viewModel.ResidentCount);
+        Assert.Equal(6, viewModel.Items.Count);
+        Assert.Equal("Six", viewModel.Items[5].GetValue("name"));
+        var dataRequest = Assert.Single(dataQueryService.DataRequests);
+        Assert.Equal(("Position", 0, 6), dataRequest);
+    }
+
+    [Fact]
+    public async Task ApplyDeletedRowUpdate_ShiftsLoadedRowsAndRemovesTailPlaceholder()
+    {
+        var dataQueryService = new FakeDataQueryService
+        {
+            RowsByModel =
+            {
+                ["Position"] =
+                [
+                    CreateRow(("id", 1), ("name", "One")),
+                    CreateRow(("id", 2), ("name", "Two")),
+                    CreateRow(("id", 3), ("name", "Three")),
+                    CreateRow(("id", 4), ("name", "Four")),
+                    CreateRow(("id", 5), ("name", "Five"))
+                ]
+            }
+        };
+        var viewModel = CreateViewModel(dataQueryService, "/references/Position");
+
+        await viewModel.EnsureLoadedAsync();
+        viewModel.UpdateViewportRetention(0, 5, 5);
+
+        viewModel.ApplyDeletedRowUpdate(3);
+
+        Assert.Equal(4, viewModel.TotalCount);
+        Assert.Equal(4, viewModel.LoadedCount);
+        Assert.Equal(4, viewModel.ResidentCount);
+        Assert.Equal(4, viewModel.Items.Count);
+        Assert.DoesNotContain(viewModel.Items, static row => row.IsPlaceholder);
+        Assert.Equal([1L, 2L, 4L, 5L], viewModel.Items.Select(static row => (long)row.GetValue("id")!));
+        Assert.Null(viewModel.SelectedRow);
     }
 
     public void Dispose()

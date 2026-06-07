@@ -13,6 +13,7 @@ using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -278,7 +279,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     return;
                 }
 
-                await RefreshTableRowAfterSaveAsync(result.IsCreateMode, result.SavedRow, result.SavedPayload);
+                await RefreshTableRowAfterSaveAsync(result.IsCreateMode, result.SavedRow);
                 ShowSuccessNotification(
                     result.SuccessTitle,
                     BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
@@ -326,7 +327,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
             {
@@ -338,7 +338,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var payload = isCreateMode
                         ? ContragentEditPayloadBuilder.BuildForCreate(viewModel)
                         : ContragentEditPayloadBuilder.BuildForUpdate(viewModel);
-                    savedPayload = payload;
 
                     if (!isCreateMode && payload.Count <= 1)
                     {
@@ -365,7 +364,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow);
             ShowSuccessNotification(
                 isCreateMode ? "Контрагент создан" : "Изменения контрагента сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
@@ -401,7 +400,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _modelMutationService.DeleteAsync(reference.Model, id.Value);
                 _referenceLookupCacheService.Invalidate(reference.Model);
-                await Store.ReloadCurrentReferenceAsync();
+                ApplyDeletedRowUpdate(id.Value);
                 ShowSuccessNotification(
                     "Контрагент удален",
                     BuildReferenceNotificationMessage(reference.Title, id.Value));

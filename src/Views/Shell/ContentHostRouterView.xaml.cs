@@ -12,7 +12,6 @@ namespace CbsContractsDesktopClient.Views.Shell
     {
         private readonly AppShellViewModel _shellViewModel;
         private ContentHostRouteKind _currentRouteKind = ContentHostRouteKind.None;
-        private ReferenceHostView? _referenceHostView;
         private HolidayHostView? _holidayHostView;
         private ProfileHostView? _profileHostView;
         private EmployeeHostView? _employeeHostView;
@@ -53,7 +52,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ApplyRoute(string? route)
         {
             var routeKind = ResolveRouteKind(route);
-            if (routeKind == _currentRouteKind && HostContentControl.Content is not null)
+            if (routeKind == _currentRouteKind
+                && routeKind != ContentHostRouteKind.Reference
+                && HostContentControl.Content is not null)
             {
                 UpdateCurrentHostRoute(routeKind, route);
                 return;
@@ -77,13 +78,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             switch (routeKind)
             {
-                case ContentHostRouteKind.Reference:
-                    if (_referenceHostView is not null)
-                    {
-                        _referenceHostView.Route = route;
-                    }
-
-                    break;
                 case ContentHostRouteKind.Holiday:
                     if (_holidayHostView is not null)
                     {
@@ -177,9 +171,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private ReferenceHostView GetReferenceHostView(string? route)
         {
-            _referenceHostView ??= new ReferenceHostView();
-            _referenceHostView.Route = route;
-            return _referenceHostView;
+            return new ReferenceHostView(route ?? string.Empty);
         }
 
         private HolidayHostView GetHolidayHostView(string? route)

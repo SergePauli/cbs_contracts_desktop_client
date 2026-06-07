@@ -57,7 +57,6 @@ namespace CbsContractsDesktopClient.Services.References
             };
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
             {
@@ -68,7 +67,6 @@ namespace CbsContractsDesktopClient.Services.References
                     var payload = request.IsCreateMode
                         ? EmployeeEditPayloadBuilder.BuildForCreate(viewModel)
                         : EmployeeEditPayloadBuilder.BuildForUpdate(viewModel);
-                    savedPayload = payload;
 
                     if (!request.IsCreateMode && payload.Count <= 1)
                     {
@@ -98,8 +96,7 @@ namespace CbsContractsDesktopClient.Services.References
             return new EmployeeEditWorkflowResult
             {
                 Definition = definition,
-                SavedRow = savedRow,
-                SavedPayload = savedPayload
+                SavedRow = savedRow
             };
         }
 

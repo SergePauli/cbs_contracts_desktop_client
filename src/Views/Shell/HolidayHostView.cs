@@ -127,14 +127,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
             {
                 var values = isCreateMode
                     ? ReferenceEditPayloadBuilder.BuildForCreate(dialogViewModel)
                     : ReferenceEditPayloadBuilder.BuildForUpdate(dialogViewModel);
-                savedPayload = values;
 
                 try
                 {
@@ -156,7 +154,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow);
             ShowSuccessNotification(
                 isCreateMode ? "Запись создана" : "Изменения сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
@@ -192,7 +190,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _modelMutationService.DeleteAsync(reference.Model, id.Value);
                 _referenceLookupCacheService.Invalidate(reference.Model);
-                await Store.ReloadCurrentReferenceAsync();
+                ApplyDeletedRowUpdate(id.Value);
                 ShowSuccessNotification(
                     "Запись удалена",
                     BuildReferenceNotificationMessage(reference.Title, id.Value));

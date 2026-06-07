@@ -110,6 +110,108 @@ namespace CbsContractsDesktopClient.Collections
 
         public event EventHandler<TableRowReplacedEventArgs>? RowReplaced;
 
+        public async Task<bool> RefreshCountIfChangedAsync(CancellationToken cancellationToken = default)
+        {
+            CancelViewportLoads();
+            IsLoading = true;
+            ErrorMessage = string.Empty;
+
+            try
+            {
+                var countRequest = _query.CreateCountRequest();
+                LastCountRequestJson = SerializeRequest(countRequest);
+                AppendTrace($"COUNT {countRequest.Model} offset=- limit=- reason=create-refresh current={TotalCount}");
+                var totalCount = await _dataQueryService.GetCountAsync(countRequest, cancellationToken);
+                AppendTrace($"COUNT RESULT {countRequest.Model} total={totalCount} reason=create-refresh");
+
+                if (totalCount == TotalCount)
+                {
+                    return false;
+                }
+
+                await _commitGate.WaitAsync(cancellationToken);
+                try
+                {
+                    TotalCount = totalCount;
+                    AdjustPlaceholderCapacity(totalCount);
+                    LoadedCount = Math.Min(LoadedCount, totalCount);
+                    return true;
+                }
+                finally
+                {
+                    _commitGate.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+                throw;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
+        public async Task RefreshRangeAsync(
+            int startIndex,
+            int endExclusive,
+            CancellationToken cancellationToken = default)
+        {
+            CancelViewportLoads();
+            IsLoading = true;
+            ErrorMessage = string.Empty;
+
+            try
+            {
+                await _commitGate.WaitAsync(cancellationToken);
+                try
+                {
+                    AdjustPlaceholderCapacity(TotalCount);
+
+                    var start = Math.Max(0, startIndex);
+                    var end = Math.Min(TotalCount, Math.Max(start, endExclusive));
+                    if (start >= end)
+                    {
+                        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Items)));
+                        OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
+                        return;
+                    }
+
+                    var pageRequest = _query.CreatePageRequest(start, end - start);
+                    LastPageRequestJson = SerializeRequest(pageRequest);
+                    AppendTrace($"PAGE {pageRequest.Model} offset={pageRequest.Offset} limit={pageRequest.Limit} reason=create-refresh");
+                    var page = await _dataQueryService.GetDataAsync<TItem>(
+                        pageRequest,
+                        cancellationToken);
+                    AppendTrace($"PAGE RESULT {pageRequest.Model} offset={pageRequest.Offset} fetched={page.Count} reason=create-refresh");
+
+                    ReplaceRange(start, page);
+                }
+                finally
+                {
+                    _commitGate.Release();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = ex.Message;
+                throw;
+            }
+            finally
+            {
+                IsLoading = false;
+            }
+        }
+
         public bool TryReplaceLoadedItem(Func<TItem, bool> predicate, TItem item)
         {
             ArgumentNullException.ThrowIfNull(predicate);
@@ -130,6 +232,69 @@ namespace CbsContractsDesktopClient.Collections
             }
 
             return false;
+        }
+
+        public void ApplyDeleteOutsideLoadedRange()
+        {
+            if (TotalCount <= 0)
+            {
+                throw new InvalidOperationException("Cannot apply delete because total count is zero.");
+            }
+
+            TotalCount--;
+            LoadedCount = Math.Min(LoadedCount, TotalCount);
+            AdjustPlaceholderCapacity(TotalCount);
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(Items)));
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
+        }
+
+        public void ApplyDeleteShift(int deletedIndex, int endExclusive)
+        {
+            if (TotalCount <= 0)
+            {
+                throw new InvalidOperationException("Cannot apply delete because total count is zero.");
+            }
+
+            if (deletedIndex < 0 || deletedIndex >= TotalCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(deletedIndex));
+            }
+
+            var oldTotalCount = TotalCount;
+            var end = Math.Min(Count, Math.Min(oldTotalCount, Math.Max(deletedIndex + 1, endExclusive)));
+            for (var index = deletedIndex; index < end - 1; index++)
+            {
+                var sourceIndex = index + 1;
+                if (_residentIndexes.Contains(sourceIndex))
+                {
+                    var row = this[sourceIndex];
+                    this[index] = row;
+                    _residentIndexes.Add(index);
+                    RowReplaced?.Invoke(this, new TableRowReplacedEventArgs(index, row));
+                }
+                else
+                {
+                    var placeholder = _placeholderFactory();
+                    this[index] = placeholder;
+                    _residentIndexes.Remove(index);
+                    RowReplaced?.Invoke(this, new TableRowReplacedEventArgs(index, placeholder));
+                }
+            }
+
+            var vacatedIndex = end - 1;
+            if (vacatedIndex >= deletedIndex && vacatedIndex < Count)
+            {
+                var placeholder = _placeholderFactory();
+                this[vacatedIndex] = placeholder;
+                _residentIndexes.Remove(vacatedIndex);
+                RowReplaced?.Invoke(this, new TableRowReplacedEventArgs(vacatedIndex, placeholder));
+            }
+
+            TotalCount--;
+            LoadedCount = Math.Min(LoadedCount, TotalCount);
+            AdjustPlaceholderCapacity(TotalCount);
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(Items)));
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
         }
 
         public string LastCountRequestJson
@@ -303,6 +468,24 @@ namespace CbsContractsDesktopClient.Collections
             {
                 Add(_placeholderFactory());
             }
+        }
+
+        private void AdjustPlaceholderCapacity(int totalCount)
+        {
+            while (Count < totalCount)
+            {
+                Add(_placeholderFactory());
+            }
+
+            while (Count > totalCount)
+            {
+                var index = Count - 1;
+                RemoveAt(index);
+                _residentIndexes.Remove(index);
+            }
+
+            _residentIndexes.RemoveWhere(index => index < 0 || index >= totalCount);
+            OnPropertyChanged(new PropertyChangedEventArgs(nameof(ResidentCount)));
         }
 
         public async Task<bool> EnsureRangeLoadedAsync(int startIndex, int endExclusive, CancellationToken cancellationToken = default)

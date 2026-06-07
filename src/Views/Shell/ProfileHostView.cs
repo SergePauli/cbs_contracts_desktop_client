@@ -13,6 +13,7 @@ using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -138,7 +139,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
 
             TableDataRow? savedRow = null;
-            IReadOnlyDictionary<string, object?>? savedPayload = null;
 
             dialog.SaveRequestedAsync += async args =>
             {
@@ -149,7 +149,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     var payload = isCreateMode
                         ? ProfileEditPayloadBuilder.BuildForCreate(viewModel)
                         : ProfileEditPayloadBuilder.BuildForUpdate(viewModel);
-                    savedPayload = payload;
 
                     if (!isCreateMode && payload.Count <= 1)
                     {
@@ -176,7 +175,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _referenceLookupCacheService.Invalidate(reference.Model);
-            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow, savedPayload);
+            await RefreshTableRowAfterSaveAsync(isCreateMode, savedRow);
             ShowSuccessNotification(
                 isCreateMode ? "Пользователь создан" : "Изменения сохранены",
                 BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedRow)));
@@ -223,7 +222,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 await _modelMutationService.DeleteAsync(reference.Model, id.Value);
                 _referenceLookupCacheService.Invalidate(reference.Model);
-                await Store.ReloadCurrentReferenceAsync();
+                ApplyDeletedRowUpdate(id.Value);
                 ShowSuccessNotification(
                     "Пользователь удален",
                     BuildReferenceNotificationMessage(reference.Title, id.Value));

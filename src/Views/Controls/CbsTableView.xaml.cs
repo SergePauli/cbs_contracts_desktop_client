@@ -494,6 +494,33 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(SelectedItemProperty, value);
         }
 
+        public void ClearSelection()
+        {
+            _selectedIndexes.Clear();
+            SelectedItem = null;
+            UpdateVisibleRowSelectionStates();
+        }
+
+        public void SetSelectedItem(TableDataRow row)
+        {
+            ArgumentNullException.ThrowIfNull(row);
+
+            SelectedItem = row;
+            _selectedIndexes.Clear();
+
+            var sourceRows = GetSourceRows();
+            for (var index = 0; index < sourceRows.Count; index++)
+            {
+                if (ReferenceEquals(sourceRows[index], row))
+                {
+                    _selectedIndexes.Add(index);
+                    break;
+                }
+            }
+
+            UpdateVisibleRowSelectionStates();
+        }
+
         private async void OnLoaded(object sender, RoutedEventArgs e)
         {
             RebuildHeader();
