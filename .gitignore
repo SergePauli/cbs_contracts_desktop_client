@@ -31,6 +31,7 @@ ARM64/
 *.VC.VC.opendb
 
 # Test and coverage output
+artifacts/
 TestResults/
 coverage/
 *.coverage
@@ -48,4 +49,3 @@ Projects.code-workspace
 # OS files
 Thumbs.db
 Desktop.ini
-
