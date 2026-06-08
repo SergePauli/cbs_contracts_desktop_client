@@ -139,28 +139,35 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                     ? user.Username
                     : "Пользователь не определен";
 
+            var selectedRecordParts = SplitFooterSelectedRecordText(selectedRecordText);
+
             return new FooterState
             {
                 DepartmentOrRole = departmentOrRole,
                 UserName = userName,
                 TotalCountValue = totalCountValue,
-                SelectedRecordText = SplitFooterSelectedRecordText(selectedRecordText).MainText,
-                SelectedRecordFooterText = SplitFooterSelectedRecordText(selectedRecordText).FooterText,
+                SelectedRecordText = selectedRecordParts.MainText,
+                SelectedRecordFooterText = selectedRecordParts.FooterText,
+                SelectedRecordTasksText = selectedRecordParts.TasksText,
+                SelectedRecordPerformersText = selectedRecordParts.PerformersText,
                 VersionText = "v1.0.0"
             };
         }
 
-        private static (string MainText, string FooterText) SplitFooterSelectedRecordText(string value)
+        private static (string MainText, string FooterText, string TasksText, string PerformersText) SplitFooterSelectedRecordText(string value)
         {
-            var separatorIndex = value.IndexOf('|', StringComparison.Ordinal);
-            if (separatorIndex < 0)
+            var parts = value.Split('|', 3, StringSplitOptions.TrimEntries);
+            if (parts.Length == 1)
             {
-                return (value, string.Empty);
+                return (value, string.Empty, string.Empty, string.Empty);
             }
 
-            return (
-                value[..separatorIndex].TrimEnd(),
-                value[(separatorIndex + 1)..].Trim());
+            if (parts.Length == 2)
+            {
+                return (parts[0], parts[1], string.Empty, string.Empty);
+            }
+
+            return (parts[0], string.Empty, parts[1], parts[2]);
         }
     }
 }

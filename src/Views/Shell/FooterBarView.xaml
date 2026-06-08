@@ -52,10 +52,33 @@
                 <TextBlock
                     Style="{StaticResource CaptionTextBlockStyle}"
                     VerticalAlignment="Center"
-                    Foreground="{StaticResource ShellTertiaryTextBrush}"
-                    Margin="6,0,6,0"
-                    Text="|"
-                    Visibility="{x:Bind ViewModel.FooterState.HasSelectedRecordFooterText, Mode=OneWay, Converter={StaticResource BoolVisibilityConverter}}" />
+                    Foreground="{StaticResource ShellSecondaryTextBrush}"
+                    Text="; прочие задачи:"
+                    Visibility="{x:Bind ViewModel.FooterState.HasSelectedRecordTasksText, Mode=OneWay, Converter={StaticResource BoolVisibilityConverter}}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Margin="4,0,0,0"
+                    VerticalAlignment="Center"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource ShellTableRowSelectedBorderBrush}"
+                    Text="{x:Bind ViewModel.FooterState.SelectedRecordTasksText, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis"
+                    Visibility="{x:Bind ViewModel.FooterState.HasSelectedRecordTasksText, Mode=OneWay, Converter={StaticResource BoolVisibilityConverter}}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    VerticalAlignment="Center"
+                    Foreground="{StaticResource ShellSecondaryTextBrush}"
+                    Text="; исполнители:"
+                    Visibility="{x:Bind ViewModel.FooterState.HasSelectedRecordPerformersText, Mode=OneWay, Converter={StaticResource BoolVisibilityConverter}}" />
+                <TextBlock
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Margin="4,0,0,0"
+                    VerticalAlignment="Center"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource ShellTableRowSelectedBorderBrush}"
+                    Text="{x:Bind ViewModel.FooterState.SelectedRecordPerformersText, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis"
+                    Visibility="{x:Bind ViewModel.FooterState.HasSelectedRecordPerformersText, Mode=OneWay, Converter={StaticResource BoolVisibilityConverter}}" />
                 <TextBlock
                     Style="{StaticResource CaptionTextBlockStyle}"
                     VerticalAlignment="Center"

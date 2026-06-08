@@ -8,6 +8,8 @@ namespace CbsContractsDesktopClient.Models.Shell
             UserName = "Пользователь не определен",
             TotalCountValue = string.Empty,
             SelectedRecordText = string.Empty,
+            SelectedRecordTasksText = string.Empty,
+            SelectedRecordPerformersText = string.Empty,
             VersionText = "v1.0.0"
         };
 
@@ -21,9 +23,17 @@ namespace CbsContractsDesktopClient.Models.Shell
 
         public string SelectedRecordFooterText { get; init; } = string.Empty;
 
+        public string SelectedRecordTasksText { get; init; } = string.Empty;
+
+        public string SelectedRecordPerformersText { get; init; } = string.Empty;
+
         public string VersionText { get; init; } = string.Empty;
 
         public bool HasSelectedRecordFooterText => !string.IsNullOrWhiteSpace(SelectedRecordFooterText);
+
+        public bool HasSelectedRecordTasksText => !string.IsNullOrWhiteSpace(SelectedRecordTasksText);
+
+        public bool HasSelectedRecordPerformersText => !string.IsNullOrWhiteSpace(SelectedRecordPerformersText);
 
         public string SelectedRecordSeparator =>
             string.IsNullOrWhiteSpace(SelectedRecordText)

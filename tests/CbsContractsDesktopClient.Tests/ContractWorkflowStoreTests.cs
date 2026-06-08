@@ -117,6 +117,69 @@ public sealed class ContractWorkflowStoreTests
         Assert.Equal(["list selected stage", "contract"], store.Comments.Select(GetCommentText));
     }
 
+    [Fact]
+    public void SetContractSelection_SelectsUsedStageAndBuildsStandardFooter()
+    {
+        var store = new ContractWorkflowStore();
+        var contract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("stages", new object[]
+            {
+                Stage(100, "Поставка", used: false, priority: 1, tasks: ["Монтаж"], performers: ["Иванов"]),
+                Stage(200, "Пусконаладка", used: true, priority: 2, tasks: ["Обучение"], performers: ["Петров", "Сидоров"])
+            }));
+
+        store.SetContractSelection(contract, contract, contragent: null);
+
+        Assert.Equal(200L, GetRowId(store.SelectedStage));
+        Assert.Equal("(ID: 10) Э2 - Пусконаладка|Обучение|Петров, Сидоров", store.SelectedFooterText);
+    }
+
+    [Fact]
+    public void SetRevisionSelection_SelectsFirstStageWhenNoStageIsUsed()
+    {
+        var store = new ContractWorkflowStore();
+        var revision = CreateRow(("id", 30), ("contract", new Dictionary<string, object?> { ["id"] = 10 }));
+        var contract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("stages", new object[]
+            {
+                Stage(100, "Поставка", used: false),
+                Stage(200, "Пусконаладка", used: false)
+            }));
+
+        store.SetRevisionSelection(revision, contract, contragent: null);
+
+        Assert.Equal(100L, GetRowId(store.SelectedStage));
+        Assert.Equal("(ID: 30) Поставка|нет|нет", store.SelectedFooterText);
+    }
+
+    [Fact]
+    public void SetStageSelection_UsesSelectedStageForStandardFooter()
+    {
+        var store = new ContractWorkflowStore();
+        var selectedStage = CreateRow(
+            ("id", 100),
+            ("priority", 3),
+            ("task_kind", TaskKind("Исполнение")),
+            ("tasks", new object[] { Named("Согласование") }),
+            ("performers", new object[] { Named("Иванов") }));
+        var contract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("stages", new object[]
+            {
+                Stage(200, "Другой этап", used: true)
+            }));
+
+        store.SetStageSelection(selectedStage, contract, contragent: null);
+
+        Assert.Equal(100L, GetRowId(store.SelectedStage));
+        Assert.Equal("(ID: 100) Э3 - Исполнение|Согласование|Иванов", store.SelectedFooterText);
+    }
+
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
         return new TableDataRow
@@ -133,6 +196,52 @@ public sealed class ContractWorkflowStoreTests
         {
             ["id"] = id,
             ["name"] = name
+        };
+    }
+
+    private static Dictionary<string, object?> Stage(
+        long id,
+        string taskKindName,
+        bool used,
+        int? priority = null,
+        string[]? tasks = null,
+        string[]? performers = null)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["id"] = id,
+            ["used"] = used,
+            ["priority"] = priority,
+            ["task_kind"] = TaskKind(taskKindName),
+            ["tasks"] = (tasks ?? Array.Empty<string>()).Select(Named).ToArray(),
+            ["performers"] = (performers ?? Array.Empty<string>()).Select(Named).ToArray()
+        };
+    }
+
+    private static Dictionary<string, object?> TaskKind(string name)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["name"] = name
+        };
+    }
+
+    private static Dictionary<string, object?> Named(string name)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["name"] = name
+        };
+    }
+
+    private static long? GetRowId(TableDataRow? row)
+    {
+        return row?.GetValue("id") switch
+        {
+            long longValue => longValue,
+            int intValue => intValue,
+            JsonElement { ValueKind: JsonValueKind.Number } element when element.TryGetInt64(out var id) => id,
+            _ => null
         };
     }
 

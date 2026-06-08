@@ -130,13 +130,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected override string BuildSelectedFooterText(TableDataRow row)
         {
-            var name = JsonDataReader.TryGetText(row, "name", "contract.name") ?? "Контракт";
-            var id = TryGetSelectedRowId(row);
-            var taskKind = JsonDataReader.TryGetText(row, "task_kind.name", "stage.task_kind.name");
-            var text = id is long idValue ? $"{name} (ID: {idValue})" : name;
-            return string.IsNullOrWhiteSpace(taskKind)
-                ? text
-                : $"{text} | {taskKind}";
+            return _contractWorkflowStore.SelectedFooterText;
         }
 
         protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
@@ -248,6 +242,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.ContractRow = selectedRow;
             _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
+            RefreshSelectedFooterText();
 
             var contractId = _rowDetailStrategy.ResolveContractId(selectedRow);
             var listContragentId = _rowDetailStrategy.ResolveContragentId(selectedRow);
@@ -298,6 +293,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _rowDetailStrategy.ApplySelection(_contractWorkflowStore, selectedRow, contract ?? selectedRow, contragent);
                 _detailView.ContractRow = contract ?? selectedRow;
                 _detailView.ContragentRow = contragent;
+                RefreshSelectedFooterText();
                 UpdateActionButtonState();
             }
             catch (OperationCanceledException)
@@ -321,6 +317,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             _contractWorkflowStore.ClearRowDetailSelection();
+            RefreshSelectedFooterText();
         }
 
         private static async Task<TableDataRow?> LoadRowDetailRowSafelyAsync(

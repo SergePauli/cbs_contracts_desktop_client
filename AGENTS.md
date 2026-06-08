@@ -3,6 +3,7 @@ use utf-8 for reading, file creation, or updates
 Workflow rules:
 - Do not create or run new tests until the code changes are approved.
 - Add or update tests immediately before committing approved changes.
+- When formatting UI output, render static text that is always present, such as labels like "прочие задачи: ", with the normal text style for that area. Render dynamic text that depends on the selected row or object, such as IDs, names, task lists, and performer lists, with the bold/accent style for that area.
 - Confirm application architecture decisions before implementing them: first discuss where new code belongs, how it should be named, and its ownership boundaries; only write code after the decision is approved.
 - When creating form or dialog layouts, avoid showing semantically duplicate information; if a field is already present in the input area, do not repeat it in the summary block unless it adds distinct context.
 - Do not add defensive fallbacks to code without approval; propose them first, explain the scenario they handle, and wait for confirmation.

@@ -81,21 +81,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected override string BuildSelectedFooterText(TableDataRow row)
         {
-            var contractName = row.GetValue("contract.name")?.ToString();
-            var priority = JsonDataReader.TryGetInt(row.GetValue("priority"));
-            var id = TryGetSelectedRowId(row);
-
-            var mainText = priority is int priorityValue
-                ? string.IsNullOrWhiteSpace(contractName)
-                    ? $"Ревизия {priorityValue:00}"
-                    : $"Ревизия {priorityValue:00} {contractName}"
-                : contractName ?? string.Empty;
-            if (id is long idValue)
-            {
-                mainText = $"{mainText} (ID: {idValue})";
-            }
-
-            return AppendFooterDetail(mainText, row);
+            return _contractWorkflowStore.SelectedFooterText;
         }
 
         private void UpdateActionButtonState()
@@ -139,6 +125,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.ContractRow = null;
             _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
+            RefreshSelectedFooterText();
 
             var contractId = _rowDetailStrategy.ResolveContractId(Store.SelectedRow);
             var listContragentId = _rowDetailStrategy.ResolveContragentId(Store.SelectedRow);
@@ -189,6 +176,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _rowDetailStrategy.ApplySelection(_contractWorkflowStore, Store.SelectedRow, contract, contragent);
                 _detailView.ContractRow = contract;
                 _detailView.ContragentRow = contragent;
+                RefreshSelectedFooterText();
                 UpdateActionButtonState();
             }
             catch (OperationCanceledException)
@@ -212,6 +200,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             _contractWorkflowStore.ClearRowDetailSelection();
+            RefreshSelectedFooterText();
         }
 
         private static async Task<TableDataRow?> LoadRowDetailRowSafelyAsync(

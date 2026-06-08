@@ -202,6 +202,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             _headerActionsPanel.Children.Add(CreateSettingsButton());
         }
 
+        protected void RefreshSelectedFooterText()
+        {
+            QueueSelectedFooterTextUpdate();
+        }
+
         protected virtual async Task RefreshTableRowAfterSaveAsync(
             bool isCreateMode,
             TableDataRow? savedRow,
