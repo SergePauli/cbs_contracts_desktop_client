@@ -106,7 +106,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
 
             SelectedRowHeader = selectedRowHeader ?? string.Empty;
-            Comments = ReadContractComments(Contract);
+            Comments = ReadSelectionComments(selectionKind, selectedRow, Contract);
         }
 
         public void ClearRowDetailSelection()
@@ -122,7 +122,10 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             Comments = [];
         }
 
-        private static IReadOnlyList<TableDataRow> ReadContractComments(TableDataRow? contract)
+        private static IReadOnlyList<TableDataRow> ReadSelectionComments(
+            ContractRowDetailSelectionKind selectionKind,
+            TableDataRow selectedRow,
+            TableDataRow? contract)
         {
             if (contract is null || contract.IsPlaceholder)
             {
@@ -131,6 +134,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
             var comments = new List<TableDataRow>();
             AddComments(comments, TryGetArray(contract, "comments"));
+
+            if (selectionKind == ContractRowDetailSelectionKind.Stage)
+            {
+                AddComments(comments, ReadSelectedStageComments(selectedRow, contract));
+                return SortComments(comments);
+            }
 
             var stages = TryGetArray(contract, "stages");
             if (stages is not null)
@@ -144,9 +153,69 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 }
             }
 
+            return SortComments(comments);
+        }
+
+        private static IReadOnlyList<TableDataRow> SortComments(IReadOnlyList<TableDataRow> comments)
+        {
             return comments
-                .OrderBy(static comment => TryGetLong(comment.GetValue("id")) ?? long.MaxValue)
+                .Select(static (comment, index) => new CommentSortItem(comment, index))
+                .OrderBy(static item => item, CommentSortComparer.Instance)
+                .Select(static item => item.Comment)
                 .ToList();
+        }
+
+        private static JsonElement? ReadSelectedStageComments(TableDataRow selectedRow, TableDataRow contract)
+        {
+            var selectedComments = TryGetArray(selectedRow, "comments");
+            if (selectedComments is not null)
+            {
+                return selectedComments;
+            }
+
+            var stageId = TryGetLong(selectedRow.GetValue("id"));
+            var stages = TryGetArray(contract, "stages");
+            if (stageId is null || stages is null)
+            {
+                return null;
+            }
+
+            foreach (var stage in stages.Value.EnumerateArray())
+            {
+                if (stage.ValueKind == JsonValueKind.Object
+                    && TryGetLong(stage.GetProperty("id")) == stageId
+                    && TryGetArray(stage, "comments") is JsonElement comments)
+                {
+                    return comments;
+                }
+            }
+
+            return null;
+        }
+
+        private sealed record CommentSortItem(TableDataRow Comment, int Index)
+        {
+            public long? Id { get; } = TryGetLong(Comment.GetValue("id"));
+        }
+
+        private sealed class CommentSortComparer : IComparer<CommentSortItem>
+        {
+            public static CommentSortComparer Instance { get; } = new();
+
+            public int Compare(CommentSortItem? x, CommentSortItem? y)
+            {
+                if (x is null || y is null)
+                {
+                    return 0;
+                }
+
+                if (!x.Id.HasValue || !y.Id.HasValue)
+                {
+                    return 0;
+                }
+
+                return x.Id.Value.CompareTo(y.Id.Value);
+            }
         }
 
         private static void AddComments(ICollection<TableDataRow> target, JsonElement? comments)

@@ -16,6 +16,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private ProfileHostView? _profileHostView;
         private EmployeeHostView? _employeeHostView;
         private ContragentHostView? _contragentHostView;
+        private ContractHostView? _contractHostView;
         private RevisionHostView? _revisionHostView;
         private StageHostView? _stageHostView;
 
@@ -68,6 +69,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ContentHostRouteKind.Profile => GetProfileHostView(route),
                 ContentHostRouteKind.Employee => GetEmployeeHostView(route),
                 ContentHostRouteKind.Contragent => GetContragentHostView(route),
+                ContentHostRouteKind.Contract => GetContractHostView(route),
                 ContentHostRouteKind.Revision => GetRevisionHostView(route),
                 ContentHostRouteKind.Stage => GetStageHostView(route),
                 _ => CreatePlaceholder()
@@ -103,6 +105,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                     if (_contragentHostView is not null)
                     {
                         _contragentHostView.Route = route;
+                    }
+
+                    break;
+                case ContentHostRouteKind.Contract:
+                    if (_contractHostView is not null)
+                    {
+                        _contractHostView.Route = route;
                     }
 
                     break;
@@ -143,6 +152,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (string.Equals(route, "/contragents", StringComparison.OrdinalIgnoreCase))
             {
                 return ContentHostRouteKind.Contragent;
+            }
+
+            if (string.Equals(route, "/contracts", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Contract;
             }
 
             if (string.Equals(route, "/revisions", StringComparison.OrdinalIgnoreCase))
@@ -202,6 +216,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             return _contragentHostView;
         }
 
+        private ContractHostView GetContractHostView(string? route)
+        {
+            _contractHostView ??= new ContractHostView();
+            _contractHostView.Route = route;
+            return _contractHostView;
+        }
+
         private RevisionHostView GetRevisionHostView(string? route)
         {
             _revisionHostView ??= new RevisionHostView();
@@ -245,6 +266,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             Profile,
             Employee,
             Contragent,
+            Contract,
             Revision,
             Stage
         }

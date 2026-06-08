@@ -453,6 +453,14 @@ namespace CbsContractsDesktopClient.Stores.Table
                 return defaults.ToCriteria();
             }
 
+            if (CurrentTablePage is not null
+                && string.Equals(CurrentTablePage.Route, "/contracts", StringComparison.OrdinalIgnoreCase))
+            {
+                var defaults = ContractTableFilterDefaultsReader.FromUser(_userService?.CurrentUser);
+                AppendUiTrace(ContractTableFilterDefaultsReader.BuildTrace(_userService?.CurrentUser, defaults));
+                return defaults.ToCriteria();
+            }
+
             return [];
         }
 
@@ -1512,6 +1520,8 @@ namespace CbsContractsDesktopClient.Stores.Table
                 || message.StartsWith("Trigger load more ", StringComparison.Ordinal)
                 || message.StartsWith("Attached explicit table ScrollViewer", StringComparison.Ordinal)
                 || message.StartsWith("FILTER ", StringComparison.Ordinal)
+                || message.StartsWith("CONTRACT FILTER DEFAULTS ", StringComparison.Ordinal)
+                || message.StartsWith("CONTRACT FILTER SETTINGS ", StringComparison.Ordinal)
                 || message.StartsWith("STAGE FILTER DEFAULTS ", StringComparison.Ordinal)
                 || message.StartsWith("STAGE FILTER SETTINGS ", StringComparison.Ordinal)
                 || message.StartsWith("VIEWMODEL LOAD STATE NULL", StringComparison.Ordinal)

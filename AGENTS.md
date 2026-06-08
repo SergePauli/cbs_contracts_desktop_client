@@ -1,4 +1,4 @@
-use utf-8 for file creation or updates
+use utf-8 for reading, file creation, or updates
 
 Workflow rules:
 - Do not create or run new tests until the code changes are approved.

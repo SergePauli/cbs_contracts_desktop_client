@@ -129,8 +129,9 @@ namespace CbsContractsDesktopClient.Views.Functional
             var revision = RevisionRow ?? _contractWorkflowStore.SelectedRevision ?? _contractWorkflowStore.SelectedStage;
             var contract = ContractRow ?? _contractWorkflowStore.Contract;
             var contragent = ContragentRow ?? _contractWorkflowStore.Contragent;
+            var selectedRow = revision ?? contract;
 
-            if (revision is null || revision.IsPlaceholder)
+            if (selectedRow is null || selectedRow.IsPlaceholder)
             {
                 ContractNameTextBlock.Text = "Контракт не выбран";
                 ContragentNameTextBlock.Text = string.Empty;
@@ -141,10 +142,12 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             ContractNameTextBlock.Text = TryGetText(contract, "name")
-                ?? TryGetText(revision, "contract.name")
+                ?? TryGetText(selectedRow, "contract.name")
+                ?? TryGetText(selectedRow, "name")
                 ?? "Контракт не выбран";
             ContragentNameTextBlock.Text = TryGetText(contragent, "name", "requisites.organization.name")
-                ?? TryGetText(revision, "contract.contragent.name")
+                ?? TryGetText(selectedRow, "contract.contragent.name")
+                ?? TryGetText(selectedRow, "contragent.name")
                 ?? string.Empty;
 
             RenderContacts(ReadContragentContacts(contragent));

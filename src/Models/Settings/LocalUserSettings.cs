@@ -7,6 +7,8 @@ namespace CbsContractsDesktopClient.Models.Settings
         public Dictionary<string, LocalTableSettings> Tables { get; init; } = [];
 
         public bool ShowStageCostFraction { get; set; }
+
+        public bool ShowContractCostFraction { get; set; }
     }
 
     public sealed class LocalTableSettings

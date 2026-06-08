@@ -377,7 +377,36 @@ namespace CbsContractsDesktopClient.Views.Controls
                 "StageCost" => FormatStageCost(value, showStageCostFraction),
                 "StageDuration" => FormatStageDuration(row, value),
                 "StageSzi" => HasStageTaskKind(row, 10) ? "\u2713" : string.Empty,
+                "ContractDsp" => FormatContractDsp(row),
+                "ContractRegion" => FirstText(
+                    row.GetValue("contragent.region.name"),
+                    row.GetValue("region.name"),
+                    value),
+                "ContractCost" => FormatStageCost(value, showStageCostFraction),
+                "ContractFunded" => FormatContractFunded(value),
                 _ => null
+            };
+        }
+
+        private static string FormatContractDsp(TableDataRow row)
+        {
+            return $"{FormatPresence(row.GetValue("revision.doc_link"))}{FormatPresence(row.GetValue("revision.scan_link"))}{FormatPresence(row.GetValue("revision.protocol_link"))}";
+        }
+
+        private static string FormatPresence(object? value)
+        {
+            return string.IsNullOrWhiteSpace(value?.ToString()) ? "-" : "+";
+        }
+
+        private static string FormatContractFunded(object? value)
+        {
+            return value switch
+            {
+                true => "\u2713",
+                string text when bool.TryParse(text, out var parsed) && parsed => "\u2713",
+                string text when string.Equals(text, "null", StringComparison.OrdinalIgnoreCase) => "\u231B",
+                null => "\u231B",
+                _ => string.Empty
             };
         }
 
@@ -607,9 +636,13 @@ namespace CbsContractsDesktopClient.Views.Controls
             var foregroundKey = "ShellPrimaryTextBrush";
             var fontWeight = FontWeights.Normal;
 
-            if (!isPlaceholder && RowStyleKey == CbsTableRowStyleKey.StageDeadline && Row is not null)
+            if (!isPlaceholder
+                && RowStyleKey is CbsTableRowStyleKey.StageDeadline or CbsTableRowStyleKey.ContractDeadline
+                && Row is not null)
             {
-                var style = ResolveStageDeadlineStyle(Row);
+                var style = RowStyleKey == CbsTableRowStyleKey.ContractDeadline
+                    ? ResolveContractDeadlineStyle(Row)
+                    : ResolveStageDeadlineStyle(Row);
                 if (!string.IsNullOrWhiteSpace(style.BackgroundBrushKey) && !IsSelected && !IsHovered && !IsPressed)
                 {
                     RowBorder.Background = ResolveBrush(style.BackgroundBrushKey, "ShellTableRowBackgroundBrush");
@@ -638,6 +671,28 @@ namespace CbsContractsDesktopClient.Views.Controls
             var deadline = TryGetDateTime(row.GetValue("deadline_at"));
             var statusId = TryGetLong(row.GetValue("status.id")) ?? TryGetLong(row.GetValue("status_id")) ?? 2;
             var governmental = TryGetBoolean(row.GetValue("contract.governmental"));
+            return ResolveDeadlineStyle(deadline, statusId, governmental);
+        }
+
+        private static ConditionalRowStyle ResolveContractDeadlineStyle(TableDataRow row)
+        {
+            var deadline =
+                TryGetDateTime(row.GetValue("stage.deadline_at"))
+                ?? TryGetDateTime(row.GetValue("expired_at"))
+                ?? TryGetDateTime(row.GetValue("deadline_at"))
+                ?? TryGetDateTime(row.GetValue("expire_at"));
+            var statusId =
+                TryGetLong(row.GetValue("stage.status.id"))
+                ?? TryGetLong(row.GetValue("stage.status_id"))
+                ?? TryGetLong(row.GetValue("status.id"))
+                ?? TryGetLong(row.GetValue("status_id"))
+                ?? 2;
+            var governmental = TryGetBoolean(row.GetValue("governmental"));
+            return ResolveDeadlineStyle(deadline, statusId, governmental);
+        }
+
+        private static ConditionalRowStyle ResolveDeadlineStyle(DateTimeOffset? deadline, long statusId, bool governmental)
+        {
             var isNotDone = statusId is not (5 or 4 or 7 or 6);
 
             if (deadline is null)

@@ -82,6 +82,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
         {
             return
             [
+                BuildContractsDefinition(),
                 BuildRevisionsDefinition(),
                 BuildStagesDefinition()
             ];
