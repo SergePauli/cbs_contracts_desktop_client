@@ -36,6 +36,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ProgressRing _progressRing;
         private readonly InfoBar _errorInfoBar;
         private Button? _settingsButton;
+        private MenuFlyoutItem? _configureColumnsItem;
         private string? _route;
         private bool _isLoaded;
         private bool _isStoreEventsSubscribed;
@@ -692,6 +693,42 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
+        private async Task ConfigureColumnsAsync()
+        {
+            if (!Store.CanConfigureColumns || Store.CurrentTablePage is null)
+            {
+                return;
+            }
+
+            try
+            {
+                var dialog = new TableColumnLayoutDialog(Store.CurrentTablePage.Columns)
+                {
+                    XamlRoot = XamlRoot
+                };
+
+                var result = await dialog.ShowAsync();
+                if (result != ContentDialogResult.Primary)
+                {
+                    return;
+                }
+
+                await Store.SaveColumnLayoutAsync(dialog.BuildColumns());
+
+                var definition = Store.CurrentTablePage
+                    ?? throw new InvalidOperationException("Table page must be available after column layout save.");
+
+                AttachCurrentStoreRowsToTableView(definition);
+                TableView.ApplyFilterInputs(Store.CurrentFilters);
+                TableView.SetSelectedRow(Store.SelectedRow);
+                TableView.InvalidateRows(new TableRenderRequest(TableRenderReason.PageLoaded));
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось изменить раскладку столбцов", ex.Message);
+            }
+        }
+
         private async Task ResetSortingAsync()
         {
             try
@@ -719,6 +756,15 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             _settingsButton = CreateHeaderIconButton("\uE713", "Настройки таблицы");
             var flyout = new MenuFlyout();
+
+            _configureColumnsItem = new MenuFlyoutItem
+            {
+                Text = "Расстановка столбцов",
+                IsEnabled = Store.CanConfigureColumns
+            };
+            _configureColumnsItem.Click += async (_, _) => await ConfigureColumnsAsync();
+            flyout.Items.Add(_configureColumnsItem);
+
             var resetWidthsItem = new MenuFlyoutItem { Text = "Сбросить ширину" };
             resetWidthsItem.Click += async (_, _) => await ResetColumnWidthsAsync();
             flyout.Items.Add(resetWidthsItem);
@@ -800,6 +846,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             TableView.Visibility = Store.HasActiveReference ? Visibility.Visible : Visibility.Collapsed;
             TableView.RowStyleKey = Store.CurrentRowStyleKey;
             ApplyDefaultActionButtonState(_settingsButton, Store.HasActiveReference);
+            if (_configureColumnsItem is not null)
+            {
+                _configureColumnsItem.IsEnabled = Store.CanConfigureColumns;
+            }
         }
 
         private void UpdateSelectedFooterText()

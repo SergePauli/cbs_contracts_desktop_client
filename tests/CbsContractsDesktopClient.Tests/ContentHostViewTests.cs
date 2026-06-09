@@ -199,6 +199,10 @@ public sealed class ContentHostViewTests
         Assert.Contains("_tableHost.Children.Add(TableView);", codeBehind);
         Assert.Contains("CreateResetFiltersButton()", codeBehind);
         Assert.Contains("CreateSettingsButton()", codeBehind);
+        Assert.Contains("ConfigureColumnsAsync()", codeBehind);
+        Assert.Contains("new TableColumnLayoutDialog(Store.CurrentTablePage.Columns)", codeBehind);
+        Assert.Contains("await Store.SaveColumnLayoutAsync(dialog.BuildColumns());", codeBehind);
+        Assert.Contains("Store.CanConfigureColumns", codeBehind);
         Assert.Contains("await Store.ResetColumnWidthsAsync();", codeBehind);
         Assert.Contains("await Store.ClearFiltersAsync();", codeBehind);
         Assert.Contains("await Store.ClearSortsAsync();", codeBehind);
