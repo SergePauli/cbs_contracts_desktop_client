@@ -49,6 +49,13 @@ public sealed class ContentHostViewTests
         "Shell",
         "ComplexHostViewBase.cs");
 
+    private static readonly string FilterIconFactoryPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Controls",
+        "FilterIconFactory.cs");
+
     private static readonly string TableHostViewXamlPath = Path.Combine(
         ProjectRoot,
         "src",
@@ -83,6 +90,34 @@ public sealed class ContentHostViewTests
         "Views",
         "Shell",
         "StageHostView.cs");
+
+    private static readonly string ContractHostViewPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ContractHostView.cs");
+
+    private static readonly string RevisionHostViewPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "RevisionHostView.cs");
+
+    private static readonly string EmployeeHostViewPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "EmployeeHostView.cs");
+
+    private static readonly string ContragentHostViewPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "ContragentHostView.cs");
 
     private static readonly string TablePageStorePath = Path.Combine(
         ProjectRoot,
@@ -167,6 +202,82 @@ public sealed class ContentHostViewTests
         Assert.Contains("await Store.ResetColumnWidthsAsync();", codeBehind);
         Assert.Contains("await Store.ClearFiltersAsync();", codeBehind);
         Assert.Contains("await Store.ClearSortsAsync();", codeBehind);
+    }
+
+    [Fact]
+    public void ComplexHostViewBase_OwnsHeaderActionButtonVisualStates()
+    {
+        var codeBehind = File.ReadAllText(ComplexHostViewBasePath);
+
+        Assert.Contains("ApplyEditButtonState", codeBehind);
+        Assert.Contains("Microsoft.UI.Colors.RoyalBlue", codeBehind);
+        Assert.Contains("ApplyCreateButtonState", codeBehind);
+        Assert.Contains("Microsoft.UI.Colors.ForestGreen", codeBehind);
+        Assert.Contains("ApplyDeleteButtonState", codeBehind);
+        Assert.Contains("Microsoft.UI.Colors.Firebrick", codeBehind);
+        Assert.Contains("ApplyDefaultActionButtonState", codeBehind);
+        Assert.Contains("GetBrush(\"ShellPrimaryTextBrush\")", codeBehind);
+        Assert.Contains("GetBrush(\"ShellSecondaryTextBrush\")", codeBehind);
+        Assert.Contains("button.IsEnabled = isEnabled;", codeBehind);
+        Assert.Contains("button.Foreground = isEnabled", codeBehind);
+    }
+
+    [Fact]
+    public void ComplexAndReferenceHostsUseSharedFilterClearIcon()
+    {
+        var complexHost = File.ReadAllText(ComplexHostViewBasePath);
+        var referenceXaml = File.ReadAllText(ReferenceHostViewXamlPath);
+        var referenceCodeBehind = File.ReadAllText(ReferenceHostViewCodeBehindPath);
+        var iconFactory = File.ReadAllText(FilterIconFactoryPath);
+
+        Assert.Contains("internal static class FilterIconFactory", iconFactory);
+        Assert.Contains("BuildFilterClearIcon()", iconFactory);
+        Assert.Contains("Glyph = \"\\uE71C\"", iconFactory);
+        Assert.Contains("Glyph = \"\\uE733\"", iconFactory);
+        Assert.Contains("button.Content = FilterIconFactory.BuildFilterClearIcon();", complexHost);
+        Assert.Contains("x:Name=\"ResetFiltersButton\"", referenceXaml);
+        Assert.Contains("ResetFiltersButton.Content = FilterIconFactory.BuildFilterClearIcon();", referenceCodeBehind);
+    }
+
+    [Fact]
+    public void ComplexHosts_UseSharedHeaderActionButtonVisualStates()
+    {
+        var contractHost = File.ReadAllText(ContractHostViewPath);
+        var stageHost = File.ReadAllText(StageHostViewPath);
+        var revisionHost = File.ReadAllText(RevisionHostViewPath);
+        var employeeHost = File.ReadAllText(EmployeeHostViewPath);
+        var contragentHost = File.ReadAllText(ContragentHostViewPath);
+
+        Assert.Contains("ApplyEditButtonState(_editButton", contractHost);
+        Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", contractHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", contractHost);
+        Assert.Contains("ApplyEditButtonState(_editButton", stageHost);
+        Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", stageHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", stageHost);
+        Assert.Contains("ApplyEditButtonState(_editButton", revisionHost);
+        Assert.Contains("ApplyDefaultActionButtonState(", revisionHost);
+        Assert.Contains("ApplyEditButtonState(_editButton", employeeHost);
+        Assert.Contains("ApplyDeleteButtonState(_deleteButton", employeeHost);
+        Assert.Contains("ApplyCreateButtonState(_createButton", employeeHost);
+        Assert.Contains("ApplyEditButtonState(_editButton", contragentHost);
+        Assert.Contains("ApplyDeleteButtonState(_deleteButton", contragentHost);
+        Assert.Contains("ApplyCreateButtonState(_createButton", contragentHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_fnsCompareButton", contragentHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_copyButton", contragentHost);
+    }
+
+    [Fact]
+    public void SettingsButtons_UseNeutralActiveState()
+    {
+        var complexHost = File.ReadAllText(ComplexHostViewBasePath);
+        var referenceCodeBehind = File.ReadAllText(ReferenceHostViewCodeBehindPath);
+
+        Assert.Contains("private Button? _settingsButton;", complexHost);
+        Assert.Contains("_settingsButton = CreateHeaderIconButton(\"\\uE713\", \"Настройки таблицы\")", complexHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_settingsButton, Store.HasActiveReference);", complexHost);
+        Assert.Contains("UpdateSettingsButtonState();", referenceCodeBehind);
+        Assert.Contains("HeaderSettingsButton.IsEnabled = _viewModel.HasActiveReference;", referenceCodeBehind);
+        Assert.Contains("HeaderSettingsButton.Foreground = _viewModel.HasActiveReference", referenceCodeBehind);
     }
 
     [Fact]

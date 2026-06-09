@@ -179,6 +179,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         private const double MultiSelectFilterButtonHeight = 22d;
         private const double MultiSelectFilterFlyoutWidth = 260d;
         private const double MultiSelectFilterFlyoutMaxHeight = 180d;
+        private const double MultiSelectFilterSearchHeight = 24d;
+        private const double MultiSelectFilterActionButtonSize = 24d;
+        private const double MultiSelectFilterHeaderWidthFactor = 0.9d;
         private enum RowsRenderPath
         {
             Full,
@@ -1895,8 +1898,44 @@ namespace CbsContractsDesktopClient.Views.Controls
             var searchTextBox = new TextBox
             {
                 PlaceholderText = "Поиск",
-                Margin = new Thickness(0, 0, 0, 8)
+                Height = MultiSelectFilterSearchHeight,
+                MinHeight = MultiSelectFilterSearchHeight,
+                Padding = new Thickness(6, 1, 6, 0),
+                FontSize = Math.Max(11, GetHeaderFontSize() - 1),
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0)
             };
+
+            var clearButton = CreateMultiSelectFilterFlyoutActionButton(FilterIconFactory.BuildFilterClearIcon(), "очистить");
+            clearButton.Click += OnMultiSelectClearButtonClick;
+
+            var closeButton = CreateMultiSelectFilterFlyoutActionButton(
+                new FontIcon
+                {
+                    Glyph = "\uE711",
+                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontSize = 10
+                },
+                "закрыть");
+            closeButton.HorizontalAlignment = HorizontalAlignment.Right;
+            closeButton.VerticalAlignment = VerticalAlignment.Top;
+            closeButton.Margin = new Thickness(0, -10, -10, 0);
+            closeButton.BorderThickness = new Thickness(0);
+            closeButton.Click += OnMultiSelectCloseButtonClick;
+
+            var flyoutHeader = new Grid
+            {
+                Width = MultiSelectFilterFlyoutWidth * MultiSelectFilterHeaderWidthFactor,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(0, 0, 0, 8),
+                ColumnSpacing = 4
+            };
+            flyoutHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            flyoutHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(searchTextBox, 0);
+            flyoutHeader.Children.Add(searchTextBox);
+            Grid.SetColumn(clearButton, 1);
+            flyoutHeader.Children.Add(clearButton);
 
             var optionsHost = new StackPanel
             {
@@ -1913,14 +1952,24 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Content = optionsHost
             };
 
-            var flyoutContent = new StackPanel
+            var flyoutBody = new StackPanel
             {
                 Width = MultiSelectFilterFlyoutWidth,
                 Spacing = 0,
                 Children =
                 {
-                    searchTextBox,
+                    flyoutHeader,
                     scrollViewer
+                }
+            };
+
+            var flyoutContent = new Grid
+            {
+                Width = MultiSelectFilterFlyoutWidth,
+                Children =
+                {
+                    flyoutBody,
+                    closeButton
                 }
             };
 
@@ -1945,6 +1994,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             };
 
             searchTextBox.Tag = state;
+            flyoutContent.Tag = state;
+            clearButton.Tag = state;
+            closeButton.Tag = state;
             searchTextBox.TextChanged += OnMultiSelectSearchTextChanged;
             flyout.Opened += OnMultiSelectFlyoutOpened;
 
@@ -1953,6 +2005,22 @@ namespace CbsContractsDesktopClient.Views.Controls
             _filterMultiSelectStates[column.FieldKey] = state;
             UpdateMultiSelectFilterButtonContent(button, column);
             RebuildMultiSelectOptionItems(state);
+            return button;
+        }
+
+        private Button CreateMultiSelectFilterFlyoutActionButton(UIElement icon, string tooltip)
+        {
+            var button = new Button
+            {
+                Width = MultiSelectFilterActionButtonSize,
+                Height = MultiSelectFilterActionButtonSize,
+                MinWidth = MultiSelectFilterActionButtonSize,
+                MinHeight = MultiSelectFilterActionButtonSize,
+                Padding = new Thickness(0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Content = icon
+            };
+            ToolTipService.SetToolTip(button, tooltip);
             return button;
         }
 
@@ -2221,15 +2289,13 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnMultiSelectFlyoutOpened(object? sender, object e)
         {
-            if (sender is not Flyout { Content: StackPanel { Children.Count: > 0 } content }
-                || content.Children[0] is not TextBox searchTextBox
-                || searchTextBox.Tag is not MultiSelectFilterUiState state)
+            if (sender is not Flyout { Content: FrameworkElement { Tag: MultiSelectFilterUiState state } })
             {
                 return;
             }
 
             state.SearchText = string.Empty;
-            searchTextBox.Text = string.Empty;
+            state.SearchTextBox.Text = string.Empty;
             RebuildMultiSelectOptionItems(state);
         }
 
@@ -2242,6 +2308,43 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             state.SearchText = state.SearchTextBox.Text ?? string.Empty;
             RebuildMultiSelectOptionItems(state);
+        }
+
+        private void OnMultiSelectClearButtonClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: MultiSelectFilterUiState state })
+            {
+                return;
+            }
+
+            state.SearchText = string.Empty;
+            state.SearchTextBox.Text = string.Empty;
+            state.SelectedValues = Array.Empty<object?>();
+            state.SelectedOptions = [];
+            state.Column.Filter.Value = state.SelectedValues;
+            UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
+            RebuildMultiSelectOptionItems(state);
+
+            if (_suppressFilterNotifications)
+            {
+                return;
+            }
+
+            FilterRequested?.Invoke(
+                this,
+                new CbsTableFilterRequestedEventArgs(
+                    state.Column.FieldKey,
+                    GetFilterMode(state.Column),
+                    CbsTableMultiSelectFilterValue.Create(GetMultiSelectOptions(state.Column), state.SelectedValues)));
+        }
+
+        private void OnMultiSelectCloseButtonClick(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: MultiSelectFilterUiState state }
+                && state.Button.Flyout is Flyout flyout)
+            {
+                flyout.Hide();
+            }
         }
 
         private void OnMultiSelectOptionChanged(object sender, RoutedEventArgs e)

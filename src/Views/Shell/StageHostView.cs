@@ -200,30 +200,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             var hasSelectedRow = Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder;
 
-            if (_editButton is not null)
-            {
-                _editButton.IsEnabled = hasSelectedRow && Store.CanEditRows;
-            }
-
-            if (_copyButton is not null)
-            {
-                _copyButton.IsEnabled = hasSelectedRow;
-            }
-
-            if (_commentButton is not null)
-            {
-                _commentButton.IsEnabled = hasSelectedRow && _userService.CurrentUser?.ProfileId is not null;
-            }
-
-            if (_createEmployeeButton is not null)
-            {
-                _createEmployeeButton.IsEnabled = hasSelectedRow;
-            }
-
-            if (_saveFiltersButton is not null)
-            {
-                _saveFiltersButton.IsEnabled = Store.HasActiveReference;
-            }
+            ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
+            ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
+            ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_saveFiltersButton, Store.HasActiveReference);
         }
 
         private void UpdateDetailView(TableDataRow? row)

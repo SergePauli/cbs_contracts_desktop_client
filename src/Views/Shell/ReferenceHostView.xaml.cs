@@ -51,6 +51,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
 
             InitializeComponent();
+            ResetFiltersButton.Content = FilterIconFactory.BuildFilterClearIcon();
             DataContext = _viewModel;
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
@@ -85,6 +86,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             _isLoaded = true;
             UpdateSelectionActionButtons();
+            UpdateSettingsButtonState();
             if (!string.IsNullOrWhiteSpace(Route))
             {
                 await NavigateToRouteAsync(Route);
@@ -137,6 +139,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 || e.PropertyName == nameof(TablePageStore.CanDeleteRows))
             {
                 UpdateSelectionActionButtons();
+                UpdateSettingsButtonState();
                 UpdateFooterStats();
             }
 
@@ -481,6 +484,19 @@ namespace CbsContractsDesktopClient.Views.Shell
                     ? new SolidColorBrush(Colors.Firebrick)
                     : (Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
             }
+        }
+
+        private void UpdateSettingsButtonState()
+        {
+            if (HeaderSettingsButton is null)
+            {
+                return;
+            }
+
+            HeaderSettingsButton.IsEnabled = _viewModel.HasActiveReference;
+            HeaderSettingsButton.Foreground = _viewModel.HasActiveReference
+                ? (Brush)Application.Current.Resources["ShellPrimaryTextBrush"]
+                : (Brush)Application.Current.Resources["ShellSecondaryTextBrush"];
         }
 
         private void UpdateFooterStats()

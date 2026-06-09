@@ -133,40 +133,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             var hasSelectedRow = Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder;
 
-            if (_editButton is not null)
-            {
-                _editButton.IsEnabled = hasSelectedRow && Store.CanEditRows;
-            }
-
-            if (_deleteButton is not null)
-            {
-                _deleteButton.IsEnabled = hasSelectedRow && Store.CanDeleteRows;
-            }
-
-            if (_createButton is not null)
-            {
-                _createButton.IsEnabled = Store.CanCreateRows;
-            }
-
-            if (_createEmployeeButton is not null)
-            {
-                _createEmployeeButton.IsEnabled = hasSelectedRow && !_isFnsWorkflowInProgress;
-            }
-
-            if (_fnsCompareButton is not null)
-            {
-                _fnsCompareButton.IsEnabled = hasSelectedRow && !_isFnsWorkflowInProgress;
-            }
-
-            if (_fnsMenuButton is not null)
-            {
-                _fnsMenuButton.IsEnabled = !_isFnsWorkflowInProgress;
-            }
-
-            if (_copyButton is not null)
-            {
-                _copyButton.IsEnabled = hasSelectedRow;
-            }
+            ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
+            ApplyDeleteButtonState(_deleteButton, hasSelectedRow && Store.CanDeleteRows);
+            ApplyCreateButtonState(_createButton, Store.CanCreateRows);
+            ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow && !_isFnsWorkflowInProgress);
+            ApplyDefaultActionButtonState(_fnsCompareButton, hasSelectedRow && !_isFnsWorkflowInProgress);
+            ApplyDefaultActionButtonState(_fnsMenuButton, !_isFnsWorkflowInProgress);
+            ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
         }
 
         private void UpdateDetailView()

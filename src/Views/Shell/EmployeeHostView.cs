@@ -99,20 +99,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             var hasSelectedRow = Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder;
 
-            if (_editButton is not null)
-            {
-                _editButton.IsEnabled = hasSelectedRow && Store.CanEditRows;
-            }
-
-            if (_deleteButton is not null)
-            {
-                _deleteButton.IsEnabled = hasSelectedRow && Store.CanDeleteRows;
-            }
-
-            if (_createButton is not null)
-            {
-                _createButton.IsEnabled = Store.CanCreateRows;
-            }
+            ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
+            ApplyDeleteButtonState(_deleteButton, hasSelectedRow && Store.CanDeleteRows);
+            ApplyCreateButtonState(_createButton, Store.CanCreateRows);
         }
 
         private void UpdateDetailView()

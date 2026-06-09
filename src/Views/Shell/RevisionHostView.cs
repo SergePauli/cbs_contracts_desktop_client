@@ -88,15 +88,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             var hasSelectedRow = Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder;
 
-            if (_editButton is not null)
-            {
-                _editButton.IsEnabled = hasSelectedRow && Store.CanEditRows;
-            }
-
-            if (_copyButton is not null)
-            {
-                _copyButton.IsEnabled = hasSelectedRow && _contractWorkflowStore.Contract is { IsPlaceholder: false };
-            }
+            ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
+            ApplyDefaultActionButtonState(
+                _copyButton,
+                hasSelectedRow && _contractWorkflowStore.Contract is { IsPlaceholder: false });
         }
 
         private void UpdateDetailView(TableDataRow? row)

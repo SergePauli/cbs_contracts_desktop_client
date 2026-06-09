@@ -17,6 +17,12 @@ public sealed class CbsTableViewTests
         "Controls",
         "TableRenderRequest.cs");
 
+    private static readonly string FilterIconFactoryPath = TestProjectPaths.FromRepositoryRoot(
+        "src",
+        "Views",
+        "Controls",
+        "FilterIconFactory.cs");
+
     [Fact]
     public void CbsTableView_BuildsMultiSelectFilterFlyoutWithSearchAndCheckboxList()
     {
@@ -30,6 +36,8 @@ public sealed class CbsTableViewTests
         Assert.Contains("new StackPanel", code);
         Assert.Contains("new CheckBox", code);
         Assert.Contains("MultiSelectFilterFlyoutMaxHeight = 180d", code);
+        Assert.Contains("MultiSelectFilterSearchHeight = 24d", code);
+        Assert.Contains("MultiSelectFilterHeaderWidthFactor = 0.9d", code);
         Assert.Contains("MinHeight = 20", code);
         Assert.Contains("Margin = new Thickness(4, 1, 4, 1)", code);
         Assert.Contains("Margin = new Thickness(2, 0, 0, 0)", code);
@@ -47,6 +55,26 @@ public sealed class CbsTableViewTests
         Assert.Contains("SelectedOptions", code);
         Assert.Contains("SelectedValues", code);
         Assert.Contains("SearchText", code);
+    }
+
+    [Fact]
+    public void CbsTableView_MultiSelectFilterFlyoutHasClearAndCloseActions()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+        var iconFactory = File.ReadAllText(FilterIconFactoryPath);
+
+        Assert.Contains("FilterIconFactory.BuildFilterClearIcon()", code);
+        Assert.Contains("CreateMultiSelectFilterFlyoutActionButton", code);
+        Assert.Contains("ToolTipService.SetToolTip(button, tooltip)", code);
+        Assert.Contains("\"очистить\"", code);
+        Assert.Contains("OnMultiSelectClearButtonClick", code);
+        Assert.Contains("state.SelectedValues = Array.Empty<object?>();", code);
+        Assert.Contains("CbsTableMultiSelectFilterValue.Create(GetMultiSelectOptions(state.Column), state.SelectedValues)", code);
+        Assert.Contains("\"закрыть\"", code);
+        Assert.Contains("OnMultiSelectCloseButtonClick", code);
+        Assert.Contains("flyout.Hide();", code);
+        Assert.Contains("Glyph = \"\\uE71C\"", iconFactory);
+        Assert.Contains("Glyph = \"\\uE733\"", iconFactory);
     }
 
     [Fact]

@@ -35,6 +35,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly TextBlock _placeholderTextBlock;
         private readonly ProgressRing _progressRing;
         private readonly InfoBar _errorInfoBar;
+        private Button? _settingsButton;
         private string? _route;
         private bool _isLoaded;
         private bool _isStoreEventsSubscribed;
@@ -709,13 +710,14 @@ namespace CbsContractsDesktopClient.Views.Shell
         private Button CreateResetFiltersButton()
         {
             var button = CreateHeaderIconButton("\uE71C", "Начальные настройки фильтрации");
+            button.Content = FilterIconFactory.BuildFilterClearIcon();
             button.Click += async (_, _) => await ResetFiltersAsync();
             return button;
         }
 
         private Button CreateSettingsButton()
         {
-            var button = CreateHeaderIconButton("\uE713", "Настройки таблицы");
+            _settingsButton = CreateHeaderIconButton("\uE713", "Настройки таблицы");
             var flyout = new MenuFlyout();
             var resetWidthsItem = new MenuFlyoutItem { Text = "Сбросить ширину" };
             resetWidthsItem.Click += async (_, _) => await ResetColumnWidthsAsync();
@@ -729,8 +731,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             resetSortItem.Click += async (_, _) => await ResetSortingAsync();
             flyout.Items.Add(resetSortItem);
 
-            button.Flyout = flyout;
-            return button;
+            _settingsButton.Flyout = flyout;
+            ApplyDefaultActionButtonState(_settingsButton, Store.HasActiveReference);
+            return _settingsButton;
         }
 
         protected static Button CreateHeaderIconButton(string iconGlyph, string tooltip)
@@ -752,6 +755,39 @@ namespace CbsContractsDesktopClient.Views.Shell
             return button;
         }
 
+        protected static void ApplyEditButtonState(Button? button, bool isEnabled)
+        {
+            ApplyHeaderActionButtonState(button, isEnabled, new SolidColorBrush(Microsoft.UI.Colors.RoyalBlue));
+        }
+
+        protected static void ApplyCreateButtonState(Button? button, bool isEnabled)
+        {
+            ApplyHeaderActionButtonState(button, isEnabled, new SolidColorBrush(Microsoft.UI.Colors.ForestGreen));
+        }
+
+        protected static void ApplyDeleteButtonState(Button? button, bool isEnabled)
+        {
+            ApplyHeaderActionButtonState(button, isEnabled, new SolidColorBrush(Microsoft.UI.Colors.Firebrick));
+        }
+
+        protected static void ApplyDefaultActionButtonState(Button? button, bool isEnabled)
+        {
+            ApplyHeaderActionButtonState(button, isEnabled, GetBrush("ShellPrimaryTextBrush"));
+        }
+
+        protected static void ApplyHeaderActionButtonState(Button? button, bool isEnabled, Brush activeForeground)
+        {
+            if (button is null)
+            {
+                return;
+            }
+
+            button.IsEnabled = isEnabled;
+            button.Foreground = isEnabled
+                ? activeForeground
+                : GetBrush("ShellSecondaryTextBrush");
+        }
+
         private void RefreshHeaderState()
         {
             _headerTitleTextBlock.Text = Store.CompactHeaderText;
@@ -763,6 +799,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _placeholderTextBlock.Visibility = Store.ShowPlaceholder ? Visibility.Visible : Visibility.Collapsed;
             TableView.Visibility = Store.HasActiveReference ? Visibility.Visible : Visibility.Collapsed;
             TableView.RowStyleKey = Store.CurrentRowStyleKey;
+            ApplyDefaultActionButtonState(_settingsButton, Store.HasActiveReference);
         }
 
         private void UpdateSelectedFooterText()

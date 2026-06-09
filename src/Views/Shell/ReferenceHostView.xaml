@@ -91,6 +91,7 @@
                             Content="&#xE74D;" />
 
                         <Button
+                            x:Name="ResetFiltersButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"
                             Padding="0"
@@ -115,8 +116,7 @@
                             FontSize="14"
                             Foreground="{StaticResource ShellSecondaryTextBrush}"
                             ToolTipService.ToolTip="Начальные установки фильтрации"
-                            Visibility="{Binding HasFilters, Converter={StaticResource BoolVisibilityConverter}}"
-                            Content="&#xE71C;" />
+                            Visibility="{Binding HasFilters, Converter={StaticResource BoolVisibilityConverter}}" />
 
                         <Button
                             x:Name="HeaderSettingsButton"
