@@ -49,6 +49,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
+            services.AddSingleton<IContragentLookupService, ContragentLookupService>();
             services.AddSingleton<IEmployeeEditWorkflow, EmployeeEditWorkflow>();
             services.AddSingleton<IContragentFnsWorkflow, ContragentFnsWorkflow>();
             services.AddSingleton<AppShellViewModel>();

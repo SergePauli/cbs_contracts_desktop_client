@@ -9,7 +9,7 @@ namespace CbsContractsDesktopClient.Shared.Dialogs;
 
 public static class AppDialogLayout
 {
-    public static UIElement BuildLabeledControl(string label, UIElement control, double spacing = 6)
+    public static UIElement BuildLabeledControl(string label, UIElement control, double spacing = 4)
     {
         var stack = new StackPanel
         {
@@ -17,8 +17,8 @@ public static class AppDialogLayout
         };
         stack.Children.Add(new TextBlock
         {
-            Text = label,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold
+            Text = label,            
+            FontSize = 12
         });
         stack.Children.Add(control);
         return stack;

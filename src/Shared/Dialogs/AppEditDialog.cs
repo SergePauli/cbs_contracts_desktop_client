@@ -8,6 +8,10 @@ namespace CbsContractsDesktopClient.Shared.Dialogs;
 
 public abstract class AppEditDialog : ContentDialog
 {
+    private static readonly Windows.UI.Color DialogBackgroundColor = ColorHelper.FromArgb(255, 246, 247, 248);
+    private static readonly Windows.UI.Color FooterButtonHoverColor = ColorHelper.FromArgb(255, 232, 235, 239);
+    private static readonly Windows.UI.Color FooterButtonPressedColor = ColorHelper.FromArgb(255, 220, 225, 231);
+
     private readonly Button _saveButton;
     private readonly Button _cancelButton;
 
@@ -17,6 +21,13 @@ public abstract class AppEditDialog : ContentDialog
         SecondaryButtonText = string.Empty;
         CloseButtonText = string.Empty;
         DefaultButton = ContentDialogButton.None;
+        Resources.MergedDictionaries.Add(new ResourceDictionary
+        {
+            Source = new Uri("ms-appx:///Microsoft.UI.Xaml/DensityStyles/Compact.xaml")
+        });
+        Background = new SolidColorBrush(DialogBackgroundColor);
+        Resources["ContentDialogBackground"] = new SolidColorBrush(DialogBackgroundColor);
+        Resources["ContentDialogTopOverlay"] = new SolidColorBrush(DialogBackgroundColor);
 
         ErrorText.Foreground = new SolidColorBrush(Colors.IndianRed);
         ErrorText.HorizontalAlignment = HorizontalAlignment.Center;
@@ -54,6 +65,7 @@ public abstract class AppEditDialog : ContentDialog
     {
         var root = new Grid
         {
+            Background = new SolidColorBrush(DialogBackgroundColor),
             RowSpacing = 8
         };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -159,7 +171,7 @@ public abstract class AppEditDialog : ContentDialog
             }
         };
 
-        return new Button
+        var button = new Button
         {
             Width = 112,
             MinHeight = 28,
@@ -172,6 +184,11 @@ public abstract class AppEditDialog : ContentDialog
             VerticalContentAlignment = VerticalAlignment.Center,
             Content = content
         };
+        button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(FooterButtonHoverColor);
+        button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(FooterButtonPressedColor);
+        button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(FooterButtonHoverColor);
+        button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(FooterButtonPressedColor);
+        return button;
     }
 
     private void SetFooterEnabled(bool isEnabled)

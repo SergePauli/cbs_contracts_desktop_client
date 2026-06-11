@@ -707,8 +707,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     XamlRoot = XamlRoot
                 };
 
-                var result = await dialog.ShowAsync();
-                if (result != ContentDialogResult.Primary)
+                await dialog.ShowAsync();
+                if (!dialog.WasApplied)
                 {
                     return;
                 }

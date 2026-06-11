@@ -414,8 +414,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     "Удаление записи",
                     "Удалить выбранную запись?",
                     "Удалить",
-                    defaultButton: ContentDialogButton.Close,
-                    applyChrome: true))
+                    defaultButton: ContentDialogButton.Close))
             {
                 return;
             }

@@ -15,17 +15,20 @@ namespace CbsContractsDesktopClient.Services.References
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
+        private readonly IContragentLookupService _contragentLookupService;
 
         public EmployeeEditWorkflow(
             IDataQueryService dataQueryService,
             IModelMutationService modelMutationService,
             IReferenceDefinitionService referenceDefinitionService,
-            IReferenceLookupCacheService referenceLookupCacheService)
+            IReferenceLookupCacheService referenceLookupCacheService,
+            IContragentLookupService contragentLookupService)
         {
             _dataQueryService = dataQueryService;
             _modelMutationService = modelMutationService;
             _referenceDefinitionService = referenceDefinitionService;
             _referenceLookupCacheService = referenceLookupCacheService;
+            _contragentLookupService = contragentLookupService;
         }
 
         public async Task<EmployeeEditWorkflowResult?> ShowAsync(
@@ -50,7 +53,7 @@ namespace CbsContractsDesktopClient.Services.References
 
             var state = request.InitialState
                 ?? EmployeeEditStateFactory.Create(definition, request.IsCreateMode, sourceRow);
-            var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, LoadContragentOptionsAsync);
+            var viewModel = new EmployeeEditViewModel(state, LoadPositionOptionsAsync, _contragentLookupService.LoadOptionsAsync);
             var dialog = new EmployeeEditDialog(viewModel)
             {
                 XamlRoot = request.XamlRoot
@@ -169,44 +172,5 @@ namespace CbsContractsDesktopClient.Services.References
                 .ToList();
         }
 
-        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadContragentOptionsAsync(
-            string searchText,
-            CancellationToken cancellationToken)
-        {
-            var normalizedSearchText = searchText?.Trim() ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(normalizedSearchText))
-            {
-                return [];
-            }
-
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = "Contragent",
-                    Preset = "item",
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["org.name_or_org.full_name__cnt"] = normalizedSearchText
-                    },
-                    Sorts = ["org.name asc"],
-                    Limit = 25
-                },
-                cancellationToken);
-
-            return rows
-                .Where(static row => !row.IsPlaceholder)
-                .Select(static row => new CbsTableFilterOptionDefinition
-                {
-                    Value = row.GetValue("id"),
-                    Label =
-                        row.GetValue("full_name")?.ToString()
-                        ?? row.GetValue("name")?.ToString()
-                        ?? string.Empty
-                })
-                .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
-                .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
-                .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
-        }
     }
 }

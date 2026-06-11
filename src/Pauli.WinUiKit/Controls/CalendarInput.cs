@@ -11,6 +11,9 @@ namespace Pauli.WinUiKit.Controls;
 
 public sealed class CalendarInput : Grid
 {
+    private const double CompactButtonSize = 22;
+    private const double CompactIconSize = 10;
+
     private readonly TextBox _textBox;
     private readonly Button _clearButton;
     private readonly Button _calendarButton;
@@ -25,7 +28,9 @@ public sealed class CalendarInput : Grid
         {
             PlaceholderText = "дд.мм.гггг",
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            Padding = new Thickness(11, 5, 54, 5),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            MinHeight = 0,
+            Padding = new Thickness(7, 0, 42, 0),
             AcceptsReturn = true,
             InputScope = new InputScope
             {
@@ -66,7 +71,7 @@ public sealed class CalendarInput : Grid
             calendarFlyout.Hide();
         };
 
-        _calendarButton = BuildIconButton("\uE787", 10);
+        _calendarButton = BuildIconButton("\uE787");
         FlyoutBase.SetAttachedFlyout(_calendarButton, calendarFlyout);
         _calendarButton.Click += (_, _) =>
         {
@@ -74,7 +79,7 @@ public sealed class CalendarInput : Grid
             FlyoutBase.ShowAttachedFlyout(_calendarButton);
         };
 
-        _clearButton = BuildIconButton("\uE711", 10);
+        _clearButton = BuildIconButton("\uE711");
         _clearButton.Click += (_, _) => Date = null;
 
         SuppressChrome(_clearButton);
@@ -85,7 +90,7 @@ public sealed class CalendarInput : Grid
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 2, 0),
+            Margin = new Thickness(0, 0, 3, 0),
             Spacing = 0
         };
         buttonsHost.Children.Add(_clearButton);
@@ -246,13 +251,13 @@ public sealed class CalendarInput : Grid
         return false;
     }
 
-    private static Button BuildIconButton(string glyph, double fontSize = 14)
+    private static Button BuildIconButton(string glyph)
     {
         return new Button
         {
-            Width = 16,
-            Height = 28,
-            MinHeight = 28,
+            Width = CompactButtonSize,
+            Height = CompactButtonSize,
+            MinHeight = 0,
             Padding = new Thickness(2, 0, 2, 0),
             Margin = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -263,7 +268,7 @@ public sealed class CalendarInput : Grid
             Content = new FontIcon
             {
                 Glyph = glyph,
-                FontSize = fontSize
+                FontSize = CompactIconSize
             }
         };
     }

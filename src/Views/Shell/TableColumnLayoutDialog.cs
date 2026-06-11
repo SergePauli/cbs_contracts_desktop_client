@@ -1,6 +1,8 @@
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
@@ -16,12 +18,15 @@ namespace CbsContractsDesktopClient.Views.Shell
                 .ToList();
 
             Title = "Расстановка столбцов";
-            PrimaryButtonText = "Применить";
-            CloseButtonText = "Отмена";
-            DefaultButton = ContentDialogButton.Primary;
+            PrimaryButtonText = string.Empty;
+            CloseButtonText = string.Empty;
+            DefaultButton = ContentDialogButton.None;
             Content = BuildContent();
             RebuildItems();
+            DialogChrome.Apply(this);
         }
+
+        public bool WasApplied { get; private set; }
 
         public IReadOnlyList<CbsTableColumnDefinition> BuildColumns()
         {
@@ -42,6 +47,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
             root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             root.Children.Add(new TextBlock
             {
@@ -58,7 +64,33 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
             Grid.SetRow(scroller, 1);
             root.Children.Add(scroller);
+
+            var footer = BuildFooter();
+            Grid.SetRow(footer, 2);
+            root.Children.Add(footer);
             return root;
+        }
+
+        private FrameworkElement BuildFooter()
+        {
+            var applyButton = BuildFooterButton("Применить", "\uE73E", true, () =>
+            {
+                WasApplied = true;
+                Hide();
+            });
+            var cancelButton = BuildFooterButton("Отмена", "\uE711", false, Hide);
+
+            return new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Spacing = 4,
+                Children =
+                {
+                    applyButton,
+                    cancelButton
+                }
+            };
         }
 
         private void RebuildItems()
@@ -117,6 +149,54 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
             ToolTipService.SetToolTip(button, tooltip);
             button.Click += (_, _) => move();
+            return button;
+        }
+
+        private static Button BuildFooterButton(string text, string glyph, bool isPrimary, Action click)
+        {
+            var foreground = Application.Current.Resources[
+                    isPrimary ? "ShellTableRowSelectedBorderBrush" : "ShellSecondaryTextBrush"] as Brush
+                ?? new SolidColorBrush(isPrimary ? Microsoft.UI.Colors.SeaGreen : Microsoft.UI.Colors.DimGray);
+            var button = new Button
+            {
+                Width = 112,
+                MinHeight = 28,
+                Padding = new Thickness(8, 2, 8, 2),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                Foreground = foreground,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        new FontIcon
+                        {
+                            Glyph = glyph,
+                            FontFamily = new FontFamily("Segoe Fluent Icons"),
+                            FontSize = 12,
+                            Foreground = foreground
+                        },
+                        new TextBlock
+                        {
+                            Text = text,
+                            Foreground = foreground,
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                }
+            };
+            button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 232, 235, 239));
+            button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 220, 225, 231));
+            button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 232, 235, 239));
+            button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 220, 225, 231));
+            button.Click += (_, _) => click();
             return button;
         }
 

@@ -6,6 +6,9 @@ Workflow rules:
 - When formatting UI output, render static text that is always present, such as labels like "прочие задачи: ", with the normal text style for that area. Render dynamic text that depends on the selected row or object, such as IDs, names, task lists, and performer lists, with the bold/accent style for that area.
 - Confirm application architecture decisions before implementing them: first discuss where new code belongs, how it should be named, and its ownership boundaries; only write code after the decision is approved.
 - When creating form or dialog layouts, avoid showing semantically duplicate information; if a field is already present in the input area, do not repeat it in the summary block unless it adds distinct context.
+- Desktop layouts are for large screens, not touch-first UI: keep dialog/forms dense and compact, with small secondary labels, tight field heights, minimal padding/gaps, and no oversized touch spacing unless explicitly requested. Input font sizes, heights, paddings, and vertical text alignment must be visually consistent across all dialog inputs.
+- Do not reduce input font size just to make forms denser. For compact inputs, calculate vertical padding from the relationship `control height - font size`; horizontal padding should be comparable to vertical padding or larger, never near-zero.
+- Form editor values, including TextBox, ComboBox, date, number, and similar input controls, must use normal font weight; do not make entered/editable field values bold.
 - Do not add defensive fallbacks to code without approval; propose them first, explain the scenario they handle, and wait for confirmation.
 - Do not mask data contract violations with defensive fallbacks, nullable workarounds, or silent checks; throw an exception at the boundary where invalid data is detected.
 - Keep API request builders next to the entity store/state they serialize.

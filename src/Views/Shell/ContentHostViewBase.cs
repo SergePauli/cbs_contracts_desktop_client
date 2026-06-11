@@ -36,16 +36,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             string message,
             string primaryButtonText,
             string closeButtonText = "Отмена",
-            ContentDialogButton defaultButton = ContentDialogButton.Primary,
-            bool applyChrome = false)
+            ContentDialogButton defaultButton = ContentDialogButton.Primary)
         {
             return await _dialogCoordinator.ConfirmAsync(
                 title,
                 message,
                 primaryButtonText,
                 closeButtonText,
-                defaultButton,
-                applyChrome);
+                defaultButton);
         }
 
         protected static void ShowSuccessNotification(string title, string message)

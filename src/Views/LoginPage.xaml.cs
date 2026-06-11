@@ -1,6 +1,7 @@
 ﻿using Microsoft.UI.Xaml.Controls;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.Views.Controls;
+using Microsoft.UI.Xaml;
 using System.Threading.Tasks;
 
 namespace CbsContractsDesktopClient.Views
@@ -56,14 +57,45 @@ namespace CbsContractsDesktopClient.Views
             var dialog = new ContentDialog
             {
                 Title = title,
-                Content = message,
-                CloseButtonText = "Закрыть",
+                CloseButtonText = string.Empty,
+                DefaultButton = ContentDialogButton.None,
                 XamlRoot = this.XamlRoot
             };
+            dialog.Content = BuildPlaceholderDialogContent(message, dialog.Hide);
 
             DialogChrome.Apply(dialog);
 
             await dialog.ShowAsync();
+        }
+
+        private static FrameworkElement BuildPlaceholderDialogContent(string message, Action close)
+        {
+            var closeButton = new Button
+            {
+                Content = "Закрыть",
+                Width = 112,
+                MinHeight = 28,
+                Padding = new Thickness(8, 2, 8, 2),
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            var root = new Grid
+            {
+                MinWidth = 320,
+                RowSpacing = 10
+            };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.Children.Add(new TextBlock
+            {
+                Text = message,
+                TextWrapping = TextWrapping.WrapWholeWords
+            });
+
+            Grid.SetRow(closeButton, 1);
+            root.Children.Add(closeButton);
+            closeButton.Click += (_, _) => close();
+            return root;
         }
     }
 }

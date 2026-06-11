@@ -32,4 +32,16 @@ public sealed class DialogChromeTests
         Assert.Contains("private static void WrapContent(ContentDialog dialog)", code);
         Assert.Contains("private static UIElement BuildTitle(ContentDialog dialog, string title)", code);
     }
+
+    [Fact]
+    public void DialogChrome_RemovesWhiteContentBorderLayer()
+    {
+        var code = File.ReadAllText(DialogChromePath);
+
+        Assert.Contains("ContentDialogTopOverlay", code);
+        Assert.Contains("ContentDialogCornerRadius", code);
+        Assert.Contains("Margin = new Thickness(0)", code);
+        Assert.Contains("Padding = new Thickness(6, 4, 6, 4)", code);
+        Assert.Contains("ResolveContentBackground(dialog)", code);
+    }
 }

@@ -15,6 +15,7 @@ using CbsContractsDesktopClient.Views.References;
 using CbsContractsDesktopClient.ViewModels.References;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Services.References
 {
@@ -491,18 +492,28 @@ namespace CbsContractsDesktopClient.Services.References
                 }
             };
 
-            var dialog = new ContentDialog
+            var submitted = false;
+            ContentDialog? dialog = null;
+            dialog = new ContentDialog
             {
                 XamlRoot = xamlRoot,
                 Title = "Импорт из ФНС",
-                PrimaryButtonText = "Найти",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary,
-                Content = content
+                PrimaryButtonText = string.Empty,
+                CloseButtonText = string.Empty,
+                DefaultButton = ContentDialogButton.None,
+                Content = BuildDialogContentWithFooter(
+                    content,
+                    BuildFooterButton("Найти", "\uE721", true, () =>
+                    {
+                        submitted = true;
+                        dialog!.Hide();
+                    }),
+                    BuildFooterButton("Отмена", "\uE711", false, () => dialog!.Hide()))
             };
             DialogChrome.Apply(dialog);
 
-            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            await dialog.ShowAsync();
+            if (!submitted)
             {
                 return null;
             }
@@ -535,19 +546,29 @@ namespace CbsContractsDesktopClient.Services.References
                 MinWidth = 680
             };
 
-            var dialog = new ContentDialog
+            var submitted = false;
+            ContentDialog? dialog = null;
+            dialog = new ContentDialog
             {
                 XamlRoot = xamlRoot,
                 Title = "Выберите регистрацию",
-                PrimaryButtonText = "Продолжить",
-                CloseButtonText = "Отмена",
-                DefaultButton = ContentDialogButton.Primary,
-                Content = comboBox
+                PrimaryButtonText = string.Empty,
+                CloseButtonText = string.Empty,
+                DefaultButton = ContentDialogButton.None,
+                Content = BuildDialogContentWithFooter(
+                    comboBox,
+                    BuildFooterButton("Продолжить", "\uE73E", true, () =>
+                    {
+                        submitted = true;
+                        dialog!.Hide();
+                    }),
+                    BuildFooterButton("Отмена", "\uE711", false, () => dialog!.Hide()))
             };
             dialog.Resources["ContentDialogMinWidth"] = 760d;
             DialogChrome.Apply(dialog);
 
-            return await dialog.ShowAsync() == ContentDialogResult.Primary
+            await dialog.ShowAsync();
+            return submitted
                 ? (comboBox.SelectedItem as FnsImportSelectionItem)?.Result
                 : null;
         }
@@ -1156,20 +1177,99 @@ namespace CbsContractsDesktopClient.Services.References
 
         private static async Task ShowErrorDialogAsync(XamlRoot xamlRoot, string title, string message)
         {
-            var dialog = new ContentDialog
+            ContentDialog? dialog = null;
+            dialog = new ContentDialog
             {
                 XamlRoot = xamlRoot,
                 Title = title,
-                Content = new TextBlock
-                {
-                    Text = message,
-                    TextWrapping = TextWrapping.WrapWholeWords
-                },
-                CloseButtonText = "ОК",
-                DefaultButton = ContentDialogButton.Close
+                Content = BuildDialogContentWithFooter(
+                    new TextBlock
+                    {
+                        Text = message,
+                        TextWrapping = TextWrapping.WrapWholeWords
+                    },
+                    BuildFooterButton("ОК", "\uE73E", true, () => dialog!.Hide())),
+                CloseButtonText = string.Empty,
+                DefaultButton = ContentDialogButton.None
             };
+            DialogChrome.Apply(dialog);
 
             await dialog.ShowAsync();
+        }
+
+        private static FrameworkElement BuildDialogContentWithFooter(UIElement body, params Button[] buttons)
+        {
+            var root = new Grid
+            {
+                RowSpacing = 10
+            };
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            root.Children.Add(body);
+
+            var footer = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Spacing = 4
+            };
+            foreach (var button in buttons)
+            {
+                footer.Children.Add(button);
+            }
+
+            Grid.SetRow(footer, 1);
+            root.Children.Add(footer);
+            return root;
+        }
+
+        private static Button BuildFooterButton(string text, string glyph, bool isPrimary, Action click)
+        {
+            var foreground = Application.Current.Resources[
+                    isPrimary ? "ShellTableRowSelectedBorderBrush" : "ShellSecondaryTextBrush"] as Brush
+                ?? new SolidColorBrush(isPrimary ? Microsoft.UI.Colors.SeaGreen : Microsoft.UI.Colors.DimGray);
+
+            var button = new Button
+            {
+                Width = 112,
+                MinHeight = 28,
+                Padding = new Thickness(8, 2, 8, 2),
+                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                Foreground = foreground,
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 6,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        new FontIcon
+                        {
+                            Glyph = glyph,
+                            FontFamily = new FontFamily("Segoe Fluent Icons"),
+                            FontSize = 12,
+                            Foreground = foreground
+                        },
+                        new TextBlock
+                        {
+                            Text = text,
+                            Foreground = foreground,
+                            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                            VerticalAlignment = VerticalAlignment.Center
+                        }
+                    }
+                }
+            };
+            button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 232, 235, 239));
+            button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 220, 225, 231));
+            button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 232, 235, 239));
+            button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 220, 225, 231));
+            button.Click += (_, _) => click();
+            return button;
         }
 
         private sealed record FnsImportCriteria(string Inn, string Kpp, string Name);

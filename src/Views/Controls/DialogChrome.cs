@@ -42,8 +42,13 @@ namespace CbsContractsDesktopClient.Views.Controls
             dialog.Resources["ContentDialogContentMargin"] = new Thickness(0);
             dialog.Resources["ContentDialogContentScrollViewerMargin"] = new Thickness(0);
             dialog.Resources["ContentDialogBorderWidth"] = new Thickness(0);
+            dialog.Resources["ContentDialogCornerRadius"] = new CornerRadius(0);
             dialog.Resources["ContentDialogSeparatorThickness"] = new Thickness(0);
             dialog.Resources["ContentDialogBorderBrush"] = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            if (dialog.Background is not null)
+            {
+                dialog.Resources["ContentDialogTopOverlay"] = dialog.Background;
+            }
         }
 
         private static void EnsureContentMargin(ContentDialog dialog)
@@ -66,7 +71,9 @@ namespace CbsContractsDesktopClient.Views.Controls
             dialog.Content = new Border
             {
                 Tag = ContentHostTag,
-                Margin = new Thickness(4),
+                Background = ResolveContentBackground(dialog),
+                Margin = new Thickness(0),
+                Padding = new Thickness(6, 4, 6, 4),
                 Child = dialog.Content as UIElement
                     ?? new TextBlock
                     {
@@ -74,6 +81,18 @@ namespace CbsContractsDesktopClient.Views.Controls
                         TextWrapping = TextWrapping.Wrap
                     }
             };
+        }
+
+        private static Brush? ResolveContentBackground(ContentDialog dialog)
+        {
+            if (dialog.Background is not null)
+            {
+                return dialog.Background;
+            }
+
+            return dialog.Resources.TryGetValue("ContentDialogBackground", out var background)
+                ? background as Brush
+                : null;
         }
 
         private static UIElement BuildTitle(ContentDialog dialog, string title)

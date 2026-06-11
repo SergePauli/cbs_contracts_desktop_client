@@ -16,7 +16,8 @@ namespace CbsContractsDesktopClient.Views.References
             Func<string> getCommittedText,
             double minWidth = 280,
             double maxSuggestionListHeight = 180,
-            double? maxWidth = null)
+            double? maxWidth = null,
+            object? bindingSource = null)
         {
             var autoSuggestBox = new AutoSuggestBox
             {
@@ -28,10 +29,16 @@ namespace CbsContractsDesktopClient.Views.References
                 UpdateTextOnSelect = false,
                 ItemTemplate = BuildSuggestionTemplate()
             };
-            autoSuggestBox.SetBinding(ItemsControl.ItemsSourceProperty, new Binding
+            var itemsSourceBinding = new Binding
             {
                 Path = new PropertyPath(itemsSourcePath)
-            });
+            };
+            if (bindingSource is not null)
+            {
+                itemsSourceBinding.Source = bindingSource;
+            }
+
+            autoSuggestBox.SetBinding(ItemsControl.ItemsSourceProperty, itemsSourceBinding);
 
             autoSuggestBox.Loaded += (_, _) =>
             {

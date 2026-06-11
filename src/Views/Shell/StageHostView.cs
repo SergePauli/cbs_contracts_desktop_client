@@ -795,8 +795,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 if (!await ConfirmDialogAsync(
                         "Сохранение фильтров",
                         "Сохранить текущие фильтры этапов как начальные установки фильтрации?",
-                        "Сохранить",
-                        applyChrome: true))
+                        "Сохранить"))
                 {
                     return;
                 }

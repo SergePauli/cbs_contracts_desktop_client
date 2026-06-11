@@ -19,6 +19,25 @@ public static class StageContractStatusDialogControls
 
     public static IReadOnlyList<EnumSelectOption> BuildStatusOptions(
         IReadOnlyList<CbsTableFilterOptionDefinition> options,
+        bool includeEmpty,
+        string emptyLabel = "Пустой")
+    {
+        var result = new List<EnumSelectOption>();
+        if (includeEmpty)
+        {
+            result.Add(new EnumSelectOption(null, emptyLabel));
+        }
+
+        result.AddRange(options
+            .Select(option => new EnumSelectOption(null, option.Label, JsonDataReader.TryGetLong(option.Value)))
+            .Where(option => option.Value is not null)
+            .OrderBy(option => option.Value));
+
+        return result;
+    }
+
+    public static IReadOnlyList<EnumSelectOption> BuildStatusOptions(
+        IReadOnlyList<CbsTableFilterOptionDefinition> options,
         IReadOnlySet<long> allowedStatusIds,
         string emptyLabel = "Пустой")
     {
@@ -44,6 +63,9 @@ public static class StageContractStatusDialogControls
         comboBox.DisplayMemberPath = string.Empty;
         comboBox.SelectedValuePath = string.Empty;
         comboBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+        comboBox.VerticalContentAlignment = VerticalAlignment.Center;
+        comboBox.MinHeight = 0;
+        comboBox.Padding = new Thickness(4, 0, 4, 0);
 
         ComboBoxItem? selectedItem = null;
         foreach (var option in options)
@@ -51,6 +73,10 @@ public static class StageContractStatusDialogControls
             var item = new ComboBoxItem
             {
                 Tag = option,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                MinHeight = 0,
+                Padding = new Thickness(0),
                 Content = BuildStatusBadge(
                     option.Label,
                     option.Value,
@@ -80,10 +106,12 @@ public static class StageContractStatusDialogControls
         var colors = ResolveStatusBadgeColors(statusId);
         return new Border
         {
-            Margin = new Thickness(0, 1, 0, 1),
-            Padding = new Thickness(6, 1, 6, 1),
+            Margin = new Thickness(0),
+            Padding = new Thickness(6, 0, 6, 0),
             CornerRadius = new CornerRadius(4),
             HorizontalAlignment = horizontalAlignment,
+            VerticalAlignment = VerticalAlignment.Center,
+            MinHeight = 18,
             MaxWidth = 160,
             Background = new SolidColorBrush(colors.Background),
             Child = new TextBlock
@@ -93,6 +121,8 @@ public static class StageContractStatusDialogControls
                 FontSize = 12,
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                LineHeight = 16,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap
             }

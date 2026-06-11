@@ -19,6 +19,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                 Kind = TablePageKind.Functional,
                 Capabilities =
                     TablePageCapabilities.RowSelection
+                    | TablePageCapabilities.Create
                     | TablePageCapabilities.Edit
                     | TablePageCapabilities.ResetFilters
                     | TablePageCapabilities.PersistColumnWidths
