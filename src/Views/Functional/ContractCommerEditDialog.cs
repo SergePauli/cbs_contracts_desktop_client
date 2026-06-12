@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Dialogs;
@@ -10,6 +12,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Pauli.WinUiKit.Controls;
+using Windows.Storage.Pickers;
 using Windows.System;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
@@ -19,6 +22,8 @@ namespace CbsContractsDesktopClient.Views.Functional
 {
     public sealed class ContractCommerEditDialog : AppEditDialog
     {
+        private const double TabAreaHeight = 500;
+
         private readonly TableDataRow _contract;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _taskKindOptions;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
@@ -31,6 +36,16 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _orderBox = new();
         private readonly TextBox _costBox = new();
         private readonly TextBox _commentBox = new();
+        private readonly CheckBox _governmentalBox = new();
+        private readonly CheckBox _revisionPresentBox = new();
+        private readonly TextBox _externalNumberBox = new();
+        private readonly TextBox _revisionDescriptionBox = new();
+        private readonly CalendarInput _deadlineAtEditor = new();
+        private readonly CalendarInput _closedAtEditor = new();
+        private readonly TextBox _revisionDocLinkBox = new();
+        private readonly TextBox _revisionScanLinkBox = new();
+        private readonly TextBox _revisionProtocolLinkBox = new();
+        private readonly TextBox _revisionZipLinkBox = new();
         private readonly CheckBox _extAgreementBox = new();
         private readonly CheckBox _multiStageBox = new();
         private readonly Button _resetChangesButton = new();
@@ -38,6 +53,11 @@ namespace CbsContractsDesktopClient.Views.Functional
         private IReadOnlyList<CbsTableFilterOptionDefinition> _contragentOptions = [];
         private CbsTableFilterOptionDefinition? _selectedContragentOption;
         private string _contragentInput = string.Empty;
+        private readonly List<RevisionEditorState> _revisionEditors = [];
+        private StackPanel? _revisionsStack;
+        private TabView? _tabs;
+        private TabViewItem? _revisionsTab;
+        private bool _isUpdatingExtAgreementBox;
 
         public ContractCommerEditDialog(
             TableDataRow contract,
@@ -56,6 +76,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _statusOptions = statusOptions;
             _loadContragentOptionsAsync = loadContragentOptionsAsync;
             _isCreateMode = isCreateMode;
+            ResetRevisionEditorsFromContract();
             FullSizeDesired = false;
             HorizontalAlignment = HorizontalAlignment.Center;
             Title = BuildDialogTitle();
@@ -88,9 +109,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             root.Children.Add(BuildHeader());
 
-            var tabs = BuildTabs();
-            Grid.SetRow(tabs, 1);
-            root.Children.Add(tabs);
+            var tabsHost = new Border
+            {
+                Padding = new Thickness(8, 0, 8, 0),
+                Child = BuildTabs()
+            };
+            Grid.SetRow(tabsHost, 1);
+            root.Children.Add(tabsHost);
             return root;
         }
 
@@ -397,7 +422,11 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ConfigureFlagBoxes()
         {
-            _extAgreementBox.IsChecked = HasExtAgreement();
+            SetExtAgreementChecked(_revisionEditors.Count > 0);
+            _extAgreementBox.Checked -= ExtAgreementBox_Checked;
+            _extAgreementBox.Unchecked -= ExtAgreementBox_Unchecked;
+            _extAgreementBox.Checked += ExtAgreementBox_Checked;
+            _extAgreementBox.Unchecked += ExtAgreementBox_Unchecked;
             ToolTipService.SetToolTip(_extAgreementBox, "Дополнительные соглашения");
 
             _multiStageBox.IsChecked = IsMultiStageContract();
@@ -643,8 +672,70 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ? AppFormatters.FormatMoney(stagesCost)
                 : string.Empty;
             _commentBox.Text = string.Empty;
-            _extAgreementBox.IsChecked = HasExtAgreement();
+            ResetMainTabEditorsFromContract();
+            ResetRevisionEditorsFromContract();
+            SetExtAgreementChecked(_revisionEditors.Count > 0);
+            RefreshRevisionsStack();
             _multiStageBox.IsChecked = IsMultiStageContract();
+        }
+
+        private void ResetMainTabEditorsFromContract()
+        {
+            _governmentalBox.IsChecked = TryGetBool(_contract.GetValue("governmental")) == true;
+            _externalNumberBox.Text = GetText(_contract, "external_number") ?? string.Empty;
+            _deadlineAtEditor.Date = AppFormatters.ParseDate(_contract.GetValue("deadline_at"));
+            _closedAtEditor.Date = AppFormatters.ParseDate(_contract.GetValue("closed_at"));
+
+            var contractRevision = GetContractRevision();
+            _revisionPresentBox.IsChecked = contractRevision is not null
+                && TryGetBool(TryGetValue(contractRevision.Value, "is_present")) == true;
+            _revisionDescriptionBox.Text = contractRevision is null
+                ? string.Empty
+                : TryGetString(contractRevision.Value, "description") ?? string.Empty;
+            _revisionDocLinkBox.Text = contractRevision is null
+                ? string.Empty
+                : TryGetString(contractRevision.Value, "doc_link") ?? string.Empty;
+            _revisionScanLinkBox.Text = contractRevision is null
+                ? string.Empty
+                : TryGetString(contractRevision.Value, "scan_link") ?? string.Empty;
+            _revisionProtocolLinkBox.Text = contractRevision is null
+                ? string.Empty
+                : TryGetString(contractRevision.Value, "protocol_link") ?? string.Empty;
+            _revisionZipLinkBox.Text = contractRevision is null
+                ? string.Empty
+                : TryGetString(contractRevision.Value, "zip_link") ?? string.Empty;
+        }
+
+        private JsonElement? GetContractRevision()
+        {
+            var revision = EnumerateObjectArray(_contract, "revisions").FirstOrDefault();
+            if (revision.ValueKind == JsonValueKind.Object)
+            {
+                return revision;
+            }
+
+            return _isCreateMode
+                ? null
+                : throw new InvalidOperationException("Contract edit row must contain revisions[0].");
+        }
+
+        private void ResetRevisionEditorsFromContract()
+        {
+            _revisionEditors.Clear();
+            foreach (var revision in EnumerateObjectArray(_contract, "revisions").Skip(1))
+            {
+                _revisionEditors.Add(new RevisionEditorState
+                {
+                    Number = TryGetLong(TryGetValue(revision, "priority")) ?? 0,
+                    IsPresent = TryGetBool(TryGetValue(revision, "is_present")) == true,
+                    Description = TryGetString(revision, "description") ?? string.Empty,
+                    DocLink = TryGetString(revision, "doc_link") ?? string.Empty,
+                    ScanLink = TryGetString(revision, "scan_link") ?? string.Empty,
+                    ProtocolLink = TryGetString(revision, "protocol_link") ?? string.Empty
+                });
+            }
+
+            _revisionEditors.Sort(static (left, right) => left.Number.CompareTo(right.Number));
         }
 
         private void ResetTaskKindFromContract()
@@ -661,7 +752,81 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private bool HasExtAgreement()
         {
-            return EnumerateObjectArray(_contract, "revisions").Skip(1).Any();
+            return _revisionEditors.Count > 0;
+        }
+
+        private void ExtAgreementBox_Checked(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingExtAgreementBox || _revisionEditors.Count > 0)
+            {
+                return;
+            }
+
+            AddRevision(1);
+            SelectRevisionsTab();
+        }
+
+        private void ExtAgreementBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingExtAgreementBox)
+            {
+                return;
+            }
+
+            if (_revisionEditors.Count > 0)
+            {
+                SetExtAgreementChecked(true);
+            }
+        }
+
+        private void AddRevision(long number)
+        {
+            if (_revisionEditors.Any(revision => revision.Number == number))
+            {
+                ShowErrorInfo($"Ревизия с номером {number} уже существует.");
+                return;
+            }
+
+            _revisionEditors.Add(new RevisionEditorState
+            {
+                Number = number,
+                Description = "Доп. соглашение"
+            });
+            _revisionEditors.Sort(static (left, right) => left.Number.CompareTo(right.Number));
+            SetExtAgreementChecked(true);
+            RefreshRevisionsStack();
+        }
+
+        private void DeleteRevision(RevisionEditorState revision)
+        {
+            if (revision.Number == 1 && _revisionEditors.Any(item => item.Number > revision.Number))
+            {
+                ShowErrorInfo($"Нельзя удалить ревизию № {revision.Number}, пока существуют ревизии с большим номером.");
+                return;
+            }
+
+            _revisionEditors.Remove(revision);
+            if (_revisionEditors.Count == 0)
+            {
+                SetExtAgreementChecked(false);
+            }
+
+            RefreshRevisionsStack();
+        }
+
+        private void SetExtAgreementChecked(bool isChecked)
+        {
+            _isUpdatingExtAgreementBox = true;
+            _extAgreementBox.IsChecked = isChecked;
+            _isUpdatingExtAgreementBox = false;
+        }
+
+        private void SelectRevisionsTab()
+        {
+            if (_tabs is not null && _revisionsTab is not null)
+            {
+                _tabs.SelectedItem = _revisionsTab;
+            }
         }
 
         private bool IsMultiStageContract()
@@ -713,26 +878,531 @@ namespace CbsContractsDesktopClient.Views.Functional
             var tabView = new TabView
             {
                 IsAddTabButtonVisible = false,
+                Height = TabAreaHeight,
                 TabWidthMode = TabViewWidthMode.Equal
             };
+            _tabs = tabView;
 
             tabView.TabItems.Add(BuildColoredTab(
-                "Общее",
+                "Контракт",
                 Microsoft.UI.ColorHelper.FromArgb(255, 255, 251, 237),
                 Microsoft.UI.ColorHelper.FromArgb(255, 237, 233, 220),
-                BuildPlaceholder("Разметка общих полей будет добавлена после утверждения единого шаблона AppEditDialog.")));
+                BuildMainTabContent()));
             tabView.TabItems.Add(BuildColoredTab(
                 "Этапы",
                 Microsoft.UI.ColorHelper.FromArgb(255, 239, 255, 242),
                 Microsoft.UI.ColorHelper.FromArgb(255, 220, 235, 223),
                 BuildPlaceholder("Разметка этапов будет добавлена после утверждения единого шаблона AppEditDialog.")));
-            tabView.TabItems.Add(BuildColoredTab(
+            _revisionsTab = BuildColoredTab(
                 "Ревизии",
                 Microsoft.UI.ColorHelper.FromArgb(255, 239, 250, 255),
                 Microsoft.UI.ColorHelper.FromArgb(255, 222, 233, 237),
-                BuildPlaceholder("Разметка ревизий будет добавлена после утверждения единого шаблона AppEditDialog.")));
+                BuildRevisionsTabContent());
+            tabView.TabItems.Add(_revisionsTab);
 
             return tabView;
+        }
+
+        private UIElement BuildMainTabContent()
+        {
+            ResetMainTabEditorsFromContract();
+            ConfigureMainTabEditors();
+
+            var grid = new Grid
+            {
+                Padding = new Thickness(8),
+                ColumnSpacing = 8,
+                RowSpacing = 8
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var governmental = BuildInlineCheckBox(_governmentalBox, "ГосКонтракт");
+            grid.Children.Add(governmental);
+
+            var revisionPresent = BuildInputLineCheckBox(_revisionPresentBox, "В наличии");
+            Grid.SetColumn(revisionPresent, 1);
+            grid.Children.Add(revisionPresent);
+
+            var revisionDescription = (FrameworkElement)BuildLabeledControl("Тип документа", _revisionDescriptionBox, spacing: 3);
+            Grid.SetColumn(revisionDescription, 2);
+            Grid.SetColumnSpan(revisionDescription, 2);
+            grid.Children.Add(revisionDescription);
+
+            var externalNumber = (FrameworkElement)BuildLabeledControl("Внешний номер", _externalNumberBox, spacing: 3);
+            Grid.SetRow(externalNumber, 1);
+            grid.Children.Add(externalNumber);
+
+            var deadlineAt = (FrameworkElement)BuildLabeledControl("Срок завершения", _deadlineAtEditor, spacing: 3);
+            Grid.SetRow(deadlineAt, 1);
+            Grid.SetColumn(deadlineAt, 1);
+            grid.Children.Add(deadlineAt);
+
+            var closedAt = (FrameworkElement)BuildLabeledControl("Дата закрытия", _closedAtEditor, spacing: 3);
+            Grid.SetRow(closedAt, 1);
+            Grid.SetColumn(closedAt, 2);
+            grid.Children.Add(closedAt);
+
+            var filesHeader = BuildSectionSeparator("Файл");
+            Grid.SetRow(filesHeader, 2);
+            Grid.SetColumnSpan(filesHeader, 5);
+            grid.Children.Add(filesHeader);
+
+            var docLink = BuildFileRow("Исходник", "\uf000", _revisionDocLinkBox);
+            Grid.SetRow(docLink, 3);
+            Grid.SetColumnSpan(docLink, 4);
+            grid.Children.Add(docLink);
+
+            var scanLink = BuildFileRow("Скан", "\uea90", _revisionScanLinkBox);
+            Grid.SetRow(scanLink, 4);
+            Grid.SetColumnSpan(scanLink, 4);
+            grid.Children.Add(scanLink);
+
+            var protocolLink = BuildFileRow("Протокол", "\ue9a4", _revisionProtocolLinkBox);
+            Grid.SetRow(protocolLink, 5);
+            Grid.SetColumnSpan(protocolLink, 4);
+            grid.Children.Add(protocolLink);
+
+            return grid;
+        }
+
+        private UIElement BuildRevisionsTabContent()
+        {
+            _revisionsStack = new StackPanel
+            {
+                Padding = new Thickness(8),
+                Spacing = 10
+            };
+            RefreshRevisionsStack();
+            return _revisionsStack;
+        }
+
+        private void RefreshRevisionsStack()
+        {
+            if (_revisionsStack is null)
+            {
+                return;
+            }
+
+            _revisionsStack.Children.Clear();
+            if (_revisionEditors.Count == 0)
+            {
+                _revisionsStack.Children.Add(BuildPlaceholder("Дополнительные соглашения отсутствуют."));
+                return;
+            }
+
+            foreach (var revision in _revisionEditors.OrderBy(static revision => revision.Number))
+            {
+                _revisionsStack.Children.Add(BuildRevisionSection(revision));
+            }
+        }
+
+        private UIElement BuildRevisionSection(RevisionEditorState revision)
+        {
+            var grid = new Grid
+            {
+                ColumnSpacing = 8,
+                RowSpacing = 8
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(390) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var numberBox = new TextBox
+            {
+                Text = FormatRevisionNumber(revision.Number),
+                IsReadOnly = true,
+                IsTabStop = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            var number = (FrameworkElement)BuildLabeledControl("Номер", numberBox, spacing: 3);
+            grid.Children.Add(number);
+
+            var presentBox = new CheckBox
+            {
+                IsChecked = revision.IsPresent
+            };
+            presentBox.Checked += (_, _) => revision.IsPresent = true;
+            presentBox.Unchecked += (_, _) => revision.IsPresent = false;
+            var present = BuildInputLineCheckBox(presentBox, "В наличии");
+            Grid.SetColumn(present, 1);
+            grid.Children.Add(present);
+
+            var descriptionBox = new TextBox
+            {
+                Text = revision.Description,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            descriptionBox.TextChanged += (_, _) => revision.Description = descriptionBox.Text ?? string.Empty;
+            var description = (FrameworkElement)BuildLabeledControl(
+                "Тип документа",
+                BuildRevisionDescriptionEditor(
+                    descriptionBox,
+                    () => AddRevision(revision.Number + 1),
+                    () => DeleteRevision(revision)),
+                spacing: 3);
+            Grid.SetColumn(description, 2);
+            Grid.SetColumnSpan(description, 2);
+            grid.Children.Add(description);
+
+            var docLink = BuildFileRow("Исходник", "\uf000", BuildRevisionFileTextBox(revision.DocLink, value => revision.DocLink = value));
+            Grid.SetRow(docLink, 1);
+            Grid.SetColumnSpan(docLink, 4);
+            grid.Children.Add(docLink);
+
+            var scanLink = BuildFileRow("Скан", "\uea90", BuildRevisionFileTextBox(revision.ScanLink, value => revision.ScanLink = value));
+            Grid.SetRow(scanLink, 2);
+            Grid.SetColumnSpan(scanLink, 4);
+            grid.Children.Add(scanLink);
+
+            var protocolLink = BuildFileRow("Протокол", "\ue9a4", BuildRevisionFileTextBox(revision.ProtocolLink, value => revision.ProtocolLink = value));
+            Grid.SetRow(protocolLink, 3);
+            Grid.SetColumnSpan(protocolLink, 4);
+            grid.Children.Add(protocolLink);
+
+            var separator = BuildSectionSeparator(null);
+            Grid.SetRow(separator, 4);
+            Grid.SetColumnSpan(separator, 4);
+            grid.Children.Add(separator);
+
+            return grid;
+        }
+
+        private void ConfigureMainTabEditors()
+        {
+            _governmentalBox.Content = null;
+            _governmentalBox.HorizontalAlignment = HorizontalAlignment.Left;
+            _governmentalBox.VerticalAlignment = VerticalAlignment.Center;
+            _governmentalBox.MinHeight = 0;
+            ToolTipService.SetToolTip(_governmentalBox, "Государственный контракт");
+
+            _revisionPresentBox.Content = null;
+            _revisionPresentBox.HorizontalAlignment = HorizontalAlignment.Left;
+            _revisionPresentBox.VerticalAlignment = VerticalAlignment.Center;
+            _revisionPresentBox.MinHeight = 0;
+            ToolTipService.SetToolTip(_revisionPresentBox, "Документ в наличии");
+
+            _revisionDescriptionBox.MinWidth = 260;
+            _revisionDescriptionBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            _externalNumberBox.MinWidth = 260;
+            _externalNumberBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            _deadlineAtEditor.MinWidth = 140;
+            _deadlineAtEditor.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            _closedAtEditor.MinWidth = 140;
+            _closedAtEditor.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            ConfigureFileTextBox(_revisionDocLinkBox);
+            ConfigureFileTextBox(_revisionScanLinkBox);
+            ConfigureFileTextBox(_revisionProtocolLinkBox);
+            ConfigureFileTextBox(_revisionZipLinkBox);
+        }
+
+        private static void ConfigureFileTextBox(TextBox textBox)
+        {
+            textBox.MinWidth = 260;
+            textBox.IsReadOnly = true;
+            textBox.IsTabStop = false;
+            textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
+
+        private static TextBox BuildRevisionFileTextBox(string value, Action<string> updateValue)
+        {
+            var textBox = new TextBox
+            {
+                Text = value
+            };
+            textBox.TextChanged += (_, _) => updateValue(textBox.Text ?? string.Empty);
+            ConfigureFileTextBox(textBox);
+            return textBox;
+        }
+
+        private static string FormatRevisionNumber(long number)
+        {
+            return number > 0
+                ? number.ToString(CultureInfo.InvariantCulture)
+                : string.Empty;
+        }
+
+        private static FrameworkElement BuildInputLineCheckBox(CheckBox checkBox, string label)
+        {
+            var element = BuildInlineCheckBox(checkBox, label);
+            element.Margin = new Thickness(0, 18, 0, 0);
+            return element;
+        }
+
+        private static FrameworkElement BuildRevisionDescriptionEditor(
+            TextBox descriptionBox,
+            Action addRevision,
+            Action deleteRevision)
+        {
+            descriptionBox.MinWidth = 285;
+            descriptionBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+
+            var grid = new Grid
+            {
+                ColumnSpacing = 6,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(285) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            grid.Children.Add(descriptionBox);
+
+            var addButton = BuildRevisionActionButton(
+                "\ue710",
+                "Добавить ревизию",
+                Microsoft.UI.ColorHelper.FromArgb(255, 34, 197, 94),
+                Microsoft.UI.ColorHelper.FromArgb(255, 22, 163, 74),
+                Microsoft.UI.ColorHelper.FromArgb(255, 21, 128, 61));
+            addButton.Click += (_, _) => addRevision();
+            Grid.SetColumn(addButton, 1);
+            grid.Children.Add(addButton);
+
+            var deleteButton = BuildRevisionActionButton(
+                "\ue74d",
+                "Удалить ревизию",
+                Microsoft.UI.ColorHelper.FromArgb(255, 239, 68, 68),
+                Microsoft.UI.ColorHelper.FromArgb(255, 220, 38, 38),
+                Microsoft.UI.ColorHelper.FromArgb(255, 185, 28, 28));
+            deleteButton.Click += (_, _) => deleteRevision();
+            Grid.SetColumn(deleteButton, 2);
+            grid.Children.Add(deleteButton);
+
+            return grid;
+        }
+
+        private static Button BuildRevisionActionButton(
+            string iconGlyph,
+            string tooltip,
+            Windows.UI.Color backgroundColor,
+            Windows.UI.Color hoverColor,
+            Windows.UI.Color pressedColor)
+        {
+            var background = new Microsoft.UI.Xaml.Media.SolidColorBrush(backgroundColor);
+            var hoverBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(hoverColor);
+            var pressedBackground = new Microsoft.UI.Xaml.Media.SolidColorBrush(pressedColor);
+            var foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.White);
+
+            var button = new Button
+            {
+                Width = 24,
+                Height = 24,
+                MinWidth = 24,
+                Padding = new Thickness(0),
+                Background = background,
+                Foreground = foreground,
+                Content = new TextBlock
+                {
+                    Text = iconGlyph,
+                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = foreground
+                }
+            };
+            button.Resources["ButtonBackground"] = background;
+            button.Resources["ButtonBackgroundPointerOver"] = hoverBackground;
+            button.Resources["ButtonBackgroundPressed"] = pressedBackground;
+            button.Resources["ButtonBorderBrush"] = background;
+            button.Resources["ButtonBorderBrushPointerOver"] = hoverBackground;
+            button.Resources["ButtonBorderBrushPressed"] = pressedBackground;
+            button.Resources["ButtonForeground"] = foreground;
+            button.Resources["ButtonForegroundPointerOver"] = foreground;
+            button.Resources["ButtonForegroundPressed"] = foreground;
+            ToolTipService.SetToolTip(button, tooltip);
+            return button;
+        }
+
+        private static FrameworkElement BuildSectionSeparator(string? title)
+        {
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return new Grid
+                {
+                    Margin = new Thickness(0, 4, 0, 0),
+                    Children =
+                    {
+                        BuildSeparatorLine()
+                    }
+                };
+            }
+
+            var leftLine = BuildSeparatorLine();
+
+            var titleBlock = new TextBlock
+            {
+                Text = title,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(titleBlock, 1);
+
+            var rightLine = BuildSeparatorLine();
+            Grid.SetColumn(rightLine, 2);
+
+            return new Grid
+            {
+                Margin = new Thickness(0, 4, 0, 0),
+                ColumnSpacing = 8,
+                ColumnDefinitions =
+                {
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) },
+                    new ColumnDefinition { Width = GridLength.Auto },
+                    new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }
+                },
+                Children =
+                {
+                    leftLine,
+                    titleBlock,
+                    rightLine
+                }
+            };
+        }
+
+        private static Border BuildSeparatorLine()
+        {
+            var line = new Border
+            {
+                Height = 1,
+                Background = new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 222, 226, 230)),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            return line;
+        }
+
+        private FrameworkElement BuildFileRow(string label, string iconGlyph, TextBox editor)
+        {
+            var grid = new Grid
+            {
+                ColumnSpacing = 6,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            grid.Children.Add(new TextBlock
+            {
+                Text = label,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            var icon = new TextBlock
+            {
+                Text = iconGlyph,
+                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            Grid.SetColumn(icon, 1);
+            grid.Children.Add(icon);
+
+            Grid.SetColumn(editor, 2);
+            grid.Children.Add(editor);
+
+            var attachButton = BuildFileActionButton("\ue723", "Прикрепить");
+            attachButton.Click += async (_, _) => await PickFilePathAsync(editor);
+            Grid.SetColumn(attachButton, 3);
+            grid.Children.Add(attachButton);
+
+            var openButton = BuildFileActionButton("\ue8a7", "Открыть");
+            openButton.Click += (_, _) => OpenFilePath(editor.Text);
+            Grid.SetColumn(openButton, 4);
+            grid.Children.Add(openButton);
+
+            return grid;
+        }
+
+        private static Button BuildFileActionButton(string iconGlyph, string tooltip)
+        {
+            var button = new Button
+            {
+                Width = 24,
+                Height = 24,
+                MinWidth = 24,
+                Padding = new Thickness(0),
+                Content = new TextBlock
+                {
+                    Text = iconGlyph,
+                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                }
+            };
+            ToolTipService.SetToolTip(button, tooltip);
+            return button;
+        }
+
+        private async Task PickFilePathAsync(TextBox target)
+        {
+            try
+            {
+                var picker = new FileOpenPicker
+                {
+                    SuggestedStartLocation = PickerLocationId.DocumentsLibrary
+                };
+                picker.FileTypeFilter.Add("*");
+
+                if (App.CurrentWindow is not null)
+                {
+                    var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.CurrentWindow);
+                    WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+                }
+
+                var file = await picker.PickSingleFileAsync();
+                if (file is not null)
+                {
+                    target.Text = file.Path;
+                }
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo($"Не удалось выбрать файл: {ex.Message}");
+            }
+        }
+
+        private void OpenFilePath(string? filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                ShowErrorInfo("Путь к файлу не заполнен.");
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = filePath.Trim(),
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo($"Не удалось открыть файл: {ex.Message}");
+            }
         }
 
         private static TabViewItem BuildColoredTab(
@@ -758,7 +1428,12 @@ namespace CbsContractsDesktopClient.Views.Functional
                 Content = new Border
                 {
                     Background = background,
-                    Child = content
+                    Child = new ScrollViewer
+                    {
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        VerticalScrollMode = ScrollMode.Enabled,
+                        Content = content
+                    }
                 }
             };
             item.Resources["TabViewItemHeaderBackground"] = background;
@@ -769,6 +1444,33 @@ namespace CbsContractsDesktopClient.Views.Functional
             item.Resources["TabViewItemBorderBrush"] = selectedBorder;
             item.Resources["TabViewSelectedItemBorderBrush"] = selectedBorder;
             return item;
+        }
+
+        private static FrameworkElement BuildInlineCheckBox(CheckBox checkBox, string label)
+        {
+            checkBox.Content = null;
+            checkBox.HorizontalAlignment = HorizontalAlignment.Left;
+            checkBox.VerticalAlignment = VerticalAlignment.Center;
+            checkBox.MinHeight = 0;
+            checkBox.MinWidth = 0;
+            checkBox.Padding = new Thickness(0);
+            checkBox.Margin = new Thickness(0);
+
+            return new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 3,
+                VerticalAlignment = VerticalAlignment.Center,
+                Children =
+                {
+                    checkBox,
+                    new TextBlock
+                    {
+                        Text = label,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                }
+            };
         }
 
         private static UIElement BuildPlaceholder(string text)
@@ -798,5 +1500,20 @@ namespace CbsContractsDesktopClient.Views.Functional
         }
 
         private sealed record TaskKindSelectOption(string Code, string Label);
+
+        private sealed class RevisionEditorState
+        {
+            public long Number { get; init; }
+
+            public bool IsPresent { get; set; }
+
+            public string Description { get; set; } = string.Empty;
+
+            public string DocLink { get; set; } = string.Empty;
+
+            public string ScanLink { get; set; } = string.Empty;
+
+            public string ProtocolLink { get; set; } = string.Empty;
+        }
     }
 }
