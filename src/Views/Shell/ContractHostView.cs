@@ -174,7 +174,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadContractStatusOptionsAsync()
         {
-            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var statusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
             return statusOptions
                 .Where(static option => JsonDataReader.TryGetLong(option.Value) is long id && ContractStatusIds.Contains(id))
                 .OrderBy(static option => JsonDataReader.TryGetLong(option.Value))
@@ -634,15 +634,34 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            var allStatusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
+            var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
+            _contractWorkflowStore.BeginContractEdit(contract);
             var dialog = new ContractCommerEditDialog(
+                _contractWorkflowStore,
                 contract,
                 OptionsRegistry.Get("TaskKind"),
+                taskKindItems,
                 OptionsRegistry.Get("ContractStatus"),
+                allStatusOptions,
                 _contragentLookupService.LoadOptionsAsync)
             {
                 XamlRoot = XamlRoot
             };
+            TableDataRow? savedRow = null;
+            AttachContractCommerSaveHandler(dialog, isCreateMode: false, saved => savedRow = saved);
             await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(ContractModel);
+            await RefreshTableRowAfterSaveAsync(isCreateMode: false, savedRow);
+            await RefreshDetailAsync();
+            ShowSuccessNotification(
+                "Контракт сохранен",
+                "Изменения контракта сохранены.");
         }
 
         private async Task ShowContractCommerCreateDialogAsync()
@@ -655,16 +674,65 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
+            var allStatusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
+            var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
+            var contract = BuildNewContractRow();
+            _contractWorkflowStore.BeginContractEdit(contract);
             var dialog = new ContractCommerEditDialog(
-                BuildNewContractRow(),
+                _contractWorkflowStore,
+                contract,
                 OptionsRegistry.Get("TaskKind"),
+                taskKindItems,
                 OptionsRegistry.Get("ContractStatus"),
+                allStatusOptions,
                 _contragentLookupService.LoadOptionsAsync,
                 isCreateMode: true)
             {
                 XamlRoot = XamlRoot
             };
+            TableDataRow? savedRow = null;
+            AttachContractCommerSaveHandler(dialog, isCreateMode: true, saved => savedRow = saved);
             await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(ContractModel);
+            await RefreshTableRowAfterSaveAsync(isCreateMode: true, savedRow);
+            ShowSuccessNotification(
+                "Контракт создан",
+                "Новый контракт сохранен.");
+        }
+
+        private void AttachContractCommerSaveHandler(
+            ContractCommerEditDialog dialog,
+            bool isCreateMode,
+            Action<TableDataRow> setSavedRow)
+        {
+            dialog.SaveRequestedAsync += async args =>
+            {
+                try
+                {
+                    var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
+                    if (!isCreateMode && !HasUpdatePayloadChanges(payload))
+                    {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    var savedRow = isCreateMode
+                        ? await _modelMutationService.CreateAsync(ContractModel, payload)
+                        : await _modelMutationService.UpdateAsync(ContractModel, payload);
+                    setSavedRow(savedRow);
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+            };
         }
 
         private bool IsContractCreateAllowedForCurrentUser()
@@ -690,6 +758,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             return !string.IsNullOrWhiteSpace(roleCsv)
                 && roleCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                     .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)
+        {
+            return payload.Keys.Any(static key =>
+                !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
         }
 
         private MenuFlyout CreateContragentMenuFlyout()

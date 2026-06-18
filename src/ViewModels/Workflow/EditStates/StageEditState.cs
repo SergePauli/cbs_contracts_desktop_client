@@ -20,13 +20,15 @@ public sealed class StageEditState : IEditState
 
     public string? Name { get; private set; }
 
-    public int? Priority { get; private set; }
+    public int? Priority { get; set; }
 
-    public decimal? Cost { get; private set; }
+    public bool Used { get; set; }
+
+    public decimal? Cost { get; set; }
 
     public StatusEditState Status { get; set; } = new(null, null);
 
-    public TaskKindEditState TaskKind { get; private set; } = new(null, null, null);
+    public TaskKindEditState TaskKind { get; set; } = new(null, null, null);
 
     public string? DeadlineKind { get; set; }
 
@@ -68,20 +70,32 @@ public sealed class StageEditState : IEditState
 
     public int? RegistryYear { get; set; }
 
-    public IReadOnlyList<StageTaskEditState> Tasks { get; private set; } = [];
+    public IReadOnlyList<StageTaskEditState> Tasks { get; set; } = [];
 
     public IReadOnlyList<StagePerformerEditState> Performers { get; set; } = [];
+
+    public string Comment { get; set; } = string.Empty;
+
+    public bool IsDestroyed { get; set; }
 
     public DateTimeOffset? PaymentBaseDate => PrepaymentAt ?? PaymentAt;
 
     public bool HasChanges =>
-        HasStatusChanges
+        IsDestroyed
+        || HasStatusChanges
+        || HasCommercialIdentityChanges
         || HasDeadlineRuleChanges
         || HasFinancialChanges
         || HasOziChanges
         || !SameDate(ClosedAt, Original.ClosedAt);
 
     public bool HasStatusChanges => Status.Id != Original.Status.Id;
+
+    public bool HasCommercialIdentityChanges =>
+        Priority != Original.Priority
+        || Used != Original.Used
+        || Cost != Original.Cost
+        || TaskKind.Id != Original.TaskKind.Id;
 
     public bool HasDeadlineRuleChanges =>
         !string.Equals(DeadlineKind, Original.DeadlineKind, StringComparison.Ordinal)
@@ -115,6 +129,7 @@ public sealed class StageEditState : IEditState
         ListKey = Original.ListKey;
         Name = Original.Name;
         Priority = Original.Priority;
+        Used = Original.Used;
         Cost = Original.Cost;
         Status = Original.Status;
         TaskKind = Original.TaskKind;
@@ -140,6 +155,8 @@ public sealed class StageEditState : IEditState
         RegistryYear = Original.RegistryYear;
         Tasks = Original.Tasks;
         Performers = Original.Performers;
+        Comment = string.Empty;
+        IsDestroyed = false;
     }
 
     public bool IsLastOpenStageIn(ContractEditState? contract, long closedStatusId)
@@ -279,6 +296,7 @@ public sealed class StageEditState : IEditState
             ListKey: row.GetValue("list_key")?.ToString(),
             Name: row.GetValue("name")?.ToString(),
             Priority: TryGetInt(row.GetValue("priority")),
+            Used: TryGetBool(row.GetValue("used")) == true,
             Cost: TryGetDecimal(row.GetValue("cost")),
             Status: new StatusEditState(
                 TryGetLong(row.GetValue("status.id")) ?? TryGetLong(row.GetValue("status_id")),
@@ -309,6 +327,41 @@ public sealed class StageEditState : IEditState
             RegistryYear: TryGetInt(row.GetValue("registry_year")),
             Tasks: ReadTasks(row),
             Performers: ReadPerformers(row)));
+    }
+
+    public static StageEditState CreateNew(int priority, bool used = false)
+    {
+        return new StageEditState(new StageEditStateSnapshot(
+            Id: 0,
+            ListKey: Guid.NewGuid().ToString(),
+            Name: null,
+            Priority: priority,
+            Used: used,
+            Cost: null,
+            Status: new StatusEditState(null, null),
+            TaskKind: new TaskKindEditState(null, null, null),
+            DeadlineKind: "calendar_days",
+            Duration: null,
+            StartAt: null,
+            DeadlineAt: null,
+            ClosedAt: null,
+            CompletedAt: null,
+            PaymentDeadlineKind: null,
+            PaymentDuration: null,
+            PaymentDeadlineAt: null,
+            PaymentAt: null,
+            PrepaymentAt: null,
+            InvoiceAt: null,
+            FundedAt: null,
+            IsFunded: false,
+            IsRideOut: false,
+            RideOutAt: null,
+            IsSended: false,
+            SendedAt: null,
+            RegistryQuarter: null,
+            RegistryYear: null,
+            Tasks: [],
+            Performers: []));
     }
 
     private static IReadOnlyList<StageTaskEditState> ReadTasks(TableDataRow row)
@@ -382,6 +435,7 @@ public sealed record StageEditStateSnapshot(
     string? ListKey,
     string? Name,
     int? Priority,
+    bool Used,
     decimal? Cost,
     StatusEditState Status,
     TaskKindEditState TaskKind,

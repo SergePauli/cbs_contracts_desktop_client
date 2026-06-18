@@ -11,7 +11,15 @@ namespace Pauli.WinUiKit.Controls;
 
 public sealed class MultiSelect : Grid
 {
-    private readonly Button _button = new();
+    private const double ChipTextFontSize = 14;
+    private const double ChipTextLineHeight = 18;
+    private const double ChevronColumnWidth = 12;
+    private const double ChevronFontSize = 9;
+
+    private readonly Grid _inputHost = new();
+    private readonly Border _inputBorder = new();
+    private readonly Border _inputBottomBorder = new();
+    private readonly ContentControl _inputContent = new();
     private readonly TextBox _searchBox = new();
     private readonly StackPanel _optionsHost = new();
     private readonly List<object> _selectedItems = [];
@@ -22,18 +30,43 @@ public sealed class MultiSelect : Grid
     {
         HorizontalAlignment = HorizontalAlignment.Stretch;
 
-        _button.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _button.HorizontalContentAlignment = HorizontalAlignment.Stretch;
-        _button.MinHeight = 32;
+        _inputHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _inputHost.Background = new SolidColorBrush(Colors.Transparent);
+        _inputHost.PointerPressed += (_, _) => FlyoutBase.ShowAttachedFlyout(_inputHost);
+
+        _inputBorder.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _inputBorder.VerticalAlignment = VerticalAlignment.Stretch;
+        _inputBorder.Background = Application.Current.Resources["TextControlBackground"] as Brush
+            ?? new SolidColorBrush(Colors.White);
+        _inputBorder.BorderBrush = Application.Current.Resources["TextControlBorderBrush"] as Brush
+            ?? new SolidColorBrush(Color.FromArgb(255, 204, 204, 204));
+        _inputBorder.BorderThickness = new Thickness(1);
+        _inputBorder.CornerRadius = new CornerRadius(2);
+        _inputBorder.Padding = new Thickness(6, 2, 4, 2);
+
+        _inputContent.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _inputContent.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+        _inputContent.VerticalAlignment = VerticalAlignment.Center;
+        _inputContent.VerticalContentAlignment = VerticalAlignment.Center;
+
+        _inputBottomBorder.Height = 1;
+        _inputBottomBorder.VerticalAlignment = VerticalAlignment.Bottom;
+        _inputBottomBorder.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _inputBottomBorder.Margin = new Thickness(1, 0, 1, 0);
+        _inputBottomBorder.Background = Application.Current.Resources["TextControlBorderBrush"] as Brush
+            ?? new SolidColorBrush(Color.FromArgb(255, 96, 96, 96));
 
         _searchBox.PlaceholderText = "Поиск";
         _searchBox.TextChanged += (_, _) => RebuildOptions();
 
         _optionsHost.Spacing = 1;
         _flyout = BuildFlyout();
-        _button.Flyout = _flyout;
+        FlyoutBase.SetAttachedFlyout(_inputHost, _flyout);
 
-        Children.Add(_button);
+        _inputHost.Children.Add(_inputBorder);
+        _inputBorder.Child = _inputContent;
+        _inputHost.Children.Add(_inputBottomBorder);
+        Children.Add(_inputHost);
         RefreshButtonContent();
     }
 
@@ -333,7 +366,7 @@ public sealed class MultiSelect : Grid
             ? BuildChipDisplay(labels)
             : BuildTextDisplay(labels);
 
-        _button.Content = BuildButtonContent(displayContent);
+        _inputContent.Content = BuildInputContent(displayContent);
 
         var tooltip = Tooltip;
         if (string.IsNullOrWhiteSpace(tooltip) && labels.Count > 0)
@@ -341,18 +374,19 @@ public sealed class MultiSelect : Grid
             tooltip = string.Join("; ", labels);
         }
 
-        ToolTipService.SetToolTip(_button, string.IsNullOrWhiteSpace(tooltip) ? null : tooltip);
+        ToolTipService.SetToolTip(_inputHost, string.IsNullOrWhiteSpace(tooltip) ? null : tooltip);
     }
 
-    private static UIElement BuildButtonContent(UIElement displayContent)
+    private static UIElement BuildInputContent(UIElement displayContent)
     {
         var grid = new Grid
         {
             HorizontalAlignment = HorizontalAlignment.Stretch,
-            ColumnSpacing = 6
+            VerticalAlignment = VerticalAlignment.Center,
+            ColumnSpacing = 2
         };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ChevronColumnWidth) });
 
         var displayElement = displayContent as FrameworkElement
             ?? new ContentControl { Content = displayContent };
@@ -362,9 +396,10 @@ public sealed class MultiSelect : Grid
         var chevron = new FontIcon
         {
             Glyph = "\uE70D",
-            FontSize = 10,
+            Width = ChevronColumnWidth,
+            FontSize = ChevronFontSize,
             VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = HorizontalAlignment.Center
         };
         Grid.SetColumn(chevron, 1);
         grid.Children.Add(chevron);
@@ -383,7 +418,8 @@ public sealed class MultiSelect : Grid
         {
             Orientation = Orientation.Horizontal,
             Spacing = 4,
-            HorizontalAlignment = HorizontalAlignment.Left
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         var visibleCount = Math.Max(0, MaxSelectedLabels);
@@ -392,13 +428,15 @@ public sealed class MultiSelect : Grid
             panel.Children.Add(new Border
             {
                 MaxWidth = 145,
-                Padding = new Thickness(6, 1, 6, 2),
+                Padding = new Thickness(5, 0, 5, 0),
                 CornerRadius = new CornerRadius(4),
                 Background = new SolidColorBrush(Color.FromArgb(255, 235, 238, 242)),
                 Child = new TextBlock
                 {
                     Text = label,
-                    FontSize = 12,
+                    FontSize = ChipTextFontSize,
+                    LineHeight = ChipTextLineHeight,
+                    VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     TextWrapping = TextWrapping.NoWrap
                 }
@@ -410,6 +448,8 @@ public sealed class MultiSelect : Grid
             panel.Children.Add(new TextBlock
             {
                 Text = $"+{labels.Count - visibleCount}",
+                FontSize = ChipTextFontSize,
+                LineHeight = ChipTextLineHeight,
                 VerticalAlignment = VerticalAlignment.Center,
                 Foreground = Application.Current.Resources["ShellSecondaryTextBrush"] as Brush
             });
@@ -423,6 +463,7 @@ public sealed class MultiSelect : Grid
         return new TextBlock
         {
             Text = labels.Count == 0 ? Placeholder : string.Join("; ", labels),
+            VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextWrapping = TextWrapping.NoWrap,
             HorizontalAlignment = HorizontalAlignment.Stretch
@@ -434,6 +475,7 @@ public sealed class MultiSelect : Grid
         return new TextBlock
         {
             Text = Placeholder,
+            VerticalAlignment = VerticalAlignment.Center,
             Foreground = Application.Current.Resources["ShellSecondaryTextBrush"] as Brush,
             TextTrimming = TextTrimming.CharacterEllipsis,
             TextWrapping = TextWrapping.NoWrap,

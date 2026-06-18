@@ -9,6 +9,7 @@ Workflow rules:
 - Desktop layouts are for large screens, not touch-first UI: keep dialog/forms dense and compact, with small secondary labels, tight field heights, minimal padding/gaps, and no oversized touch spacing unless explicitly requested. Input font sizes, heights, paddings, and vertical text alignment must be visually consistent across all dialog inputs.
 - Do not reduce input font size just to make forms denser. For compact inputs, calculate vertical padding from the relationship `control height - font size`; horizontal padding should be comparable to vertical padding or larger, never near-zero.
 - Form editor values, including TextBox, ComboBox, date, number, and similar input controls, must use normal font weight; do not make entered/editable field values bold.
+- Do not use the standard WinUI ComboBox in project UI. Use the custom Pauli.WinUiKit Dropdown control instead.
 - Do not add defensive fallbacks to code without approval; propose them first, explain the scenario they handle, and wait for confirmation.
 - Do not mask data contract violations with defensive fallbacks, nullable workarounds, or silent checks; throw an exception at the boundary where invalid data is detected.
 - Keep API request builders next to the entity store/state they serialize.

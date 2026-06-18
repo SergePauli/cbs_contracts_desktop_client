@@ -21,4 +21,14 @@ public sealed class CalendarInputTests
         Assert.Contains("_calendarButton.IsEnabled = !IsReadOnly;", code);
         Assert.Contains("if (_isSyncing || IsReadOnly)", code);
     }
+
+    [Fact]
+    public void CalendarInput_UsesCompactSizeRatio()
+    {
+        var code = File.ReadAllText(CalendarInputPath);
+
+        Assert.Contains("private const double CompactButtonSize = 16;", code);
+        Assert.Contains("private const double CompactIconSize = 12;", code);
+        Assert.Contains("Width = 106;", code);
+    }
 }

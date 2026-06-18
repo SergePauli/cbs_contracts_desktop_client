@@ -11,8 +11,8 @@ namespace Pauli.WinUiKit.Controls;
 
 public sealed class CalendarInput : Grid
 {
-    private const double CompactButtonSize = 22;
-    private const double CompactIconSize = 10;
+    private const double CompactButtonSize = 16;
+    private const double CompactIconSize = 12;
 
     private readonly TextBox _textBox;
     private readonly Button _clearButton;
@@ -22,16 +22,13 @@ public sealed class CalendarInput : Grid
 
     public CalendarInput()
     {
-        HorizontalAlignment = HorizontalAlignment.Stretch;
+        Width = 106;
 
         _textBox = new TextBox
         {
-            PlaceholderText = "дд.мм.гггг",
+            PlaceholderText = "ДД.ММ.ГГГГ",
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalContentAlignment = VerticalAlignment.Center,
-            MinHeight = 0,
-            Padding = new Thickness(7, 0, 42, 0),
-            AcceptsReturn = true,
             InputScope = new InputScope
             {
                 Names =
@@ -42,6 +39,12 @@ public sealed class CalendarInput : Grid
         };
         _textBox.LostFocus += (_, _) => CommitText();
         _textBox.PreviewKeyDown += OnTextBoxPreviewKeyDown;
+        DisableTextBoxClearButton(_textBox);
+        _textBox.Loaded += (_, _) =>
+        {
+            var padding = _textBox.Padding;
+            _textBox.Padding = new Thickness(4, padding.Top, padding.Right, padding.Bottom);
+        };
 
         _calendarView = new CalendarView
         {
@@ -85,15 +88,17 @@ public sealed class CalendarInput : Grid
         SuppressChrome(_clearButton);
         SuppressChrome(_calendarButton);
 
-        var buttonsHost = new StackPanel
+        var buttonsHost = new Grid
         {
-            Orientation = Orientation.Horizontal,
+            Width = CompactButtonSize * 2,
             HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 3, 0),
-            Spacing = 0
+            VerticalAlignment = VerticalAlignment.Stretch,
+            Margin = new Thickness(0, 0, 3, 0)
         };
+        buttonsHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CompactButtonSize) });
+        buttonsHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(CompactButtonSize) });
         buttonsHost.Children.Add(_clearButton);
+        Grid.SetColumn(_calendarButton, 1);
         buttonsHost.Children.Add(_calendarButton);
 
         Children.Add(_textBox);
@@ -128,6 +133,25 @@ public sealed class CalendarInput : Grid
 
     public event EventHandler<CalendarInputDateChangedEventArgs>? DateChanged;
 
+    public Action<CalendarInput, KeyRoutedEventArgs>? OnTab { get; set; }
+
+    public bool FocusInput(FocusState focusState = FocusState.Programmatic)
+    {
+        return _textBox.Focus(focusState);
+    }
+
+    private static void DisableTextBoxClearButton(TextBox textBox)
+    {
+        var transparent = new SolidColorBrush(Colors.Transparent);
+        textBox.Resources["TextControlButtonForeground"] = transparent;
+        textBox.Resources["TextControlButtonForegroundPointerOver"] = transparent;
+        textBox.Resources["TextControlButtonForegroundPressed"] = transparent;
+        textBox.Resources["TextControlButtonBackground"] = transparent;
+        textBox.Resources["TextControlButtonBackgroundPointerOver"] = transparent;
+        textBox.Resources["TextControlButtonBackgroundPressed"] = transparent;
+        textBox.Resources["TextBoxInnerButtonMargin"] = new Thickness(0, 4, 24, 4);
+    }
+
     private static void OnDatePropertyChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
     {
         var editor = (CalendarInput)dependencyObject;
@@ -145,6 +169,13 @@ public sealed class CalendarInput : Grid
 
     private void OnTextBoxPreviewKeyDown(object sender, KeyRoutedEventArgs args)
     {
+        if (args.Key == VirtualKey.Tab && OnTab is not null)
+        {
+            CommitText();
+            OnTab(this, args);
+            return;
+        }
+
         if (args.Key != VirtualKey.Enter)
         {
             return;
@@ -258,17 +289,24 @@ public sealed class CalendarInput : Grid
             Width = CompactButtonSize,
             Height = CompactButtonSize,
             MinHeight = 0,
+            IsTabStop = false,
             Padding = new Thickness(2, 0, 2, 0),
             Margin = new Thickness(0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
             Background = new SolidColorBrush(Colors.Transparent),
             BorderBrush = new SolidColorBrush(Colors.Transparent),
             BorderThickness = new Thickness(0),
             Content = new FontIcon
             {
                 Glyph = glyph,
-                FontSize = CompactIconSize
+                Width = CompactIconSize,
+                Height = CompactIconSize,
+                FontSize = CompactIconSize,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             }
         };
     }

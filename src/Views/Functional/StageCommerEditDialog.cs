@@ -10,7 +10,6 @@ using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogControls;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractDeadlineDialogOptions;
 using static CbsContractsDesktopClient.Shared.Formatting.AppFormatters;
-using static CbsContractsDesktopClient.Shared.Dates.BusinessCalendar;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -42,7 +41,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _paymentDurationBox = BuildNumberTextBox();
         private readonly ComboBox _deadlineKindBox = new();
         private readonly ComboBox _paymentDeadlineKindBox = new();
-        private readonly ComboBox _statusBox = new();
+        private readonly Dropdown _statusBox = new();
         private readonly MultiSelect _tasksMultiSelect = new();
         private readonly HashSet<long> _selectedTaskKindIds = [];
         private readonly TextBox _commentBox = new();
@@ -73,7 +72,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _originalTasks = stage.Tasks
                 .Select(static task => new StageTaskRecord(task.Id, task.ListKey, task.TaskKindId, task.Name ?? string.Empty))
                 .ToList();
-            _taskOptions = CreateTaskOptions(taskKindItems, _originalTasks);
+            _taskOptions = StageContractTaskDialogControls.CreateTaskOptions(taskKindItems, _originalTasks);
             foreach (var option in _taskOptions.Where(static option => option.IsSelected))
             {
                 _selectedTaskKindIds.Add(option.TaskKindId);
@@ -127,7 +126,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         public override bool Validate()
         {
             if (_deadlineAtEditedManually
-                && IsDeadlineManualMode(GetSelectedDeadlineKind())
+                && StageDeadlineBusinessRules.IsDeadlineManualMode(GetSelectedDeadlineKind())
                 && _deadlineAtEditor.Date is DateTimeOffset deadlineAt
                 && _startAtEditor.Date is DateTimeOffset startAt
                 && deadlineAt.Date < startAt.Date)
@@ -137,7 +136,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             if (GetSelectedKey(_paymentDeadlineKindBox) is string paymentKind
-                && paymentKind != "c_plan"
+                && paymentKind != StageDeadlineBusinessRules.PaymentCalendarPlan
                 && paymentKind.Length > 0
                 && TryGetInt(_paymentDurationBox.Text) is null)
             {
@@ -145,7 +144,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return false;
             }
 
-            if (GetSelectedKey(_paymentDeadlineKindBox) == "c_plan"
+            if (GetSelectedKey(_paymentDeadlineKindBox) == StageDeadlineBusinessRules.PaymentCalendarPlan
                 && _paymentDeadlineAtEditor.Date is null)
             {
                 ShowErrorInfo("Для календарного плана укажите срок оплаты.");
@@ -154,7 +153,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var fundedAt = _stage.FundedAt;
             if (_paymentDeadlineAtEditedManually
-                && IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind())
+                && StageDeadlineBusinessRules.IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind())
                 && _paymentDeadlineAtEditor.Date is DateTimeOffset paymentDeadlineAt
                 && fundedAt is not null
                 && paymentDeadlineAt.Date < fundedAt.Value.Date)
@@ -315,7 +314,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             ConfigureSelectCombo(_deadlineKindBox, DeadlineKindOptions(), _stage.DeadlineKind);
             ConfigureSelectCombo(_paymentDeadlineKindBox, PaymentDeadlineKindOptions(), _stage.PaymentDeadlineKind);
-            ConfigureStatusCombo(_statusBox, BuildStageStatusOptions(statusOptions), _stage.Status.Id);
+            ConfigureStatusDropdown(_statusBox, BuildStageStatusOptions(statusOptions), _stage.Status.Id);
 
             AttachBusinessLogicHandlers();
             ApplyBusinessLogicAfterFieldChange(applyInitialStart: true);
@@ -364,14 +363,14 @@ namespace CbsContractsDesktopClient.Views.Functional
             _startAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterFieldChange(applyInitialStart: false);
             _deadlineAtEditor.DateChanged += (_, _) =>
             {
-                if (!_isApplyingBusinessLogic && IsDeadlineManualMode(GetSelectedDeadlineKind()))
+                if (!_isApplyingBusinessLogic && StageDeadlineBusinessRules.IsDeadlineManualMode(GetSelectedDeadlineKind()))
                 {
                     _deadlineAtEditedManually = true;
                 }
             };
             _paymentDeadlineAtEditor.DateChanged += (_, _) =>
             {
-                if (!_isApplyingBusinessLogic && IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind()))
+                if (!_isApplyingBusinessLogic && StageDeadlineBusinessRules.IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind()))
                 {
                     _paymentDeadlineAtEditedManually = true;
                 }
@@ -408,23 +407,24 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ApplyInitialStartBusinessLogic()
         {
+            var deadlineKind = GetSelectedDeadlineKind();
+            if (StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(deadlineKind))
+            {
+                _startAtEditor.Date = _stage.PaymentBaseDate;
+                return;
+            }
+
             if (_contract?.IsMultiStage == true || _startAtEditor.Date is not null)
             {
                 return;
             }
 
-            var deadlineKind = GetSelectedDeadlineKind();
-            DateTimeOffset? nextStart = null;
-
-            if (deadlineKind is "calendar_plan" or "calendar_days" or "working_days")
-            {
-                nextStart = _contract?.SignedAt;
-            }
-            else if (deadlineKind is "calendar_prepayment" or "working_prepayment")
-            {
-                nextStart = _stage.PaymentBaseDate;
-            }
-
+            var nextStart = StageDeadlineBusinessRules.ResolveInitialStart(
+                _contract?.IsMultiStage == true,
+                _startAtEditor.Date,
+                deadlineKind,
+                _contract?.SignedAt,
+                _stage.PaymentBaseDate);
             if (nextStart is null)
             {
                 return;
@@ -439,21 +439,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ApplyDeadlineBusinessLogic()
         {
-            var deadlineKind = GetSelectedDeadlineKind();
-            var startAt = _startAtEditor.Date;
-            var duration = TryGetInt(_durationBox.Text);
-
-            if (deadlineKind == "calendar_days" && duration is int calendarDuration && startAt is not null)
+            if (!StageDeadlineBusinessRules.IsDeadlineManualMode(GetSelectedDeadlineKind()))
             {
-                _deadlineAtEditor.Date = startAt.Value.Date.AddDays(calendarDuration);
-            }
-            else if (deadlineKind == "working_days" && duration is int workingDuration && startAt is not null)
-            {
-                _deadlineAtEditor.Date = AddWorkingDaysToDate(startAt.Value, workingDuration, _holidays);
-            }
-            else if ((duration is null || startAt is null) && deadlineKind != "calendar_plan")
-            {
-                _deadlineAtEditor.Date = null;
+                _deadlineAtEditor.Date = StageDeadlineBusinessRules.CalculateDeadline(
+                    GetSelectedDeadlineKind(),
+                    _startAtEditor.Date,
+                    TryGetInt(_durationBox.Text),
+                    _holidays);
             }
         }
 
@@ -462,16 +454,17 @@ namespace CbsContractsDesktopClient.Views.Functional
             var paymentKind = GetSelectedPaymentDeadlineKind();
             var paymentDuration = TryGetInt(_paymentDurationBox.Text);
             var fundedAt = _stage.FundedAt;
+            var paymentDeadline = StageDeadlineBusinessRules.CalculatePaymentDeadline(
+                paymentKind,
+                fundedAt,
+                paymentDuration,
+                _holidays);
 
-            if (paymentKind == "c_days" && paymentDuration is int calendarDuration && fundedAt is not null)
+            if (paymentDeadline is not null)
             {
-                _paymentDeadlineAtEditor.Date = fundedAt.Value.Date.AddDays(calendarDuration);
+                _paymentDeadlineAtEditor.Date = paymentDeadline;
             }
-            else if (paymentKind == "w_days" && paymentDuration is int workingDuration && fundedAt is not null)
-            {
-                _paymentDeadlineAtEditor.Date = AddWorkingDaysToDate(fundedAt.Value, workingDuration, _holidays);
-            }
-            else if (string.IsNullOrWhiteSpace(paymentKind) || paymentKind == "c_plan")
+            else if (StageDeadlineBusinessRules.ShouldClearPaymentDuration(paymentKind, paymentDuration))
             {
                 if (!string.IsNullOrWhiteSpace(_paymentDurationBox.Text))
                 {
@@ -488,14 +481,15 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void UpdateDeadlineEditorState()
         {
-            var deadlineManual = IsDeadlineManualMode(GetSelectedDeadlineKind());
+            var deadlineManual = StageDeadlineBusinessRules.IsDeadlineManualMode(GetSelectedDeadlineKind());
+            _startAtEditor.IsReadOnly = StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(GetSelectedDeadlineKind());
             _deadlineAtEditor.IsReadOnly = !deadlineManual;
             if (!deadlineManual)
             {
                 _deadlineAtEditedManually = false;
             }
 
-            var paymentDeadlineManual = IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind());
+            var paymentDeadlineManual = StageDeadlineBusinessRules.IsPaymentDeadlineManualMode(GetSelectedPaymentDeadlineKind());
             _paymentDeadlineAtEditor.IsReadOnly = !paymentDeadlineManual;
             if (!paymentDeadlineManual)
             {
@@ -521,26 +515,11 @@ namespace CbsContractsDesktopClient.Views.Functional
             return GetSelectedKey(_paymentDeadlineKindBox);
         }
 
-        private static bool IsDeadlineManualMode(string? deadlineKind)
-        {
-            return string.Equals(deadlineKind, "calendar_plan", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsPaymentDeadlineManualMode(string? paymentDeadlineKind)
-        {
-            return string.Equals(paymentDeadlineKind, "c_plan", StringComparison.OrdinalIgnoreCase);
-        }
-
         private void SelectStatus(long statusId)
         {
-            foreach (var item in _statusBox.Items.OfType<ComboBoxItem>())
-            {
-                if (item.Tag is EnumSelectOption option && option.Value == statusId)
-                {
-                    _statusBox.SelectedItem = item;
-                    return;
-                }
-            }
+            _statusBox.SelectedItem = (_statusBox.ItemsSource?.Cast<object>() ?? Enumerable.Empty<object>())
+                .OfType<EnumSelectOption>()
+                .FirstOrDefault(option => option.Value == statusId);
         }
 
         private ContractEditState RequireContract()
@@ -566,56 +545,22 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private UIElement BuildTasksMultiSelectEditor()
         {
-            _tasksMultiSelect.Options = _taskOptions;
-            _tasksMultiSelect.Value = _taskOptions
-                .Where(option => _selectedTaskKindIds.Contains(option.TaskKindId))
-                .ToList();
-            _tasksMultiSelect.Display = "chip";
-            _tasksMultiSelect.MaxSelectedLabels = 4;
-            _tasksMultiSelect.Placeholder = "Выбрать";
-            _tasksMultiSelect.Tooltip = "Прочие задачи";
-            _tasksMultiSelect.SelectionChanged += OnTaskSelectionChanged;
-            return _tasksMultiSelect;
+            return StageContractTaskDialogControls.ConfigureTasksMultiSelect(
+                _tasksMultiSelect,
+                _taskOptions,
+                _selectedTaskKindIds,
+                OnTaskSelectionChanged);
         }
 
         private void OnTaskSelectionChanged(object? sender, MultiSelectChangedEventArgs e)
         {
-            _selectedTaskKindIds.Clear();
-            foreach (var option in e.Value.OfType<StageTaskOption>())
-            {
-                _selectedTaskKindIds.Add(option.TaskKindId);
-            }
-        }
-
-        private static IReadOnlyList<StageTaskOption> CreateTaskOptions(
-            IReadOnlyList<ReferenceLookupItem> taskKindItems,
-            IReadOnlyList<StageTaskRecord> selectedTasks)
-        {
-            var selectedKinds = selectedTasks
-                .Select(static item => item.TaskKindId)
-                .Where(static id => id is not null)
-                .Select(static id => id!.Value)
-                .ToHashSet();
-
-            return taskKindItems
-                .Where(static item => string.IsNullOrWhiteSpace(item.Code))
-                .Select(item => new StageTaskOption(
-                    TaskKindId: TryGetLong(item.Id) ?? 0,
-                    Name: item.DisplayName,
-                    IsSelected: TryGetLong(item.Id) is long id && selectedKinds.Contains(id)))
-                .Where(static item => item.TaskKindId > 0 && !string.IsNullOrWhiteSpace(item.Name))
-                .OrderBy(static item => item.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
+            StageContractTaskDialogControls.UpdateSelectedTaskKindIds(_selectedTaskKindIds, e);
         }
 
         private EnumSelectOption? GetSelectedStatusOption()
         {
             return StageContractStatusDialogControls.GetSelectedStatusOption(_statusBox);
         }
-
-        private sealed record StageTaskOption(long TaskKindId, string Name, bool IsSelected);
-
-        private sealed record StageTaskRecord(long? Id, string? ListKey, long? TaskKindId, string Name);
 
     }
 }

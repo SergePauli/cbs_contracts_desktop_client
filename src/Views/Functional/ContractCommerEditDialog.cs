@@ -1,13 +1,18 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.Shared.Formatting;
+using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -16,6 +21,7 @@ using Windows.Storage.Pickers;
 using Windows.System;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
+using static CbsContractsDesktopClient.Shared.Dialogs.StageContractDeadlineDialogOptions;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogControls;
 
 namespace CbsContractsDesktopClient.Views.Functional
@@ -24,13 +30,17 @@ namespace CbsContractsDesktopClient.Views.Functional
     {
         private const double TabAreaHeight = 500;
 
+        private readonly ContractWorkflowStore _workflowStore;
         private readonly TableDataRow _contract;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _taskKindOptions;
-        private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
+        private readonly IReadOnlyList<ReferenceLookupItem> _stageTaskKindItems;
+        private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _contractStatusOptions;
+        private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _stageStatusOptions;
         private readonly Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> _loadContragentOptionsAsync;
+        private readonly IHolidayRecalculationService _holidayRecalculationService;
         private readonly bool _isCreateMode;
         private readonly Dropdown _taskKindBox = new();
-        private readonly ComboBox _statusBox = new();
+        private readonly Dropdown _statusBox = new();
         private readonly CalendarInput _signedAtEditor = new();
         private readonly TextBox _yearBox = BuildNumberTextBox();
         private readonly TextBox _orderBox = new();
@@ -51,31 +61,58 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly Button _resetChangesButton = new();
         private AutoSuggestBox? _contragentBox;
         private IReadOnlyList<CbsTableFilterOptionDefinition> _contragentOptions = [];
+        private IReadOnlyList<HolidayCalendarDay> _holidays = [];
         private CbsTableFilterOptionDefinition? _selectedContragentOption;
         private string _contragentInput = string.Empty;
-        private readonly List<RevisionEditorState> _revisionEditors = [];
+        private IReadOnlyList<RevisionEditState> RevisionEditors =>
+            _workflowStore.ContractRevisionEditStates
+                .Where(static revision => revision.Priority > 0 && !revision.IsDestroyed)
+                .ToList();
+
+        private IReadOnlyList<StageEditState> StageEditors => _workflowStore.ContractStageEditStates
+            .Where(static stage => !stage.IsDestroyed)
+            .ToList();
+        private StackPanel? _stagesStack;
         private StackPanel? _revisionsStack;
         private TabView? _tabs;
+        private TabViewItem? _contractTab;
+        private TabViewItem? _stagesTab;
         private TabViewItem? _revisionsTab;
+        private Button? _contractDocAttachButton;
+        private Button? _contractScanAttachButton;
+        private Button? _contractProtocolAttachButton;
+        private Dropdown? _firstStageDeadlineKindBox;
         private bool _isUpdatingExtAgreementBox;
+        private bool _isSyncingTaskKindSelection;
 
         public ContractCommerEditDialog(
+            ContractWorkflowStore workflowStore,
             TableDataRow contract,
             IReadOnlyList<CbsTableFilterOptionDefinition> taskKindOptions,
-            IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions,
+            IReadOnlyList<ReferenceLookupItem> stageTaskKindItems,
+            IReadOnlyList<CbsTableFilterOptionDefinition> contractStatusOptions,
+            IReadOnlyList<CbsTableFilterOptionDefinition> stageStatusOptions,
             Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> loadContragentOptionsAsync,
             bool isCreateMode = false)
         {
+            ArgumentNullException.ThrowIfNull(workflowStore);
             ArgumentNullException.ThrowIfNull(contract);
             ArgumentNullException.ThrowIfNull(taskKindOptions);
-            ArgumentNullException.ThrowIfNull(statusOptions);
+            ArgumentNullException.ThrowIfNull(stageTaskKindItems);
+            ArgumentNullException.ThrowIfNull(contractStatusOptions);
+            ArgumentNullException.ThrowIfNull(stageStatusOptions);
             ArgumentNullException.ThrowIfNull(loadContragentOptionsAsync);
 
+            _workflowStore = workflowStore;
             _contract = contract;
             _taskKindOptions = taskKindOptions;
-            _statusOptions = statusOptions;
+            _stageTaskKindItems = stageTaskKindItems;
+            _contractStatusOptions = contractStatusOptions;
+            _stageStatusOptions = stageStatusOptions;
             _loadContragentOptionsAsync = loadContragentOptionsAsync;
+            _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _isCreateMode = isCreateMode;
+            ResetStageEditorsFromContract();
             ResetRevisionEditorsFromContract();
             FullSizeDesired = false;
             HorizontalAlignment = HorizontalAlignment.Center;
@@ -92,8 +129,64 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         public override bool Validate()
         {
-            ShowErrorInfo("Сохранение контракта будет подключено следующим этапом.");
-            return false;
+            ShowErrorInfo(string.Empty);
+            CommitContragentInput(_contragentBox?.Text ?? _contragentInput);
+            _taskKindBox.CommitText();
+            _statusBox.CommitText();
+
+            if (GetSelectedTaskKindOption()?.Id is null)
+            {
+                ShowErrorInfo("Выберите тип контракта.");
+                return false;
+            }
+
+            if (TryReadContractYear() is null)
+            {
+                ShowErrorInfo("Укажите год контракта.");
+                return false;
+            }
+
+            if (_selectedContragentOption is null || TryGetLong(_selectedContragentOption.Value) is null)
+            {
+                ShowErrorInfo("Выберите контрагента.");
+                return false;
+            }
+
+            if (GetSelectedContractStatusId() is null)
+            {
+                ShowErrorInfo("Выберите статус контракта.");
+                return false;
+            }
+
+            if (_workflowStore.ContractStageEditStates.Where(static stage => !stage.IsDestroyed).Count() == 0)
+            {
+                ShowErrorInfo("Контракт должен содержать хотя бы один этап.");
+                return false;
+            }
+
+            return true;
+        }
+
+        public IReadOnlyDictionary<string, object?> BuildPayload(int? profileId)
+        {
+            SyncEditorsToWorkflowStore();
+            return _workflowStore.BuildContractCommerPayload(new ContractCommerEditPayloadInput(
+                IsCreateMode: _isCreateMode,
+                Id: TryGetLong(_contract.GetValue("id")),
+                ListKey: _contract.GetValue("list_key")?.ToString(),
+                TaskKindId: GetSelectedTaskKindOption()?.Id,
+                Code: GetSelectedTaskKindOption()?.Code,
+                Year: TryReadContractYear(),
+                Order: TryGetLong(_contract.GetValue("order")),
+                ContragentId: _selectedContragentOption is null ? null : TryGetLong(_selectedContragentOption.Value),
+                StatusId: GetSelectedContractStatusId(),
+                SignedAt: _signedAtEditor.Date,
+                Comment: _commentBox.Text,
+                Governmental: _governmentalBox.IsChecked == true,
+                ExternalNumber: _externalNumberBox.Text,
+                DeadlineAt: _deadlineAtEditor.Date,
+                ClosedAt: _closedAtEditor.Date,
+                ProfileId: profileId));
         }
 
         private FrameworkElement BuildContent()
@@ -162,7 +255,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -279,46 +372,26 @@ namespace CbsContractsDesktopClient.Views.Functional
         private void ConfigureCostBox()
         {
             var stagesCost = SumStageCosts();
-            _costBox.Text = stagesCost is null ? string.Empty : AppFormatters.FormatMoney(stagesCost.Value);
-            _costBox.IsReadOnly = true;
-            _costBox.IsTabStop = false;
-            _costBox.MinWidth = 120;
-            _costBox.TextAlignment = TextAlignment.Right;
-            _costBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _costBox.Text = FormatMoneyInput(stagesCost);
+            ConfigureMoneyTextBox(_costBox);
         }
 
         private decimal? SumStageCosts()
         {
             decimal sum = 0;
             var hasStageCost = false;
-            foreach (var stage in EnumerateObjectArray(_contract, "stages"))
+            foreach (var stage in StageEditors)
             {
-                var stageCost = TryGetStageCost(stage);
-                if (stageCost is null)
+                if (stage.Cost is null)
                 {
                     continue;
                 }
 
-                sum += stageCost.Value;
+                sum += stage.Cost.Value;
                 hasStageCost = true;
             }
 
             return hasStageCost ? sum : null;
-        }
-
-        private static decimal? TryGetStageCost(System.Text.Json.JsonElement stage)
-        {
-            var value = TryGetValue(stage, "cost");
-            return value?.ValueKind switch
-            {
-                System.Text.Json.JsonValueKind.Number when value.Value.TryGetDecimal(out var decimalValue) => decimalValue,
-                System.Text.Json.JsonValueKind.String when decimal.TryParse(
-                    value.Value.GetString(),
-                    NumberStyles.Any,
-                    CultureInfo.InvariantCulture,
-                    out var parsedValue) => parsedValue,
-                _ => null
-            };
         }
 
         private static FrameworkElement BuildNumberSeparator()
@@ -335,32 +408,110 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ConfigureTaskKindCombo()
         {
-            var options = _taskKindOptions
-                .Select(static option => new TaskKindSelectOption(option.Value?.ToString() ?? string.Empty, option.Label))
-                .ToList();
+            var options = BuildTaskKindOptions();
             var selectedCode = GetText(_contract, "task_kind.code", "code");
 
             _taskKindBox.DisplayMemberPath = nameof(TaskKindSelectOption.Label);
             _taskKindBox.TextMemberPath = nameof(TaskKindSelectOption.Code);
             _taskKindBox.MatchMemberPath = nameof(TaskKindSelectOption.Code);
+            _taskKindBox.IsClearButtonEnabled = false;
+            _taskKindBox.TabTarget = _yearBox;
             _taskKindBox.MinWidth = 48;
             _taskKindBox.Items.Clear();
-            foreach (var option in options)
+            _isSyncingTaskKindSelection = true;
+            try
             {
-                _taskKindBox.Items.Add(option);
-
-                if (string.Equals(option.Code, selectedCode, StringComparison.OrdinalIgnoreCase))
+                foreach (var option in options)
                 {
-                    _taskKindBox.SelectedItem = option;
+                    _taskKindBox.Items.Add(option);
+
+                    if (string.Equals(option.Code, selectedCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _taskKindBox.SelectedItem = option;
+                    }
                 }
+            }
+            finally
+            {
+                _isSyncingTaskKindSelection = false;
             }
 
             _taskKindBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _taskKindBox.SelectionChanged -= TaskKindBox_SelectionChanged;
+            _taskKindBox.SelectionChanged += TaskKindBox_SelectionChanged;
+            _taskKindBox.SelectionCommitted -= TaskKindBox_SelectionCommitted;
+            _taskKindBox.SelectionCommitted += TaskKindBox_SelectionCommitted;
         }
 
-        private void ContractCommerEditDialog_Loaded(object sender, RoutedEventArgs e)
+        private void TaskKindBox_SelectionChanged(object? sender, EventArgs e)
+        {
+            SyncSingleStageTaskKindFromContract();
+            RefreshStagesStack();
+        }
+
+        private void TaskKindBox_SelectionCommitted(object? sender, EventArgs e)
+        {
+            if (!_isSyncingTaskKindSelection && _taskKindBox.SelectedItem is TaskKindSelectOption)
+            {
+                FocusYearBox();
+            }
+        }
+
+        private void FocusYearBox()
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _yearBox.Focus(FocusState.Programmatic);
+                _yearBox.SelectAll();
+            });
+        }
+
+        private TaskKindSelectOption? GetSelectedTaskKindOption()
+        {
+            return _taskKindBox.SelectedItem as TaskKindSelectOption;
+        }
+
+        private long? GetSelectedContractStatusId()
+        {
+            return (_statusBox.SelectedItem as EnumSelectOption)?.Value;
+        }
+
+        private int? TryReadContractYear()
+        {
+            if (!int.TryParse(_yearBox.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var twoDigitYear))
+            {
+                return null;
+            }
+
+            return 2000 + Math.Clamp(twoDigitYear, 0, 99);
+        }
+
+        private void SyncEditorsToWorkflowStore()
+        {
+            SyncSingleStageTaskKindFromContract();
+            GetContractRevisionEditState().IsPresent = _revisionPresentBox.IsChecked == true;
+            GetContractRevisionEditState().Description = NormalizeEditorText(_revisionDescriptionBox.Text);
+            GetContractRevisionEditState().DocLink = NormalizeEditorText(_revisionDocLinkBox.Text);
+            GetContractRevisionEditState().ScanLink = NormalizeEditorText(_revisionScanLinkBox.Text);
+            GetContractRevisionEditState().ProtocolLink = NormalizeEditorText(_revisionProtocolLinkBox.Text);
+            GetContractRevisionEditState().ZipLink = NormalizeEditorText(_revisionZipLinkBox.Text);
+            _workflowStore.SetContractStageEditStates(_workflowStore.ContractStageEditStates);
+            _workflowStore.SetContractRevisionEditStates(_workflowStore.ContractRevisionEditStates);
+        }
+
+        private async void ContractCommerEditDialog_Loaded(object sender, RoutedEventArgs e)
         {
             Loaded -= ContractCommerEditDialog_Loaded;
+            try
+            {
+                _holidays = await _holidayRecalculationService.GetHolidayCalendarDaysAsync();
+                ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: false);
+            }
+            catch
+            {
+                _holidays = [];
+            }
+
             if (string.IsNullOrWhiteSpace(_taskKindBox.Text))
             {
                 return;
@@ -372,17 +523,53 @@ namespace CbsContractsDesktopClient.Views.Functional
         private void ConfigureStatusCombo()
         {
             var statusId = ResolveStatusId();
-            var statusOptions = BuildStatusOptions(_statusOptions, includeEmpty: false);
+            var statusOptions = BuildStatusOptions(_contractStatusOptions, includeEmpty: false);
             if (statusOptions.All(option => option.Value != statusId))
             {
                 throw new InvalidOperationException($"Contract status options must contain status id {statusId}.");
             }
 
-            StageContractStatusDialogControls.ConfigureStatusCombo(
-                _statusBox,
-                statusOptions,
-                statusId);
             _statusBox.MinWidth = 120;
+            _statusBox.OnFocus = StatusBox_OnFocus;
+            _statusBox.OnTab = StatusBox_OnTab;
+            ConfigureStatusDropdown(_statusBox, statusOptions, statusId, option => ApplyContractStatusBusinessLogic(option));
+        }
+
+        private void StatusBox_OnFocus(Dropdown dropdown, RoutedEventArgs args)
+        {
+            dropdown.OpenDropDown();
+        }
+
+        private void StatusBox_OnTab(Dropdown dropdown, KeyRoutedEventArgs args)
+        {
+            dropdown.CloseDropDown();
+            dropdown.CommitText();
+            FocusSignedAtEditor();
+            args.Handled = true;
+        }
+
+        private void ApplyContractStatusBusinessLogic(EnumSelectOption? option)
+        {
+            if (option is null)
+            {
+                return;
+            }
+
+            if (string.Equals(option.Label, "Подписан", StringComparison.CurrentCultureIgnoreCase))
+            {
+                _signedAtEditor.Date ??= DateTimeOffset.Now;
+                return;
+            }
+
+            if (string.Equals(option.Label, "В проекте", StringComparison.CurrentCultureIgnoreCase))
+            {
+                _signedAtEditor.Date = null;
+            }
+        }
+
+        private void FocusSignedAtEditor()
+        {
+            DispatcherQueue.TryEnqueue(() => _signedAtEditor.FocusInput());
         }
 
         private long ResolveStatusId()
@@ -398,7 +585,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 throw new InvalidOperationException("Contract edit row must contain status_id or status.id.");
             }
 
-            return _statusOptions
+            return _contractStatusOptions
                 .Where(static option => string.Equals(option.Label, "В проекте", StringComparison.CurrentCultureIgnoreCase))
                 .Select(static option => TryGetLong(option.Value))
                 .FirstOrDefault(static id => id is not null)
@@ -408,8 +595,23 @@ namespace CbsContractsDesktopClient.Views.Functional
         private void ConfigureSignedAtEditor()
         {
             _signedAtEditor.Date = AppFormatters.ParseDate(_contract.GetValue("signed_at"));
-            _signedAtEditor.MinWidth = 110;
-            _signedAtEditor.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _signedAtEditor.DateChanged += SignedAtEditor_DateChanged;
+            _signedAtEditor.OnTab = SignedAtEditor_OnTab;
+        }
+
+        private void SignedAtEditor_DateChanged(object? sender, EventArgs e)
+        {
+            ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: true);
+        }
+
+        private void SignedAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _commentBox.Focus(FocusState.Programmatic);
+                _commentBox.Select(_commentBox.Text.Length, 0);
+            });
+            args.Handled = true;
         }
 
         private void ConfigureCommentBox()
@@ -422,14 +624,18 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ConfigureFlagBoxes()
         {
-            SetExtAgreementChecked(_revisionEditors.Count > 0);
+            SetExtAgreementChecked(RevisionEditors.Count > 0);
             _extAgreementBox.Checked -= ExtAgreementBox_Checked;
             _extAgreementBox.Unchecked -= ExtAgreementBox_Unchecked;
+            _extAgreementBox.PreviewKeyDown -= ExtAgreementBox_PreviewKeyDown;
             _extAgreementBox.Checked += ExtAgreementBox_Checked;
             _extAgreementBox.Unchecked += ExtAgreementBox_Unchecked;
+            _extAgreementBox.PreviewKeyDown += ExtAgreementBox_PreviewKeyDown;
             ToolTipService.SetToolTip(_extAgreementBox, "Дополнительные соглашения");
 
-            _multiStageBox.IsChecked = IsMultiStageContract();
+            SetMultiStageChecked(IsMultiStageContract());
+            _multiStageBox.IsHitTestVisible = false;
+            _multiStageBox.IsTabStop = false;
             ToolTipService.SetToolTip(_multiStageBox, "Многоэтапный контракт");
         }
 
@@ -485,7 +691,26 @@ namespace CbsContractsDesktopClient.Views.Functional
                 maxWidth: 390,
                 maxSuggestionListHeight: 240,
                 bindingSource: this);
+            _contragentBox.PreviewKeyDown -= ContragentBox_PreviewKeyDown;
+            _contragentBox.PreviewKeyDown += ContragentBox_PreviewKeyDown;
             return _contragentBox;
+        }
+
+        private void ContragentBox_PreviewKeyDown(object sender, KeyRoutedEventArgs args)
+        {
+            if (args.Key != VirtualKey.Tab)
+            {
+                return;
+            }
+
+            CommitContragentInput(_contragentBox?.Text);
+            FocusStatusBox();
+            args.Handled = true;
+        }
+
+        private void FocusStatusBox()
+        {
+            DispatcherQueue.TryEnqueue(() => _statusBox.Focus(FocusState.Programmatic));
         }
 
         private void ConfigureContragentState()
@@ -535,6 +760,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             SelectContragentOption(option);
+            FocusStatusBox();
             return true;
         }
 
@@ -668,15 +894,15 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             ConfigureStatusCombo();
             _signedAtEditor.Date = AppFormatters.ParseDate(_contract.GetValue("signed_at"));
-            _costBox.Text = SumStageCosts() is decimal stagesCost
-                ? AppFormatters.FormatMoney(stagesCost)
-                : string.Empty;
             _commentBox.Text = string.Empty;
             ResetMainTabEditorsFromContract();
+            ResetStageEditorsFromContract();
+            RefreshContractCostBox();
+            RefreshStagesStack();
             ResetRevisionEditorsFromContract();
-            SetExtAgreementChecked(_revisionEditors.Count > 0);
+            SetExtAgreementChecked(RevisionEditors.Count > 0);
             RefreshRevisionsStack();
-            _multiStageBox.IsChecked = IsMultiStageContract();
+            SetMultiStageChecked(IsMultiStageContract());
         }
 
         private void ResetMainTabEditorsFromContract()
@@ -686,78 +912,127 @@ namespace CbsContractsDesktopClient.Views.Functional
             _deadlineAtEditor.Date = AppFormatters.ParseDate(_contract.GetValue("deadline_at"));
             _closedAtEditor.Date = AppFormatters.ParseDate(_contract.GetValue("closed_at"));
 
-            var contractRevision = GetContractRevision();
-            _revisionPresentBox.IsChecked = contractRevision is not null
-                && TryGetBool(TryGetValue(contractRevision.Value, "is_present")) == true;
-            _revisionDescriptionBox.Text = contractRevision is null
-                ? string.Empty
-                : TryGetString(contractRevision.Value, "description") ?? string.Empty;
-            _revisionDocLinkBox.Text = contractRevision is null
-                ? string.Empty
-                : TryGetString(contractRevision.Value, "doc_link") ?? string.Empty;
-            _revisionScanLinkBox.Text = contractRevision is null
-                ? string.Empty
-                : TryGetString(contractRevision.Value, "scan_link") ?? string.Empty;
-            _revisionProtocolLinkBox.Text = contractRevision is null
-                ? string.Empty
-                : TryGetString(contractRevision.Value, "protocol_link") ?? string.Empty;
-            _revisionZipLinkBox.Text = contractRevision is null
-                ? string.Empty
-                : TryGetString(contractRevision.Value, "zip_link") ?? string.Empty;
+            var contractRevision = GetContractRevisionEditState();
+            _revisionPresentBox.IsChecked = contractRevision.IsPresent;
+            _revisionDescriptionBox.Text = contractRevision.Description ?? string.Empty;
+            _revisionDocLinkBox.Text = contractRevision.DocLink ?? string.Empty;
+            _revisionScanLinkBox.Text = contractRevision.ScanLink ?? string.Empty;
+            _revisionProtocolLinkBox.Text = contractRevision.ProtocolLink ?? string.Empty;
+            _revisionZipLinkBox.Text = contractRevision.ZipLink ?? string.Empty;
         }
 
-        private JsonElement? GetContractRevision()
+        private RevisionEditState GetContractRevisionEditState()
         {
-            var revision = EnumerateObjectArray(_contract, "revisions").FirstOrDefault();
-            if (revision.ValueKind == JsonValueKind.Object)
+            var revision = _workflowStore.ContractRevisionEditStates.FirstOrDefault(static revision => revision.Priority == 0);
+            if (revision is not null)
             {
                 return revision;
             }
 
-            return _isCreateMode
-                ? null
-                : throw new InvalidOperationException("Contract edit row must contain revisions[0].");
+            throw new InvalidOperationException("Contract edit graph must contain revision with priority 0.");
         }
 
         private void ResetRevisionEditorsFromContract()
         {
-            _revisionEditors.Clear();
-            foreach (var revision in EnumerateObjectArray(_contract, "revisions").Skip(1))
+            _workflowStore.SetContractRevisionEditStates(
+                _workflowStore.ContractRevisionEditStates
+                    .Where(static revision => revision.Priority == 0 || !revision.IsDestroyed));
+        }
+
+        private void ResetStageEditorsFromContract()
+        {
+            _workflowStore.ResetEditGraph();
+            if (StageEditors.Count == 0)
             {
-                _revisionEditors.Add(new RevisionEditorState
-                {
-                    Number = TryGetLong(TryGetValue(revision, "priority")) ?? 0,
-                    IsPresent = TryGetBool(TryGetValue(revision, "is_present")) == true,
-                    Description = TryGetString(revision, "description") ?? string.Empty,
-                    DocLink = TryGetString(revision, "doc_link") ?? string.Empty,
-                    ScanLink = TryGetString(revision, "scan_link") ?? string.Empty,
-                    ProtocolLink = TryGetString(revision, "protocol_link") ?? string.Empty
-                });
+                throw new InvalidOperationException("Contract edit graph must contain at least one stage.");
             }
 
-            _revisionEditors.Sort(static (left, right) => left.Number.CompareTo(right.Number));
+            SetMultiStageChecked(IsMultiStageContract());
+        }
+
+        private void AddStage(long priority)
+        {
+            var sourceStage = StageEditors.FirstOrDefault(stage => stage.Priority == priority - 1)
+                ?? StageEditors.LastOrDefault();
+            if (sourceStage is null)
+            {
+                return;
+            }
+
+            try
+            {
+                _workflowStore.AddStageAfter(sourceStage);
+                SetMultiStageChecked(true);
+                RefreshStagesStack();
+                RefreshContractCostBox();
+            }
+            catch (InvalidOperationException ex)
+            {
+                ShowErrorInfo(ex.Message);
+            }
+        }
+
+        private void DeleteStage(StageEditState stage)
+        {
+            try
+            {
+                _workflowStore.DeleteStage(stage);
+                SetMultiStageChecked(StageEditors.Count > 1);
+                RefreshStagesStack();
+                RefreshContractCostBox();
+            }
+            catch (InvalidOperationException ex)
+            {
+                ShowErrorInfo(ex.Message);
+            }
+        }
+
+        private void NormalizeStageNumbering()
+        {
+            _workflowStore.SetContractStageEditStates(StageEditors);
+        }
+
+        private void SetActiveStage(StageEditState selectedStage)
+        {
+            _workflowStore.SetActiveStage(selectedStage);
+            RefreshStagesStack();
+        }
+
+        private void EnsureSingleActiveStage()
+        {
+            _workflowStore.SetContractStageEditStates(StageEditors);
         }
 
         private void ResetTaskKindFromContract()
         {
             var selectedCode = GetText(_contract, "task_kind.code", "code");
-            _taskKindBox.SelectedItem = _taskKindBox.Items
-                .OfType<TaskKindSelectOption>()
-                .FirstOrDefault(option => string.Equals(option.Code, selectedCode, StringComparison.OrdinalIgnoreCase));
-            if (_taskKindBox.SelectedItem is null)
+            _isSyncingTaskKindSelection = true;
+            try
             {
-                _taskKindBox.Text = string.Empty;
+                _taskKindBox.SelectedItem = _taskKindBox.Items
+                    .OfType<TaskKindSelectOption>()
+                    .FirstOrDefault(option => string.Equals(option.Code, selectedCode, StringComparison.OrdinalIgnoreCase));
+                if (_taskKindBox.SelectedItem is null)
+                {
+                    _taskKindBox.Text = string.Empty;
+                }
             }
+            finally
+            {
+                _isSyncingTaskKindSelection = false;
+            }
+
+            SyncSingleStageTaskKindFromContract();
         }
 
         private bool HasExtAgreement()
         {
-            return _revisionEditors.Count > 0;
+            return RevisionEditors.Count > 0;
         }
 
         private void ExtAgreementBox_Checked(object sender, RoutedEventArgs e)
         {
-            if (_isUpdatingExtAgreementBox || _revisionEditors.Count > 0)
+            if (_isUpdatingExtAgreementBox || RevisionEditors.Count > 0)
             {
                 return;
             }
@@ -773,45 +1048,70 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            if (_revisionEditors.Count > 0)
+            if (RevisionEditors.Count > 0)
             {
                 SetExtAgreementChecked(true);
             }
         }
 
-        private void AddRevision(long number)
+        private void ExtAgreementBox_PreviewKeyDown(object sender, KeyRoutedEventArgs args)
         {
-            if (_revisionEditors.Any(revision => revision.Number == number))
+            if (args.Key != VirtualKey.Tab)
             {
-                ShowErrorInfo($"Ревизия с номером {number} уже существует.");
                 return;
             }
 
-            _revisionEditors.Add(new RevisionEditorState
-            {
-                Number = number,
-                Description = "Доп. соглашение"
-            });
-            _revisionEditors.Sort(static (left, right) => left.Number.CompareTo(right.Number));
-            SetExtAgreementChecked(true);
-            RefreshRevisionsStack();
+            FocusGovernmentalBox();
+            args.Handled = true;
         }
 
-        private void DeleteRevision(RevisionEditorState revision)
+        private void FocusGovernmentalBox()
         {
-            if (revision.Number == 1 && _revisionEditors.Any(item => item.Number > revision.Number))
+            if (_tabs is not null && _contractTab is not null)
             {
-                ShowErrorInfo($"Нельзя удалить ревизию № {revision.Number}, пока существуют ревизии с большим номером.");
+                _tabs.SelectedItem = _contractTab;
+            }
+
+            DispatcherQueue.TryEnqueue(() => _governmentalBox.Focus(FocusState.Programmatic));
+        }
+
+        private void AddRevision(long number)
+        {
+            var sourceRevision = _workflowStore.ContractRevisionEditStates.FirstOrDefault(revision => revision.Priority == number - 1)
+                ?? _workflowStore.ContractRevisionEditStates.FirstOrDefault();
+            if (sourceRevision is null)
+            {
                 return;
             }
 
-            _revisionEditors.Remove(revision);
-            if (_revisionEditors.Count == 0)
+            try
             {
-                SetExtAgreementChecked(false);
+                _workflowStore.AddRevisionAfter(sourceRevision);
+                SetExtAgreementChecked(true);
+                RefreshRevisionsStack();
             }
+            catch (InvalidOperationException ex)
+            {
+                ShowErrorInfo(ex.Message);
+            }
+        }
 
-            RefreshRevisionsStack();
+        private void DeleteRevision(RevisionEditState revision)
+        {
+            try
+            {
+                _workflowStore.DeleteRevision(revision);
+                if (RevisionEditors.Count == 0)
+                {
+                    SetExtAgreementChecked(false);
+                }
+
+                RefreshRevisionsStack();
+            }
+            catch (InvalidOperationException ex)
+            {
+                ShowErrorInfo(ex.Message);
+            }
         }
 
         private void SetExtAgreementChecked(bool isChecked)
@@ -819,6 +1119,11 @@ namespace CbsContractsDesktopClient.Views.Functional
             _isUpdatingExtAgreementBox = true;
             _extAgreementBox.IsChecked = isChecked;
             _isUpdatingExtAgreementBox = false;
+        }
+
+        private void SetMultiStageChecked(bool isChecked)
+        {
+            _multiStageBox.IsChecked = isChecked;
         }
 
         private void SelectRevisionsTab()
@@ -831,18 +1136,8 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private bool IsMultiStageContract()
         {
-            var explicitValue =
-                TryGetBool(_contract.GetValue("multyStage"))
-                ?? TryGetBool(_contract.GetValue("multiStage"))
-                ?? TryGetBool(_contract.GetValue("is_multistage"));
-            if (explicitValue is not null)
-            {
-                return explicitValue.Value;
-            }
-
-            var stages = EnumerateObjectArray(_contract, "stages").ToList();
-            return stages.Any(stage => TryGetLong(TryGetValue(stage, "priority")) > 0)
-                || stages.Count > 1;
+            return StageEditors.Count > 1
+                || StageEditors.Any(static stage => stage.Priority > 0);
         }
 
         private static FrameworkElement BuildFlagHost(CheckBox checkBox, string label)
@@ -883,16 +1178,18 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
             _tabs = tabView;
 
-            tabView.TabItems.Add(BuildColoredTab(
+            _contractTab = BuildColoredTab(
                 "Контракт",
                 Microsoft.UI.ColorHelper.FromArgb(255, 255, 251, 237),
                 Microsoft.UI.ColorHelper.FromArgb(255, 237, 233, 220),
-                BuildMainTabContent()));
-            tabView.TabItems.Add(BuildColoredTab(
+                BuildMainTabContent());
+            tabView.TabItems.Add(_contractTab);
+            _stagesTab = BuildColoredTab(
                 "Этапы",
                 Microsoft.UI.ColorHelper.FromArgb(255, 239, 255, 242),
                 Microsoft.UI.ColorHelper.FromArgb(255, 220, 235, 223),
-                BuildPlaceholder("Разметка этапов будет добавлена после утверждения единого шаблона AppEditDialog.")));
+                BuildStagesTabContent());
+            tabView.TabItems.Add(_stagesTab);
             _revisionsTab = BuildColoredTab(
                 "Ревизии",
                 Microsoft.UI.ColorHelper.FromArgb(255, 239, 250, 255),
@@ -915,9 +1212,9 @@ namespace CbsContractsDesktopClient.Views.Functional
                 RowSpacing = 8
             };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -926,7 +1223,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var governmental = BuildInlineCheckBox(_governmentalBox, "ГосКонтракт");
+            var governmental = BuildInputLineCheckBox(_governmentalBox, "ГосКонтракт");
             grid.Children.Add(governmental);
 
             var revisionPresent = BuildInputLineCheckBox(_revisionPresentBox, "В наличии");
@@ -957,20 +1254,165 @@ namespace CbsContractsDesktopClient.Views.Functional
             Grid.SetColumnSpan(filesHeader, 5);
             grid.Children.Add(filesHeader);
 
-            var docLink = BuildFileRow("Исходник", "\uf000", _revisionDocLinkBox);
+            var docLink = BuildFileRow("Исходник", "\uf000", _revisionDocLinkBox, button => _contractDocAttachButton = button);
             Grid.SetRow(docLink, 3);
             Grid.SetColumnSpan(docLink, 4);
             grid.Children.Add(docLink);
 
-            var scanLink = BuildFileRow("Скан", "\uea90", _revisionScanLinkBox);
+            var scanLink = BuildFileRow("Скан", "\uea90", _revisionScanLinkBox, button => _contractScanAttachButton = button);
             Grid.SetRow(scanLink, 4);
             Grid.SetColumnSpan(scanLink, 4);
             grid.Children.Add(scanLink);
 
-            var protocolLink = BuildFileRow("Протокол", "\ue9a4", _revisionProtocolLinkBox);
+            var protocolLink = BuildFileRow("Протокол", "\ue9a4", _revisionProtocolLinkBox, button => _contractProtocolAttachButton = button);
             Grid.SetRow(protocolLink, 5);
             Grid.SetColumnSpan(protocolLink, 4);
             grid.Children.Add(protocolLink);
+
+            ConfigureContractFileAttachTabChain();
+
+            return grid;
+        }
+
+        private UIElement BuildStagesTabContent()
+        {
+            _stagesStack = new StackPanel
+            {
+                Padding = new Thickness(8),
+                Spacing = 10
+            };
+            RefreshStagesStack();
+            return _stagesStack;
+        }
+
+        private void RefreshStagesStack()
+        {
+            if (_stagesStack is null)
+            {
+                return;
+            }
+
+            NormalizeStageNumbering();
+            _stagesStack.Children.Clear();
+            _firstStageDeadlineKindBox = null;
+            foreach (var stage in StageEditors.OrderBy(static stage => stage.Priority))
+            {
+                _stagesStack.Children.Add(BuildStageSection(stage));
+            }
+        }
+
+        private UIElement BuildStageSection(StageEditState stage)
+        {
+            var grid = new Grid
+            {
+                ColumnSpacing = 8,
+                RowSpacing = 8
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(193) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(123) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
+            AddGridChild(grid, BuildLabeledControl("№", BuildCompactReadonlyTextBox(FormatStageNumber(stage)), spacing: 3), 0, 0);
+            AddGridChild(grid, BuildInputLineCheckBox(BuildActiveStageCheckBox(stage), "АЭ"), 0, 1);
+            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 2);
+            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage);
+            var stageStatusDropdown = BuildStageStatusDropdown(stage);
+            var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
+            var stageDurationEditor = BuildStageDurationEditor(stage.Duration, value => stage.Duration = value);
+            var stageDeadlineEditor = BuildDateEditor(stage.DeadlineAt, value => stage.DeadlineAt = value);
+            var stageCostEditor = BuildStageCostEditor(stage);
+            stageTaskKindDropdown.TabTarget = stageStatusDropdown;
+            stageStatusDropdown.TabTarget = stageDeadlineKindDropdown;
+            stageDeadlineKindDropdown.OnTab = (dropdown, args) => StageDeadlineKind_OnTab(dropdown, stage, stageStartEditor, stageDurationEditor, stageDeadlineEditor, args);
+            stageDeadlineKindDropdown.SelectionChanged += (_, _) =>
+            {
+                ApplyStageStartMode(stage, stageStartEditor);
+                ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
+                SyncStageDeadlineEditorsFromBusinessRules(stage, stageStartEditor, stageDeadlineEditor, applyInitialStart: true);
+            };
+            stageDurationEditor.TextChanged += (_, _) => SyncStageDeadlineEditorsFromBusinessRules(stage, stageStartEditor, stageDeadlineEditor, applyInitialStart: false);
+            stageStartEditor.DateChanged += (_, _) => SyncStageDeadlineEditorsFromBusinessRules(stage, stageStartEditor, stageDeadlineEditor, applyInitialStart: false);
+            ConfigureTabTo(stageDurationEditor, stageCostEditor);
+            stageDeadlineEditor.OnTab = (_, args) => FocusStageCostEditor(stageCostEditor, args);
+            ApplyStageStartMode(stage, stageStartEditor);
+            ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
+            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 3);
+            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 4);
+            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 5);
+            AddGridChild(grid, BuildLabeledControl(
+                "Дней",
+                stageDurationEditor,
+                spacing: 3), 0, 6);
+            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 7);
+            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 8);
+            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 9);
+
+            var paymentRow = BuildStagePaymentRow(stage);
+            Grid.SetRow(paymentRow, 1);
+            Grid.SetColumnSpan(paymentRow, 11);
+            grid.Children.Add(paymentRow);
+
+            var comment = BuildLabeledControl("Комментарий этапа", BuildStageCommentEditor(stage), spacing: 3);
+            AddGridChild(grid, comment, 2, 0, 8);
+
+            var separator = BuildSectionSeparator(null);
+            Grid.SetRow(separator, 3);
+            Grid.SetColumnSpan(separator, 11);
+            grid.Children.Add(separator);
+
+            return grid;
+        }
+
+        private FrameworkElement BuildStagePaymentRow(StageEditState stage)
+        {
+            var grid = new Grid
+            {
+                ColumnSpacing = 8
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(159) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(336) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var paymentDeadlineKindDropdown = BuildStagePaymentDeadlineKindDropdown(stage);
+            var paymentDurationEditor = BuildStageDurationEditor(stage.PaymentDuration, value => stage.PaymentDuration = value);
+            var paymentDeadlineEditor = BuildDateEditor(stage.PaymentDeadlineAt, value => stage.PaymentDeadlineAt = value);
+            paymentDeadlineKindDropdown.OnTab = (dropdown, args) => StagePaymentDeadlineKind_OnTab(dropdown, stage, paymentDurationEditor, paymentDeadlineEditor, args);
+            paymentDeadlineKindDropdown.SelectionChanged += (_, _) =>
+            {
+                ApplyStagePaymentDeadlineMode(stage, paymentDurationEditor, paymentDeadlineEditor);
+                SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, paymentDurationEditor, paymentDeadlineEditor);
+            };
+            paymentDurationEditor.TextChanged += (_, _) => SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, paymentDurationEditor, paymentDeadlineEditor);
+            ApplyStagePaymentDeadlineMode(stage, paymentDurationEditor, paymentDeadlineEditor);
+
+            AddGridChild(grid, BuildLabeledControl("Режим оплаты", paymentDeadlineKindDropdown, spacing: 3), 0, 0);
+            AddGridChild(grid, BuildLabeledControl(
+                "Дней",
+                paymentDurationEditor,
+                spacing: 3), 0, 1);
+            AddGridChild(grid, BuildLabeledControl("СрокОп", paymentDeadlineEditor, spacing: 3), 0, 2);
+            AddGridChild(grid, BuildLabeledControl("Дополнительные задачи", BuildStageTasksMultiSelectEditor(stage), spacing: 3), 0, 3);
+            AddGridChild(grid, BuildLabeledControl("Выезды", BuildReadonlyTextBox(FormatStageFlagText(stage.IsRideOut, stage.RideOutAt)), spacing: 3), 0, 4);
+            AddGridChild(grid, BuildLabeledControl("Выполнены", BuildReadonlyTextBox(FormatStageFlagText(stage.CompletedAt is not null, stage.CompletedAt)), spacing: 3), 0, 5);
+            AddGridChild(grid, BuildLabeledControl("Отправлены", BuildReadonlyTextBox(FormatStageFlagText(stage.IsSended, stage.SendedAt)), spacing: 3), 0, 6);
 
             return grid;
         }
@@ -994,19 +1436,19 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             _revisionsStack.Children.Clear();
-            if (_revisionEditors.Count == 0)
+            if (RevisionEditors.Count == 0)
             {
                 _revisionsStack.Children.Add(BuildPlaceholder("Дополнительные соглашения отсутствуют."));
                 return;
             }
 
-            foreach (var revision in _revisionEditors.OrderBy(static revision => revision.Number))
+            foreach (var revision in RevisionEditors.OrderBy(static revision => revision.Priority))
             {
                 _revisionsStack.Children.Add(BuildRevisionSection(revision));
             }
         }
 
-        private UIElement BuildRevisionSection(RevisionEditorState revision)
+        private UIElement BuildRevisionSection(RevisionEditState revision)
         {
             var grid = new Grid
             {
@@ -1025,7 +1467,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var numberBox = new TextBox
             {
-                Text = FormatRevisionNumber(revision.Number),
+                Text = FormatRevisionNumber(revision.Priority),
                 IsReadOnly = true,
                 IsTabStop = false,
                 HorizontalAlignment = HorizontalAlignment.Stretch
@@ -1045,7 +1487,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var descriptionBox = new TextBox
             {
-                Text = revision.Description,
+                Text = revision.Description ?? string.Empty,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             descriptionBox.TextChanged += (_, _) => revision.Description = descriptionBox.Text ?? string.Empty;
@@ -1053,7 +1495,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 "Тип документа",
                 BuildRevisionDescriptionEditor(
                     descriptionBox,
-                    () => AddRevision(revision.Number + 1),
+                    () => AddRevision(revision.Priority + 1),
                     () => DeleteRevision(revision)),
                 spacing: 3);
             Grid.SetColumn(description, 2);
@@ -1095,24 +1537,705 @@ namespace CbsContractsDesktopClient.Views.Functional
             _revisionPresentBox.HorizontalAlignment = HorizontalAlignment.Left;
             _revisionPresentBox.VerticalAlignment = VerticalAlignment.Center;
             _revisionPresentBox.MinHeight = 0;
+            _revisionPresentBox.Checked -= RevisionPresentBox_Checked;
+            _revisionPresentBox.Unchecked -= RevisionPresentBox_Unchecked;
+            _revisionPresentBox.Checked += RevisionPresentBox_Checked;
+            _revisionPresentBox.Unchecked += RevisionPresentBox_Unchecked;
             ToolTipService.SetToolTip(_revisionPresentBox, "Документ в наличии");
 
             _revisionDescriptionBox.MinWidth = 260;
             _revisionDescriptionBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _revisionDescriptionBox.TextChanged -= RevisionDescriptionBox_TextChanged;
+            _revisionDescriptionBox.TextChanged += RevisionDescriptionBox_TextChanged;
 
             _externalNumberBox.MinWidth = 260;
             _externalNumberBox.HorizontalAlignment = HorizontalAlignment.Stretch;
 
-            _deadlineAtEditor.MinWidth = 140;
-            _deadlineAtEditor.HorizontalAlignment = HorizontalAlignment.Stretch;
-
-            _closedAtEditor.MinWidth = 140;
-            _closedAtEditor.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _deadlineAtEditor.OnTab = DeadlineAtEditor_OnTab;
+            _closedAtEditor.OnTab = ClosedAtEditor_OnTab;
 
             ConfigureFileTextBox(_revisionDocLinkBox);
             ConfigureFileTextBox(_revisionScanLinkBox);
             ConfigureFileTextBox(_revisionProtocolLinkBox);
             ConfigureFileTextBox(_revisionZipLinkBox);
+            _revisionDocLinkBox.TextChanged -= RevisionDocLinkBox_TextChanged;
+            _revisionScanLinkBox.TextChanged -= RevisionScanLinkBox_TextChanged;
+            _revisionProtocolLinkBox.TextChanged -= RevisionProtocolLinkBox_TextChanged;
+            _revisionZipLinkBox.TextChanged -= RevisionZipLinkBox_TextChanged;
+            _revisionDocLinkBox.TextChanged += RevisionDocLinkBox_TextChanged;
+            _revisionScanLinkBox.TextChanged += RevisionScanLinkBox_TextChanged;
+            _revisionProtocolLinkBox.TextChanged += RevisionProtocolLinkBox_TextChanged;
+            _revisionZipLinkBox.TextChanged += RevisionZipLinkBox_TextChanged;
+        }
+
+        private void RevisionPresentBox_Checked(object sender, RoutedEventArgs e)
+        {
+            GetContractRevisionEditState().IsPresent = true;
+        }
+
+        private void RevisionPresentBox_Unchecked(object sender, RoutedEventArgs e)
+        {
+            GetContractRevisionEditState().IsPresent = false;
+        }
+
+        private void RevisionDescriptionBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            GetContractRevisionEditState().Description = NormalizeEditorText(_revisionDescriptionBox.Text);
+        }
+
+        private void RevisionDocLinkBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            GetContractRevisionEditState().DocLink = NormalizeEditorText(_revisionDocLinkBox.Text);
+        }
+
+        private void RevisionScanLinkBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            GetContractRevisionEditState().ScanLink = NormalizeEditorText(_revisionScanLinkBox.Text);
+        }
+
+        private void RevisionProtocolLinkBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            GetContractRevisionEditState().ProtocolLink = NormalizeEditorText(_revisionProtocolLinkBox.Text);
+        }
+
+        private void RevisionZipLinkBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            GetContractRevisionEditState().ZipLink = NormalizeEditorText(_revisionZipLinkBox.Text);
+        }
+
+        private void DeadlineAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
+        {
+            DispatcherQueue.TryEnqueue(() => _closedAtEditor.FocusInput());
+            args.Handled = true;
+        }
+
+        private void ClosedAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
+        {
+            DispatcherQueue.TryEnqueue(() => _contractDocAttachButton?.Focus(FocusState.Programmatic));
+            args.Handled = true;
+        }
+
+        private void ConfigureContractFileAttachTabChain()
+        {
+            ConfigureAttachButtonTab(_contractDocAttachButton, () => _contractScanAttachButton?.Focus(FocusState.Programmatic));
+            ConfigureAttachButtonTab(_contractScanAttachButton, () => _contractProtocolAttachButton?.Focus(FocusState.Programmatic));
+            ConfigureAttachButtonTab(_contractProtocolAttachButton, FocusFirstStageDeadlineKindBox);
+        }
+
+        private static void ConfigureAttachButtonTab(Button? button, Action focusNext)
+        {
+            if (button is null)
+            {
+                return;
+            }
+
+            button.PreviewKeyDown -= AttachButton_PreviewKeyDown;
+            button.PreviewKeyDown += AttachButton_PreviewKeyDown;
+            button.Tag = focusNext;
+        }
+
+        private static void AttachButton_PreviewKeyDown(object sender, KeyRoutedEventArgs args)
+        {
+            if (args.Key != VirtualKey.Tab || sender is not Button { Tag: Action focusNext })
+            {
+                return;
+            }
+
+            focusNext();
+            args.Handled = true;
+        }
+
+        private void FocusFirstStageDeadlineKindBox()
+        {
+            if (_tabs is not null && _stagesTab is not null)
+            {
+                _tabs.SelectedItem = _stagesTab;
+            }
+
+            DispatcherQueue.TryEnqueue(() => _firstStageDeadlineKindBox?.FocusInput());
+        }
+
+        private static void AddGridChild(
+            Grid grid,
+            UIElement child,
+            int row,
+            int column,
+            int columnSpan = 1)
+        {
+            var element = (FrameworkElement)child;
+            Grid.SetRow(element, row);
+            Grid.SetColumn(element, column);
+            if (columnSpan > 1)
+            {
+                Grid.SetColumnSpan(element, columnSpan);
+            }
+
+            grid.Children.Add(child);
+        }
+
+        private static TextBox BuildReadonlyTextBox(string? text)
+        {
+            return new TextBox
+            {
+                Text = text ?? string.Empty,
+                IsReadOnly = true,
+                IsTabStop = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+        }
+
+        private static TextBox BuildCompactReadonlyTextBox(string? text)
+        {
+            return new TextBox
+            {
+                Text = text ?? string.Empty,
+                IsReadOnly = true,
+                IsTabStop = false,
+                MinWidth = 0,
+                Padding = new Thickness(4, 0, 4, 0),
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+        }
+
+        private CheckBox BuildActiveStageCheckBox(StageEditState stage)
+        {
+            var hasChoice = StageEditors.Count > 1;
+            var checkBox = new CheckBox
+            {
+                IsChecked = stage.Used,
+                IsEnabled = hasChoice,
+                IsTabStop = hasChoice,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                MinHeight = 0,
+                MinWidth = 0,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0)
+            };
+            checkBox.Checked += (_, _) => SetActiveStage(stage);
+            checkBox.Unchecked += (_, _) =>
+            {
+                if (stage.Used)
+                {
+                    checkBox.IsChecked = true;
+                    return;
+                }
+
+                EnsureSingleActiveStage();
+            };
+
+            return checkBox;
+        }
+
+        private static CalendarInput BuildDateEditor(DateTimeOffset? date, Action<DateTimeOffset?>? updateDate = null)
+        {
+            var editor = new CalendarInput
+            {
+                Date = date,
+                IsReadOnly = true,
+                IsTabStop = false
+            };
+            if (updateDate is not null)
+            {
+                editor.DateChanged += (_, args) => updateDate(args.NewDate);
+            }
+
+            return editor;
+        }
+
+        private static ComboBox BuildSingleOptionCombo(string? text)
+        {
+            var comboBox = new ComboBox
+            {
+                ItemsSource = string.IsNullOrWhiteSpace(text) ? Array.Empty<string>() : new[] { text },
+                SelectedIndex = string.IsNullOrWhiteSpace(text) ? -1 : 0,
+                IsHitTestVisible = false,
+                IsTabStop = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            return comboBox;
+        }
+
+        private Dropdown BuildStageTaskKindDropdown(StageEditState stage)
+        {
+            if (stage.Priority == 0)
+            {
+                SyncStageTaskKindFromContract(stage);
+            }
+
+            var dropdown = new Dropdown
+            {
+                DisplayMemberPath = nameof(TaskKindSelectOption.Label),
+                TextMemberPath = nameof(TaskKindSelectOption.Code),
+                MatchMemberPath = nameof(TaskKindSelectOption.Code),
+                IsClearButtonEnabled = false,
+                MinWidth = 48,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+
+            var options = BuildTaskKindOptions();
+            dropdown.ItemsSource = options;
+            dropdown.SelectedItem = options.FirstOrDefault(option => string.Equals(option.Code, stage.TaskKind.Code, StringComparison.OrdinalIgnoreCase))
+                ?? options.FirstOrDefault(option => string.Equals(option.Label, FormatTaskKind(stage), StringComparison.CurrentCultureIgnoreCase));
+            if (stage.Priority == 0)
+            {
+                dropdown.IsHitTestVisible = false;
+                dropdown.IsTabStop = false;
+            }
+
+            dropdown.SelectionChanged += (_, _) =>
+            {
+                if (dropdown.SelectedItem is not TaskKindSelectOption option)
+                {
+                    return;
+                }
+
+                stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
+            };
+
+            return dropdown;
+        }
+
+        private Dropdown BuildStageStatusDropdown(StageEditState stage)
+        {
+            var options = BuildStageStatusOptions(_stageStatusOptions);
+            var dropdown = new Dropdown
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            var selectedStatusId = stage.Status.Id
+                ?? options.FirstOrDefault(option => string.Equals(option.Label, stage.Status.Name, StringComparison.CurrentCultureIgnoreCase))?.Value;
+            ConfigureStatusDropdown(dropdown, options, selectedStatusId, option =>
+            {
+                if (option is null)
+                {
+                    return;
+                }
+
+                stage.Status = new StatusEditState(option.Value, option.Label);
+            });
+            return dropdown;
+        }
+
+        private List<TaskKindSelectOption> BuildTaskKindOptions()
+        {
+            return _taskKindOptions
+                .Select(option =>
+                {
+                    var code = option.Value?.ToString() ?? string.Empty;
+                    var id = _stageTaskKindItems
+                        .Where(item => string.Equals(item.Code, code, StringComparison.OrdinalIgnoreCase))
+                        .Select(static item => AppFormatters.TryGetLong(item.Id))
+                        .FirstOrDefault(static value => value is not null);
+                    return new TaskKindSelectOption(id, code, option.Label);
+                })
+                .ToList();
+        }
+
+        private void SyncSingleStageTaskKindFromContract()
+        {
+            foreach (var stage in StageEditors.Where(static stage => stage.Priority == 0))
+            {
+                SyncStageTaskKindFromContract(stage);
+            }
+        }
+
+        private void SyncStageTaskKindFromContract(StageEditState stage)
+        {
+            if (_taskKindBox.SelectedItem is not TaskKindSelectOption option)
+            {
+                stage.TaskKind = new TaskKindEditState(null, null, null);
+                return;
+            }
+
+            stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
+        }
+
+        private Dropdown BuildStageDeadlineKindDropdown(StageEditState stage)
+        {
+            var dropdown = BuildEnumDropdown(DeadlineKindOptions(), stage.DeadlineKind);
+            _firstStageDeadlineKindBox ??= dropdown;
+            dropdown.SelectionChanged += (_, _) =>
+            {
+                stage.DeadlineKind = GetSelectedDropdownKey(dropdown);
+            };
+
+            return dropdown;
+        }
+
+        private void StageDeadlineKind_OnTab(
+            Dropdown dropdown,
+            StageEditState stage,
+            CalendarInput startEditor,
+            TextBox durationEditor,
+            CalendarInput deadlineEditor,
+            KeyRoutedEventArgs args)
+        {
+            dropdown.CloseDropDown();
+            dropdown.CommitText();
+            stage.DeadlineKind = GetSelectedDropdownKey(dropdown);
+            ApplyStageStartMode(stage, startEditor);
+            ApplyStageDeadlineMode(stage, durationEditor, deadlineEditor);
+            SyncStageDeadlineEditorsFromBusinessRules(stage, startEditor, deadlineEditor, applyInitialStart: true);
+            if (IsStageCalendarPlanMode(stage.DeadlineKind))
+            {
+                DispatcherQueue.TryEnqueue(() => deadlineEditor.FocusInput());
+            }
+            else
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    durationEditor.Focus(FocusState.Programmatic);
+                    durationEditor.SelectAll();
+                });
+            }
+
+            args.Handled = true;
+        }
+
+        private void ConfigureTabTo(TextBox source, TextBox target)
+        {
+            source.PreviewKeyDown += (_, args) =>
+            {
+                if (args.Key != VirtualKey.Tab)
+                {
+                    return;
+                }
+
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    target.Focus(FocusState.Programmatic);
+                    target.SelectAll();
+                });
+                args.Handled = true;
+            };
+        }
+
+        private void FocusStageCostEditor(TextBox costEditor, KeyRoutedEventArgs args)
+        {
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                costEditor.Focus(FocusState.Programmatic);
+                costEditor.SelectAll();
+            });
+            args.Handled = true;
+        }
+
+        private static void ApplyStageDeadlineMode(
+            StageEditState stage,
+            TextBox durationEditor,
+            CalendarInput deadlineEditor)
+        {
+            var isCalendarPlan = IsStageCalendarPlanMode(stage.DeadlineKind);
+            durationEditor.IsReadOnly = isCalendarPlan;
+            durationEditor.IsTabStop = !isCalendarPlan;
+            deadlineEditor.IsReadOnly = !isCalendarPlan;
+            deadlineEditor.IsTabStop = isCalendarPlan;
+        }
+
+        private static void ApplyStageStartMode(StageEditState stage, CalendarInput startEditor)
+        {
+            var isPaymentBased = StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(stage.DeadlineKind);
+            startEditor.IsReadOnly = isPaymentBased;
+            startEditor.IsTabStop = !isPaymentBased;
+        }
+
+        private static bool IsStageCalendarPlanMode(string? deadlineKind)
+        {
+            return StageDeadlineBusinessRules.IsDeadlineManualMode(deadlineKind);
+        }
+
+        private static Dropdown BuildStagePaymentDeadlineKindDropdown(StageEditState stage)
+        {
+            var dropdown = BuildEnumDropdown(PaymentDeadlineKindOptions(), stage.PaymentDeadlineKind);
+            dropdown.SelectionChanged += (_, _) =>
+            {
+                stage.PaymentDeadlineKind = GetSelectedDropdownKey(dropdown);
+            };
+
+            return dropdown;
+        }
+
+        private void StagePaymentDeadlineKind_OnTab(
+            Dropdown dropdown,
+            StageEditState stage,
+            TextBox durationEditor,
+            CalendarInput deadlineEditor,
+            KeyRoutedEventArgs args)
+        {
+            dropdown.CloseDropDown();
+            dropdown.CommitText();
+            stage.PaymentDeadlineKind = GetSelectedDropdownKey(dropdown);
+            ApplyStagePaymentDeadlineMode(stage, durationEditor, deadlineEditor);
+            SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, durationEditor, deadlineEditor);
+            if (IsStagePaymentCalendarPlanMode(stage.PaymentDeadlineKind))
+            {
+                DispatcherQueue.TryEnqueue(() => deadlineEditor.FocusInput());
+            }
+            else
+            {
+                DispatcherQueue.TryEnqueue(() =>
+                {
+                    durationEditor.Focus(FocusState.Programmatic);
+                    durationEditor.SelectAll();
+                });
+            }
+
+            args.Handled = true;
+        }
+
+        private static void ApplyStagePaymentDeadlineMode(
+            StageEditState stage,
+            TextBox durationEditor,
+            CalendarInput deadlineEditor)
+        {
+            var isCalendarPlan = IsStagePaymentCalendarPlanMode(stage.PaymentDeadlineKind);
+            durationEditor.IsReadOnly = isCalendarPlan;
+            durationEditor.IsTabStop = !isCalendarPlan;
+            deadlineEditor.IsReadOnly = !isCalendarPlan;
+            deadlineEditor.IsTabStop = isCalendarPlan;
+        }
+
+        private static bool IsStagePaymentCalendarPlanMode(string? paymentDeadlineKind)
+        {
+            return StageDeadlineBusinessRules.IsPaymentDeadlineManualMode(paymentDeadlineKind);
+        }
+
+        private void ApplyStageDeadlineBusinessLogicToAll(bool applyInitialStart)
+        {
+            foreach (var stage in StageEditors)
+            {
+                ApplyStageDeadlineBusinessLogic(stage, applyInitialStart);
+                ApplyStagePaymentDeadlineBusinessLogic(stage);
+            }
+
+            RefreshStagesStack();
+        }
+
+        private void SyncStageDeadlineEditorsFromBusinessRules(
+            StageEditState stage,
+            CalendarInput startEditor,
+            CalendarInput deadlineEditor,
+            bool applyInitialStart)
+        {
+            ApplyStageDeadlineBusinessLogic(stage, applyInitialStart);
+            startEditor.Date = stage.StartAt;
+            deadlineEditor.Date = stage.DeadlineAt;
+        }
+
+        private void SyncStagePaymentDeadlineEditorsFromBusinessRules(
+            StageEditState stage,
+            TextBox durationEditor,
+            CalendarInput deadlineEditor)
+        {
+            ApplyStagePaymentDeadlineBusinessLogic(stage);
+            SyncNumberText(durationEditor, stage.PaymentDuration);
+            deadlineEditor.Date = stage.PaymentDeadlineAt;
+        }
+
+        private void ApplyStageDeadlineBusinessLogic(StageEditState stage, bool applyInitialStart)
+        {
+            if (applyInitialStart)
+            {
+                ApplyStageInitialStartBusinessLogic(stage);
+            }
+
+            if (StageDeadlineBusinessRules.IsDeadlineManualMode(stage.DeadlineKind))
+            {
+                return;
+            }
+
+            stage.DeadlineAt = StageDeadlineBusinessRules.CalculateDeadline(
+                stage.DeadlineKind,
+                stage.StartAt,
+                stage.Duration,
+                _holidays);
+        }
+
+        private void ApplyStageInitialStartBusinessLogic(StageEditState stage)
+        {
+            if (StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(stage.DeadlineKind))
+            {
+                stage.StartAt = stage.PaymentBaseDate;
+                return;
+            }
+
+            var nextStart = StageDeadlineBusinessRules.ResolveInitialStart(
+                IsMultiStageContract(),
+                stage.StartAt,
+                stage.DeadlineKind,
+                _signedAtEditor.Date,
+                stage.PaymentBaseDate);
+
+            if (nextStart is not null)
+            {
+                stage.StartAt = nextStart;
+            }
+        }
+
+        private void ApplyStagePaymentDeadlineBusinessLogic(StageEditState stage)
+        {
+            var paymentDeadline = StageDeadlineBusinessRules.CalculatePaymentDeadline(
+                stage.PaymentDeadlineKind,
+                stage.FundedAt,
+                stage.PaymentDuration,
+                _holidays);
+
+            if (paymentDeadline is not null)
+            {
+                stage.PaymentDeadlineAt = paymentDeadline;
+                return;
+            }
+
+            if (StageDeadlineBusinessRules.ShouldClearPaymentDuration(stage.PaymentDeadlineKind, stage.PaymentDuration))
+            {
+                stage.PaymentDuration = null;
+                return;
+            }
+
+            if (stage.PaymentDuration is null
+                && stage.FundedAt is not null
+                && stage.Original.PaymentDeadlineAt is null
+                && !StageDeadlineBusinessRules.IsPaymentDeadlineManualMode(stage.PaymentDeadlineKind))
+            {
+                stage.PaymentDeadlineAt = null;
+            }
+        }
+
+        private static void SyncNumberText(TextBox textBox, int? value)
+        {
+            var nextText = FormatNullableNumber(value);
+            if (!string.Equals(textBox.Text, nextText, StringComparison.Ordinal))
+            {
+                textBox.Text = nextText;
+            }
+        }
+
+        private static Dropdown BuildEnumDropdown(IReadOnlyList<EnumSelectOption> options, string? key)
+        {
+            var dropdown = new Dropdown
+            {
+                DisplayMemberPath = nameof(EnumSelectOption.Label),
+                TextMemberPath = nameof(EnumSelectOption.Label),
+                MatchMemberPath = nameof(EnumSelectOption.Key),
+                IsClearButtonEnabled = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            dropdown.ItemsSource = options;
+            dropdown.SelectedItem = options.FirstOrDefault(option => string.Equals(option.Key, key, StringComparison.OrdinalIgnoreCase))
+                ?? options.FirstOrDefault();
+            return dropdown;
+        }
+
+        private static string? GetSelectedDropdownKey(Dropdown dropdown)
+        {
+            return (dropdown.SelectedItem as EnumSelectOption)?.Key;
+        }
+
+        private FrameworkElement BuildStageCommentEditor(StageEditState stage)
+        {
+            var grid = new Grid
+            {
+                ColumnSpacing = 6
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var commentBox = new TextBox
+            {
+                Text = stage.Comment,
+                HorizontalAlignment = HorizontalAlignment.Stretch
+            };
+            commentBox.TextChanged += (_, _) => stage.Comment = commentBox.Text ?? string.Empty;
+            grid.Children.Add(commentBox);
+
+            var addButton = BuildRevisionActionButton(
+                "\ue710",
+                "Добавить этап",
+                Microsoft.UI.ColorHelper.FromArgb(255, 34, 197, 94),
+                Microsoft.UI.ColorHelper.FromArgb(255, 22, 163, 74),
+                Microsoft.UI.ColorHelper.FromArgb(255, 21, 128, 61));
+            addButton.Click += (_, _) => AddStage((stage.Priority ?? 0) + 1);
+            Grid.SetColumn(addButton, 1);
+            grid.Children.Add(addButton);
+
+            if (StageEditors.Count == 1 && stage.Priority == 0)
+            {
+                return grid;
+            }
+
+            var deleteButton = BuildRevisionActionButton(
+                "\ue74d",
+                "Удалить этап",
+                Microsoft.UI.ColorHelper.FromArgb(255, 239, 68, 68),
+                Microsoft.UI.ColorHelper.FromArgb(255, 220, 38, 38),
+                Microsoft.UI.ColorHelper.FromArgb(255, 185, 28, 28));
+            deleteButton.Click += (_, _) => DeleteStage(stage);
+            Grid.SetColumn(deleteButton, 2);
+            grid.Children.Add(deleteButton);
+
+            return grid;
+        }
+
+        private static TextBox BuildStageDurationEditor(int? duration, Action<int?> updateDuration)
+        {
+            var textBox = BuildNumberTextBox();
+            textBox.Text = FormatNullableNumber(duration);
+            textBox.TextAlignment = TextAlignment.Right;
+            textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+            textBox.TextChanged += (_, _) => updateDuration(TryGetInt(textBox.Text));
+            return textBox;
+        }
+
+        private TextBox BuildStageCostEditor(StageEditState stage)
+        {
+            var textBox = BuildMoneyInputTextBox(FormatMoneyInput(stage.Cost));
+            textBox.TextChanged += (_, _) =>
+            {
+                stage.Cost = TryParseMoney(textBox.Text);
+                RefreshContractCostBox();
+            };
+            return textBox;
+        }
+
+        private MultiSelect BuildStageTasksMultiSelectEditor(StageEditState stage)
+        {
+            var multiSelect = new MultiSelect();
+            var taskRecords = stage.Tasks
+                .Select(static task => new StageTaskRecord(task.Id, task.ListKey, task.TaskKindId, task.Name ?? string.Empty))
+                .ToList();
+            var selectedTaskKindIds = taskRecords
+                .Select(static task => task.TaskKindId)
+                .Where(static id => id is not null)
+                .Select(static id => id!.Value)
+                .ToHashSet();
+            var taskOptions = StageContractTaskDialogControls.CreateTaskOptions(_stageTaskKindItems, taskRecords);
+            return StageContractTaskDialogControls.ConfigureTasksMultiSelect(
+                multiSelect,
+                taskOptions,
+                selectedTaskKindIds,
+                (_, args) =>
+                {
+                    StageContractTaskDialogControls.UpdateSelectedTaskKindIds(selectedTaskKindIds, args);
+                    stage.Tasks = taskOptions
+                        .Where(option => selectedTaskKindIds.Contains(option.TaskKindId))
+                        .Select(option =>
+                        {
+                            var existing = taskRecords.FirstOrDefault(task => task.TaskKindId == option.TaskKindId);
+                            return existing is null
+                                ? new StageTaskEditState(null, null, option.TaskKindId, option.Name)
+                                : new StageTaskEditState(existing.Id, existing.ListKey, option.TaskKindId, option.Name);
+                        })
+                        .ToList();
+                });
+        }
+
+        private void RefreshContractCostBox()
+        {
+            _costBox.Text = SumStageCosts() is decimal stagesCost
+                ? FormatMoneyInput(stagesCost)
+                : string.Empty;
         }
 
         private static void ConfigureFileTextBox(TextBox textBox)
@@ -1123,13 +2246,13 @@ namespace CbsContractsDesktopClient.Views.Functional
             textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         }
 
-        private static TextBox BuildRevisionFileTextBox(string value, Action<string> updateValue)
+        private static TextBox BuildRevisionFileTextBox(string? value, Action<string?> updateValue)
         {
             var textBox = new TextBox
             {
-                Text = value
+                Text = value ?? string.Empty
             };
-            textBox.TextChanged += (_, _) => updateValue(textBox.Text ?? string.Empty);
+            textBox.TextChanged += (_, _) => updateValue(string.IsNullOrWhiteSpace(textBox.Text) ? null : textBox.Text);
             ConfigureFileTextBox(textBox);
             return textBox;
         }
@@ -1139,6 +2262,135 @@ namespace CbsContractsDesktopClient.Views.Functional
             return number > 0
                 ? number.ToString(CultureInfo.InvariantCulture)
                 : string.Empty;
+        }
+
+        private string FormatStageNumber(StageEditState stage)
+        {
+            var priority = stage.Priority ?? 0;
+            if (priority <= 0)
+            {
+                return string.Empty;
+            }
+
+            return $"Э{priority.ToString(CultureInfo.InvariantCulture)}";
+        }
+
+        private static string FormatNullableNumber(int? value)
+        {
+            return value?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
+        }
+
+        private static string? NormalizeEditorText(string? value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static string FormatMoneyInput(decimal? value)
+        {
+            return value?.ToString("N2", CultureInfo.CurrentCulture) ?? string.Empty;
+        }
+
+        private static decimal? TryGetDecimal(JsonElement? element)
+        {
+            if (element is null)
+            {
+                return null;
+            }
+
+            var value = element.Value;
+            return value.ValueKind switch
+            {
+                JsonValueKind.Number when value.TryGetDecimal(out var decimalValue) => decimalValue,
+                JsonValueKind.String when decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var decimalValue) => decimalValue,
+                JsonValueKind.String when decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.CurrentCulture, out var decimalValue) => decimalValue,
+                _ => null
+            };
+        }
+
+        private static decimal? TryParseMoney(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            var normalized = text
+                .Replace("руб.", string.Empty, StringComparison.CurrentCultureIgnoreCase)
+                .Replace("руб", string.Empty, StringComparison.CurrentCultureIgnoreCase)
+                .Replace("₽", string.Empty, StringComparison.CurrentCultureIgnoreCase)
+                .Trim();
+
+            return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var currentCultureValue)
+                ? currentCultureValue
+                : decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var invariantCultureValue)
+                    ? invariantCultureValue
+                    : null;
+        }
+
+        private static string FormatTaskKind(StageEditState stage)
+        {
+            if (string.IsNullOrWhiteSpace(stage.TaskKind.Code))
+            {
+                return stage.TaskKind.Name ?? string.Empty;
+            }
+
+            return string.IsNullOrWhiteSpace(stage.TaskKind.Name)
+                ? stage.TaskKind.Code
+                : $"{stage.TaskKind.Code} - {stage.TaskKind.Name}";
+        }
+
+        private static string ExtractTaskKindName(TaskKindSelectOption option)
+        {
+            if (string.IsNullOrWhiteSpace(option.Code))
+            {
+                return option.Label;
+            }
+
+            var prefix = option.Code + " - ";
+            return option.Label.StartsWith(prefix, StringComparison.CurrentCultureIgnoreCase)
+                ? option.Label[prefix.Length..]
+                : option.Label;
+        }
+
+        private static IReadOnlyList<StageTaskRecord> ReadStageTaskRecords(JsonElement stage)
+        {
+            return EnumerateObjectArray(TryGetArray(stage, "tasks"))
+                .Select(static task =>
+                {
+                    var taskKind = TryGetObject(task, "task_kind");
+                    var taskKindId = taskKind is null
+                        ? TryGetLong(TryGetValue(task, "task_kind_id"))
+                        : TryGetLong(TryGetValue(taskKind.Value, "id")) ?? TryGetLong(TryGetValue(task, "task_kind_id"));
+                    var name = taskKind is null
+                        ? TryGetString(task, "name") ?? string.Empty
+                        : TryGetString(taskKind.Value, "name") ?? TryGetString(task, "name") ?? string.Empty;
+                    return new StageTaskRecord(
+                        TryGetLong(TryGetValue(task, "id")),
+                        TryGetString(task, "list_key"),
+                        taskKindId,
+                        name);
+                })
+                .Where(static task => task.TaskKindId is not null && !string.IsNullOrWhiteSpace(task.Name))
+                .ToList();
+        }
+
+        private static HashSet<long> ReadSelectedStageTaskKindIds(JsonElement stage)
+        {
+            return ReadStageTaskRecords(stage)
+                .Select(static task => task.TaskKindId)
+                .Where(static id => id is not null)
+                .Select(static id => id!.Value)
+                .ToHashSet();
+        }
+
+        private static string FormatStageFlagText(bool? isSet, DateTimeOffset? date)
+        {
+            if (date is not null)
+            {
+                return AppFormatters.FormatDisplayDate(date);
+            }
+
+            return isSet == true ? "ДА" : "НЕТ";
         }
 
         private static FrameworkElement BuildInputLineCheckBox(CheckBox checkBox, string label)
@@ -1290,7 +2542,11 @@ namespace CbsContractsDesktopClient.Views.Functional
             return line;
         }
 
-        private FrameworkElement BuildFileRow(string label, string iconGlyph, TextBox editor)
+        private FrameworkElement BuildFileRow(
+            string label,
+            string iconGlyph,
+            TextBox editor,
+            Action<Button>? configureAttachButton = null)
         {
             var grid = new Grid
             {
@@ -1324,10 +2580,12 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var attachButton = BuildFileActionButton("\ue723", "Прикрепить");
             attachButton.Click += async (_, _) => await PickFilePathAsync(editor);
+            configureAttachButton?.Invoke(attachButton);
             Grid.SetColumn(attachButton, 3);
             grid.Children.Add(attachButton);
 
             var openButton = BuildFileActionButton("\ue8a7", "Открыть");
+            openButton.IsTabStop = false;
             openButton.Click += (_, _) => OpenFilePath(editor.Text);
             Grid.SetColumn(openButton, 4);
             grid.Children.Add(openButton);
@@ -1499,21 +2757,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 : $"Редактирование контракта {name}";
         }
 
-        private sealed record TaskKindSelectOption(string Code, string Label);
+        private sealed record TaskKindSelectOption(long? Id, string Code, string Label);
 
-        private sealed class RevisionEditorState
-        {
-            public long Number { get; init; }
-
-            public bool IsPresent { get; set; }
-
-            public string Description { get; set; } = string.Empty;
-
-            public string DocLink { get; set; } = string.Empty;
-
-            public string ScanLink { get; set; } = string.Empty;
-
-            public string ProtocolLink { get; set; } = string.Empty;
-        }
     }
 }

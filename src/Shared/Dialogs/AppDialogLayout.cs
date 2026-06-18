@@ -108,12 +108,56 @@ public static class AppDialogLayout
     {
         return new TextBox
         {
+            MinWidth = 38,
             InputScope = new InputScope
             {
                 Names =
                 {
                     new InputScopeName(InputScopeNameValue.Number)
                 }
+            }
+        };
+    }
+
+    public static TextBox BuildMoneyTextBox(string? text = null)
+    {
+        var textBox = new TextBox
+        {
+            Text = text ?? string.Empty
+        };
+        ConfigureMoneyTextBox(textBox);
+        return textBox;
+    }
+
+    public static TextBox BuildMoneyInputTextBox(string? text = null)
+    {
+        var textBox = new TextBox
+        {
+            Text = text ?? string.Empty
+        };
+        ConfigureMoneyInputTextBox(textBox);
+        return textBox;
+    }
+
+    public static void ConfigureMoneyTextBox(TextBox textBox)
+    {
+        textBox.IsReadOnly = true;
+        textBox.IsTabStop = false;
+        textBox.MinWidth = 120;
+        textBox.TextAlignment = TextAlignment.Right;
+        textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+    }
+
+    public static void ConfigureMoneyInputTextBox(TextBox textBox)
+    {
+        textBox.MinWidth = 120;
+        textBox.TextAlignment = TextAlignment.Right;
+        textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+        textBox.InputScope = new InputScope
+        {
+            Names =
+            {
+                new InputScopeName(InputScopeNameValue.Number)
             }
         };
     }

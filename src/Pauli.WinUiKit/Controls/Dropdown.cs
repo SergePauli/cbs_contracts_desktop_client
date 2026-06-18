@@ -6,19 +6,27 @@ using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
 namespace Pauli.WinUiKit.Controls;
 
 public sealed class Dropdown : UserControl
 {
+    private static readonly Brush DefaultHighlightBorderBrush =
+        new SolidColorBrush(ColorHelper.FromArgb(255, 209, 213, 219));
+
+    private readonly Border _editorBorder = new();
     private readonly TextBox _textBox = new();
     private readonly Button _dropButton = new();
     private readonly FontIcon _chevron = new();
+    private readonly ContentControl _selectedContentHost = new();
     private readonly ListView _listView = new();
     private readonly Flyout _flyout;
     private bool _isSyncingText;
     private bool _isSyncingListSelection;
+    private bool _isPointerOverEditor;
+    private string _lastAcceptedText = string.Empty;
 
     public Dropdown()
     {
@@ -26,11 +34,22 @@ public sealed class Dropdown : UserControl
 
         _textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
         _textBox.VerticalContentAlignment = VerticalAlignment.Center;
-        _textBox.TextAlignment = TextAlignment.Right;
+        _textBox.TextAlignment = TextAlignment.Center;
         _textBox.MinWidth = 0;
         _textBox.Padding = new Thickness(6, 1, 22, 0);
         _textBox.GotFocus += OnTextBoxGotFocus;
+        _textBox.LostFocus += OnTextBoxLostFocus;
+        _textBox.PreviewKeyDown += OnTextBoxPreviewKeyDown;
+        _textBox.KeyDown += OnTextBoxKeyDown;
         _textBox.TextChanged += OnTextChanged;
+
+        _selectedContentHost.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _selectedContentHost.VerticalAlignment = VerticalAlignment.Center;
+        _selectedContentHost.Margin = new Thickness(4, 0, 22, 0);
+        _selectedContentHost.HorizontalContentAlignment = HorizontalAlignment.Center;
+        _selectedContentHost.VerticalContentAlignment = VerticalAlignment.Center;
+        _selectedContentHost.IsHitTestVisible = false;
+        _selectedContentHost.Visibility = Visibility.Collapsed;
 
         _chevron.Glyph = "\uE70D";
         _chevron.FontSize = 10;
@@ -50,8 +69,20 @@ public sealed class Dropdown : UserControl
         _dropButton.Click += (_, _) => ToggleDropDown();
         SuppressButtonChrome();
 
+        PointerEntered += (_, _) =>
+        {
+            _isPointerOverEditor = true;
+            ApplyHighlightBrushes();
+        };
+        PointerExited += (_, _) =>
+        {
+            _isPointerOverEditor = false;
+            ApplyHighlightBrushes();
+        };
+
         _listView.SelectionMode = ListViewSelectionMode.Single;
         _listView.IsItemClickEnabled = true;
+        _listView.PreviewKeyDown += OnDropDownPreviewKeyDown;
         _listView.ItemClick += OnItemClick;
         _listView.SelectionChanged += OnListSelectionChanged;
 
@@ -64,6 +95,8 @@ public sealed class Dropdown : UserControl
 
         Items.CollectionChanged += OnItemsChanged;
         Content = BuildEditor();
+        ApplyHoverBorderBrush();
+        ApplyClearButtonMode();
     }
 
     public ObservableCollection<object> Items { get; } = [];
@@ -192,11 +225,105 @@ public sealed class Dropdown : UserControl
         set => SetValue(UseCompactDensityProperty, value);
     }
 
+    public static readonly DependencyProperty IsClearButtonEnabledProperty = DependencyProperty.Register(
+        nameof(IsClearButtonEnabled),
+        typeof(bool),
+        typeof(Dropdown),
+        new PropertyMetadata(true, OnClearButtonModeChanged));
+
+    public bool IsClearButtonEnabled
+    {
+        get => (bool)GetValue(IsClearButtonEnabledProperty);
+        set => SetValue(IsClearButtonEnabledProperty, value);
+    }
+
+    public static readonly DependencyProperty AllowCustomOptionsProperty = DependencyProperty.Register(
+        nameof(AllowCustomOptions),
+        typeof(bool),
+        typeof(Dropdown),
+        new PropertyMetadata(false));
+
+    public bool AllowCustomOptions
+    {
+        get => (bool)GetValue(AllowCustomOptionsProperty);
+        set => SetValue(AllowCustomOptionsProperty, value);
+    }
+
+    public static readonly DependencyProperty HoverBorderBrushProperty = DependencyProperty.Register(
+        nameof(HoverBorderBrush),
+        typeof(Brush),
+        typeof(Dropdown),
+        new PropertyMetadata(null, OnHoverBorderBrushChanged));
+
+    public Brush? HoverBorderBrush
+    {
+        get => (Brush?)GetValue(HoverBorderBrushProperty);
+        set => SetValue(HoverBorderBrushProperty, value);
+    }
+
+    public static readonly DependencyProperty HighlightBackgroundProperty = DependencyProperty.Register(
+        nameof(HighlightBackground),
+        typeof(Brush),
+        typeof(Dropdown),
+        new PropertyMetadata(null, OnHighlightBrushChanged));
+
+    public Brush? HighlightBackground
+    {
+        get => (Brush?)GetValue(HighlightBackgroundProperty);
+        set => SetValue(HighlightBackgroundProperty, value);
+    }
+
     public event EventHandler? DropDownOpened;
 
     public event EventHandler? DropDownClosed;
 
     public event EventHandler? SelectionChanged;
+
+    public event EventHandler? SelectionCommitted;
+
+    public Func<object?, UIElement?>? SelectedContentBuilder { get; set; }
+
+    public Func<object, UIElement>? ItemContentBuilder { get; set; }
+
+    public Action<Dropdown, RoutedEventArgs>? OnFocus { get; set; }
+
+    public Action<Dropdown, KeyRoutedEventArgs>? OnTab { get; set; }
+
+    public FrameworkElement? TabTarget { get; set; }
+
+    public bool IsDropDownOpen => _flyout.IsOpen;
+
+    public void OpenDropDown()
+    {
+        if (_flyout.IsOpen)
+        {
+            return;
+        }
+
+        DropDownOpened?.Invoke(this, EventArgs.Empty);
+        RebuildListItems();
+        SyncListSelection();
+        SetFlyoutWidth();
+        _flyout.ShowAt(_textBox);
+    }
+
+    public void CloseDropDown()
+    {
+        if (_flyout.IsOpen)
+        {
+            _flyout.Hide();
+        }
+    }
+
+    public bool CommitText()
+    {
+        return CommitEditorText();
+    }
+
+    public bool FocusInput(FocusState focusState = FocusState.Programmatic)
+    {
+        return _textBox.Focus(focusState);
+    }
 
     private static void OnItemsSourceChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
     {
@@ -232,15 +359,39 @@ public sealed class Dropdown : UserControl
         ((Dropdown)dependencyObject).ApplyChevronPadding();
     }
 
+    private static void OnHoverBorderBrushChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+    {
+        ((Dropdown)dependencyObject).ApplyHoverBorderBrush();
+    }
+
+    private static void OnHighlightBrushChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+    {
+        ((Dropdown)dependencyObject).ApplyHighlightBrushes();
+    }
+
+    private static void OnClearButtonModeChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
+    {
+        ((Dropdown)dependencyObject).ApplyClearButtonMode();
+    }
+
     private UIElement BuildEditor()
     {
         var grid = new Grid
         {
             HorizontalAlignment = HorizontalAlignment.Stretch
         };
-        grid.Children.Add(_textBox);
+        _editorBorder.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _editorBorder.VerticalAlignment = VerticalAlignment.Stretch;
+        _editorBorder.BorderThickness = new Thickness(1);
+        _editorBorder.CornerRadius = new CornerRadius(3);
+        var editorContent = new Grid();
+        editorContent.Children.Add(_textBox);
+        editorContent.Children.Add(_selectedContentHost);
+        _editorBorder.Child = editorContent;
+        grid.Children.Add(_editorBorder);
         grid.Children.Add(_dropButton);
         ApplyChevronPadding();
+        ApplyHighlightBrushes();
         return grid;
     }
 
@@ -252,11 +403,7 @@ public sealed class Dropdown : UserControl
             return;
         }
 
-        DropDownOpened?.Invoke(this, EventArgs.Empty);
-        RebuildListItems();
-        SyncListSelection();
-        SetFlyoutWidth();
-        _flyout.ShowAt(_textBox);
+        OpenDropDown();
     }
 
     private void OnTextChanged(object sender, TextChangedEventArgs args)
@@ -272,7 +419,88 @@ public sealed class Dropdown : UserControl
 
     private void OnTextBoxGotFocus(object sender, RoutedEventArgs args)
     {
+        if (OnFocus is not null)
+        {
+            OnFocus(this, args);
+            return;
+        }
+
+        _lastAcceptedText = _textBox.Text;
         _textBox.Select(_textBox.Text.Length, 0);
+        OpenDropDown();
+    }
+
+    private void OnTextBoxLostFocus(object sender, RoutedEventArgs args)
+    {
+        CommitEditorText();
+    }
+
+    private void OnTextBoxPreviewKeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        OnDropDownPreviewKeyDown(sender, args);
+    }
+
+    private void OnDropDownPreviewKeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != Windows.System.VirtualKey.Tab)
+        {
+            return;
+        }
+
+        if (OnTab is not null)
+        {
+            OnTab(this, args);
+        }
+        else if (TabTarget is not null)
+        {
+            CloseDropDown();
+            CommitEditorText();
+            FocusTabTarget(TabTarget);
+        }
+        else
+        {
+            return;
+        }
+
+        args.Handled = true;
+    }
+
+    private void FocusTabTarget(FrameworkElement target)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            if (target is Dropdown dropdown)
+            {
+                dropdown.FocusInput();
+                return;
+            }
+
+            if (target is CalendarInput calendarInput)
+            {
+                calendarInput.FocusInput();
+                return;
+            }
+
+            if (target is TextBox textBox)
+            {
+                textBox.Focus(FocusState.Programmatic);
+                textBox.SelectAll();
+                return;
+            }
+
+            target.Focus(FocusState.Programmatic);
+        });
+    }
+
+    private void OnTextBoxKeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != Windows.System.VirtualKey.Enter)
+        {
+            return;
+        }
+
+        CommitEditorText();
+        args.Handled = true;
     }
 
     private void OnItemClick(object sender, ItemClickEventArgs args)
@@ -283,6 +511,7 @@ public sealed class Dropdown : UserControl
         }
 
         SelectedItem = item;
+        SelectionCommitted?.Invoke(this, EventArgs.Empty);
         _flyout.Hide();
     }
 
@@ -294,6 +523,7 @@ public sealed class Dropdown : UserControl
         }
 
         SelectedItem = item;
+        SelectionCommitted?.Invoke(this, EventArgs.Empty);
         _flyout.Hide();
     }
 
@@ -310,18 +540,21 @@ public sealed class Dropdown : UserControl
 
         foreach (var item in items)
         {
-            _listView.Items.Add(new ListViewItem
+            var listViewItem = new ListViewItem
             {
                 Tag = item,
                 MinHeight = 24,
                 Padding = new Thickness(6, 2, 6, 2),
-                Content = new TextBlock
+                Content = ItemContentBuilder?.Invoke(item) ?? new TextBlock
                 {
                     Text = GetItemDisplayText(item),
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     TextWrapping = TextWrapping.NoWrap
                 }
-            });
+            };
+            listViewItem.PreviewKeyDown += OnDropDownPreviewKeyDown;
+            listViewItem.KeyDown += OnDropDownPreviewKeyDown;
+            _listView.Items.Add(listViewItem);
         }
     }
 
@@ -330,6 +563,11 @@ public sealed class Dropdown : UserControl
         var text = Text?.Trim();
         if (string.IsNullOrWhiteSpace(text))
         {
+            if (!IsClearButtonEnabled)
+            {
+                return;
+            }
+
             SelectedItem = null;
             return;
         }
@@ -351,6 +589,8 @@ public sealed class Dropdown : UserControl
     private void SyncTextFromSelection()
     {
         SyncEditorText(SelectedItem is null ? string.Empty : GetItemText(SelectedItem));
+        _lastAcceptedText = _textBox.Text;
+        SyncSelectedContent();
     }
 
     private void SyncEditorText(string text)
@@ -372,6 +612,43 @@ public sealed class Dropdown : UserControl
         }
     }
 
+    private bool CommitEditorText()
+    {
+        var previousSelectedItem = SelectedItem;
+        var text = Text?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            if (IsClearButtonEnabled)
+            {
+                SelectedItem = null;
+                _lastAcceptedText = string.Empty;
+                return !ReferenceEquals(previousSelectedItem, SelectedItem);
+            }
+
+            SyncTextFromSelection();
+            return false;
+        }
+
+        var item = GetItems().FirstOrDefault(item => MatchesItem(item, text));
+        if (item is not null)
+        {
+            SelectedItem = item;
+            _lastAcceptedText = _textBox.Text;
+            return !ReferenceEquals(previousSelectedItem, SelectedItem);
+        }
+
+        if (AllowCustomOptions && ItemsSource is null)
+        {
+            Items.Add(text);
+            SelectedItem = text;
+            _lastAcceptedText = text;
+            return !ReferenceEquals(previousSelectedItem, SelectedItem);
+        }
+
+        SyncTextFromSelection();
+        return false;
+    }
+
     private void SyncListSelection()
     {
         _isSyncingListSelection = true;
@@ -385,6 +662,14 @@ public sealed class Dropdown : UserControl
         {
             _isSyncingListSelection = false;
         }
+    }
+
+    private void SyncSelectedContent()
+    {
+        var selectedContent = SelectedContentBuilder?.Invoke(SelectedItem);
+        _selectedContentHost.Content = selectedContent;
+        _selectedContentHost.Visibility = selectedContent is null ? Visibility.Collapsed : Visibility.Visible;
+        _textBox.Opacity = selectedContent is null ? 1 : 0;
     }
 
     private void SetFlyoutWidth()
@@ -479,6 +764,69 @@ public sealed class Dropdown : UserControl
             ? CompactChevronHorizontalPadding
             : NormalChevronHorizontalPadding;
         _chevron.Margin = new Thickness(horizontalPadding, 0, horizontalPadding, 0);
+    }
+
+    private void ApplyHoverBorderBrush()
+    {
+        if (HoverBorderBrush is null)
+        {
+            _textBox.Resources.Remove("TextControlBorderBrushPointerOver");
+            _textBox.Resources.Remove("TextControlBorderBrushFocused");
+            _textBox.Resources.Remove("TextControlBackgroundPointerOver");
+            _textBox.Resources.Remove("TextControlBackgroundFocused");
+            return;
+        }
+
+        _textBox.Resources["TextControlBorderBrushPointerOver"] = HoverBorderBrush;
+        _textBox.Resources["TextControlBorderBrushFocused"] = HoverBorderBrush;
+        _textBox.Resources["TextControlBackgroundPointerOver"] = new SolidColorBrush(Colors.Transparent);
+        _textBox.Resources["TextControlBackgroundFocused"] = new SolidColorBrush(Colors.Transparent);
+    }
+
+    private void ApplyClearButtonMode()
+    {
+        _textBox.Resources["TextBoxInnerButtonMargin"] = new Thickness(0, 4, IsClearButtonEnabled ? 16 : 22, 4);
+
+        if (IsClearButtonEnabled)
+        {
+            _textBox.Resources.Remove("TextControlButtonForeground");
+            _textBox.Resources.Remove("TextControlButtonForegroundPointerOver");
+            _textBox.Resources.Remove("TextControlButtonForegroundPressed");
+            _textBox.Resources.Remove("TextControlButtonBackground");
+            _textBox.Resources.Remove("TextControlButtonBackgroundPointerOver");
+            _textBox.Resources.Remove("TextControlButtonBackgroundPressed");
+            return;
+        }
+
+        var transparent = new SolidColorBrush(Colors.Transparent);
+        _textBox.Resources["TextControlButtonForeground"] = transparent;
+        _textBox.Resources["TextControlButtonForegroundPointerOver"] = transparent;
+        _textBox.Resources["TextControlButtonForegroundPressed"] = transparent;
+        _textBox.Resources["TextControlButtonBackground"] = transparent;
+        _textBox.Resources["TextControlButtonBackgroundPointerOver"] = transparent;
+        _textBox.Resources["TextControlButtonBackgroundPressed"] = transparent;
+    }
+
+    private void ApplyHighlightBrushes()
+    {
+        var hasHighlightMode = HighlightBackground is not null || HoverBorderBrush is not null;
+        _editorBorder.Background = _isPointerOverEditor ? HighlightBackground : null;
+        _editorBorder.BorderBrush = hasHighlightMode
+            ? _isPointerOverEditor && HoverBorderBrush is not null
+                ? HoverBorderBrush
+                : DefaultHighlightBorderBrush
+            : null;
+        _editorBorder.BorderThickness = new Thickness(1);
+
+        if (hasHighlightMode)
+        {
+            _textBox.Background = new SolidColorBrush(Colors.Transparent);
+            _textBox.BorderThickness = new Thickness(0);
+            return;
+        }
+
+        _textBox.ClearValue(Control.BackgroundProperty);
+        _textBox.ClearValue(Control.BorderThicknessProperty);
     }
 
     private bool ShouldUseCompactPadding()

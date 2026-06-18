@@ -1,12 +1,118 @@
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
 
 public sealed class ContractWorkflowStoreTests
 {
+    [Fact]
+    public void BeginContractEdit_ForNewContractCreatesZeroStageAndContractRevision()
+    {
+        var store = new ContractWorkflowStore();
+        var contract = CreateRow(
+            ("status", Status(0, "В проекте")),
+            ("task_kind", TaskKind("Договор")));
+
+        store.BeginContractEdit(contract);
+
+        var stage = Assert.Single(store.ContractStageEditStates);
+        Assert.Equal(0, stage.Priority);
+        Assert.True(stage.Used);
+        Assert.Equal("calendar_days", stage.DeadlineKind);
+
+        var revision = Assert.Single(store.ContractRevisionEditStates);
+        Assert.Equal(0, revision.Priority);
+        Assert.Equal("Договор", revision.Description);
+        Assert.True(revision.Used);
+    }
+
+    [Fact]
+    public void AddStageAfter_ConvertsSingleZeroStageToMultistageNumbering()
+    {
+        var store = new ContractWorkflowStore();
+        var stage = StageEditState.CreateNew(0, used: true);
+        store.SetContractStageEditStates([stage]);
+
+        store.AddStageAfter(stage);
+
+        Assert.Equal([1, 2], store.ContractStageEditStates.Select(static item => item.Priority));
+        Assert.True(store.ContractStageEditStates.Single(static item => item.Priority == 1).Used);
+        Assert.False(store.ContractStageEditStates.Single(static item => item.Priority == 2).Used);
+    }
+
+    [Fact]
+    public void DeleteStage_WhenOnlyOneStageRemainsResetsItToZeroAndActive()
+    {
+        var store = new ContractWorkflowStore();
+        var first = StageEditState.CreateNew(0, used: true);
+        store.SetContractStageEditStates([first]);
+        store.AddStageAfter(first);
+
+        store.DeleteStage(store.ContractStageEditStates.Single(static item => item.Priority == 2));
+
+        var remaining = Assert.Single(store.ContractStageEditStates, static item => !item.IsDestroyed);
+        Assert.Equal(0, remaining.Priority);
+        Assert.True(remaining.Used);
+    }
+
+    [Fact]
+    public void DeleteStage_RejectsDeletingLastStage()
+    {
+        var store = new ContractWorkflowStore();
+        var stage = StageEditState.CreateNew(0, used: true);
+        store.SetContractStageEditStates([stage]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => store.DeleteStage(stage));
+
+        Assert.Equal("Нельзя удалить последний этап.", exception.Message);
+    }
+
+    [Fact]
+    public void SetActiveStage_KeepsExactlyOneActiveStage()
+    {
+        var store = new ContractWorkflowStore();
+        var first = StageEditState.CreateNew(1, used: true);
+        var second = StageEditState.CreateNew(2);
+        store.SetContractStageEditStates([first, second]);
+
+        store.SetActiveStage(second);
+
+        Assert.False(first.Used);
+        Assert.True(second.Used);
+        Assert.Same(second, store.SelectedStageEditState);
+    }
+
+    [Fact]
+    public void AddRevisionAfter_CreatesAdditionalAgreementWithNextPriority()
+    {
+        var store = new ContractWorkflowStore();
+        var contractRevision = RevisionEditState.CreateNew(0, "Договор");
+        store.SetContractRevisionEditStates([contractRevision]);
+
+        store.AddRevisionAfter(contractRevision);
+
+        var revision = Assert.Single(store.ContractRevisionEditStates, static item => item.Priority == 1);
+        Assert.Equal("Доп.соглашение", revision.Description);
+        Assert.True(revision.Used);
+    }
+
+    [Fact]
+    public void DeleteRevision_RejectsDeletingFirstAdditionalAgreementWhenLaterRevisionsExist()
+    {
+        var store = new ContractWorkflowStore();
+        var contractRevision = RevisionEditState.CreateNew(0, "Договор");
+        var firstAgreement = RevisionEditState.CreateNew(1, "Доп.соглашение");
+        var secondAgreement = RevisionEditState.CreateNew(2, "Доп.соглашение");
+        store.SetContractRevisionEditStates([contractRevision, firstAgreement, secondAgreement]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => store.DeleteRevision(firstAgreement));
+
+        Assert.Equal("Нельзя удалить ревизию № 1, пока существуют ревизии с большим номером.", exception.Message);
+    }
+
     [Fact]
     public void SetContractSelection_CombinesContractCommentsWithEveryStageComment()
     {

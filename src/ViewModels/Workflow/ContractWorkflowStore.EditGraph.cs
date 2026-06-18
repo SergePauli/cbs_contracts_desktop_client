@@ -1,0 +1,265 @@
+using System.Text.Json;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
+using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
+
+namespace CbsContractsDesktopClient.ViewModels.Workflow
+{
+    public partial class ContractWorkflowStore
+    {
+        private const string ContractRevisionDescription = "Договор";
+        private const string AdditionalRevisionDescription = "Доп.соглашение";
+
+        [ObservableProperty]
+        public partial IReadOnlyList<StageEditState> ContractStageEditStates { get; set; } = [];
+
+        [ObservableProperty]
+        public partial IReadOnlyList<RevisionEditState> ContractRevisionEditStates { get; set; } = [];
+
+        public void BeginContractEdit(TableDataRow contract, TableDataRow? contragent = null)
+        {
+            ArgumentNullException.ThrowIfNull(contract);
+
+            Contract = contract;
+            SelectedContractEditState = ContractEditState.FromRow(contract);
+            Contragent = contragent;
+            SelectedStage = ResolveSelectedStage(ContractRowDetailSelectionKind.Contract, contract, contract);
+            SelectedRevision = null;
+            FocusedRevisionPriority = null;
+            ResetEditGraph();
+        }
+
+        public void ResetEditGraph()
+        {
+            ContractStageEditStates = EnsureInitialStage(ReadStageEditStates(Contract));
+            ContractRevisionEditStates = EnsureInitialRevision(ReadRevisionEditStates(Contract));
+            SelectedStageEditState = ResolveSelectedStageEditState();
+        }
+
+        public void SetContractStageEditStates(IEnumerable<StageEditState> stages)
+        {
+            ArgumentNullException.ThrowIfNull(stages);
+            ContractStageEditStates = stages.OrderBy(static stage => stage.Priority ?? 0).ToList();
+            EnsureSingleActiveStage();
+            SelectedStageEditState = ResolveSelectedStageEditState();
+        }
+
+        public void SetContractRevisionEditStates(IEnumerable<RevisionEditState> revisions)
+        {
+            ArgumentNullException.ThrowIfNull(revisions);
+            ContractRevisionEditStates = revisions.OrderBy(static revision => revision.Priority).ToList();
+        }
+
+        public void AddStageAfter(StageEditState stage)
+        {
+            ArgumentNullException.ThrowIfNull(stage);
+
+            var stages = ContractStageEditStates.ToList();
+            var visibleStages = stages.Where(static item => !item.IsDestroyed).ToList();
+            var newPriority = (stage.Priority ?? 0) + 1;
+            if (visibleStages.Count == 1 && visibleStages[0].Priority == 0)
+            {
+                visibleStages[0].Priority = 1;
+                newPriority = 2;
+            }
+
+            if (visibleStages.Any(existing => existing.Priority == newPriority))
+            {
+                throw new InvalidOperationException($"Этап с номером {newPriority} уже существует.");
+            }
+
+            stages.Add(StageEditState.CreateNew(newPriority));
+            SetContractStageEditStates(stages);
+        }
+
+        public void DeleteStage(StageEditState stage)
+        {
+            ArgumentNullException.ThrowIfNull(stage);
+
+            var stages = ContractStageEditStates.ToList();
+            var visibleStages = stages.Where(static item => !item.IsDestroyed).ToList();
+            if (visibleStages.Count <= 1)
+            {
+                throw new InvalidOperationException("Нельзя удалить последний этап.");
+            }
+
+            if (stage.Id > 0)
+            {
+                stage.IsDestroyed = true;
+            }
+            else
+            {
+                stages.Remove(stage);
+            }
+
+            visibleStages = stages.Where(static item => !item.IsDestroyed).ToList();
+            if (visibleStages.Count == 1)
+            {
+                visibleStages[0].Priority = 0;
+                visibleStages[0].Used = true;
+            }
+
+            SetContractStageEditStates(stages);
+        }
+
+        public void SetActiveStage(StageEditState selectedStage)
+        {
+            ArgumentNullException.ThrowIfNull(selectedStage);
+
+            foreach (var stage in ContractStageEditStates.Where(static stage => !stage.IsDestroyed))
+            {
+                stage.Used = ReferenceEquals(stage, selectedStage);
+            }
+
+            SelectedStageEditState = selectedStage;
+        }
+
+        public void AddRevisionAfter(RevisionEditState revision)
+        {
+            ArgumentNullException.ThrowIfNull(revision);
+
+            var revisions = ContractRevisionEditStates.ToList();
+            var newPriority = revision.Priority + 1;
+            if (revisions.Any(existing => existing.Priority == newPriority))
+            {
+                throw new InvalidOperationException($"Ревизия с номером {newPriority} уже существует.");
+            }
+
+            revisions.Add(RevisionEditState.CreateNew(newPriority, AdditionalRevisionDescription));
+            SetContractRevisionEditStates(revisions);
+        }
+
+        public void DeleteRevision(RevisionEditState revision)
+        {
+            ArgumentNullException.ThrowIfNull(revision);
+
+            var revisions = ContractRevisionEditStates.ToList();
+            if (revision.Priority == 1 && revisions.Any(item => !item.IsDestroyed && item.Priority > revision.Priority))
+            {
+                throw new InvalidOperationException($"Нельзя удалить ревизию № {revision.Priority}, пока существуют ревизии с большим номером.");
+            }
+
+            if (revision.Id is long id && id > 0)
+            {
+                revision.IsDestroyed = true;
+            }
+            else
+            {
+                revisions.Remove(revision);
+            }
+
+            SetContractRevisionEditStates(revisions);
+        }
+
+        public IReadOnlyDictionary<string, object?> BuildContractCommerPayload(ContractCommerEditPayloadInput input)
+        {
+            if (Contract is null)
+            {
+                throw new InvalidOperationException("Contract edit graph must contain contract source row.");
+            }
+
+            return ContractCommerEditPayloadBuilder.Build(
+                Contract,
+                input,
+                ContractStageEditStates,
+                ContractRevisionEditStates);
+        }
+
+        private StageEditState? ResolveSelectedStageEditState()
+        {
+            if (SelectedStage is not null)
+            {
+                var selectedId = TryGetLong(SelectedStage.GetValue("id"));
+                var selectedListKey = SelectedStage.GetValue("list_key")?.ToString();
+                return ContractStageEditStates.FirstOrDefault(stage => !stage.IsDestroyed && SameIdentity(stage.Id, stage.ListKey, selectedId, selectedListKey))
+                    ?? ContractStageEditStates.FirstOrDefault(static stage => !stage.IsDestroyed);
+            }
+
+            return ContractStageEditStates.FirstOrDefault(static stage => !stage.IsDestroyed);
+        }
+
+        private void EnsureSingleActiveStage()
+        {
+            var visibleStages = ContractStageEditStates.Where(static stage => !stage.IsDestroyed).ToList();
+            if (visibleStages.Count == 0)
+            {
+                return;
+            }
+
+            var activeStage = visibleStages.FirstOrDefault(static stage => stage.Used)
+                ?? visibleStages.OrderBy(static stage => stage.Priority ?? 0).First();
+            foreach (var stage in visibleStages)
+            {
+                stage.Used = ReferenceEquals(stage, activeStage);
+            }
+        }
+
+        private static IReadOnlyList<StageEditState> ReadStageEditStates(TableDataRow? contract)
+        {
+            if (contract is null || contract.IsPlaceholder)
+            {
+                return [];
+            }
+
+            return EnumerateObjectArray(contract, "stages")
+                .Where(static stage => stage.ValueKind == JsonValueKind.Object)
+                .Select(static stage => StageEditState.FromRow(ToTableDataRow(stage)))
+                .OrderBy(static stage => stage.Priority ?? 0)
+                .ToList();
+        }
+
+        private IReadOnlyList<StageEditState> EnsureInitialStage(IReadOnlyList<StageEditState> stages)
+        {
+            if (stages.Count > 0 || !IsNewContractEditGraph())
+            {
+                return stages;
+            }
+
+            return [StageEditState.CreateNew(0, used: true)];
+        }
+
+        private static IReadOnlyList<RevisionEditState> ReadRevisionEditStates(TableDataRow? contract)
+        {
+            if (contract is null || contract.IsPlaceholder)
+            {
+                return [];
+            }
+
+            return EnumerateObjectArray(contract, "revisions")
+                .Where(static revision => revision.ValueKind == JsonValueKind.Object)
+                .Select(static revision => RevisionEditState.FromRow(ToTableDataRow(revision)))
+                .OrderBy(static revision => revision.Priority)
+                .ToList();
+        }
+
+        private IReadOnlyList<RevisionEditState> EnsureInitialRevision(IReadOnlyList<RevisionEditState> revisions)
+        {
+            if (revisions.Any(static revision => revision.Priority == 0) || !IsNewContractEditGraph())
+            {
+                return revisions;
+            }
+
+            return [RevisionEditState.CreateNew(0, ContractRevisionDescription), .. revisions];
+        }
+
+        private bool IsNewContractEditGraph()
+        {
+            return Contract is not null
+                && !Contract.IsPlaceholder
+                && TryGetLong(Contract.GetValue("id")) is null;
+        }
+
+        private static bool SameIdentity(long? leftId, string? leftListKey, long? rightId, string? rightListKey)
+        {
+            if (leftId is not null && rightId is not null)
+            {
+                return leftId == rightId;
+            }
+
+            return !string.IsNullOrWhiteSpace(leftListKey)
+                && !string.IsNullOrWhiteSpace(rightListKey)
+                && string.Equals(leftListKey, rightListKey, StringComparison.Ordinal);
+        }
+    }
+}

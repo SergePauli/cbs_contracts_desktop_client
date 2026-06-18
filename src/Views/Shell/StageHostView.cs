@@ -125,7 +125,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageStatusOptionsAsync()
         {
-            var statusOptions = await _referenceLookupCacheService.GetOptionsAsync("Status");
+            var statusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
             var optionsById = statusOptions
                 .Where(static option => JsonDataReader.TryGetLong(option.Value) is not null)
                 .GroupBy(static option => JsonDataReader.TryGetLong(option.Value)!.Value)
@@ -136,7 +136,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 new()
                 {
                     Value = null,
-                    Label = "Пустой"
+                    Label = "Не определен"
                 }
             };
 

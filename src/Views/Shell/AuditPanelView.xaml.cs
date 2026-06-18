@@ -25,11 +25,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _isAuditDatePickerUpdating;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _actionFilterOptions =
         [
-            new() { Value = "added", Label = "Р”РѕР±Р°РІР»РµРЅРѕ" },
-            new() { Value = "updated", Label = "РР·РјРµРЅРµРЅРѕ" },
-            new() { Value = "removed", Label = "РЈРґР°Р»РµРЅРѕ" },
-            new() { Value = "archived", Label = "РђСЂС…РёРІРёСЂРѕРІР°РЅРѕ" },
-            new() { Value = "imported", Label = "РРјРїРѕСЂС‚" }
+            new() { Value = "added", Label = "Добавлено" },
+            new() { Value = "updated", Label = "Изменено" },
+            new() { Value = "removed", Label = "Удалено" },
+            new() { Value = "archived", Label = "Архивировано" },
+            new() { Value = "imported", Label = "Импорт" }
         ];
         private readonly List<string> _selectedActionValues = [];
         private StackPanel? _actionOptionsHost;
@@ -279,11 +279,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void UpdateActionFilterButtonContent()
         {
             var text = _selectedActionValues.Count == 0
-                ? "Р”РµР№СЃС‚РІРёСЏ"
+                ? "Действия"
                 : _selectedActionValues.Count == 1
                     ? _actionFilterOptions.FirstOrDefault(
-                        option => option.Value is string value && value == _selectedActionValues[0])?.Label ?? "1 РґРµР№СЃС‚РІРёРµ"
-                    : $"Р”РµР№СЃС‚РІРёСЏ: {_selectedActionValues.Count}";
+                        option => option.Value is string value && value == _selectedActionValues[0])?.Label ?? "1 действие"
+                    : $"Действия: {_selectedActionValues.Count}";
 
             AuditActionFilterButton.Content = new TextBlock
             {
@@ -387,7 +387,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 MinHeight = 28,
                 Padding = new Thickness(8, 0, 8, 0),
                 HorizontalAlignment = HorizontalAlignment.Left,
-                Content = "РљРѕРїРёСЂРѕРІР°С‚СЊ"
+                Content = "Копировать"
             };
             button.Click += CopyAuditEntryButton_Click;
             return button;
@@ -441,19 +441,55 @@ namespace CbsContractsDesktopClient.Views.Shell
             var label = line[..separatorIndex].Trim();
             var value = line[(separatorIndex + 1)..].TrimStart();
 
+            AddStaticRun(textBlock, $"{label}: ");
+
+            const string changedMarker = "; изменено ";
+            const string toMarker = " на ";
+            var changedIndex = value.IndexOf(changedMarker, StringComparison.Ordinal);
+            if (changedIndex > 0)
+            {
+                var fieldValue = value[..changedIndex];
+                var changeValue = value[(changedIndex + changedMarker.Length)..];
+                var toIndex = changeValue.IndexOf(toMarker, StringComparison.Ordinal);
+
+                AddValueRun(textBlock, fieldValue);
+                AddStaticRun(textBlock, changedMarker);
+                if (toIndex >= 0)
+                {
+                    AddValueRun(textBlock, changeValue[..toIndex]);
+                    AddStaticRun(textBlock, toMarker);
+                    AddValueRun(textBlock, changeValue[(toIndex + toMarker.Length)..]);
+                }
+                else
+                {
+                    AddValueRun(textBlock, changeValue);
+                }
+
+                return textBlock;
+            }
+
+            AddValueRun(textBlock, value);
+
+            return textBlock;
+        }
+
+        private static void AddStaticRun(TextBlock textBlock, string text)
+        {
             textBlock.Inlines.Add(new Run
             {
-                Text = $"{label}: ",
+                Text = text,
+                Foreground = GetBrush("ShellSecondaryTextBrush")
+            });
+        }
+
+        private static void AddValueRun(TextBlock textBlock, string text)
+        {
+            textBlock.Inlines.Add(new Run
+            {
+                Text = text,
                 Foreground = GetBrush("ShellPrimaryTextBrush"),
                 FontWeight = FontWeights.SemiBold
             });
-            textBlock.Inlines.Add(new Run
-            {
-                Text = value,
-                Foreground = GetBrush("ShellSecondaryTextBrush")
-            });
-
-            return textBlock;
         }
 
         private static Brush GetBrush(string resourceKey, string fallbackResourceKey = "ShellAccentPanelBackgroundBrush")

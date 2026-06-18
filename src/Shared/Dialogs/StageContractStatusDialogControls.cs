@@ -1,5 +1,6 @@
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Data;
+using Pauli.WinUiKit.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -20,7 +21,7 @@ public static class StageContractStatusDialogControls
     public static IReadOnlyList<EnumSelectOption> BuildStatusOptions(
         IReadOnlyList<CbsTableFilterOptionDefinition> options,
         bool includeEmpty,
-        string emptyLabel = "Пустой")
+        string emptyLabel = "Не определен")
     {
         var result = new List<EnumSelectOption>();
         if (includeEmpty)
@@ -39,7 +40,7 @@ public static class StageContractStatusDialogControls
     public static IReadOnlyList<EnumSelectOption> BuildStatusOptions(
         IReadOnlyList<CbsTableFilterOptionDefinition> options,
         IReadOnlySet<long> allowedStatusIds,
-        string emptyLabel = "Пустой")
+        string emptyLabel = "Не определен")
     {
         var result = new List<EnumSelectOption>
         {
@@ -96,6 +97,68 @@ public static class StageContractStatusDialogControls
     public static EnumSelectOption? GetSelectedStatusOption(ComboBox comboBox)
     {
         return (comboBox.SelectedItem as ComboBoxItem)?.Tag as EnumSelectOption;
+    }
+
+    public static void ConfigureStatusDropdown(
+        Dropdown dropdown,
+        IReadOnlyList<EnumSelectOption> options,
+        long? value,
+        Action<EnumSelectOption?>? selectionChanged = null)
+    {
+        dropdown.DisplayMemberPath = nameof(EnumSelectOption.Label);
+        dropdown.TextMemberPath = nameof(EnumSelectOption.Label);
+        dropdown.MatchMemberPath = nameof(EnumSelectOption.Label);
+        dropdown.IsClearButtonEnabled = false;
+        dropdown.SelectedContentBuilder = BuildSelectedStatusDropdownContent;
+        dropdown.ItemContentBuilder = BuildStatusDropdownItemContent;
+        dropdown.ItemsSource = options;
+        dropdown.SelectedItem = options.FirstOrDefault(option => option.Value == value || (value is null && option.Value is null))
+            ?? options.FirstOrDefault();
+        ApplyStatusDropdownHighlight(dropdown);
+        dropdown.SelectionChanged += (_, _) =>
+        {
+            ApplyStatusDropdownHighlight(dropdown);
+            selectionChanged?.Invoke(GetSelectedStatusOption(dropdown));
+        };
+    }
+
+    public static EnumSelectOption? GetSelectedStatusOption(Dropdown dropdown)
+    {
+        return dropdown.SelectedItem as EnumSelectOption;
+    }
+
+    private static UIElement? BuildSelectedStatusDropdownContent(object? item)
+    {
+        return item is EnumSelectOption option
+            ? BuildStatusBadge(
+                option.Label,
+                option.Value,
+                horizontalAlignment: HorizontalAlignment.Center)
+            : null;
+    }
+
+    private static UIElement? BuildStatusDropdownItemContent(object item)
+    {
+        return item is EnumSelectOption option
+            ? BuildStatusBadge(
+                option.Label,
+                option.Value,
+                horizontalAlignment: HorizontalAlignment.Stretch)
+            : new TextBlock { Text = item.ToString() ?? string.Empty };
+    }
+
+    private static void ApplyStatusDropdownHighlight(Dropdown dropdown)
+    {
+        if (dropdown.SelectedItem is not EnumSelectOption option)
+        {
+            dropdown.HoverBorderBrush = null;
+            dropdown.HighlightBackground = null;
+            return;
+        }
+
+        var colors = ResolveStatusBadgeColors(option.Value);
+        dropdown.HoverBorderBrush = new SolidColorBrush(colors.Background);
+        dropdown.HighlightBackground = new SolidColorBrush(Color.FromArgb(112, colors.Background.R, colors.Background.G, colors.Background.B));
     }
 
     public static Border BuildStatusBadge(

@@ -63,6 +63,18 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             return request;
         }
 
+        public static IReadOnlyList<Dictionary<string, object?>> BuildTaskAttributesDelta(StageEditState state)
+        {
+            ArgumentNullException.ThrowIfNull(state);
+
+            var selectedTaskKindIds = state.Tasks
+                .Select(static task => task.TaskKindId)
+                .Where(static id => id is not null)
+                .Select(static id => id!.Value)
+                .ToHashSet();
+            return BuildTaskAttributesDelta(state, selectedTaskKindIds);
+        }
+
         public static IReadOnlyDictionary<string, object?> BuildForUpdate(
             TableDataRow sourceRow,
             StageCommerEditPayloadInput input)
@@ -277,6 +289,10 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             IReadOnlyCollection<long> selectedTaskKindIds)
         {
             var selectedKinds = selectedTaskKindIds.ToHashSet();
+            var currentTasks = state.Tasks
+                .Where(static task => task.TaskKindId is not null)
+                .GroupBy(static task => task.TaskKindId!.Value)
+                .ToDictionary(static group => group.Key, static group => group.First());
 
             var originalKinds = state.Original.Tasks
                 .Select(static item => item.TaskKindId)
@@ -288,7 +304,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 .Where(kind => !originalKinds.Contains(kind))
                 .Select(kind => new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
-                    ["list_key"] = Guid.NewGuid().ToString(),
+                    ["list_key"] = currentTasks.TryGetValue(kind, out var task) && !string.IsNullOrWhiteSpace(task.ListKey)
+                        ? task.ListKey
+                        : Guid.NewGuid().ToString(),
                     ["task_kind_id"] = kind
                 });
 
