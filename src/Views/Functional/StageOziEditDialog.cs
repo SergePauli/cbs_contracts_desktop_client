@@ -20,10 +20,13 @@ public sealed class StageOziEditDialog : AppEditDialog
     private const long StatusDone = 4;
     private const long StatusClosed = 5;
 
-    private readonly StageEditState _stage;
-    private readonly ContractEditState? _contract;
+    private StageEditState _stage;
+    private ContractEditState? _contract;
     private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
-    private readonly IReadOnlyList<StagePerformerOption> _performerOptions;
+    private readonly IReadOnlyList<ReferenceLookupItem> _employeeItems;
+    private IReadOnlyList<StagePerformerOption> _performerOptions;
+    private StageEditDialogNavigationState? _navigationState;
+    private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly int? _profileId;
     private readonly CalendarInput _rideOutAtEditor = new();
     private readonly CalendarInput _sendedAtEditor = new();
@@ -44,7 +47,9 @@ public sealed class StageOziEditDialog : AppEditDialog
         ContractEditState? contract,
         IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions,
         IReadOnlyList<ReferenceLookupItem> employeeItems,
-        int? profileId)
+        int? profileId,
+        StageEditDialogNavigationState? navigationState = null,
+        Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null)
     {
         ArgumentNullException.ThrowIfNull(stage);
         ArgumentNullException.ThrowIfNull(statusOptions);
@@ -53,9 +58,11 @@ public sealed class StageOziEditDialog : AppEditDialog
         _stage = stage;
         _contract = contract;
         _statusOptions = statusOptions;
+        _employeeItems = employeeItems;
         _profileId = profileId;
+        _navigationState = navigationState;
+        _navigateAsync = navigateAsync;
         _performerOptions = CreatePerformerOptions(employeeItems, stage.Performers);
-        Id = stage.Id;
 
         Resources["ContentDialogMinWidth"] = 760d;
         Resources["ContentDialogMaxWidth"] = 940d;
@@ -63,7 +70,7 @@ public sealed class StageOziEditDialog : AppEditDialog
         DialogChrome.Apply(this, _stage.GetEditDialogTitle());
     }
 
-    public long Id { get; }
+    public long Id => _stage.Id;
 
     public bool ShouldCloseContract()
     {
@@ -166,9 +173,11 @@ public sealed class StageOziEditDialog : AppEditDialog
         contractGrid.Children.Add(right);
         stack.Children.Add(contractGrid);
 
-        stack.Children.Add(BuildDialogSectionTitle(
+        stack.Children.Add(StageEditDialogNavigationControls.BuildTitle(
             _stage.GetSectionTitle(_contract),
-            _stage.GetSectionTitleAmount(_contract)));
+            _stage.GetSectionTitleAmount(_contract),
+            _navigationState,
+            RequestNavigation));
 
         var stageGrid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
         stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -454,6 +463,78 @@ public sealed class StageOziEditDialog : AppEditDialog
     {
         return _contract
             ?? throw new InvalidOperationException("Stage edit dialog requires selected contract edit state.");
+    }
+
+    private async void RequestNavigation(StageEditDialogNavigationDirection direction)
+    {
+        try
+        {
+            if (_navigateAsync is null)
+            {
+                return;
+            }
+
+            var result = await _navigateAsync(direction);
+            if (result is null)
+            {
+                return;
+            }
+
+            ApplyNavigationResult(result);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo(ex.Message);
+        }
+    }
+
+    private void ApplyNavigationResult(StageEditDialogNavigationResult result)
+    {
+        var oldContent = Content;
+        var oldStage = _stage;
+        var oldContract = _contract;
+        var oldNavigationState = _navigationState;
+        var oldPerformerOptions = _performerOptions;
+
+        try
+        {
+            _stage = result.Stage;
+            _contract = result.Contract;
+            _navigationState = result.NavigationState;
+            _performerOptions = CreatePerformerOptions(_employeeItems, _stage.Performers);
+            ReplaceDialogBody(BuildContent);
+        }
+        catch
+        {
+            _stage = oldStage;
+            _contract = oldContract;
+            _navigationState = oldNavigationState;
+            _performerOptions = oldPerformerOptions;
+            Content = oldContent;
+            throw;
+        }
+    }
+
+    private void ReplaceDialogBody(Func<UIElement> buildBody)
+    {
+        if (Content is Border border)
+        {
+            var oldChild = border.Child;
+            border.Child = null;
+            try
+            {
+                border.Child = buildBody();
+            }
+            catch
+            {
+                border.Child = oldChild;
+                throw;
+            }
+
+            return;
+        }
+
+        Content = buildBody();
     }
 
     private static IReadOnlyList<StagePerformerOption> CreatePerformerOptions(

@@ -46,6 +46,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             AppendChangedText(request, "deadline_kind", state.Original.DeadlineKind, state.DeadlineKind);
             AppendChangedDate(request, "deadline_at", state.Original.DeadlineAt, state.DeadlineAt);
             AppendChangedDate(request, "start_at", state.Original.StartAt, state.StartAt);
+            AppendChangedDecimal(request, "cost", state.Original.Cost, state.Cost);
             AppendChangedText(request, "payment_deadline_kind", state.Original.PaymentDeadlineKind, state.PaymentDeadlineKind);
             AppendChangedDate(request, "payment_deadline_at", state.Original.PaymentDeadlineAt, state.PaymentDeadlineAt);
             AppendChangedInt(request, "duration", state.Original.Duration, state.Duration);
@@ -170,6 +171,18 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             string key,
             int? originalValue,
             int? value)
+        {
+            if (originalValue != value)
+            {
+                request[key] = value;
+            }
+        }
+
+        private static void AppendChangedDecimal(
+            IDictionary<string, object?> request,
+            string key,
+            decimal? originalValue,
+            decimal? value)
         {
             if (originalValue != value)
             {

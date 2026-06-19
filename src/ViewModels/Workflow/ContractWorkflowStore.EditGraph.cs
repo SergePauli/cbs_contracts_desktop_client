@@ -30,6 +30,21 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             ResetEditGraph();
         }
 
+        public void BeginStageEdit(TableDataRow contract, TableDataRow selectedStage, TableDataRow? contragent = null)
+        {
+            ArgumentNullException.ThrowIfNull(contract);
+            ArgumentNullException.ThrowIfNull(selectedStage);
+
+            Contract = contract;
+            SelectedContractEditState = ContractEditState.FromRow(contract);
+            Contragent = contragent;
+            SelectedRevision = null;
+            FocusedRevisionPriority = null;
+            SelectedStage = selectedStage;
+            ResetEditGraph();
+            SelectStageEditState(selectedStage);
+        }
+
         public void ResetEditGraph()
         {
             ContractStageEditStates = EnsureInitialStage(ReadStageEditStates(Contract));
@@ -113,6 +128,72 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
 
             SelectedStageEditState = selectedStage;
+        }
+
+        public void SelectStageEditState(TableDataRow selectedStage)
+        {
+            ArgumentNullException.ThrowIfNull(selectedStage);
+
+            var selectedId = TryGetLong(selectedStage.GetValue("id"));
+            var selectedListKey = selectedStage.GetValue("list_key")?.ToString();
+            SelectedStageEditState =
+                ContractStageEditStates.FirstOrDefault(stage => !stage.IsDestroyed && SameIdentity(stage.Id, stage.ListKey, selectedId, selectedListKey))
+                ?? throw new InvalidOperationException("Contract edit graph does not contain selected stage.");
+        }
+
+        public IReadOnlyList<StageEditState> GetVisibleStageEditStates()
+        {
+            return ContractStageEditStates
+                .Where(static stage => !stage.IsDestroyed)
+                .OrderBy(static stage => stage.Priority ?? 0)
+                .ToList();
+        }
+
+        public bool TrySelectAdjacentStageEditState(int direction)
+        {
+            if (direction == 0)
+            {
+                return false;
+            }
+
+            var stages = GetVisibleStageEditStates();
+            if (stages.Count == 0)
+            {
+                return false;
+            }
+
+            var selectedIndex = SelectedStageEditState is null
+                ? 0
+                : FindStageEditStateIndex(stages, SelectedStageEditState);
+            if (selectedIndex < 0)
+            {
+                selectedIndex = 0;
+            }
+
+            var nextIndex = selectedIndex + Math.Sign(direction);
+            if (nextIndex < 0 || nextIndex >= stages.Count)
+            {
+                return false;
+            }
+
+            SelectedStageEditState = stages[nextIndex];
+            return true;
+        }
+
+        private static int FindStageEditStateIndex(
+            IReadOnlyList<StageEditState> stages,
+            StageEditState selectedStage)
+        {
+            for (var index = 0; index < stages.Count; index++)
+            {
+                var stage = stages[index];
+                if (SameIdentity(stage.Id, stage.ListKey, selectedStage.Id, selectedStage.ListKey))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
         }
 
         public void AddRevisionAfter(RevisionEditState revision)
@@ -252,7 +333,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         private static bool SameIdentity(long? leftId, string? leftListKey, long? rightId, string? rightListKey)
         {
-            if (leftId is not null && rightId is not null)
+            if (leftId > 0 && rightId > 0)
             {
                 return leftId == rightId;
             }

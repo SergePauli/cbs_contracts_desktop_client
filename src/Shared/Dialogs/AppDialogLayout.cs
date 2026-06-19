@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Documents;
+using Pauli.WinUiKit.Controls;
 
 namespace CbsContractsDesktopClient.Shared.Dialogs;
 
@@ -11,6 +12,11 @@ public static class AppDialogLayout
 {
     public static UIElement BuildLabeledControl(string label, UIElement control, double spacing = 4)
     {
+        if (control is CalendarInput calendarInput)
+        {
+            calendarInput.HorizontalAlignment = HorizontalAlignment.Left;
+        }
+
         var stack = new StackPanel
         {
             Spacing = spacing

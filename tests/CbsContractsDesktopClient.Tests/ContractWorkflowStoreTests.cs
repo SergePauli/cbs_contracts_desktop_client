@@ -30,6 +30,59 @@ public sealed class ContractWorkflowStoreTests
     }
 
     [Fact]
+    public void BeginStageEdit_SelectsStageEditStateMatchingSelectedStageId()
+    {
+        var store = new ContractWorkflowStore();
+        var selectedStage = CreateRow(("id", 200L));
+        var contract = CreateRow(
+            ("id", 10L),
+            ("status", Status(1, "Подписан")),
+            ("stages", new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 100L,
+                    ["priority"] = 1,
+                    ["used"] = false
+                },
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 200L,
+                    ["priority"] = 2,
+                    ["used"] = true
+                }
+            }));
+
+        store.BeginStageEdit(contract, selectedStage);
+
+        Assert.Equal(200L, store.SelectedStageEditState?.Id);
+        Assert.Equal(2, store.SelectedStageEditState?.Priority);
+        Assert.Equal([1, 2], store.ContractStageEditStates.Select(static stage => stage.Priority));
+    }
+
+    [Fact]
+    public void BeginStageEdit_ThrowsWhenContractDoesNotContainSelectedStage()
+    {
+        var store = new ContractWorkflowStore();
+        var selectedStage = CreateRow(("id", 300L));
+        var contract = CreateRow(
+            ("id", 10L),
+            ("status", Status(1, "Подписан")),
+            ("stages", new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 100L,
+                    ["priority"] = 1
+                }
+            }));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => store.BeginStageEdit(contract, selectedStage));
+
+        Assert.Equal("Contract edit graph does not contain selected stage.", exception.Message);
+    }
+
+    [Fact]
     public void AddStageAfter_ConvertsSingleZeroStageToMultistageNumbering()
     {
         var store = new ContractWorkflowStore();
@@ -83,6 +136,28 @@ public sealed class ContractWorkflowStoreTests
         Assert.False(first.Used);
         Assert.True(second.Used);
         Assert.Same(second, store.SelectedStageEditState);
+    }
+
+    [Fact]
+    public void TrySelectAdjacentStageEditState_MovesSelectionByStagePriority()
+    {
+        var store = new ContractWorkflowStore();
+        var first = StageEditState.CreateNew(1, used: true);
+        var second = StageEditState.CreateNew(2);
+        var third = StageEditState.CreateNew(3);
+        store.SetContractStageEditStates([third, first, second]);
+        store.SetActiveStage(second);
+
+        Assert.True(store.TrySelectAdjacentStageEditState(-1));
+        Assert.Same(first, store.SelectedStageEditState);
+        Assert.False(store.TrySelectAdjacentStageEditState(-1));
+        Assert.Same(first, store.SelectedStageEditState);
+
+        Assert.True(store.TrySelectAdjacentStageEditState(1));
+        Assert.Same(second, store.SelectedStageEditState);
+        Assert.True(store.TrySelectAdjacentStageEditState(1));
+        Assert.Same(third, store.SelectedStageEditState);
+        Assert.False(store.TrySelectAdjacentStageEditState(1));
     }
 
     [Fact]

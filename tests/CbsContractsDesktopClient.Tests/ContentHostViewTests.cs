@@ -335,6 +335,18 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void StageHostView_PreparesStageEditContextFromContractId()
+    {
+        var stageHost = File.ReadAllText(StageHostViewPath);
+
+        Assert.Contains("private async Task<bool> PrepareStageEditContextAsync(TableDataRow sourceRow)", stageHost);
+        Assert.Contains("private long? ResolveStageContractId(TableDataRow sourceRow)", stageHost);
+        Assert.Contains("TryGetLongValue(sourceRow, \"contract.id\")", stageHost);
+        Assert.Contains("TryGetLongValue(sourceRow, \"contract_id\")", stageHost);
+        Assert.Contains("_contractWorkflowStore.BeginStageEdit(contract, sourceRow, contragent);", stageHost);
+    }
+
+    [Fact]
     public void ReferenceHostView_AcceptsRouteInput()
     {
         var xaml = File.ReadAllText(ReferenceHostViewXamlPath);

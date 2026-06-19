@@ -41,4 +41,17 @@ public sealed class StageFinEditDialogTests
         Assert.Contains("_contract.BuildExternalNumberPayload(_externalNumberBox.Text)", code);
         Assert.DoesNotContain("private static TextBlock BuildDynamicSummaryText()", code);
     }
+
+    [Fact]
+    public void StageFinEditDialog_UsesSharedStageNavigationControls()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("StageEditDialogNavigationState? navigationState = null", code);
+        Assert.Contains("Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null", code);
+        Assert.Contains("StageEditDialogNavigationControls.BuildTitle(", code);
+        Assert.DoesNotContain("StageEditDialogNavigationControls.Build(", code);
+        Assert.Contains("private async void RequestNavigation(StageEditDialogNavigationDirection direction)", code);
+        Assert.Contains("Content = BuildContent();", code);
+    }
 }

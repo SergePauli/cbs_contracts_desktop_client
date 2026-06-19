@@ -11,9 +11,11 @@ using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogC
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractDeadlineDialogOptions;
 using static CbsContractsDesktopClient.Shared.Formatting.AppFormatters;
 using CbsContractsDesktopClient.Views.Controls;
+using System.Globalization;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
@@ -25,12 +27,15 @@ namespace CbsContractsDesktopClient.Views.Functional
         private const long StatusPending = 2;
         private const long StatusClosed = 5;
 
-        private readonly StageEditState _stage;
-        private readonly ContractEditState? _contract;
+        private StageEditState _stage;
+        private ContractEditState? _contract;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
-        private readonly IReadOnlyList<StageTaskOption> _taskOptions;
-        private readonly List<StageTaskRecord> _originalTasks;
+        private readonly IReadOnlyList<ReferenceLookupItem> _taskKindItems;
+        private IReadOnlyList<StageTaskOption> _taskOptions = [];
+        private List<StageTaskRecord> _originalTasks = [];
+        private StageEditDialogNavigationState? _navigationState;
+        private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
         private IReadOnlyList<HolidayCalendarDay> _holidays = [];
         private readonly int? _profileId;
         private readonly CalendarInput _startAtEditor = new();
@@ -39,13 +44,14 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly CalendarInput _closedAtEditor = new();
         private readonly TextBox _durationBox = BuildNumberTextBox();
         private readonly TextBox _paymentDurationBox = BuildNumberTextBox();
+        private readonly TextBox _costBox = BuildMoneyInputTextBox();
         private readonly ComboBox _deadlineKindBox = new();
         private readonly ComboBox _paymentDeadlineKindBox = new();
         private readonly Dropdown _statusBox = new();
         private readonly MultiSelect _tasksMultiSelect = new();
+        private readonly StageCommerEditView _view = new();
         private readonly HashSet<long> _selectedTaskKindIds = [];
         private readonly TextBox _commentBox = new();
-        private readonly string? _listKey;
         private bool _isApplyingBusinessLogic;
         private bool _businessLogicHandlersAttached;
         private bool _deadlineAtEditedManually;
@@ -56,7 +62,9 @@ namespace CbsContractsDesktopClient.Views.Functional
             ContractEditState? contract,
             IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions,
             IReadOnlyList<ReferenceLookupItem> taskKindItems,
-            int? profileId)
+            int? profileId,
+            StageEditDialogNavigationState? navigationState = null,
+            Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null)
         {
             ArgumentNullException.ThrowIfNull(stage);
             ArgumentNullException.ThrowIfNull(statusOptions);
@@ -66,26 +74,22 @@ namespace CbsContractsDesktopClient.Views.Functional
             _contract = contract;
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _statusOptions = statusOptions;
+            _taskKindItems = taskKindItems;
             _profileId = profileId;
-            Id = stage.Id;
-            _listKey = stage.ListKey;
-            _originalTasks = stage.Tasks
-                .Select(static task => new StageTaskRecord(task.Id, task.ListKey, task.TaskKindId, task.Name ?? string.Empty))
-                .ToList();
-            _taskOptions = StageContractTaskDialogControls.CreateTaskOptions(taskKindItems, _originalTasks);
-            foreach (var option in _taskOptions.Where(static option => option.IsSelected))
-            {
-                _selectedTaskKindIds.Add(option.TaskKindId);
-            }
+            _navigationState = navigationState;
+            _navigateAsync = navigateAsync;
+            _view.PreviousButton.Click += StageNavigationButton_Click;
+            _view.NextButton.Click += StageNavigationButton_Click;
+            ResetTaskSelection();
 
             Resources["ContentDialogMinWidth"] = 780d;
-            Resources["ContentDialogMaxWidth"] = 980d;
+            Resources["ContentDialogMaxWidth"] = 800d;
             Content = BuildContent(statusOptions);
             DialogChrome.Apply(this, _stage.GetEditDialogTitle());
             Loaded += StageCommerEditDialog_Loaded;
         }
 
-        public long Id { get; }
+        public long Id => _stage.Id;
 
         public bool ShouldCloseContract()
         {
@@ -172,6 +176,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _stage.DeadlineKind = GetSelectedKey(_deadlineKindBox);
             _stage.DeadlineAt = _deadlineAtEditor.Date;
             _stage.StartAt = _startAtEditor.Date;
+            _stage.Cost = TryParseMoney(_costBox.Text);
             _stage.PaymentDeadlineKind = GetSelectedKey(_paymentDeadlineKindBox);
             _stage.PaymentDeadlineAt = _paymentDeadlineAtEditor.Date;
             _stage.Duration = TryGetInt(_durationBox.Text);
@@ -181,172 +186,161 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private UIElement BuildContent(IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
         {
-            var root = new Grid
-            {
-                MinWidth = 740,
-                MaxWidth = 940
-            };
-
             var scrollViewer = new ScrollViewer
             {
                 MaxHeight = 640,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto
             };
-
-            var stack = new StackPanel
-            {
-                Spacing = 14
-            };
-            scrollViewer.Content = stack;
-
-            stack.Children.Add(BuildSummaryPanel());
-            stack.Children.Add(BuildEditorsArea(statusOptions));
-
-            root.Children.Add(scrollViewer);
-            return BuildEditContent(root);
+            scrollViewer.Content = _view;
+            InitializeStaticView();
+            RenderStageContent();
+            return BuildEditContent(scrollViewer);
         }
 
-        private UIElement BuildSummaryPanel()
+        private void InitializeStaticView()
         {
-            var stack = new StackPanel
-            {
-                Spacing = 12
-            };
-
-            stack.Children.Add(BuildDialogSectionTitle(RequireContract().GetSectionTitle()));
-
-            var contractGrid = new Grid
-            {
-                ColumnSpacing = 18,
-                RowSpacing = 6
-            };
-            contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var left = new StackPanel { Spacing = 6 };
-            left.Children.Add(BuildSummaryLine("Внешний номер", _contract?.ExternalNumber ?? string.Empty));
-            left.Children.Add(BuildSummaryLine("Контрагент", _contract?.ContragentName ?? string.Empty));
-            left.Children.Add(BuildAccentSummaryLine("Стоимость", FormatMoney(_contract?.Cost)));
-
-            var right = new StackPanel { Spacing = 6 };
-            right.Children.Add(BuildSummaryElement("Статус", BuildStatusBadge(
+            _view.ContractTitleSlot.Content = BuildDialogSectionTitle(RequireContract().GetSectionTitle());
+            _view.ExternalNumberValue.Text = FormatSummaryValue(_contract?.ExternalNumber ?? string.Empty);
+            _view.ContragentValue.Text = FormatSummaryValue(_contract?.ContragentName ?? string.Empty);
+            _view.ContractCostValue.Text = FormatSummaryValue(FormatMoney(_contract?.Cost));
+            _view.ContractStatusSlot.Content = BuildStatusBadge(
                 RequireContract().Status.Name!,
                 RequireContract().Status.Id,
-                horizontalAlignment: HorizontalAlignment.Left)));
-            right.Children.Add(BuildSummaryLine("Дата подписания", FormatDisplayDate(_contract?.SignedAt)));
-            right.Children.Add(BuildSummaryLine("Госконтракт", FormatBoolean(_contract?.Governmental)));
-
-            contractGrid.Children.Add(left);
-            Grid.SetColumn(right, 1);
-            contractGrid.Children.Add(right);
-            stack.Children.Add(contractGrid);
-
-            stack.Children.Add(BuildDialogSectionTitle(
-                _stage.GetSectionTitle(_contract),
-                _stage.GetSectionTitleAmount(_contract)));
-
-            var stageGrid = new Grid
-            {
-                ColumnSpacing = 18,
-                RowSpacing = 6
-            };
-            stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var stageLeft = new StackPanel { Spacing = 6 };
-            stageLeft.Children.Add(BuildSummaryLine("Предоплата", FormatDisplayDate(_stage.PrepaymentAt)));
-            stageLeft.Children.Add(BuildSummaryLine("Оплата", FormatDisplayDate(_stage.PaymentAt)));
-
-            var stageMiddle = new StackPanel { Spacing = 6 };
-            stageMiddle.Children.Add(BuildSummaryLine("Бух. закрытие", FormatDisplayDate(_stage.FundedAt)));
-            stageMiddle.Children.Add(BuildSummaryLine("Работа выполнена", FormatDisplayDate(_stage.CompletedAt)));
-
-            var stageRight = new StackPanel { Spacing = 6 };
-            stageRight.Children.Add(BuildSummaryLine("Выезд", FormatFlagDate(_stage.IsRideOut, _stage.RideOutAt)));
-            stageRight.Children.Add(BuildSummaryLine("Отправка", FormatFlagDate(_stage.IsSended, _stage.SendedAt)));
-
-            stageGrid.Children.Add(stageLeft);
-            Grid.SetColumn(stageMiddle, 1);
-            stageGrid.Children.Add(stageMiddle);
-            Grid.SetColumn(stageRight, 2);
-            stageGrid.Children.Add(stageRight);
-            stack.Children.Add(stageGrid);
-
-            return new Border
-            {
-                Padding = new Thickness(0, 0, 0, 12),
-                BorderThickness = new Thickness(0, 0, 0, 1),
-                BorderBrush = Application.Current.Resources["ShellTableGridLineBrush"] as Brush,
-                Child = stack
-            };
+                horizontalAlignment: HorizontalAlignment.Left);
+            _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_contract?.SignedAt));
+            _view.GovernmentalValue.Text = FormatSummaryValue(FormatBoolean(_contract?.Governmental));
+            InitializeNavigationButton(_view.PreviousButton, "Предыдущий этап", StageEditDialogNavigationDirection.Previous);
+            InitializeNavigationButton(_view.NextButton, "Следующий этап", StageEditDialogNavigationDirection.Next);
+            InitializeEditorSlots();
         }
 
-        private UIElement BuildEditorsArea(IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
+        private static void InitializeNavigationButton(
+            Button button,
+            string tooltip,
+            StageEditDialogNavigationDirection direction)
         {
-            var stack = new StackPanel
-            {
-                Spacing = 12
-            };
-
-            stack.Children.Add(BuildEditorsGrid(statusOptions));
-            stack.Children.Add(BuildWideEditorsColumn());
-            return stack;
+            button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 99, 102, 241));
+            button.BorderBrush = button.Background;
+            button.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+            button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 79, 70, 229));
+            button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 67, 56, 202));
+            button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 79, 70, 229));
+            button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 67, 56, 202));
+            ToolTipService.SetToolTip(button, tooltip);
+            button.Tag = direction;
         }
 
-        private UIElement BuildEditorsGrid(IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
+        private void InitializeEditorSlots()
         {
-            var grid = new Grid
-            {
-                ColumnSpacing = 18,
-                RowSpacing = 12
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            _startAtEditor.Date = _stage.StartAt;
-            _deadlineAtEditor.Date = _stage.DeadlineAt;
-            _paymentDeadlineAtEditor.Date = _stage.PaymentDeadlineAt;
-            _closedAtEditor.Date = _stage.ClosedAt;
-            _durationBox.Text = _stage.Duration?.ToString() ?? string.Empty;
-            _paymentDurationBox.Text = _stage.PaymentDuration?.ToString() ?? string.Empty;
-
-            ConfigureSelectCombo(_deadlineKindBox, DeadlineKindOptions(), _stage.DeadlineKind);
-            ConfigureSelectCombo(_paymentDeadlineKindBox, PaymentDeadlineKindOptions(), _stage.PaymentDeadlineKind);
-            ConfigureStatusDropdown(_statusBox, BuildStageStatusOptions(statusOptions), _stage.Status.Id);
-
+            _view.DeadlineKindSlot.Content = _deadlineKindBox;
+            _view.DurationSlot.Content = _durationBox;
+            _view.DeadlineAtSlot.Content = _deadlineAtEditor;
+            _view.CostSlot.Content = _costBox;
+            _view.PaymentDeadlineKindSlot.Content = _paymentDeadlineKindBox;
+            _view.PaymentDurationSlot.Content = _paymentDurationBox;
+            _view.PaymentDeadlineAtSlot.Content = _paymentDeadlineAtEditor;
+            _view.StatusSlot.Content = _statusBox;
+            _view.StartAtSlot.Content = _startAtEditor;
+            _view.ClosedAtSlot.Content = _closedAtEditor;
+            _view.TasksSlot.Content = BuildTasksMultiSelectEditor();
+            _view.CommentSlot.Content = _commentBox;
+            _commentBox.PlaceholderText = _profileId is null
+                ? "Комментарий недоступен: не получен profile_id пользователя"
+                : "Комментарий";
+            _commentBox.IsEnabled = _profileId is not null;
             AttachBusinessLogicHandlers();
+        }
+
+        private void UpdateStageSummaryPanel()
+        {
+            UpdateStageTitle();
+            UpdateStageNavigationButtons();
+            _view.PrepaymentValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.PrepaymentAt));
+            _view.PaymentValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.PaymentAt));
+            _view.FundedValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.FundedAt));
+            _view.CompletedValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.CompletedAt));
+            _view.RideOutValue.Text = FormatSummaryValue(FormatFlagDate(_stage.IsRideOut, _stage.RideOutAt));
+            _view.SendedValue.Text = FormatSummaryValue(FormatFlagDate(_stage.IsSended, _stage.SendedAt));
+        }
+
+        private void UpdateStageTitle()
+        {
+            _view.StageTitleValue.Inlines.Clear();
+            var title = _stage.GetSectionTitle(_contract);
+            var accentText = _stage.GetSectionTitleAmount(_contract);
+            if (string.IsNullOrWhiteSpace(accentText))
+            {
+                _view.StageTitleValue.Text = title;
+                return;
+            }
+
+            _view.StageTitleValue.Text = string.Empty;
+            _view.StageTitleValue.Inlines.Add(new Run { Text = title + " " });
+            _view.StageTitleValue.Inlines.Add(new Run
+            {
+                Text = accentText,
+                Foreground = Application.Current.Resources["ShellAccentBrush"] as Brush
+            });
+        }
+
+        private void UpdateStageNavigationButtons()
+        {
+            var state = _navigationState ?? new StageEditDialogNavigationState(false, false);
+            var hasNavigation = state.CanPrevious || state.CanNext;
+            _view.PreviousButton.Visibility = hasNavigation ? Visibility.Visible : Visibility.Collapsed;
+            _view.NextButton.Visibility = hasNavigation ? Visibility.Visible : Visibility.Collapsed;
+            _view.PreviousButton.IsEnabled = state.CanPrevious;
+            _view.NextButton.IsEnabled = state.CanNext;
+        }
+
+        private static string FormatSummaryValue(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? "-" : value;
+        }
+
+        private static string FormatMoneyInput(decimal? value)
+        {
+            return value?.ToString("N2", CultureInfo.CurrentCulture) ?? string.Empty;
+        }
+
+        private static decimal? TryParseMoney(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            var normalized = text.Trim().Replace(" ", string.Empty);
+            return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out var currentCultureValue)
+                ? currentCultureValue
+                : decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out var invariantCultureValue)
+                    ? invariantCultureValue
+                    : null;
+        }
+
+        private void UpdateStageEditors()
+        {
+            _isApplyingBusinessLogic = true;
+            try
+            {
+                ConfigureSelectCombo(_deadlineKindBox, DeadlineKindOptions(), _stage.DeadlineKind);
+                ConfigureSelectCombo(_paymentDeadlineKindBox, PaymentDeadlineKindOptions(), _stage.PaymentDeadlineKind);
+                ConfigureStatusDropdown(_statusBox, BuildStageStatusOptions(_statusOptions), _stage.Status.Id);
+
+                _startAtEditor.Date = _stage.StartAt;
+                _deadlineAtEditor.Date = _stage.DeadlineAt;
+                _paymentDeadlineAtEditor.Date = _stage.PaymentDeadlineAt;
+                _closedAtEditor.Date = _stage.ClosedAt;
+                _durationBox.Text = _stage.Duration?.ToString() ?? string.Empty;
+                _paymentDurationBox.Text = _stage.PaymentDuration?.ToString() ?? string.Empty;
+                _costBox.Text = FormatMoneyInput(_stage.Cost);
+            }
+            finally
+            {
+                _isApplyingBusinessLogic = false;
+            }
+
             ApplyBusinessLogicAfterFieldChange(applyInitialStart: true);
-
-            var left = new StackPanel { Spacing = 10 };
-            left.Children.Add(BuildSectionTitle("Срок выполнения"));
-            left.Children.Add(BuildLabeledControl("Режим срока", _deadlineKindBox));
-            left.Children.Add(BuildLabeledControl("Дней", _durationBox));
-            left.Children.Add(BuildLabeledControl("Срок выполнения", _deadlineAtEditor));
-
-            var middle = new StackPanel { Spacing = 10 };
-            middle.Children.Add(BuildSectionTitle("Оплата"));
-            middle.Children.Add(BuildLabeledControl("Режим оплаты", _paymentDeadlineKindBox));
-            middle.Children.Add(BuildLabeledControl("Дней", _paymentDurationBox));
-            middle.Children.Add(BuildLabeledControl("Срок оплаты", _paymentDeadlineAtEditor));
-
-            var right = new StackPanel { Spacing = 10 };
-            right.Children.Add(BuildSectionTitle("Состояние"));
-            right.Children.Add(BuildLabeledControl("Статус этапа", _statusBox));
-            right.Children.Add(BuildLabeledControl("Дата начала", _startAtEditor));
-            right.Children.Add(BuildLabeledControl("Закрыт", _closedAtEditor));
-
-            var deadlinePanel = BuildEditorGroupPanel(left, DialogEditorGroupTone.Neutral);
-            var paymentPanel = BuildEditorGroupPanel(middle, DialogEditorGroupTone.Accent);
-            var statePanel = BuildEditorGroupPanel(right, DialogEditorGroupTone.Muted);
-
-            grid.Children.Add(deadlinePanel);
-            Grid.SetColumn(paymentPanel, 1);
-            grid.Children.Add(paymentPanel);
-            Grid.SetColumn(statePanel, 2);
-            grid.Children.Add(statePanel);
-            return grid;
         }
 
         private void AttachBusinessLogicHandlers()
@@ -528,19 +522,88 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ?? throw new InvalidOperationException("Stage edit dialog requires selected contract edit state.");
         }
 
-        private UIElement BuildWideEditorsColumn()
+        private async void RequestNavigation(StageEditDialogNavigationDirection direction)
         {
-            var stack = new StackPanel { Spacing = 10 };
+            try
+            {
+                if (_navigateAsync is null)
+                {
+                    return;
+                }
 
-            stack.Children.Add(BuildLabeledControl("Прочие задачи", BuildTasksMultiSelectEditor()));
+                var result = await _navigateAsync(direction);
+                if (result is null)
+                {
+                    return;
+                }
 
-            _commentBox.PlaceholderText = _profileId is null
-                ? "Комментарий недоступен: не получен profile_id пользователя"
-                : "Комментарий";
-            _commentBox.IsEnabled = _profileId is not null;
-            stack.Children.Add(BuildLabeledControl("Комментарий", _commentBox));
+                ApplyNavigationResult(result);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo(FormatNavigationError("StageCommerEditDialog.RequestNavigation", ex));
+            }
+        }
 
-            return stack;
+        private void ApplyNavigationResult(StageEditDialogNavigationResult result)
+        {
+            var oldStage = _stage;
+            var oldContract = _contract;
+            var oldNavigationState = _navigationState;
+
+            try
+            {
+                _stage = result.Stage;
+                _contract = result.Contract;
+                _navigationState = result.NavigationState;
+                ResetTaskSelection();
+                RenderStageContent("StageCommerEditDialog.ApplyNavigationResult.apply");
+            }
+            catch (Exception ex)
+            {
+                _stage = oldStage;
+                _contract = oldContract;
+                _navigationState = oldNavigationState;
+                ResetTaskSelection();
+                try
+                {
+                    RenderStageContent("StageCommerEditDialog.ApplyNavigationResult.restore");
+                }
+                catch (Exception restoreEx)
+                {
+                    throw new InvalidOperationException(
+                        FormatNavigationError("StageCommerEditDialog.ApplyNavigationResult.restore", restoreEx),
+                        restoreEx);
+                }
+
+                throw new InvalidOperationException(
+                    FormatNavigationError("StageCommerEditDialog.ApplyNavigationResult.apply", ex),
+                    ex);
+            }
+        }
+
+        private void RenderStageContent(string location = "StageCommerEditDialog.RenderStageContent")
+        {
+            UpdateStageSummaryPanel();
+            RenderStageEditors(location);
+        }
+
+        private void RenderStageEditors(string location)
+        {
+            UpdateStageEditors();
+        }
+
+        private void StageNavigationButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: StageEditDialogNavigationDirection direction })
+            {
+                RequestNavigation(direction);
+            }
+        }
+
+        private static string FormatNavigationError(string location, Exception ex)
+        {
+            return $"{location}: {ex.Message}";
         }
 
         private UIElement BuildTasksMultiSelectEditor()
@@ -555,6 +618,19 @@ namespace CbsContractsDesktopClient.Views.Functional
         private void OnTaskSelectionChanged(object? sender, MultiSelectChangedEventArgs e)
         {
             StageContractTaskDialogControls.UpdateSelectedTaskKindIds(_selectedTaskKindIds, e);
+        }
+
+        private void ResetTaskSelection()
+        {
+            _selectedTaskKindIds.Clear();
+            _originalTasks = _stage.Tasks
+                .Select(static task => new StageTaskRecord(task.Id, task.ListKey, task.TaskKindId, task.Name ?? string.Empty))
+                .ToList();
+            _taskOptions = StageContractTaskDialogControls.CreateTaskOptions(_taskKindItems, _originalTasks);
+            foreach (var option in _taskOptions.Where(static option => option.IsSelected))
+            {
+                _selectedTaskKindIds.Add(option.TaskKindId);
+            }
         }
 
         private EnumSelectOption? GetSelectedStatusOption()

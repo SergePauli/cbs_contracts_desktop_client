@@ -10,13 +10,20 @@ public sealed class StageCommerEditDialogTests
         "Functional",
         "StageCommerEditDialog.cs");
 
+    private static readonly string ViewPath = TestProjectPaths.FromRepositoryRoot(
+        "src",
+        "Views",
+        "Functional",
+        "StageCommerEditView.xaml");
+
     [Fact]
     public void StageCommerEditDialog_LocksAutoCalculatedDeadlineFields()
     {
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("public sealed class StageCommerEditDialog : AppEditDialog", code);
-        Assert.Contains("return BuildEditContent(root);", code);
+        Assert.Contains("scrollViewer.Content = _view;", code);
+        Assert.Contains("return BuildEditContent(scrollViewer);", code);
         Assert.Contains("private readonly TextBox _durationBox = BuildNumberTextBox();", code);
         Assert.Contains("private readonly TextBox _paymentDurationBox = BuildNumberTextBox();", code);
         Assert.DoesNotContain("private static TextBox BuildNumberTextBox()", code);
@@ -52,11 +59,15 @@ public sealed class StageCommerEditDialogTests
     public void StageCommerEditDialog_UsesCenteredSectionTitlesAndAccentMoney()
     {
         var code = File.ReadAllText(DialogPath);
+        var xaml = File.ReadAllText(ViewPath);
 
         Assert.Contains("BuildDialogSectionTitle(RequireContract().GetSectionTitle())", code);
-        Assert.Contains("BuildDialogSectionTitle(", code);
+        Assert.Contains("x:Name=\"ContractTitleHost\"", xaml);
+        Assert.Contains("x:Name=\"StageTitleText\"", xaml);
+        Assert.Contains("TextAlignment=\"Center\"", xaml);
         Assert.Contains("_stage.GetSectionTitleAmount(_contract)", code);
-        Assert.Contains("BuildAccentSummaryLine(\"Стоимость\", FormatMoney(_contract?.Cost))", code);
+        Assert.Contains("Foreground=\"{StaticResource ShellAccentBrush}\"", xaml);
+        Assert.Contains("_view.ContractCostValue.Text = FormatSummaryValue(FormatMoney(_contract?.Cost));", code);
         Assert.DoesNotContain("BuildSummaryLine(\"Стоимость\", FormatMoney(_stage.Cost))", code);
     }
 
@@ -70,5 +81,62 @@ public sealed class StageCommerEditDialogTests
         Assert.DoesNotContain("ResolveContractStatusName", code);
         Assert.DoesNotContain("ResolveContractStatusId", code);
         Assert.DoesNotContain("FindStatusLabel(_statusOptions", code);
+    }
+
+    [Fact]
+    public void StageCommerEditDialog_UsesSharedStageNavigationControls()
+    {
+        var code = File.ReadAllText(DialogPath);
+        var xaml = File.ReadAllText(ViewPath);
+
+        Assert.Contains("StageEditDialogNavigationState? navigationState = null", code);
+        Assert.Contains("Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null", code);
+        Assert.Contains("x:Name=\"PreviousStageButton\"", xaml);
+        Assert.Contains("x:Name=\"NextStageButton\"", xaml);
+        Assert.Contains("InitializeNavigationButton(_view.PreviousButton", code);
+        Assert.Contains("InitializeNavigationButton(_view.NextButton", code);
+        Assert.Contains("private async void RequestNavigation(StageEditDialogNavigationDirection direction)", code);
+        Assert.Contains("Content = BuildContent(statusOptions);", code);
+    }
+
+    [Fact]
+    public void StageCommerEditDialog_UserBusinessLogicDoesNotRebuildView()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("private void ApplyBusinessLogicAfterFieldChange(bool applyInitialStart)", code);
+        Assert.Contains("if (_isApplyingBusinessLogic)", code);
+        Assert.Contains("_isApplyingBusinessLogic = true;", code);
+        Assert.DoesNotContain("RenderStageContent", ExtractMethod(code, "ApplyBusinessLogicAfterFieldChange"));
+        Assert.DoesNotContain("RenderStageContent", ExtractMethod(code, "ApplyStatusBusinessLogic"));
+        Assert.Contains("RenderStageContent(\"StageCommerEditDialog.ApplyNavigationResult.apply\")", code);
+    }
+
+    private static string ExtractMethod(string code, string methodName)
+    {
+        var start = code.IndexOf(methodName, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Method {methodName} was not found.");
+
+        var braceStart = code.IndexOf('{', start);
+        Assert.True(braceStart >= 0, $"Method {methodName} body was not found.");
+
+        var depth = 0;
+        for (var index = braceStart; index < code.Length; index++)
+        {
+            if (code[index] == '{')
+            {
+                depth++;
+            }
+            else if (code[index] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return code[braceStart..(index + 1)];
+                }
+            }
+        }
+
+        throw new InvalidOperationException($"Method {methodName} body was not closed.");
     }
 }

@@ -7,6 +7,7 @@ Workflow rules:
 - Confirm application architecture decisions before implementing them: first discuss where new code belongs, how it should be named, and its ownership boundaries; only write code after the decision is approved.
 - When creating form or dialog layouts, avoid showing semantically duplicate information; if a field is already present in the input area, do not repeat it in the summary block unless it adds distinct context.
 - Desktop layouts are for large screens, not touch-first UI: keep dialog/forms dense and compact, with small secondary labels, tight field heights, minimal padding/gaps, and no oversized touch spacing unless explicitly requested. Input font sizes, heights, paddings, and vertical text alignment must be visually consistent across all dialog inputs.
+- When constructing dialog grids, date input columns must have a fixed width everywhere; do not place date inputs in star-sized columns because that creates visual stair-step alignment defects.
 - Do not reduce input font size just to make forms denser. For compact inputs, calculate vertical padding from the relationship `control height - font size`; horizontal padding should be comparable to vertical padding or larger, never near-zero.
 - Form editor values, including TextBox, ComboBox, date, number, and similar input controls, must use normal font weight; do not make entered/editable field values bold.
 - Do not use the standard WinUI ComboBox in project UI. Use the custom Pauli.WinUiKit Dropdown control instead.

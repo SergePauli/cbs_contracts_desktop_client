@@ -19,12 +19,13 @@ namespace CbsContractsDesktopClient.Views.Functional;
 
 public sealed class StageFinEditDialog : AppEditDialog
 {
-    private readonly StageEditState _stage;
-    private readonly ContractEditState? _contract;
+    private StageEditState _stage;
+    private ContractEditState? _contract;
     private readonly IHolidayRecalculationService _holidayRecalculationService;
     private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
+    private StageEditDialogNavigationState? _navigationState;
+    private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly int? _profileId;
-    private readonly string? _listKey;
     private readonly CalendarInput _invoiceAtEditor = new();
     private readonly CalendarInput _prepaymentAtEditor = new();
     private readonly CalendarInput _paymentAtEditor = new();
@@ -46,7 +47,9 @@ public sealed class StageFinEditDialog : AppEditDialog
         StageEditState stage,
         ContractEditState? contract,
         IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions,
-        int? profileId)
+        int? profileId,
+        StageEditDialogNavigationState? navigationState = null,
+        Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null)
     {
         ArgumentNullException.ThrowIfNull(stage);
         ArgumentNullException.ThrowIfNull(statusOptions);
@@ -55,9 +58,9 @@ public sealed class StageFinEditDialog : AppEditDialog
         _contract = contract;
         _statusOptions = statusOptions;
         _profileId = profileId;
+        _navigationState = navigationState;
+        _navigateAsync = navigateAsync;
         _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
-        Id = stage.Id;
-        _listKey = stage.ListKey;
         _isFunded = stage.IsFunded;
         Resources["ContentDialogMinWidth"] = 720d;
         Resources["ContentDialogMaxWidth"] = 860d;
@@ -66,7 +69,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         Loaded += StageFinEditDialog_Loaded;
     }
 
-    public long Id { get; }
+    public long Id => _stage.Id;
 
     public bool HasContractExternalNumberChanges()
     {
@@ -160,9 +163,11 @@ public sealed class StageFinEditDialog : AppEditDialog
         contractGrid.Children.Add(right);
         stack.Children.Add(contractGrid);
 
-        stack.Children.Add(BuildDialogSectionTitle(
+        stack.Children.Add(StageEditDialogNavigationControls.BuildTitle(
             _stage.GetSectionTitle(_contract),
-            _stage.GetSectionTitleAmount(_contract)));
+            _stage.GetSectionTitleAmount(_contract),
+            _navigationState,
+            RequestNavigation));
         var stageGrid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
         stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -241,6 +246,78 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         return _contract
             ?? throw new InvalidOperationException("Stage edit dialog requires selected contract edit state.");
+    }
+
+    private async void RequestNavigation(StageEditDialogNavigationDirection direction)
+    {
+        try
+        {
+            if (_navigateAsync is null)
+            {
+                return;
+            }
+
+            var result = await _navigateAsync(direction);
+            if (result is null)
+            {
+                return;
+            }
+
+            ApplyNavigationResult(result);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo(ex.Message);
+        }
+    }
+
+    private void ApplyNavigationResult(StageEditDialogNavigationResult result)
+    {
+        var oldContent = Content;
+        var oldStage = _stage;
+        var oldContract = _contract;
+        var oldNavigationState = _navigationState;
+        var oldIsFunded = _isFunded;
+
+        try
+        {
+            _stage = result.Stage;
+            _contract = result.Contract;
+            _navigationState = result.NavigationState;
+            _isFunded = _stage.IsFunded;
+            ReplaceDialogBody(BuildContent);
+        }
+        catch
+        {
+            _stage = oldStage;
+            _contract = oldContract;
+            _navigationState = oldNavigationState;
+            _isFunded = oldIsFunded;
+            Content = oldContent;
+            throw;
+        }
+    }
+
+    private void ReplaceDialogBody(Func<UIElement> buildBody)
+    {
+        if (Content is Border border)
+        {
+            var oldChild = border.Child;
+            border.Child = null;
+            try
+            {
+                border.Child = buildBody();
+            }
+            catch
+            {
+                border.Child = oldChild;
+                throw;
+            }
+
+            return;
+        }
+
+        Content = buildBody();
     }
 
     private void AttachBusinessLogicHandlers()

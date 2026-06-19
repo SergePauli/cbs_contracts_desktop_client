@@ -1,0 +1,389 @@
+<UserControl
+    x:Class="CbsContractsDesktopClient.Views.Functional.StageCommerEditView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid
+        MinWidth="700"
+        MaxWidth="800"
+        RowSpacing="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Spacing="12">
+            <ContentControl
+                x:Name="ContractTitleHost"
+                HorizontalAlignment="Center" />
+
+            <Grid
+                ColumnSpacing="42"
+                RowSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="6">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Внешний номер" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="ExternalNumberText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Контрагент" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="ContragentText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Стоимость" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock
+                            x:Name="ContractCostText"
+                            Grid.Column="1"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource ShellAccentBrush}"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="6">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Статус" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <ContentControl
+                            x:Name="ContractStatusHost"
+                            Grid.Column="1"
+                            HorizontalAlignment="Left" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Дата подписания" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="SignedAtText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Госконтракт" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="GovernmentalText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Grid>
+
+            <Grid
+                HorizontalAlignment="Stretch"
+                ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button
+                    x:Name="PreviousStageButton"
+                    Grid.Column="1"
+                    Width="24"
+                    Height="24"
+                    MinWidth="0"
+                    MinHeight="0"
+                    Padding="0"
+                    BorderThickness="0"
+                    CornerRadius="5"
+                    FontFamily="Segoe Fluent Icons"
+                    FontSize="12"
+                    Content="&#xE76B;" />
+                <TextBlock
+                    x:Name="StageTitleText"
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    FontSize="14"
+                    LineHeight="18"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    TextAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+                <Button
+                    x:Name="NextStageButton"
+                    Grid.Column="3"
+                    Width="24"
+                    Height="24"
+                    MinWidth="0"
+                    MinHeight="0"
+                    Padding="0"
+                    BorderThickness="0"
+                    CornerRadius="5"
+                    FontFamily="Segoe Fluent Icons"
+                    FontSize="12"
+                    Content="&#xE76C;" />
+            </Grid>
+
+            <Grid
+                ColumnSpacing="42"
+                RowSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="6">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Предоплата" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="PrepaymentText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Оплата" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="PaymentText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="6">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Бух. закрытие" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="FundedText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Работа выполнена" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="CompletedText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" Spacing="6">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Выезд" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="RideOutText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Отправка" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="SendedText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </StackPanel>
+
+        <Border
+            Grid.Row="1"
+            BorderBrush="{StaticResource ShellTableGridLineBrush}"
+            BorderThickness="0,1,0,0" />
+
+        <Grid
+            Grid.Row="2"
+            RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Border
+                Padding="10,8,10,10"
+                Background="{StaticResource ShellPanelBackgroundBrush}"
+                BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="116" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Margin="4,0,4,0"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        LineHeight="12"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource ShellTableHeaderTextBrush}"
+                        Text="Срок выполнения" />
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock FontSize="12" Text="Режим срока" />
+                        <ContentControl
+                            x:Name="DeadlineKindHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock FontSize="12" Text="Дней" />
+                        <ContentControl
+                            x:Name="DurationHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="4">
+                        <TextBlock FontSize="12" Text="Срок выполнения" />
+                        <ContentControl
+                            x:Name="DeadlineAtHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Row="1"
+                Padding="10,8,10,10"
+                Background="{StaticResource ShellAccentPanelBackgroundAltBrush}"
+                BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="90" />
+                        <ColumnDefinition Width="116" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Margin="4,0,4,0"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        LineHeight="12"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource ShellTableHeaderTextBrush}"
+                        Text="Оплата" />
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock FontSize="12" Text="Сумма" />
+                        <ContentControl
+                            x:Name="CostHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock FontSize="12" Text="Режим оплаты" />
+                        <ContentControl
+                            x:Name="PaymentDeadlineKindHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="4">
+                        <TextBlock FontSize="12" Text="Дней" />
+                        <ContentControl
+                            x:Name="PaymentDurationHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="4" Spacing="4">
+                        <TextBlock FontSize="12" Text="Срок оплаты" />
+                        <ContentControl
+                            x:Name="PaymentDeadlineAtHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Border
+                Grid.Row="2"
+                Padding="10,8,10,10"
+                Background="{StaticResource ShellMutedPanelBackgroundBrush}"
+                BorderBrush="{StaticResource ShellPanelBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="6">
+                <Grid ColumnSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="116" />
+                        <ColumnDefinition Width="116" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock
+                        Margin="4,0,4,0"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        LineHeight="12"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource ShellTableHeaderTextBrush}"
+                        Text="Состояние" />
+                    <StackPanel Grid.Column="1" Spacing="4">
+                        <TextBlock FontSize="12" Text="Статус этапа" />
+                        <ContentControl
+                            x:Name="StatusHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock FontSize="12" Text="Дата начала" />
+                        <ContentControl
+                            x:Name="StartAtHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Spacing="4">
+                        <TextBlock FontSize="12" Text="Закрыт" />
+                        <ContentControl
+                            x:Name="ClosedAtHost"
+                            HorizontalContentAlignment="Stretch" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid
+                Grid.Row="3"
+                ColumnSpacing="14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="4">
+                    <TextBlock FontSize="12" Text="Прочие задачи" />
+                    <ContentControl
+                        x:Name="TasksHost"
+                        HorizontalContentAlignment="Stretch" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="4">
+                    <TextBlock FontSize="12" Text="Комментарий" />
+                    <ContentControl
+                        x:Name="CommentHost"
+                        HorizontalContentAlignment="Stretch" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -58,6 +58,19 @@ public sealed class StageOziEditDialogTests
         Assert.DoesNotContain("BuildInlineDateRow(\"Выполнили\"", code);
     }
 
+    [Fact]
+    public void StageOziEditDialog_UsesSharedStageNavigationControls()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("StageEditDialogNavigationState? navigationState = null", code);
+        Assert.Contains("Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null", code);
+        Assert.Contains("StageEditDialogNavigationControls.BuildTitle(", code);
+        Assert.DoesNotContain("StageEditDialogNavigationControls.Build(", code);
+        Assert.Contains("private async void RequestNavigation(StageEditDialogNavigationDirection direction)", code);
+        Assert.Contains("Content = BuildContent();", code);
+    }
+
     private static string ExtractMethodBody(string code, string signature)
     {
         var start = code.IndexOf(signature, StringComparison.Ordinal);
