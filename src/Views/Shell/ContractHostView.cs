@@ -16,7 +16,9 @@ using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
+using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Functional;
 using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.Views.References;
@@ -33,8 +35,11 @@ namespace CbsContractsDesktopClient.Views.Shell
 {
     public sealed class ContractHostView : ComplexHostViewBase
     {
+        private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
+        private const int FinDepartmentId = 3;
         private const string ContractModel = "Contract";
+        private const string StageModel = "Stage";
         private const string ProfileModel = "Profile";
         private const string AddressModel = "Address";
 
@@ -87,7 +92,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _createButton.Click += async (_, _) => await ShowContractCommerCreateDialogAsync();
 
             _editButton = CreateHeaderIconButton("\uE70F", "Редактировать контракт");
-            _editButton.Click += async (_, _) => await ShowContractCommerEditDialogAsync();
+            _editButton.Click += async (_, _) => await ShowEditDialogForCurrentUserAsync();
 
             _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать контракт");
             _copyButton.Click += (_, _) => CopyContractInfo();
@@ -144,7 +149,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (row is not null)
             {
-                await ShowContractCommerEditDialogAsync();
+                await ShowEditDialogForCurrentUserAsync();
             }
         }
 
@@ -179,6 +184,34 @@ namespace CbsContractsDesktopClient.Views.Shell
                 .Where(static option => JsonDataReader.TryGetLong(option.Value) is long id && ContractStatusIds.Contains(id))
                 .OrderBy(static option => JsonDataReader.TryGetLong(option.Value))
                 .ToList();
+        }
+
+        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageStatusOptionsAsync()
+        {
+            var statusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
+            var optionsById = statusOptions
+                .Where(static option => JsonDataReader.TryGetLong(option.Value) is not null)
+                .GroupBy(static option => JsonDataReader.TryGetLong(option.Value)!.Value)
+                .ToDictionary(static group => group.Key, static group => group.First());
+
+            var result = new List<CbsTableFilterOptionDefinition>
+            {
+                new()
+                {
+                    Value = null,
+                    Label = "Не определен"
+                }
+            };
+
+            foreach (var statusId in StageContractStatusDialogControls.StageStatusIds.Order())
+            {
+                if (optionsById.TryGetValue(statusId, out var option))
+                {
+                    result.Add(option);
+                }
+            }
+
+            return result;
         }
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadTaskKindCodeOptionsAsync()
@@ -664,6 +697,240 @@ namespace CbsContractsDesktopClient.Views.Shell
                 "Изменения контракта сохранены.");
         }
 
+        private async Task ShowEditDialogForCurrentUserAsync()
+        {
+            if (_userService.CurrentUser?.DepartmentId == OziDepartmentId)
+            {
+                await ShowContractOziStageEditDialogAsync();
+                return;
+            }
+
+            if (_userService.CurrentUser?.DepartmentId == FinDepartmentId)
+            {
+                await ShowContractFinStageEditDialogAsync();
+                return;
+            }
+
+            await ShowContractCommerEditDialogAsync();
+        }
+
+        private async Task ShowContractOziStageEditDialogAsync()
+        {
+            if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
+            {
+                return;
+            }
+
+            var contract = _contractWorkflowStore.Contract;
+            if (contract is null && TryGetSelectedRowId(Store.SelectedRow) is long contractId)
+            {
+                contract = await LoadContractEditRowAsync(contractId);
+            }
+
+            if (contract is null)
+            {
+                await ShowErrorDialogAsync(
+                    "Редактирование этапа",
+                    "Не удалось загрузить карточку контракта для редактирования этапа.");
+                return;
+            }
+
+            try
+            {
+                _contractWorkflowStore.BeginContractEdit(contract, _contractWorkflowStore.Contragent);
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            var selectedStageEditState = _contractWorkflowStore.SelectedStageEditState;
+            if (_contractWorkflowStore.SelectedStage is null || selectedStageEditState is null)
+            {
+                await ShowErrorDialogAsync(
+                    "Редактирование этапа",
+                    "В выбранном контракте нет этапа для редактирования.");
+                return;
+            }
+
+            var statusOptions = await LoadStageStatusOptionsAsync();
+            var employeeItems = await LoadOziEmployeeItemsAsync();
+            StageOziEditDialog dialog;
+            try
+            {
+                dialog = new StageOziEditDialog(
+                    selectedStageEditState,
+                    _contractWorkflowStore.SelectedContractEditState,
+                    statusOptions,
+                    employeeItems,
+                    _userService.CurrentUser?.ProfileId,
+                    BuildStageNavigationState(selectedStageEditState),
+                    NavigateStageEditDialogAsync)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            TableDataRow? savedStageRow = null;
+            dialog.SaveRequestedAsync += async args =>
+            {
+                try
+                {
+                    var stagePayload = dialog.BuildPayload();
+                    if (!HasUpdatePayloadChanges(stagePayload))
+                    {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    savedStageRow = await _modelMutationService.UpdateAsync(StageModel, stagePayload);
+
+                    if (dialog.ShouldCloseContract())
+                    {
+                        await _modelMutationService.UpdateAsync(
+                            ContractModel,
+                            dialog.BuildContractClosePayload());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+            };
+
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedStageRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(StageModel);
+            _referenceLookupCacheService.Invalidate(ContractModel);
+            await RefreshSelectedContractAfterStageSaveAsync();
+            ShowSuccessNotification(
+                "Этап сохранен",
+                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedStageRow)));
+        }
+
+        private async Task ShowContractFinStageEditDialogAsync()
+        {
+            if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
+            {
+                return;
+            }
+
+            var contract = _contractWorkflowStore.Contract;
+            if (contract is null && TryGetSelectedRowId(Store.SelectedRow) is long contractId)
+            {
+                contract = await LoadContractEditRowAsync(contractId);
+            }
+
+            if (contract is null)
+            {
+                await ShowErrorDialogAsync(
+                    "Редактирование этапа",
+                    "Не удалось загрузить карточку контракта для редактирования этапа.");
+                return;
+            }
+
+            try
+            {
+                _contractWorkflowStore.BeginContractEdit(contract, _contractWorkflowStore.Contragent);
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            var selectedStageEditState = _contractWorkflowStore.SelectedStageEditState;
+            if (_contractWorkflowStore.SelectedStage is null || selectedStageEditState is null)
+            {
+                await ShowErrorDialogAsync(
+                    "Редактирование этапа",
+                    "В выбранном контракте нет этапа для редактирования.");
+                return;
+            }
+
+            var statusOptions = await LoadStageStatusOptionsAsync();
+            StageFinEditDialog dialog;
+            try
+            {
+                dialog = new StageFinEditDialog(
+                    selectedStageEditState,
+                    _contractWorkflowStore.SelectedContractEditState,
+                    statusOptions,
+                    _userService.CurrentUser?.ProfileId,
+                    BuildStageNavigationState(selectedStageEditState),
+                    NavigateStageEditDialogAsync)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                return;
+            }
+
+            TableDataRow? savedStageRow = null;
+            var hasSavedContract = false;
+            dialog.SaveRequestedAsync += async args =>
+            {
+                try
+                {
+                    var stagePayload = dialog.BuildPayload();
+                    var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
+                    var hasContractChanges = dialog.HasContractExternalNumberChanges();
+                    if (!hasStageChanges && !hasContractChanges)
+                    {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    if (hasStageChanges)
+                    {
+                        savedStageRow = await _modelMutationService.UpdateAsync(StageModel, stagePayload);
+                    }
+
+                    if (hasContractChanges)
+                    {
+                        await _modelMutationService.UpdateAsync(
+                            ContractModel,
+                            dialog.BuildContractExternalNumberPayload());
+                        hasSavedContract = true;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+            };
+
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || (savedStageRow is null && !hasSavedContract))
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(StageModel);
+            _referenceLookupCacheService.Invalidate(ContractModel);
+            await RefreshSelectedContractAfterStageSaveAsync();
+            ShowSuccessNotification(
+                "Этап сохранен",
+                BuildReferenceNotificationMessage("Этап", savedStageRow is null ? selectedStageEditState.Id : TryGetSelectedRowId(savedStageRow)));
+        }
+
         private async Task ShowContractCommerCreateDialogAsync()
         {
             if (!IsContractCreateAllowedForCurrentUser())
@@ -765,6 +1032,103 @@ namespace CbsContractsDesktopClient.Views.Shell
             return payload.Keys.Any(static key =>
                 !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private async Task RefreshSelectedContractAfterStageSaveAsync(CancellationToken cancellationToken = default)
+        {
+            if (Store.SelectedRow is null || TryGetSelectedRowId(Store.SelectedRow) is not long contractId)
+            {
+                await RefreshDetailAsync();
+                return;
+            }
+
+            await RefreshTableRowByIdAsync(contractId, cancellationToken);
+            await RefreshDetailAsync();
+        }
+
+        private StageEditDialogNavigationState BuildStageNavigationState(StageEditState stage)
+        {
+            var stages = _contractWorkflowStore.GetVisibleStageEditStates();
+            var index = FindStageIndex(stages, stage);
+            return new StageEditDialogNavigationState(
+                CanPrevious: index > 0,
+                CanNext: index >= 0 && index < stages.Count - 1);
+        }
+
+        private Task<StageEditDialogNavigationResult?> NavigateStageEditDialogAsync(
+            StageEditDialogNavigationDirection direction)
+        {
+            if (direction == StageEditDialogNavigationDirection.None)
+            {
+                return Task.FromResult<StageEditDialogNavigationResult?>(null);
+            }
+
+            var offset = direction == StageEditDialogNavigationDirection.Previous ? -1 : 1;
+            if (!_contractWorkflowStore.TrySelectAdjacentStageEditState(offset))
+            {
+                return Task.FromResult<StageEditDialogNavigationResult?>(null);
+            }
+
+            var stage = _contractWorkflowStore.SelectedStageEditState;
+            if (stage is null)
+            {
+                return Task.FromResult<StageEditDialogNavigationResult?>(null);
+            }
+
+            return Task.FromResult<StageEditDialogNavigationResult?>(new StageEditDialogNavigationResult(
+                stage,
+                _contractWorkflowStore.SelectedContractEditState,
+                BuildStageNavigationState(stage)));
+        }
+
+        private static int FindStageIndex(IReadOnlyList<StageEditState> stages, StageEditState selectedStage)
+        {
+            for (var index = 0; index < stages.Count; index++)
+            {
+                var stage = stages[index];
+                if ((stage.Id > 0 && stage.Id == selectedStage.Id)
+                    || (!string.IsNullOrWhiteSpace(stage.ListKey)
+                        && string.Equals(stage.ListKey, selectedStage.ListKey, StringComparison.Ordinal)))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        private async Task<IReadOnlyList<ReferenceLookupItem>> LoadOziEmployeeItemsAsync(
+            CancellationToken cancellationToken = default)
+        {
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "Employee",
+                    Preset = "item",
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["contragent_id__eq"] = 1L,
+                        ["used__eq"] = true
+                    },
+                    Sorts = ["priority asc"],
+                    Limit = 1000
+                },
+                cancellationToken);
+
+            return rows
+                .Where(static row => !row.IsPlaceholder)
+                .Select(static row => new ReferenceLookupItem
+                {
+                    Model = "Employee",
+                    Preset = "item",
+                    Id = row.GetValue("id"),
+                    Name = JsonDataReader.GetText(row, "name", "person.name", "full_name"),
+                    FullName = JsonDataReader.GetText(row, "full_name", "name", "person.name"),
+                    Code = JsonDataReader.GetText(row, "code"),
+                    Row = row
+                })
+                .Where(static item => item.Id is not null && !string.IsNullOrWhiteSpace(item.DisplayName))
+                .ToList();
         }
 
         private MenuFlyout CreateContragentMenuFlyout()

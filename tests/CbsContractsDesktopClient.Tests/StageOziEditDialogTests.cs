@@ -10,73 +10,99 @@ public sealed class StageOziEditDialogTests
         "Functional",
         "StageOziEditDialog.cs");
 
+    private static readonly string ViewPath = TestProjectPaths.FromRepositoryRoot(
+        "src",
+        "Views",
+        "Functional",
+        "StageOziEditView.xaml");
+
     [Fact]
     public void StageOziEditDialog_KeepsSummaryFreeOfInputDuplicates()
     {
         var code = File.ReadAllText(DialogPath);
-        var summaryCode = ExtractMethodBody(code, "private UIElement BuildSummaryPanel()");
+        var xaml = File.ReadAllText(ViewPath);
 
         Assert.Contains("public sealed class StageOziEditDialog : AppEditDialog", code);
-        Assert.DoesNotContain("_stage.Status.Name", summaryCode);
-        Assert.DoesNotContain("_stage.Status.Id", summaryCode);
-        Assert.DoesNotContain("BuildSummaryLine(\"Выполнили\"", summaryCode);
-        Assert.DoesNotContain("BuildSummaryLine(\"Выезд\"", summaryCode);
-        Assert.DoesNotContain("BuildSummaryLine(\"Отправка\"", summaryCode);
+        Assert.Contains("x:Name=\"StageTitleText\"", xaml);
+        Assert.DoesNotContain("x:Name=\"StageStatus", xaml);
+        Assert.DoesNotContain("Text=\"Статус этапа\"", ExtractSummaryXaml(xaml));
+        Assert.DoesNotContain("Text=\"Выполнили\"", xaml);
+        Assert.DoesNotContain("Text=\"Выезд\"", xaml);
+        Assert.DoesNotContain("Text=\"Отправка\"", xaml);
     }
 
     [Fact]
     public void StageOziEditDialog_GroupsExecutionInputsInLeftColumn()
     {
-        var code = File.ReadAllText(DialogPath);
-        var executionTitleIndex = code.IndexOf("BuildSectionTitle(\"Выполнение\")", StringComparison.Ordinal);
-        var performersIndex = code.IndexOf("BuildLabeledControl(\"Исполнители\", _performersMultiSelect)", StringComparison.Ordinal);
-        var rideOutIndex = code.IndexOf("BuildCheckDateRow(_isRideOutBox, _rideOutAtEditor)", StringComparison.Ordinal);
-        var sendedIndex = code.IndexOf("BuildCheckDateRow(_isSendedBox, _sendedAtEditor)", StringComparison.Ordinal);
-        var registryIndex = code.IndexOf("left.Children.Add(BuildRegistryEditors())", StringComparison.Ordinal);
-        var stateTitleIndex = code.IndexOf("BuildSectionTitle(\"Состояние\")", StringComparison.Ordinal);
+        var xaml = File.ReadAllText(ViewPath);
+        var executionTitleIndex = xaml.IndexOf("Text=\"Выполнение\"", StringComparison.Ordinal);
+        var performersIndex = xaml.IndexOf("x:Name=\"PerformersHost\"", StringComparison.Ordinal);
+        var rideOutIndex = xaml.IndexOf("x:Name=\"RideOutCheckHost\"", StringComparison.Ordinal);
+        var sendedIndex = xaml.IndexOf("x:Name=\"SendedCheckHost\"", StringComparison.Ordinal);
+        var stateTitleIndex = xaml.IndexOf("Text=\"Состояние\"", StringComparison.Ordinal);
 
         Assert.True(executionTitleIndex >= 0);
         Assert.True(executionTitleIndex < performersIndex);
         Assert.True(performersIndex < rideOutIndex);
         Assert.True(rideOutIndex < sendedIndex);
-        Assert.True(sendedIndex < registryIndex);
-        Assert.True(registryIndex < stateTitleIndex);
-        Assert.DoesNotContain("right.Children.Add(BuildRegistryEditors())", code);
+        Assert.True(sendedIndex < stateTitleIndex);
     }
 
     [Fact]
-    public void StageOziEditDialog_ShowsCompletionDateLikeClosedDate()
+    public void StageOziEditDialog_ShowsCompletionAndClosedDatesInFixedColumns()
     {
-        var code = File.ReadAllText(DialogPath);
-        var statusIndex = code.IndexOf("BuildLabeledControl(\"Статус этапа\", _statusBox)", StringComparison.Ordinal);
-        var completedIndex = code.IndexOf("BuildLabeledControl(\"Работа выполнена\", _completedAtEditor)", StringComparison.Ordinal);
-        var closedIndex = code.IndexOf("BuildLabeledControl(\"Закрыт\", _closedAtEditor)", StringComparison.Ordinal);
+        var xaml = File.ReadAllText(ViewPath);
+        var statusIndex = xaml.IndexOf("Text=\"Статус этапа\"", StringComparison.Ordinal);
+        var completedIndex = xaml.IndexOf("Text=\"Работа выполнена\"", StringComparison.Ordinal);
+        var closedIndex = xaml.IndexOf("Text=\"Закрыт\"", StringComparison.Ordinal);
+        var registryIndex = xaml.IndexOf("x:Name=\"RegistryCheckHost\"", StringComparison.Ordinal);
 
         Assert.True(statusIndex >= 0);
         Assert.True(statusIndex < completedIndex);
         Assert.True(completedIndex < closedIndex);
-        Assert.DoesNotContain("BuildInlineDateRow(\"Выполнили\"", code);
+        Assert.True(closedIndex < registryIndex);
+        Assert.Contains("<ColumnDefinition Width=\"116\" />", xaml);
+        Assert.DoesNotContain("Text=\"Выполнили\"", xaml);
     }
 
     [Fact]
     public void StageOziEditDialog_UsesSharedStageNavigationControls()
     {
         var code = File.ReadAllText(DialogPath);
+        var xaml = File.ReadAllText(ViewPath);
 
         Assert.Contains("StageEditDialogNavigationState? navigationState = null", code);
         Assert.Contains("Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null", code);
-        Assert.Contains("StageEditDialogNavigationControls.BuildTitle(", code);
-        Assert.DoesNotContain("StageEditDialogNavigationControls.Build(", code);
+        Assert.Contains("x:Name=\"PreviousStageButton\"", xaml);
+        Assert.Contains("x:Name=\"NextStageButton\"", xaml);
+        Assert.Contains("InitializeNavigationButton(_view.PreviousButton", code);
+        Assert.Contains("InitializeNavigationButton(_view.NextButton", code);
         Assert.Contains("private async void RequestNavigation(StageEditDialogNavigationDirection direction)", code);
         Assert.Contains("Content = BuildContent();", code);
+        Assert.DoesNotContain("ReplaceDialogBody", code);
     }
 
-    private static string ExtractMethodBody(string code, string signature)
+    [Fact]
+    public void StageOziEditDialog_UsesXamlViewAndDropdownStatus()
     {
-        var start = code.IndexOf(signature, StringComparison.Ordinal);
-        Assert.True(start >= 0);
-        var nextMethod = code.IndexOf("    private UIElement BuildEditorsArea()", start, StringComparison.Ordinal);
-        Assert.True(nextMethod > start);
-        return code[start..nextMethod];
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("private readonly StageOziEditView _view = new();", code);
+        Assert.Contains("scrollViewer.Content = _view;", code);
+        Assert.Contains("private readonly Dropdown _statusBox = new();", code);
+        Assert.Contains("ConfigureStatusDropdown(_statusBox", code);
+        Assert.DoesNotContain("private readonly ComboBox _statusBox", code);
+    }
+
+    private static string ExtractSummaryXaml(string xaml)
+    {
+        var end = xaml.IndexOf("<Border\r\n            Grid.Row=\"1\"", StringComparison.Ordinal);
+        if (end < 0)
+        {
+            end = xaml.IndexOf("<Border\n            Grid.Row=\"1\"", StringComparison.Ordinal);
+        }
+
+        Assert.True(end > 0);
+        return xaml[..end];
     }
 }

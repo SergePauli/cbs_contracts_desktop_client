@@ -2,10 +2,13 @@
 using System.Net.Http;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Mutations;
+using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
@@ -135,6 +138,87 @@ public sealed class ModelMutationServiceTests
     }
 
     [Fact]
+    public async Task UpdateAsync_FinStageAndContractPayloads_MatchExpectedJsonContracts()
+    {
+        var capturedRequests = new List<(HttpMethod Method, string Uri, string? Body)>();
+
+        var service = CreateService(new StubHttpMessageHandler(async request =>
+        {
+            var body = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync();
+            capturedRequests.Add((request.Method, request.RequestUri!.ToString(), body));
+
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{ "id": 1 }""", Encoding.UTF8, "application/json")
+            };
+        }));
+        var stage = StageEditState.FromRow(CreateRow(
+            ("id", 6388L),
+            ("list_key", "1fc89df1-8229-4c1d-8046-c4fd1311f4a4"),
+            ("name", "05/26/002"),
+            ("priority", 1),
+            ("used", true),
+            ("cost", 124454m),
+            ("status.id", 2L),
+            ("status.name", "В работе"),
+            ("task_kind.id", 1L),
+            ("task_kind.name", "Контрольная проверка"),
+            ("task_kind.code", "01"),
+            ("payment_at", "Fri Jun 19 2026"),
+            ("prepayment_at", "Wed Jun 17 2026"),
+            ("invoice_at", "Wed Jun 17 2026"),
+            ("funded_at", "Fri Jun 19 2026"),
+            ("is_funded", false),
+            ("start_at", "Fri Jun 19 2026"),
+            ("deadline_at", "Wed Jul 01 2026"),
+            ("payment_deadline_at", "Sun Jul 05 2026"),
+            ("payment_deadline_kind", "w_days"),
+            ("payment_duration", 12),
+            ("duration", 12)));
+        var contract = ContractEditState.FromRow(CreateRow(
+            ("id", 6367L),
+            ("name", "05/26/002"),
+            ("status_id", 5L),
+            ("status.name", "Подписан"),
+            ("task_kind.name", "Контрольная проверка"),
+            ("external_number", "аварп")));
+
+        stage.PaymentAt = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
+        stage.InvoiceAt = new DateTimeOffset(2026, 6, 18, 0, 0, 0, TimeSpan.Zero);
+        stage.FundedAt = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
+        stage.IsFunded = true;
+        stage.PaymentDeadlineAt = new DateTimeOffset(2026, 7, 6, 0, 0, 0, TimeSpan.Zero);
+
+        await service.UpdateAsync(
+            "Stage",
+            StageFinEditPayloadBuilder.BuildForUpdate(stage, string.Empty, null));
+        await service.UpdateAsync(
+            "Contract",
+            contract!.BuildExternalNumberPayload("аварп4"));
+
+        Assert.Collection(
+            capturedRequests,
+            stageRequest =>
+            {
+                Assert.Equal(HttpMethod.Put, stageRequest.Method);
+                Assert.Equal("http://localhost/model/Stage/6388", stageRequest.Uri);
+                Assert.Equal(
+                    """{"data_set":"item","Stage":{"id":6388,"list_key":"1fc89df1-8229-4c1d-8046-c4fd1311f4a4","payment_at":"Sat Jun 20 2026","invoice_at":"Thu Jun 18 2026","funded_at":"Sat Jun 20 2026","is_funded":true,"payment_deadline_at":"Mon Jul 06 2026"}}""",
+                    stageRequest.Body);
+            },
+            contractRequest =>
+            {
+                Assert.Equal(HttpMethod.Put, contractRequest.Method);
+                Assert.Equal("http://localhost/model/Contract/6367", contractRequest.Uri);
+                Assert.Equal(
+                    """{"data_set":"item","Contract":{"id":6367,"external_number":"\u0430\u0432\u0430\u0440\u043F4"}}""",
+                    contractRequest.Body);
+            });
+    }
+
+    [Fact]
     public async Task UpdateAsync_StagePayloadRejectsReadModelComments()
     {
         var service = CreateService(new StubHttpMessageHandler(_ =>
@@ -205,6 +289,16 @@ public sealed class ModelMutationServiceTests
         };
 
         return new ModelMutationService(httpClient, new StubUserService());
+    }
+
+    private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
+    {
+        return new TableDataRow
+        {
+            Values = values.ToDictionary(
+                static value => value.Key,
+                static value => JsonSerializer.SerializeToElement(value.Value))
+        };
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler

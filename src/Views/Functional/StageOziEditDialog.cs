@@ -7,6 +7,7 @@ using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
@@ -32,7 +33,7 @@ public sealed class StageOziEditDialog : AppEditDialog
     private readonly CalendarInput _sendedAtEditor = new();
     private readonly CalendarInput _completedAtEditor = new();
     private readonly CalendarInput _closedAtEditor = new();
-    private readonly ComboBox _statusBox = new();
+    private readonly Dropdown _statusBox = new();
     private readonly CheckBox _isRideOutBox = new() { Content = "Выехали" };
     private readonly CheckBox _isSendedBox = new() { Content = "Отправили" };
     private readonly CheckBox _toRegistryBox = new() { Content = "Реестр" };
@@ -40,7 +41,9 @@ public sealed class StageOziEditDialog : AppEditDialog
     private readonly TextBox _registryYearBox = BuildNumberTextBox();
     private readonly MultiSelect _performersMultiSelect = new();
     private readonly TextBox _commentBox = new();
+    private readonly StageOziEditView _view = new();
     private bool _isApplyingBusinessLogic;
+    private bool _businessLogicHandlersAttached;
 
     public StageOziEditDialog(
         StageEditState stage,
@@ -63,9 +66,11 @@ public sealed class StageOziEditDialog : AppEditDialog
         _navigationState = navigationState;
         _navigateAsync = navigateAsync;
         _performerOptions = CreatePerformerOptions(employeeItems, stage.Performers);
+        _view.PreviousButton.Click += StageNavigationButton_Click;
+        _view.NextButton.Click += StageNavigationButton_Click;
 
         Resources["ContentDialogMinWidth"] = 760d;
-        Resources["ContentDialogMaxWidth"] = 940d;
+        Resources["ContentDialogMaxWidth"] = 860d;
         Content = BuildContent();
         DialogChrome.Apply(this, _stage.GetEditDialogTitle());
     }
@@ -133,183 +138,150 @@ public sealed class StageOziEditDialog : AppEditDialog
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
 
-        var stack = new StackPanel { Spacing = 14 };
-        scrollViewer.Content = stack;
-        stack.Children.Add(BuildSummaryPanel());
-        stack.Children.Add(BuildEditorsArea());
-
-        return BuildEditContent(new Grid
-        {
-            MinWidth = 720,
-            MaxWidth = 900,
-            Children = { scrollViewer }
-        });
+        scrollViewer.Content = _view;
+        InitializeStaticView();
+        RenderStageContent();
+        return BuildEditContent(scrollViewer);
     }
 
-    private UIElement BuildSummaryPanel()
+    private void InitializeStaticView()
     {
-        var stack = new StackPanel { Spacing = 12 };
-        stack.Children.Add(BuildDialogSectionTitle(RequireContract().GetSectionTitle()));
-
-        var contractGrid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
-        contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var left = new StackPanel { Spacing = 6 };
-        left.Children.Add(BuildSummaryLine("Внешний номер", _contract?.ExternalNumber ?? string.Empty));
-        left.Children.Add(BuildSummaryLine("Контрагент", _contract?.ContragentName ?? string.Empty));
-        left.Children.Add(BuildSummaryLine("Дата подписания", FormatDisplayDate(_contract?.SignedAt)));
-
-        var right = new StackPanel { Spacing = 6 };
-        right.Children.Add(BuildSummaryElement("Статус", BuildStatusBadge(
+        _view.ContractTitleSlot.Content = BuildDialogSectionTitle(RequireContract().GetSectionTitle());
+        _view.ExternalNumberValue.Text = FormatSummaryValue(_contract?.ExternalNumber ?? string.Empty);
+        _view.ContragentValue.Text = FormatSummaryValue(_contract?.ContragentName ?? string.Empty);
+        _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_contract?.SignedAt));
+        _view.ContractStatusSlot.Content = BuildStatusBadge(
             RequireContract().Status.Name!,
             RequireContract().Status.Id,
-            horizontalAlignment: HorizontalAlignment.Left)));
-        right.Children.Add(BuildAccentSummaryLine("Стоимость", FormatMoney(_contract?.Cost)));
-        right.Children.Add(BuildSummaryLine("Особенности", BuildContractKindText()));
-
-        contractGrid.Children.Add(left);
-        Grid.SetColumn(right, 1);
-        contractGrid.Children.Add(right);
-        stack.Children.Add(contractGrid);
-
-        stack.Children.Add(StageEditDialogNavigationControls.BuildTitle(
-            _stage.GetSectionTitle(_contract),
-            _stage.GetSectionTitleAmount(_contract),
-            _navigationState,
-            RequestNavigation));
-
-        var stageGrid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
-        stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var stageLeft = new StackPanel { Spacing = 6 };
-        stageLeft.Children.Add(BuildSummaryLine("Дата начала", FormatDisplayDate(_stage.StartAt)));
-        stageLeft.Children.Add(BuildSummaryLine("Предоплата", FormatDisplayDate(_stage.PrepaymentAt ?? _stage.PaymentAt)));
-
-        var stageRight = new StackPanel { Spacing = 6 };
-        stageRight.Children.Add(BuildSummaryLine("Срок завершения", FormatDisplayDate(_stage.DeadlineAt)));
-        stageRight.Children.Add(BuildSummaryLine("Прочее", BuildTasksText()));
-
-        stageGrid.Children.Add(stageLeft);
-        Grid.SetColumn(stageRight, 1);
-        stageGrid.Children.Add(stageRight);
-        stack.Children.Add(stageGrid);
-
-        return new Border
-        {
-            Padding = new Thickness(0, 0, 0, 12),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            BorderBrush = Application.Current.Resources["ShellTableGridLineBrush"] as Brush,
-            Child = stack
-        };
+            horizontalAlignment: HorizontalAlignment.Left);
+        _view.ContractCostValue.Text = FormatSummaryValue(FormatMoney(_contract?.Cost));
+        _view.ContractKindValue.Text = FormatSummaryValue(BuildContractKindText());
+        InitializeNavigationButton(_view.PreviousButton, "Предыдущий этап", StageEditDialogNavigationDirection.Previous);
+        InitializeNavigationButton(_view.NextButton, "Следующий этап", StageEditDialogNavigationDirection.Next);
+        InitializeEditorSlots();
     }
 
-    private UIElement BuildEditorsArea()
+    private static void InitializeNavigationButton(
+        Button button,
+        string tooltip,
+        StageEditDialogNavigationDirection direction)
     {
-        _rideOutAtEditor.Date = _stage.RideOutAt;
-        _sendedAtEditor.Date = _stage.SendedAt;
-        _completedAtEditor.Date = _stage.CompletedAt;
-        _closedAtEditor.Date = _stage.ClosedAt;
-        _isRideOutBox.IsChecked = _stage.IsRideOut == true;
-        _isSendedBox.IsChecked = _stage.IsSended == true;
-        _toRegistryBox.IsChecked = _stage.RegistryQuarter is not null || _stage.RegistryYear is not null;
-        _registryQuarterBox.Text = _stage.RegistryQuarter?.ToString() ?? string.Empty;
-        _registryYearBox.Text = _stage.RegistryYear?.ToString() ?? string.Empty;
+        button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 99, 102, 241));
+        button.BorderBrush = button.Background;
+        button.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 79, 70, 229));
+        button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 67, 56, 202));
+        button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 79, 70, 229));
+        button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 67, 56, 202));
+        ToolTipService.SetToolTip(button, tooltip);
+        button.Tag = direction;
+    }
 
-        ConfigureStatusCombo(_statusBox, BuildStageStatusOptions(_statusOptions), _stage.Status.Id);
-        ConfigurePerformersMultiSelect();
-        AttachBusinessLogicHandlers();
-        ApplyBusinessLogic();
-
-        var grid = new Grid { ColumnSpacing = 18, RowSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var left = new StackPanel { Spacing = 10 };
-        left.Children.Add(BuildSectionTitle("Выполнение"));
-        left.Children.Add(BuildLabeledControl("Исполнители", _performersMultiSelect));
-        left.Children.Add(BuildCheckDateRow(_isRideOutBox, _rideOutAtEditor));
-        left.Children.Add(BuildCheckDateRow(_isSendedBox, _sendedAtEditor));
-        left.Children.Add(BuildRegistryEditors());
-
-        var right = new StackPanel { Spacing = 10 };
-        right.Children.Add(BuildSectionTitle("Состояние"));
-        right.Children.Add(BuildLabeledControl("Статус этапа", _statusBox));
-        right.Children.Add(BuildLabeledControl("Работа выполнена", _completedAtEditor));
-        right.Children.Add(BuildLabeledControl("Закрыт", _closedAtEditor));
-
-        var leftPanel = BuildEditorGroupPanel(left, DialogEditorGroupTone.Accent);
-        var rightPanel = BuildEditorGroupPanel(right, DialogEditorGroupTone.Muted);
-        grid.Children.Add(leftPanel);
-        Grid.SetColumn(rightPanel, 1);
-        grid.Children.Add(rightPanel);
-
-        var root = new StackPanel { Spacing = 12 };
-        root.Children.Add(grid);
+    private void InitializeEditorSlots()
+    {
+        _view.PerformersSlot.Content = _performersMultiSelect;
+        _view.RideOutCheckSlot.Content = _isRideOutBox;
+        _view.RideOutAtSlot.Content = _rideOutAtEditor;
+        _view.SendedCheckSlot.Content = _isSendedBox;
+        _view.SendedAtSlot.Content = _sendedAtEditor;
+        _view.RegistryCheckSlot.Content = _toRegistryBox;
+        _view.RegistryQuarterSlot.Content = _registryQuarterBox;
+        _view.RegistryYearSlot.Content = _registryYearBox;
+        _view.StatusSlot.Content = _statusBox;
+        _view.CompletedAtSlot.Content = _completedAtEditor;
+        _view.ClosedAtSlot.Content = _closedAtEditor;
+        _view.CommentSlot.Content = _commentBox;
         _commentBox.PlaceholderText = _profileId is null
             ? "Комментарий недоступен: не получен profile_id пользователя"
             : "Комментарий";
         _commentBox.IsEnabled = _profileId is not null;
-        root.Children.Add(BuildLabeledControl("Комментарий", _commentBox));
-        return root;
+        AttachBusinessLogicHandlers();
     }
 
-    private static UIElement BuildCheckDateRow(CheckBox checkBox, CalendarInput dateEditor)
+    private void RenderStageContent()
     {
-        checkBox.VerticalAlignment = VerticalAlignment.Center;
-        dateEditor.VerticalAlignment = VerticalAlignment.Center;
-
-        var grid = new Grid { ColumnSpacing = 10 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(checkBox);
-        Grid.SetColumn(dateEditor, 1);
-        grid.Children.Add(dateEditor);
-        return grid;
+        UpdateStageSummaryPanel();
+        UpdateStageEditors();
     }
 
-    private UIElement BuildRegistryEditors()
+    private void UpdateStageSummaryPanel()
     {
-        _toRegistryBox.VerticalAlignment = VerticalAlignment.Center;
-
-        var grid = new Grid { ColumnSpacing = 10 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(118) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(_toRegistryBox);
-
-        var quarterEditor = BuildInlineTextBox("Квартал", _registryQuarterBox);
-        Grid.SetColumn(quarterEditor, 1);
-        grid.Children.Add(quarterEditor);
-
-        var yearEditor = BuildInlineTextBox("Год", _registryYearBox);
-        Grid.SetColumn(yearEditor, 2);
-        grid.Children.Add(yearEditor);
-        return grid;
+        UpdateStageTitle();
+        UpdateStageNavigationButtons();
+        _view.StartAtValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.StartAt));
+        _view.PrepaymentValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.PrepaymentAt ?? _stage.PaymentAt));
+        _view.DeadlineAtValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.DeadlineAt));
+        _view.TasksValue.Text = FormatSummaryValue(BuildTasksText());
     }
 
-    private static FrameworkElement BuildInlineTextBox(string label, TextBox textBox)
+    private void UpdateStageTitle()
     {
-        textBox.VerticalAlignment = VerticalAlignment.Center;
-
-        var grid = new Grid { ColumnSpacing = 6 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.Children.Add(new TextBlock
+        _view.StageTitleValue.Inlines.Clear();
+        var title = _stage.GetSectionTitle(_contract);
+        var accentText = _stage.GetSectionTitleAmount(_contract);
+        if (string.IsNullOrWhiteSpace(accentText))
         {
-            Text = label,
-            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
+            _view.StageTitleValue.Text = title;
+            return;
+        }
 
-        Grid.SetColumn(textBox, 1);
-        grid.Children.Add(textBox);
-        return grid;
+        _view.StageTitleValue.Text = string.Empty;
+        _view.StageTitleValue.Inlines.Add(new Run { Text = title + " " });
+        _view.StageTitleValue.Inlines.Add(new Run
+        {
+            Text = accentText,
+            Foreground = Application.Current.Resources["ShellAccentBrush"] as Brush
+        });
+    }
+
+    private void UpdateStageNavigationButtons()
+    {
+        var state = _navigationState ?? new StageEditDialogNavigationState(false, false);
+        var hasNavigation = state.CanPrevious || state.CanNext;
+        _view.PreviousButton.Visibility = hasNavigation ? Visibility.Visible : Visibility.Collapsed;
+        _view.NextButton.Visibility = hasNavigation ? Visibility.Visible : Visibility.Collapsed;
+        _view.PreviousButton.IsEnabled = state.CanPrevious;
+        _view.NextButton.IsEnabled = state.CanNext;
+    }
+
+    private void UpdateStageEditors()
+    {
+        _isApplyingBusinessLogic = true;
+        try
+        {
+            _rideOutAtEditor.Date = _stage.RideOutAt;
+            _sendedAtEditor.Date = _stage.SendedAt;
+            _completedAtEditor.Date = _stage.CompletedAt;
+            _closedAtEditor.Date = _stage.ClosedAt;
+            _isRideOutBox.IsChecked = _stage.IsRideOut == true;
+            _isSendedBox.IsChecked = _stage.IsSended == true;
+            _toRegistryBox.IsChecked = _stage.RegistryQuarter is not null || _stage.RegistryYear is not null;
+            _registryQuarterBox.Text = _stage.RegistryQuarter?.ToString() ?? string.Empty;
+            _registryYearBox.Text = _stage.RegistryYear?.ToString() ?? string.Empty;
+            ConfigureStatusDropdown(_statusBox, BuildStageStatusOptions(_statusOptions), _stage.Status.Id);
+        }
+        finally
+        {
+            _isApplyingBusinessLogic = false;
+        }
+
+        ConfigurePerformersMultiSelect();
+        ApplyBusinessLogic();
+    }
+
+    private static string FormatSummaryValue(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
     }
 
     private void AttachBusinessLogicHandlers()
     {
+        if (_businessLogicHandlersAttached)
+        {
+            return;
+        }
+
+        _businessLogicHandlersAttached = true;
         _isRideOutBox.Checked += (_, _) => ApplyBusinessLogic();
         _isRideOutBox.Unchecked += (_, _) => ApplyBusinessLogic();
         _isSendedBox.Checked += (_, _) => ApplyBusinessLogic();
@@ -490,7 +462,6 @@ public sealed class StageOziEditDialog : AppEditDialog
 
     private void ApplyNavigationResult(StageEditDialogNavigationResult result)
     {
-        var oldContent = Content;
         var oldStage = _stage;
         var oldContract = _contract;
         var oldNavigationState = _navigationState;
@@ -502,7 +473,7 @@ public sealed class StageOziEditDialog : AppEditDialog
             _contract = result.Contract;
             _navigationState = result.NavigationState;
             _performerOptions = CreatePerformerOptions(_employeeItems, _stage.Performers);
-            ReplaceDialogBody(BuildContent);
+            RenderStageContent();
         }
         catch
         {
@@ -510,31 +481,17 @@ public sealed class StageOziEditDialog : AppEditDialog
             _contract = oldContract;
             _navigationState = oldNavigationState;
             _performerOptions = oldPerformerOptions;
-            Content = oldContent;
+            RenderStageContent();
             throw;
         }
     }
 
-    private void ReplaceDialogBody(Func<UIElement> buildBody)
+    private void StageNavigationButton_Click(object sender, RoutedEventArgs e)
     {
-        if (Content is Border border)
+        if (sender is Button { Tag: StageEditDialogNavigationDirection direction })
         {
-            var oldChild = border.Child;
-            border.Child = null;
-            try
-            {
-                border.Child = buildBody();
-            }
-            catch
-            {
-                border.Child = oldChild;
-                throw;
-            }
-
-            return;
+            RequestNavigation(direction);
         }
-
-        Content = buildBody();
     }
 
     private static IReadOnlyList<StagePerformerOption> CreatePerformerOptions(

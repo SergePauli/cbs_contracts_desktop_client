@@ -8,8 +8,11 @@ using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
+using Windows.System;
 using static CbsContractsDesktopClient.Shared.Dates.BusinessCalendar;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogControls;
@@ -22,7 +25,6 @@ public sealed class StageFinEditDialog : AppEditDialog
     private StageEditState _stage;
     private ContractEditState? _contract;
     private readonly IHolidayRecalculationService _holidayRecalculationService;
-    private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _statusOptions;
     private StageEditDialogNavigationState? _navigationState;
     private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly int? _profileId;
@@ -30,14 +32,12 @@ public sealed class StageFinEditDialog : AppEditDialog
     private readonly CalendarInput _prepaymentAtEditor = new();
     private readonly CalendarInput _paymentAtEditor = new();
     private readonly CalendarInput _fundedAtEditor = new();
-    private readonly TextBlock _startAtText = BuildDynamicSummaryText();
-    private readonly TextBlock _deadlineAtText = BuildDynamicSummaryText();
-    private readonly TextBlock _paymentDeadlineAtText = BuildDynamicSummaryText();
     private DateTimeOffset? _startAt;
     private DateTimeOffset? _deadlineAt;
     private DateTimeOffset? _paymentDeadlineAt;
     private readonly TextBox _externalNumberBox = new();
     private readonly TextBox _commentBox = new();
+    private readonly StageFinEditView _view = new();
     private IReadOnlyList<HolidayCalendarDay> _holidays = [];
     private bool _isApplyingBusinessLogic;
     private bool _businessLogicHandlersAttached;
@@ -56,14 +56,15 @@ public sealed class StageFinEditDialog : AppEditDialog
 
         _stage = stage;
         _contract = contract;
-        _statusOptions = statusOptions;
         _profileId = profileId;
         _navigationState = navigationState;
         _navigateAsync = navigateAsync;
         _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
         _isFunded = stage.IsFunded;
-        Resources["ContentDialogMinWidth"] = 720d;
-        Resources["ContentDialogMaxWidth"] = 860d;
+        _view.PreviousButton.Click += StageNavigationButton_Click;
+        _view.NextButton.Click += StageNavigationButton_Click;
+        Resources["ContentDialogMinWidth"] = 670d;
+        Resources["ContentDialogMaxWidth"] = 770d;
         Content = BuildContent();
         DialogChrome.Apply(this, _stage.GetEditDialogTitle());
         Loaded += StageFinEditDialog_Loaded;
@@ -108,11 +109,13 @@ public sealed class StageFinEditDialog : AppEditDialog
             ApplyBusinessLogicAfterPaymentChange();
             ApplyBusinessLogicAfterFundedAtChange();
             UpdateCalculatedSummary();
+            FocusExternalNumberBox();
         }
         catch
         {
             _holidays = [];
             UpdateCalculatedSummary();
+            FocusExternalNumberBox();
         }
     }
 
@@ -124,122 +127,188 @@ public sealed class StageFinEditDialog : AppEditDialog
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto
         };
 
-        var stack = new StackPanel { Spacing = 14 };
-        scrollViewer.Content = stack;
-        stack.Children.Add(BuildSummaryPanel());
-        stack.Children.Add(BuildEditorsGrid());
-
-        var body = new Grid
-        {
-            MinWidth = 700,
-            MaxWidth = 840,
-            Children = { scrollViewer }
-        };
-        return BuildEditContent(body);
+        scrollViewer.Content = _view;
+        InitializeStaticView();
+        RenderStageContent();
+        return BuildEditContent(scrollViewer);
     }
 
-    private UIElement BuildSummaryPanel()
+    private void InitializeStaticView()
     {
-        var stack = new StackPanel { Spacing = 12 };
-        stack.Children.Add(BuildDialogSectionTitle(RequireContract().GetSectionTitle()));
-
-        var contractGrid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
-        contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        contractGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var left = new StackPanel { Spacing = 6 };
-        left.Children.Add(BuildSummaryLine("Контрагент", _contract?.ContragentName ?? string.Empty));
-        left.Children.Add(BuildAccentSummaryLine("Стоимость", FormatMoney(_contract?.Cost)));
-
-        var right = new StackPanel { Spacing = 6 };
-        right.Children.Add(BuildSummaryElement("Статус", BuildStatusBadge(
+        _view.ContractTitleSlot.Content = BuildDialogSectionTitle(RequireContract().GetSectionTitle());
+        _view.ContragentValue.Text = FormatSummaryValue(_contract?.ContragentName ?? string.Empty);
+        _view.ContractCostValue.Text = FormatSummaryValue(FormatMoney(_contract?.Cost));
+        _view.ContractStatusSlot.Content = BuildStatusBadge(
             RequireContract().Status.Name!,
             RequireContract().Status.Id,
-            horizontalAlignment: HorizontalAlignment.Left)));
-        right.Children.Add(BuildSummaryLine("Дата подписания", FormatDisplayDate(_contract?.SignedAt)));
-
-        contractGrid.Children.Add(left);
-        Grid.SetColumn(right, 1);
-        contractGrid.Children.Add(right);
-        stack.Children.Add(contractGrid);
-
-        stack.Children.Add(StageEditDialogNavigationControls.BuildTitle(
-            _stage.GetSectionTitle(_contract),
-            _stage.GetSectionTitleAmount(_contract),
-            _navigationState,
-            RequestNavigation));
-        var stageGrid = new Grid { ColumnSpacing = 18, RowSpacing = 6 };
-        stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        stageGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var stageLeft = new StackPanel { Spacing = 6 };
-        stageLeft.Children.Add(BuildSummaryElement("Статус", BuildStatusBadge(
-            _stage.Status.Name ?? string.Empty,
-            _stage.Status.Id,
-            horizontalAlignment: HorizontalAlignment.Left)));
-        stageLeft.Children.Add(BuildSummaryElement("Дата начала", _startAtText));
-        stageLeft.Children.Add(BuildSummaryLine("Режим оплаты", ResolvePaymentDeadlineKindLabel()));
-        stageLeft.Children.Add(BuildSummaryElement("Срок оплаты", _paymentDeadlineAtText));
-
-        var stageRight = new StackPanel { Spacing = 6 };
-        stageRight.Children.Add(BuildSummaryElement("Срок завершения", _deadlineAtText));
-        stageRight.Children.Add(BuildSummaryLine("Дата завершения", FormatDisplayDate(_stage.CompletedAt)));
-        stageRight.Children.Add(BuildSummaryLine("Выезд", FormatFlagDate(_stage.IsRideOut, _stage.RideOutAt)));
-        stageRight.Children.Add(BuildSummaryLine("Отправка", FormatFlagDate(_stage.IsSended, _stage.SendedAt)));
-
-        stageGrid.Children.Add(stageLeft);
-        Grid.SetColumn(stageRight, 1);
-        stageGrid.Children.Add(stageRight);
-        stack.Children.Add(stageGrid);
-
-        return new Border
-        {
-            Padding = new Thickness(0, 0, 0, 12),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            BorderBrush = Application.Current.Resources["ShellTableGridLineBrush"] as Brush,
-            Child = stack
-        };
+            horizontalAlignment: HorizontalAlignment.Left);
+        _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_contract?.SignedAt));
+        InitializeNavigationButton(_view.PreviousButton, "Предыдущий этап", StageEditDialogNavigationDirection.Previous);
+        InitializeNavigationButton(_view.NextButton, "Следующий этап", StageEditDialogNavigationDirection.Next);
+        InitializeEditorSlots();
     }
 
-    private UIElement BuildEditorsGrid()
+    private static void InitializeNavigationButton(
+        Button button,
+        string tooltip,
+        StageEditDialogNavigationDirection direction)
     {
-        _externalNumberBox.Text = _contract?.ExternalNumber ?? string.Empty;
-        _invoiceAtEditor.Date = _stage.InvoiceAt;
-        _prepaymentAtEditor.Date = _stage.PrepaymentAt;
-        _paymentAtEditor.Date = _stage.PaymentAt;
-        _fundedAtEditor.Date = _stage.FundedAt;
-        _startAt = _stage.StartAt;
-        _deadlineAt = _stage.DeadlineAt;
-        _paymentDeadlineAt = _stage.PaymentDeadlineAt;
-        UpdateCalculatedSummary();
-        AttachBusinessLogicHandlers();
+        button.Background = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 99, 102, 241));
+        button.BorderBrush = button.Background;
+        button.Foreground = new SolidColorBrush(Microsoft.UI.Colors.White);
+        button.Resources["ButtonBackgroundPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 79, 70, 229));
+        button.Resources["ButtonBackgroundPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 67, 56, 202));
+        button.Resources["ButtonBorderBrushPointerOver"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 79, 70, 229));
+        button.Resources["ButtonBorderBrushPressed"] = new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 67, 56, 202));
+        ToolTipService.SetToolTip(button, tooltip);
+        button.Tag = direction;
+    }
 
-        var grid = new Grid { ColumnSpacing = 18, RowSpacing = 12 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-        var left = new StackPanel { Spacing = 10 };
-        var right = new StackPanel { Spacing = 10 };
-
-        left.Children.Add(BuildLabeledControl("Внешний номер", _externalNumberBox));
-        left.Children.Add(BuildLabeledControl("Дата предоплаты", _prepaymentAtEditor));
-        left.Children.Add(BuildLabeledControl("Дата бух. закрытия", _fundedAtEditor));
-
-        right.Children.Add(BuildLabeledControl("Дата счёта", _invoiceAtEditor));
-        right.Children.Add(BuildLabeledControl("Дата оплаты", _paymentAtEditor));
-
-        grid.Children.Add(left);
-        Grid.SetColumn(right, 1);
-        grid.Children.Add(right);
-
-        var root = new StackPanel { Spacing = 12 };
-        root.Children.Add(grid);
+    private void InitializeEditorSlots()
+    {
+        _view.ExternalNumberSlot.Content = _externalNumberBox;
+        _view.InvoiceAtSlot.Content = _invoiceAtEditor;
+        _view.PaymentAtSlot.Content = _paymentAtEditor;
+        _view.PrepaymentAtSlot.Content = _prepaymentAtEditor;
+        _view.FundedAtSlot.Content = _fundedAtEditor;
+        _view.CommentSlot.Content = _commentBox;
         _commentBox.PlaceholderText = _profileId is null
             ? "Комментарий недоступен: не получен profile_id пользователя"
             : "Комментарий";
         _commentBox.IsEnabled = _profileId is not null;
-        root.Children.Add(BuildLabeledControl("Комментарий", _commentBox));
-        return root;
+        AttachBusinessLogicHandlers();
+        ConfigureTabChain();
+    }
+
+    private void ConfigureTabChain()
+    {
+        _externalNumberBox.TabIndex = 0;
+        _invoiceAtEditor.TabIndex = 1;
+        _paymentAtEditor.TabIndex = 2;
+        _prepaymentAtEditor.TabIndex = 3;
+        _fundedAtEditor.TabIndex = 4;
+        _commentBox.TabIndex = 5;
+
+        _externalNumberBox.PreviewKeyDown += ExternalNumberBox_PreviewKeyDown;
+        _invoiceAtEditor.OnTab = (_, args) => FocusDateEditor(_paymentAtEditor, args);
+        _paymentAtEditor.OnTab = (_, args) => FocusDateEditor(_prepaymentAtEditor, args);
+        _prepaymentAtEditor.OnTab = (_, args) => FocusDateEditor(_fundedAtEditor, args);
+        _fundedAtEditor.OnTab = (_, args) => FocusTextBox(_commentBox, args);
+    }
+
+    private void FocusExternalNumberBox()
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            _externalNumberBox.Focus(FocusState.Programmatic);
+            _externalNumberBox.Select(0, _externalNumberBox.Text.Length);
+        });
+    }
+
+    private void ExternalNumberBox_PreviewKeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Tab)
+        {
+            return;
+        }
+
+        FocusDateEditor(_invoiceAtEditor, args);
+    }
+
+    private void FocusDateEditor(CalendarInput editor, KeyRoutedEventArgs args)
+    {
+        DispatcherQueue.TryEnqueue(() => editor.FocusInput(FocusState.Programmatic));
+        args.Handled = true;
+    }
+
+    private void FocusTextBox(TextBox textBox, KeyRoutedEventArgs args)
+    {
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            textBox.Focus(FocusState.Programmatic);
+            textBox.Select(textBox.Text.Length, 0);
+        });
+        args.Handled = true;
+    }
+
+    private void RenderStageContent()
+    {
+        UpdateStageSummaryPanel();
+        UpdateStageEditors();
+    }
+
+    private void UpdateStageSummaryPanel()
+    {
+        UpdateStageTitle();
+        UpdateStageNavigationButtons();
+        _view.StageStatusSlot.Content = BuildStatusBadge(
+            _stage.Status.Name ?? string.Empty,
+            _stage.Status.Id,
+            horizontalAlignment: HorizontalAlignment.Left);
+        _view.PaymentKindValue.Text = FormatSummaryValue(ResolvePaymentDeadlineKindLabel());
+        _view.CompletedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.CompletedAt));
+        _view.RideOutValue.Text = FormatSummaryValue(FormatFlagDate(_stage.IsRideOut, _stage.RideOutAt));
+        _view.SendedValue.Text = FormatSummaryValue(FormatFlagDate(_stage.IsSended, _stage.SendedAt));
+        UpdateCalculatedSummary();
+    }
+
+    private void UpdateStageTitle()
+    {
+        _view.StageTitleValue.Inlines.Clear();
+        var title = _stage.GetSectionTitle(_contract);
+        var accentText = _stage.GetSectionTitleAmount(_contract);
+        if (string.IsNullOrWhiteSpace(accentText))
+        {
+            _view.StageTitleValue.Text = title;
+            return;
+        }
+
+        _view.StageTitleValue.Text = string.Empty;
+        _view.StageTitleValue.Inlines.Add(new Run { Text = title + " " });
+        _view.StageTitleValue.Inlines.Add(new Run
+        {
+            Text = accentText,
+            Foreground = Application.Current.Resources["ShellAccentBrush"] as Brush
+        });
+    }
+
+    private void UpdateStageNavigationButtons()
+    {
+        var state = _navigationState ?? new StageEditDialogNavigationState(false, false);
+        var hasNavigation = state.CanPrevious || state.CanNext;
+        _view.PreviousButton.Visibility = hasNavigation ? Visibility.Visible : Visibility.Collapsed;
+        _view.NextButton.Visibility = hasNavigation ? Visibility.Visible : Visibility.Collapsed;
+        _view.PreviousButton.IsEnabled = state.CanPrevious;
+        _view.NextButton.IsEnabled = state.CanNext;
+    }
+
+    private void UpdateStageEditors()
+    {
+        _isApplyingBusinessLogic = true;
+        try
+        {
+            _externalNumberBox.Text = _contract?.ExternalNumber ?? string.Empty;
+            _invoiceAtEditor.Date = _stage.InvoiceAt;
+            _prepaymentAtEditor.Date = _stage.PrepaymentAt;
+            _paymentAtEditor.Date = _stage.PaymentAt;
+            _fundedAtEditor.Date = _stage.FundedAt;
+            _startAt = _stage.StartAt;
+            _deadlineAt = _stage.DeadlineAt;
+            _paymentDeadlineAt = _stage.PaymentDeadlineAt;
+        }
+        finally
+        {
+            _isApplyingBusinessLogic = false;
+        }
+
+        UpdateCalculatedSummary();
+        ApplyBusinessLogicAfterPaymentChange();
+        ApplyBusinessLogicAfterFundedAtChange();
+    }
+
+    private static string FormatSummaryValue(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
     }
 
     private ContractEditState RequireContract()
@@ -273,7 +342,6 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     private void ApplyNavigationResult(StageEditDialogNavigationResult result)
     {
-        var oldContent = Content;
         var oldStage = _stage;
         var oldContract = _contract;
         var oldNavigationState = _navigationState;
@@ -285,7 +353,7 @@ public sealed class StageFinEditDialog : AppEditDialog
             _contract = result.Contract;
             _navigationState = result.NavigationState;
             _isFunded = _stage.IsFunded;
-            ReplaceDialogBody(BuildContent);
+            RenderStageContent();
         }
         catch
         {
@@ -293,31 +361,17 @@ public sealed class StageFinEditDialog : AppEditDialog
             _contract = oldContract;
             _navigationState = oldNavigationState;
             _isFunded = oldIsFunded;
-            Content = oldContent;
+            RenderStageContent();
             throw;
         }
     }
 
-    private void ReplaceDialogBody(Func<UIElement> buildBody)
+    private void StageNavigationButton_Click(object sender, RoutedEventArgs e)
     {
-        if (Content is Border border)
+        if (sender is Button { Tag: StageEditDialogNavigationDirection direction })
         {
-            var oldChild = border.Child;
-            border.Child = null;
-            try
-            {
-                border.Child = buildBody();
-            }
-            catch
-            {
-                border.Child = oldChild;
-                throw;
-            }
-
-            return;
+            RequestNavigation(direction);
         }
-
-        Content = buildBody();
     }
 
     private void AttachBusinessLogicHandlers()
@@ -420,9 +474,9 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     private void UpdateCalculatedSummary()
     {
-        _startAtText.Text = FormatDisplayDate(_startAt);
-        _deadlineAtText.Text = FormatDisplayDate(_deadlineAt);
-        _paymentDeadlineAtText.Text = FormatDisplayDate(_paymentDeadlineAt);
+        _view.StartAtValue.Text = FormatSummaryValue(FormatDisplayDate(_startAt));
+        _view.DeadlineAtValue.Text = FormatSummaryValue(FormatDisplayDate(_deadlineAt));
+        _view.PaymentDeadlineAtValue.Text = FormatSummaryValue(FormatDisplayDate(_paymentDeadlineAt));
     }
 
     private void SyncStageStateFromEditors()

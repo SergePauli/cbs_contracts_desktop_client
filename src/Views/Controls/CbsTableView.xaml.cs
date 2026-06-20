@@ -1279,11 +1279,20 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             var firstVisibleIndex = Math.Max(0, (int)Math.Floor(RowsScrollViewer.VerticalOffset / RowHeight));
             var visibleRowCount = Math.Max(1, (int)Math.Ceiling(viewportHeight / RowHeight));
+            var windowRows = visibleRowCount + (WindowBufferRows * 2);
+            var viewportBottom = RowsScrollViewer.VerticalOffset + viewportHeight;
+            var totalHeight = totalRows * RowHeight;
+            if (viewportBottom >= totalHeight - RowHeight)
+            {
+                var bottomStart = Math.Max(0, totalRows - windowRows);
+                return (bottomStart, totalRows);
+            }
+
             var rawStart = Math.Max(0, firstVisibleIndex - WindowBufferRows);
             var alignedStart = (rawStart / WindowStepRows) * WindowStepRows;
             var maxStart = Math.Max(0, totalRows - 1);
             var start = Math.Min(Math.Max(0, alignedStart), maxStart);
-            var end = Math.Min(totalRows, start + visibleRowCount + (WindowBufferRows * 2));
+            var end = Math.Min(totalRows, start + windowRows);
             return (start, Math.Max(start, end));
         }
 
