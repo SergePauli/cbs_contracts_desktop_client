@@ -70,8 +70,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
-            SetDetailContent(_detailView);
-            ClearDetailView();
+            SetDetailContent(_detailView, isVisible: false);
         }
 
         protected override IEnumerable<FrameworkElement> BuildHeaderActions()
@@ -112,8 +111,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             await LoadStageOptionsSourcesAsync();
             ApplyStageCostFractionMode();
             UpdateActionButtonState();
-            UpdateDetailView(Store.SelectedRow);
-            _ = RefreshDetailAsync();
+            if (Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder)
+            {
+                UpdateDetailView(Store.SelectedRow);
+                _ = RefreshDetailAsync();
+            }
         }
 
         private async Task LoadStageOptionsSourcesAsync()
@@ -178,6 +180,12 @@ namespace CbsContractsDesktopClient.Views.Shell
         protected override Task OnRowSelected(TableDataRow? row)
         {
             UpdateActionButtonState();
+            if (row is null || row.IsPlaceholder)
+            {
+                ClearDetailView();
+                return Task.CompletedTask;
+            }
+
             UpdateDetailView(row);
             _ = RefreshDetailAsync();
             return Task.CompletedTask;
@@ -211,10 +219,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (row is null || row.IsPlaceholder)
             {
-                ClearDetailView();
                 return;
             }
 
+            SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
             _detailView.RevisionRow = row;
         }
@@ -225,7 +233,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
-                ClearDetailView();
                 UpdateActionButtonState();
                 return;
             }
@@ -294,7 +301,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
-                    ClearDetailView();
                     UpdateActionButtonState();
                 }
             }
@@ -319,6 +325,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.ContractRow = null;
             _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
+            SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
         }
@@ -397,7 +404,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     employeeItems,
                     _userService.CurrentUser?.ProfileId,
                     BuildStageNavigationState(_contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow)),
-                    NavigateStageEditDialogAsync)
+                    NavigateStageEditDialogAsync,
+                    _contractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed)
                 {
                     XamlRoot = XamlRoot
                 };
@@ -423,11 +431,14 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     savedRow = await SaveStagePayloadAsync(stagePayload);
 
-                    if (dialog.ShouldCloseContract())
+                    var shouldCloseContract = dialog.ShouldCloseContract();
+                    Store.AppendUiTrace($"CONTRACT CLOSE CHECK {_contractWorkflowStore.BuildContractCloseDecisionTrace(shouldCloseContract)}");
+                    if (shouldCloseContract)
                     {
+                        var contractPayload = dialog.BuildContractClosePayload();
                         await _modelMutationService.UpdateAsync(
                             ContractModel,
-                            dialog.BuildContractClosePayload());
+                            contractPayload);
                     }
                 }
                 catch (Exception ex)

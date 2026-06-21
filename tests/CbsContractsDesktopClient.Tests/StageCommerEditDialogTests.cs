@@ -50,7 +50,7 @@ public sealed class StageCommerEditDialogTests
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("public bool ShouldCloseContract()", code);
-        Assert.Contains("_stage.ShouldCloseContract(_contract, StatusClosed)", code);
+        Assert.Contains("_stage.ShouldCloseContract(_contract, WorkflowStatusIds.Closed)", code);
         Assert.Contains("public IReadOnlyDictionary<string, object?> BuildContractClosePayload()", code);
         Assert.Contains("StageCommerEditPayloadBuilder.BuildContractClosePayload(RequireContract().Id, _closedAtEditor.Date)", code);
     }

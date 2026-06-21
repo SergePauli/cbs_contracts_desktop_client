@@ -82,8 +82,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _showContractCostFraction = _localUserSettingsService.Get().ShowContractCostFraction;
-            SetDetailContent(_detailView);
-            ClearDetailView();
+            SetDetailContent(_detailView, isVisible: false);
         }
 
         protected override IEnumerable<FrameworkElement> BuildHeaderActions()
@@ -133,13 +132,22 @@ namespace CbsContractsDesktopClient.Views.Shell
             await LoadContractOptionsSourcesAsync();
             ApplyContractCostFractionMode();
             UpdateActionButtonState();
-            UpdateDetailView(Store.SelectedRow);
-            _ = RefreshDetailAsync();
+            if (Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder)
+            {
+                UpdateDetailView(Store.SelectedRow);
+                _ = RefreshDetailAsync();
+            }
         }
 
         protected override Task OnRowSelected(TableDataRow? row)
         {
             UpdateActionButtonState();
+            if (row is null || row.IsPlaceholder)
+            {
+                ClearDetailView();
+                return Task.CompletedTask;
+            }
+
             UpdateDetailView(row);
             _ = RefreshDetailAsync();
             return Task.CompletedTask;
@@ -256,10 +264,12 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (row is null || row.IsPlaceholder)
             {
-                ClearDetailView();
+                Store.AppendUiTrace($"CONTRACT DETAIL UPDATE empty row={DescribeDetailRow(row)}");
                 return;
             }
 
+            Store.AppendUiTrace($"CONTRACT DETAIL UPDATE row={DescribeDetailRow(row)}");
+            SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
             _detailView.ContractRow = row;
         }
@@ -270,12 +280,13 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
-                ClearDetailView();
+                Store.AppendUiTrace($"CONTRACT DETAIL REFRESH empty selected={DescribeDetailRow(Store.SelectedRow)}");
                 UpdateActionButtonState();
                 return;
             }
 
             var selectedRow = Store.SelectedRow;
+            Store.AppendUiTrace($"CONTRACT DETAIL REFRESH start selected={DescribeDetailRow(selectedRow)}");
             _detailView.ContractRow = selectedRow;
             _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
@@ -309,11 +320,14 @@ namespace CbsContractsDesktopClient.Views.Shell
                 var contragent = await contragentTask;
                 if (cancellationTokenSource.IsCancellationRequested)
                 {
+                    Store.AppendUiTrace($"CONTRACT DETAIL REFRESH canceled selected={DescribeDetailRow(selectedRow)}");
                     return;
                 }
 
                 if (Store.SelectedRow is null || !_rowDetailStrategy.IsSameSelection(Store.SelectedRow, contractId))
                 {
+                    Store.AppendUiTrace(
+                        $"CONTRACT DETAIL REFRESH stale selected={DescribeDetailRow(selectedRow)} current={DescribeDetailRow(Store.SelectedRow)}");
                     return;
                 }
 
@@ -332,15 +346,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _detailView.ContragentRow = contragent;
                 RefreshSelectedFooterText();
                 UpdateActionButtonState();
+                Store.AppendUiTrace(
+                    $"CONTRACT DETAIL REFRESH applied selected={DescribeDetailRow(selectedRow)} contract={DescribeDetailRow(contract)} contragent={DescribeDetailRow(contragent)}");
             }
             catch (OperationCanceledException)
             {
+                Store.AppendUiTrace($"CONTRACT DETAIL REFRESH canceled-exception selected={DescribeDetailRow(selectedRow)}");
             }
             catch
             {
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
-                    ClearDetailView();
+                    Store.AppendUiTrace($"CONTRACT DETAIL REFRESH failed selected={DescribeDetailRow(selectedRow)}");
                     UpdateActionButtonState();
                 }
             }
@@ -348,13 +365,30 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void ClearDetailView()
         {
+            Store.AppendUiTrace("CONTRACT DETAIL CLEAR");
             _detailCts?.Cancel();
             _detailView.RevisionRow = null;
             _detailView.ContractRow = null;
             _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
+            SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
+        }
+
+        private static string DescribeDetailRow(TableDataRow? row)
+        {
+            if (row is null)
+            {
+                return "<null>";
+            }
+
+            if (row.IsPlaceholder)
+            {
+                return "<placeholder>";
+            }
+
+            return TryGetSelectedRowId(row)?.ToString() ?? "<no-id>";
         }
 
         private static async Task<TableDataRow?> LoadRowDetailRowSafelyAsync(
@@ -766,7 +800,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     employeeItems,
                     _userService.CurrentUser?.ProfileId,
                     BuildStageNavigationState(selectedStageEditState),
-                    NavigateStageEditDialogAsync)
+                    NavigateStageEditDialogAsync,
+                    _contractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed)
                 {
                     XamlRoot = XamlRoot
                 };
@@ -792,11 +827,14 @@ namespace CbsContractsDesktopClient.Views.Shell
 
                     savedStageRow = await _modelMutationService.UpdateAsync(StageModel, stagePayload);
 
-                    if (dialog.ShouldCloseContract())
+                    var shouldCloseContract = dialog.ShouldCloseContract();
+                    Store.AppendUiTrace($"CONTRACT CLOSE CHECK {_contractWorkflowStore.BuildContractCloseDecisionTrace(shouldCloseContract)}");
+                    if (shouldCloseContract)
                     {
+                        var contractPayload = dialog.BuildContractClosePayload();
                         await _modelMutationService.UpdateAsync(
                             ContractModel,
-                            dialog.BuildContractClosePayload());
+                            contractPayload);
                     }
                 }
                 catch (Exception ex)
@@ -1464,5 +1502,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             return Application.Current.Resources[resourceKey] as Brush;
         }
+
     }
 }

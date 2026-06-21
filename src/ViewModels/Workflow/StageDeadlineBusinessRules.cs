@@ -3,6 +3,8 @@ using static CbsContractsDesktopClient.Shared.Dates.BusinessCalendar;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow;
 
+public sealed record StagePaymentBasedDeadlineCalculation(DateTimeOffset StartAt, DateTimeOffset DeadlineAt);
+
 public static class StageDeadlineBusinessRules
 {
     public const string DeadlineCalendarPlan = "calendar_plan";
@@ -105,6 +107,28 @@ public static class StageDeadlineBusinessRules
         }
 
         return null;
+    }
+
+    public static StagePaymentBasedDeadlineCalculation? CalculatePaymentBasedStageDeadline(
+        string? deadlineKind,
+        DateTimeOffset? paymentAt,
+        DateTimeOffset? prepaymentAt,
+        int? duration,
+        IReadOnlyList<HolidayCalendarDay> holidays)
+    {
+        if (!IsPaymentBasedDeadlineMode(deadlineKind))
+        {
+            return null;
+        }
+
+        var startAt = prepaymentAt ?? paymentAt;
+        var deadlineAt = CalculateDeadline(deadlineKind, startAt, duration, holidays);
+        if (startAt is null || deadlineAt is null)
+        {
+            return null;
+        }
+
+        return new StagePaymentBasedDeadlineCalculation(startAt.Value, deadlineAt.Value);
     }
 
     public static bool ShouldClearPaymentDuration(string? paymentDeadlineKind, int? paymentDuration)

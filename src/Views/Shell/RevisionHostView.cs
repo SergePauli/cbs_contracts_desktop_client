@@ -39,8 +39,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
-            SetDetailContent(_detailView);
-            ClearDetailView();
+            SetDetailContent(_detailView, isVisible: false);
         }
 
         protected override IEnumerable<FrameworkElement> BuildHeaderActions()
@@ -58,14 +57,23 @@ namespace CbsContractsDesktopClient.Views.Shell
         protected override Task OnRouteLoaded(TablePageDefinition definition)
         {
             UpdateActionButtonState();
-            UpdateDetailView(Store.SelectedRow);
-            _ = RefreshDetailAsync();
+            if (Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder)
+            {
+                UpdateDetailView(Store.SelectedRow);
+                _ = RefreshDetailAsync();
+            }
             return Task.CompletedTask;
         }
 
         protected override Task OnRowSelected(TableDataRow? row)
         {
             UpdateActionButtonState();
+            if (row is null || row.IsPlaceholder)
+            {
+                ClearDetailView();
+                return Task.CompletedTask;
+            }
+
             UpdateDetailView(row);
             _ = RefreshDetailAsync();
             return Task.CompletedTask;
@@ -98,10 +106,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (row is null || row.IsPlaceholder)
             {
-                ClearDetailView();
                 return;
             }
 
+            SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
             _detailView.RevisionRow = row;
         }
@@ -112,7 +120,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
-                ClearDetailView();
                 UpdateActionButtonState();
                 return;
             }
@@ -181,7 +188,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 if (!cancellationTokenSource.IsCancellationRequested)
                 {
-                    ClearDetailView();
                     UpdateActionButtonState();
                 }
             }
@@ -194,6 +200,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.ContractRow = null;
             _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
+            SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
         }

@@ -43,8 +43,6 @@ namespace CbsContractsDesktopClient.Stores.Table
         private INotifyPropertyChanged? _rowsNotifier;
         private CancellationTokenSource? _navigationCts;
         private IReadOnlyList<TableDataRow> _itemsSnapshot = [];
-        private string _lastDiagnosticsSnapshot = string.Empty;
-        private string _lastDiagnosticsStateKey = string.Empty;
         private int _lastViewportEnsureStart = -1;
         private int _lastViewportEnsureEnd = -1;
         private int _lastViewportVisibleStart = -1;
@@ -258,11 +256,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             OnPropertyChanged(nameof(UiTraceLog));
             OnPropertyChanged(nameof(CombinedTraceLog));
             DiagnosticsFileLogger.AppendLine(line);
-        }
-
-        public void RefreshAuditPanelSnapshot()
-        {
-            WriteDiagnosticsSnapshot(force: true);
         }
 
         private void SyncAuditContext()
@@ -891,8 +884,6 @@ namespace CbsContractsDesktopClient.Stores.Table
                 CurrentSortDirection = definition.InitialSortDirection ?? DataSortDirection.Ascending;
                 SelectedRow = null;
                 UiTraceLog = string.Empty;
-                _lastDiagnosticsSnapshot = string.Empty;
-                _lastDiagnosticsStateKey = string.Empty;
                 _shellViewModel.SetFooterTableStats(string.Empty);
 
                 var initialSorts = CurrentSortField is not null && CurrentSortDirection is DataSortDirection initialDirection
@@ -993,7 +984,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             ErrorMessage = string.Empty;
             TotalCount = 0;
             UiTraceLog = string.Empty;
-            _lastDiagnosticsSnapshot = string.Empty;
             _auditStore?.Reset();
             CurrentSortField = null;
             CurrentSortDirection = null;
@@ -1250,9 +1240,7 @@ namespace CbsContractsDesktopClient.Stores.Table
                 return;
             }
 
-            if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.LoadedCount)
-                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.TotalCount)
-                || e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
+            if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
             {
                 if (_viewportMutationDepth > 0)
                 {
@@ -1335,7 +1323,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             OnPropertyChanged(nameof(TraceLog));
             OnPropertyChanged(nameof(CombinedTraceLog));
             _shellViewModel.SetFooterTableStats(BuildFooterTotalCountValue());
-            WriteDiagnosticsSnapshot();
         }
 
         private string BuildFooterTotalCountValue()
@@ -1346,49 +1333,6 @@ namespace CbsContractsDesktopClient.Stores.Table
             }
 
             return TotalCount.ToString();
-        }
-
-        private void WriteDiagnosticsSnapshot(bool force = false)
-        {
-            if (!DiagnosticsEnabled)
-            {
-                return;
-            }
-
-            if (!HasActiveReference)
-            {
-                return;
-            }
-
-            if (!force && IsLoading)
-            {
-                return;
-            }
-
-            var diagnosticsStateKey =
-                $"{_shellViewModel.CurrentRoute}|{CurrentTablePage?.Model}|{LoadedCount}|{TotalCount}|{ResidentCount}|{LastCountRequestJson}|{LastPageRequestJson}";
-            if (!force && string.Equals(_lastDiagnosticsStateKey, diagnosticsStateKey, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            var diagnosticsText =
-                $"Route: {_shellViewModel.CurrentRoute}{Environment.NewLine}" +
-                $"Table: {CurrentTablePage?.Model ?? "<none>"}{Environment.NewLine}" +
-                $"Loaded: {LoadedCount}/{TotalCount}{Environment.NewLine}" +
-                $"Resident: {ResidentCount}/{TotalCount}{Environment.NewLine}{Environment.NewLine}" +
-                $"Count payload:{Environment.NewLine}{LastCountRequestJson}{Environment.NewLine}{Environment.NewLine}" +
-                $"Page payload:{Environment.NewLine}{LastPageRequestJson}{Environment.NewLine}{Environment.NewLine}" +
-                $"Trace:{Environment.NewLine}{CombinedTraceLog}";
-
-            if (!force && string.Equals(_lastDiagnosticsSnapshot, diagnosticsText, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            _lastDiagnosticsSnapshot = diagnosticsText;
-            _lastDiagnosticsStateKey = diagnosticsStateKey;
-            DiagnosticsFileLogger.AppendBlock("TABLE DIAGNOSTICS", diagnosticsText);
         }
 
         private static long? TryGetSelectedRowId(TableDataRow row)
@@ -1513,8 +1457,9 @@ namespace CbsContractsDesktopClient.Stores.Table
                 || message.StartsWith("HTTP ", StringComparison.Ordinal)
                 || message.StartsWith("API SEND ", StringComparison.Ordinal)
                 || message.StartsWith("DATA QUERY ", StringComparison.Ordinal)
-                || message.StartsWith("STEP API ", StringComparison.Ordinal)
-                || message.StartsWith("STEP VM ", StringComparison.Ordinal)
+                || message.StartsWith("DETAIL ", StringComparison.Ordinal)
+                || message.StartsWith("CONTRACT DETAIL ", StringComparison.Ordinal)
+                || message.StartsWith("CONTRACT CLOSE CHECK ", StringComparison.Ordinal)
                 || message.StartsWith("TABLE ", StringComparison.Ordinal)
                 || message.StartsWith("VIEWPORT CHANGED ", StringComparison.Ordinal)
                 || message.StartsWith("Trigger load more ", StringComparison.Ordinal)

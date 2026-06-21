@@ -28,6 +28,8 @@ public sealed class ContractEditState : IEditState
 
     public DateTimeOffset? SignedAt { get; private set; }
 
+    public DateTimeOffset? ClosedAt { get; set; }
+
     public TaskKindEditState TaskKind { get; private set; } = new(null, null, null);
 
     public string? ContragentName { get; private set; }
@@ -63,6 +65,18 @@ public sealed class ContractEditState : IEditState
 
     public bool HasChanges => HasExternalNumberChanges;
 
+    public void ApplyClosedStatusPreview(DateTimeOffset? closedAt)
+    {
+        Status = new StatusEditState(WorkflowStatusIds.Closed, "Закрыт");
+        ClosedAt = closedAt;
+    }
+
+    public void RestoreStatusPreview()
+    {
+        Status = Original.Status;
+        ClosedAt = Original.ClosedAt;
+    }
+
     public void RestoreOriginal()
     {
         Id = Original.Id;
@@ -72,6 +86,7 @@ public sealed class ContractEditState : IEditState
         ExternalNumber = Original.ExternalNumber;
         Status = Original.Status;
         SignedAt = Original.SignedAt;
+        ClosedAt = Original.ClosedAt;
         TaskKind = Original.TaskKind;
         ContragentName = Original.ContragentName;
         Governmental = Original.Governmental;
@@ -150,6 +165,7 @@ public sealed class ContractEditState : IEditState
                 statusId,
                 statusName),
             SignedAt: AppFormatters.ParseDate(row.GetValue("signed_at")),
+            ClosedAt: AppFormatters.ParseDate(row.GetValue("closed_at")),
             TaskKind: new TaskKindEditState(
                 TryGetLong(row.GetValue("task_kind.id")) ?? TryGetLong(row.GetValue("task_kind_id")),
                 row.GetValue("task_kind.name")?.ToString(),
@@ -203,6 +219,7 @@ public sealed record ContractEditStateSnapshot(
     string? ExternalNumber,
     StatusEditState Status,
     DateTimeOffset? SignedAt,
+    DateTimeOffset? ClosedAt,
     TaskKindEditState TaskKind,
     string? ContragentName,
     bool? Governmental,

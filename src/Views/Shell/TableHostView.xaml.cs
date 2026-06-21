@@ -18,7 +18,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private INotifyPropertyChanged? _rowsNotifier;
         private ITableRowReplacementSource? _rowReplacementSource;
         private IReadOnlyList<CbsTableColumnDefinition> _columns = [];
-        private IReadOnlyList<TableDataRow> _items = [];
         private IReadOnlyDictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>> _filterOptionsSources =
             new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
         private TablePageDefinition? _definition;
@@ -82,7 +81,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         internal IReadOnlyList<CbsTableColumnDefinition> Columns => _columns;
 
-        internal IReadOnlyList<TableDataRow> Items => _items;
+        internal IReadOnlyList<TableDataRow> Items => _rows?.Items ?? [];
 
         internal IReadOnlyList<DataFilterCriterion> Filters => _state?.Filters.ToList() ?? [];
 
@@ -172,11 +171,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             _filterOptionsSources = filterOptionsSources
                 ?? new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
-            RefreshSortSnapshot();
-            RefreshItemsSnapshot();
             RefreshRowsStateSnapshot();
-            ApplyStructureToRenderer();
+            RefreshSortSnapshot();
             ApplyRowsStateToRenderer();
+            ApplyStructureToRenderer();
         }
 
         public void AttachTableRows(
@@ -201,11 +199,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             _filterOptionsSources = filterOptionsSources
                 ?? new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
 
-            RefreshSortSnapshot(sorts);
-            RefreshItemsSnapshot();
             RefreshRowsStateSnapshot();
-            ApplyStructureToRenderer();
+            RefreshSortSnapshot(sorts);
             ApplyRowsStateToRenderer();
+            ApplyStructureToRenderer();
         }
 
         public void DetachTableState()
@@ -222,7 +219,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _state = null;
             _rows = null;
             _columns = [];
-            _items = [];
             _filterOptionsSources = new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase);
             _tableStateKey = string.Empty;
             _currentSortField = null;
@@ -275,12 +271,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             TableView.CurrentSortDirection = _currentSortDirection;
         }
 
-        public void RefreshItemsSnapshot()
-        {
-            _items = _rows?.Items ?? [];
-            TableView.ItemsSource = _items;
-        }
-
         public void RefreshRowsStateSnapshot()
         {
             _hasMoreItems = _rows?.HasMoreItems == true;
@@ -309,8 +299,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))
             {
-                RefreshItemsSnapshot();
+                RefreshRowsStateSnapshot();
+                ApplyRowsStateToRenderer();
+                ApplyItemsToRenderer();
                 TableView.RefreshVisibleRowsIfViewportHasPlaceholders();
+                return;
             }
 
             if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.IsLoading)
@@ -354,19 +347,23 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            RefreshItemsSnapshot();
             TableView.RefreshVisibleRow(e.Index, row);
         }
 
         private void ApplyStructureToRenderer()
         {
             TableView.Columns = _columns;
-            TableView.ItemsSource = _items;
             TableView.TableStateKey = _tableStateKey;
             TableView.MultiSelectOptionsSources = _filterOptionsSources;
             TableView.CurrentSortField = _currentSortField;
             TableView.CurrentSortDirection = _currentSortDirection;
             TableView.SelectedItem = _selectedRow;
+            ApplyItemsToRenderer();
+        }
+
+        private void ApplyItemsToRenderer()
+        {
+            TableView.ItemsSource = _rows?.Items ?? [];
         }
 
         private void ApplyRowsStateToRenderer()

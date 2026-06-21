@@ -24,9 +24,6 @@ namespace CbsContractsDesktopClient.Views.Functional
 {
     public sealed class StageCommerEditDialog : AppEditDialog
     {
-        private const long StatusPending = 2;
-        private const long StatusClosed = 5;
-
         private StageEditState _stage;
         private ContractEditState? _contract;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
@@ -94,7 +91,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         public bool ShouldCloseContract()
         {
             SyncStageStateFromEditors();
-            return _stage.ShouldCloseContract(_contract, StatusClosed);
+            return _stage.ShouldCloseContract(_contract, WorkflowStatusIds.Closed);
         }
 
         public IReadOnlyDictionary<string, object?> BuildContractClosePayload()
@@ -427,7 +424,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _startAtEditor.Date = nextStart;
             if (GetSelectedStatusOption()?.Value is null)
             {
-                SelectStatus(StatusPending);
+                SelectStatus(WorkflowStatusIds.InProgress);
             }
         }
 
@@ -493,7 +490,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ApplyStatusBusinessLogic()
         {
-            if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtEditor.Date is null)
+            if (GetSelectedStatusOption()?.Value == WorkflowStatusIds.Closed && _closedAtEditor.Date is null)
             {
                 _closedAtEditor.Date = DateTimeOffset.Now;
             }

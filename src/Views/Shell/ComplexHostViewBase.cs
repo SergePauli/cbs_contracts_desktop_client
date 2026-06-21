@@ -185,9 +185,16 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected void SetDetailContentVisible(bool isVisible)
         {
-            _detailContentControl.Visibility = isVisible && _detailContentControl.Content is not null
+            var nextVisibility = isVisible && _detailContentControl.Content is not null
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            if (_detailContentControl.Visibility != nextVisibility)
+            {
+                Store.AppendUiTrace(
+                    $"DETAIL VISIBILITY host={GetType().Name} old={_detailContentControl.Visibility} next={nextVisibility} content={_detailContentControl.Content?.GetType().Name ?? "<null>"}");
+            }
+
+            _detailContentControl.Visibility = nextVisibility;
         }
 
         protected void RebuildHeaderActions()

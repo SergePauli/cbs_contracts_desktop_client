@@ -14,6 +14,7 @@ public sealed partial class StageOziEditView : UserControl
     public TextBlock ContragentValue => ContragentText;
     public TextBlock SignedAtValue => SignedAtText;
     public ContentControl ContractStatusSlot => ContractStatusHost;
+    public TextBlock ContractClosedAtValue => ContractClosedAtText;
     public TextBlock ContractCostValue => ContractCostText;
     public TextBlock ContractKindValue => ContractKindText;
 

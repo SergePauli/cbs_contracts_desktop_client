@@ -10,7 +10,6 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
     {
         private const string ContractRevisionDescription = "Договор";
         private const string AdditionalRevisionDescription = "Доп.соглашение";
-
         [ObservableProperty]
         public partial IReadOnlyList<StageEditState> ContractStageEditStates { get; set; } = [];
 
@@ -180,6 +179,45 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             return true;
         }
 
+        public bool ShouldCloseContractAfterSelectedStageClosed()
+        {
+            var selectedStage = SelectedStageEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed: SelectedStageEditState is not set.");
+            var selectedContract = SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed: SelectedContractEditState is not set.");
+
+            if (selectedStage.Status.Id != WorkflowStatusIds.Closed
+                || selectedStage.ClosedAt is null
+                || selectedContract.Original.Status.Id == WorkflowStatusIds.Closed)
+            {
+                return false;
+            }
+
+            var stages = GetVisibleStageEditStates();
+            if (!stages.Any(stage => SameIdentity(stage.Id, stage.ListKey, selectedStage.Id, selectedStage.ListKey)))
+            {
+                throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed: selected stage is absent from ContractStageEditStates.");
+            }
+
+            return stages
+                .Where(stage => !SameIdentity(stage.Id, stage.ListKey, selectedStage.Id, selectedStage.ListKey))
+                .All(stage => stage.Status.Id == WorkflowStatusIds.Closed);
+        }
+
+        public string BuildContractCloseDecisionTrace(bool result)
+        {
+            var selectedStage = SelectedStageEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.BuildContractCloseDecisionTrace: SelectedStageEditState is not set.");
+            var selectedContract = SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.BuildContractCloseDecisionTrace: SelectedContractEditState is not set.");
+            var stages = GetVisibleStageEditStates();
+            return
+                $"result={result} "
+                + $"contract={selectedContract.Id} contractStatus={selectedContract.Status.Id} contractOriginalStatus={selectedContract.Original.Status.Id} "
+                + $"selectedStage={selectedStage.Id} selectedStatus={selectedStage.Status.Id} selectedClosedAt={FormatTraceDate(selectedStage.ClosedAt)} "
+                + $"stages=[{string.Join("; ", stages.Select(stage => $"id={stage.Id},priority={stage.Priority},status={stage.Status.Id},closedAt={FormatTraceDate(stage.ClosedAt)},used={stage.Used}"))}]";
+        }
+
         private static int FindStageEditStateIndex(
             IReadOnlyList<StageEditState> stages,
             StageEditState selectedStage)
@@ -194,6 +232,11 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
 
             return -1;
+        }
+
+        private static string FormatTraceDate(DateTimeOffset? date)
+        {
+            return date?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) ?? "<null>";
         }
 
         public void AddRevisionAfter(RevisionEditState revision)

@@ -8,8 +8,10 @@ using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
+using Windows.System;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogControls;
 using static CbsContractsDesktopClient.Shared.Formatting.AppFormatters;
@@ -18,8 +20,12 @@ namespace CbsContractsDesktopClient.Views.Functional;
 
 public sealed class StageOziEditDialog : AppEditDialog
 {
-    private const long StatusDone = 4;
-    private const long StatusClosed = 5;
+    private static readonly IReadOnlySet<long> OziStageStatusIds = new HashSet<long>
+    {
+        WorkflowStatusIds.InProgress,
+        WorkflowStatusIds.Done,
+        WorkflowStatusIds.Closed
+    };
 
     private StageEditState _stage;
     private ContractEditState? _contract;
@@ -28,7 +34,8 @@ public sealed class StageOziEditDialog : AppEditDialog
     private IReadOnlyList<StagePerformerOption> _performerOptions;
     private StageEditDialogNavigationState? _navigationState;
     private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
-    private readonly int? _profileId;
+    private readonly Func<bool> _shouldCloseContractAfterSelectedStageClosed;
+    private readonly int _profileId;
     private readonly CalendarInput _rideOutAtEditor = new();
     private readonly CalendarInput _sendedAtEditor = new();
     private readonly CalendarInput _completedAtEditor = new();
@@ -44,6 +51,7 @@ public sealed class StageOziEditDialog : AppEditDialog
     private readonly StageOziEditView _view = new();
     private bool _isApplyingBusinessLogic;
     private bool _businessLogicHandlersAttached;
+    private bool _contractCloseCommentApplied;
 
     public StageOziEditDialog(
         StageEditState stage,
@@ -51,20 +59,24 @@ public sealed class StageOziEditDialog : AppEditDialog
         IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions,
         IReadOnlyList<ReferenceLookupItem> employeeItems,
         int? profileId,
-        StageEditDialogNavigationState? navigationState = null,
-        Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null)
+        StageEditDialogNavigationState? navigationState,
+        Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync,
+        Func<bool> shouldCloseContractAfterSelectedStageClosed)
     {
         ArgumentNullException.ThrowIfNull(stage);
         ArgumentNullException.ThrowIfNull(statusOptions);
         ArgumentNullException.ThrowIfNull(employeeItems);
+        ArgumentNullException.ThrowIfNull(shouldCloseContractAfterSelectedStageClosed);
 
         _stage = stage;
         _contract = contract;
         _statusOptions = statusOptions;
         _employeeItems = employeeItems;
-        _profileId = profileId;
+        _profileId = profileId
+            ?? throw new InvalidOperationException("StageOziEditDialog requires current user profile_id.");
         _navigationState = navigationState;
         _navigateAsync = navigateAsync;
+        _shouldCloseContractAfterSelectedStageClosed = shouldCloseContractAfterSelectedStageClosed;
         _performerOptions = CreatePerformerOptions(employeeItems, stage.Performers);
         _view.PreviousButton.Click += StageNavigationButton_Click;
         _view.NextButton.Click += StageNavigationButton_Click;
@@ -73,6 +85,7 @@ public sealed class StageOziEditDialog : AppEditDialog
         Resources["ContentDialogMaxWidth"] = 860d;
         Content = BuildContent();
         DialogChrome.Apply(this, _stage.GetEditDialogTitle());
+        Loaded += StageOziEditDialog_Loaded;
     }
 
     public long Id => _stage.Id;
@@ -80,7 +93,7 @@ public sealed class StageOziEditDialog : AppEditDialog
     public bool ShouldCloseContract()
     {
         SyncStageStateFromEditors();
-        return _stage.ShouldCloseContract(_contract, StatusClosed);
+        return _shouldCloseContractAfterSelectedStageClosed();
     }
 
     public IReadOnlyDictionary<string, object?> BuildContractClosePayload()
@@ -112,7 +125,7 @@ public sealed class StageOziEditDialog : AppEditDialog
             return false;
         }
 
-        if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtEditor.Date is null)
+        if (GetSelectedStatusOption()?.Value == WorkflowStatusIds.Closed && _closedAtEditor.Date is null)
         {
             ShowErrorInfo("Для закрытого этапа укажите дату закрытия.");
             return false;
@@ -149,13 +162,9 @@ public sealed class StageOziEditDialog : AppEditDialog
         _view.ContractTitleSlot.Content = BuildDialogSectionTitle(RequireContract().GetSectionTitle());
         _view.ExternalNumberValue.Text = FormatSummaryValue(_contract?.ExternalNumber ?? string.Empty);
         _view.ContragentValue.Text = FormatSummaryValue(_contract?.ContragentName ?? string.Empty);
-        _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_contract?.SignedAt));
-        _view.ContractStatusSlot.Content = BuildStatusBadge(
-            RequireContract().Status.Name!,
-            RequireContract().Status.Id,
-            horizontalAlignment: HorizontalAlignment.Left);
         _view.ContractCostValue.Text = FormatSummaryValue(FormatMoney(_contract?.Cost));
         _view.ContractKindValue.Text = FormatSummaryValue(BuildContractKindText());
+        UpdateContractSummaryPanel();
         InitializeNavigationButton(_view.PreviousButton, "Предыдущий этап", StageEditDialogNavigationDirection.Previous);
         InitializeNavigationButton(_view.NextButton, "Следующий этап", StageEditDialogNavigationDirection.Next);
         InitializeEditorSlots();
@@ -191,11 +200,118 @@ public sealed class StageOziEditDialog : AppEditDialog
         _view.CompletedAtSlot.Content = _completedAtEditor;
         _view.ClosedAtSlot.Content = _closedAtEditor;
         _view.CommentSlot.Content = _commentBox;
-        _commentBox.PlaceholderText = _profileId is null
-            ? "Комментарий недоступен: не получен profile_id пользователя"
-            : "Комментарий";
-        _commentBox.IsEnabled = _profileId is not null;
+        _commentBox.PlaceholderText = "Комментарий";
         AttachBusinessLogicHandlers();
+        ConfigureTabChain();
+    }
+
+    private void StageOziEditDialog_Loaded(object sender, RoutedEventArgs e)
+    {
+        Loaded -= StageOziEditDialog_Loaded;
+        FocusCheckBox(_isRideOutBox);
+    }
+
+    private void ConfigureTabChain()
+    {
+        _isRideOutBox.TabIndex = 0;
+        _rideOutAtEditor.TabIndex = 1;
+        _isSendedBox.TabIndex = 2;
+        _sendedAtEditor.TabIndex = 3;
+        _statusBox.TabIndex = 4;
+        _completedAtEditor.TabIndex = 5;
+        _closedAtEditor.TabIndex = 6;
+        _toRegistryBox.TabIndex = 7;
+        _registryQuarterBox.TabIndex = 8;
+        _registryYearBox.TabIndex = 9;
+        _commentBox.TabIndex = 10;
+
+        _isRideOutBox.PreviewKeyDown += (_, args) => FocusDateEditorOnTab(_rideOutAtEditor, args);
+        _rideOutAtEditor.OnTab = (_, args) => FocusCheckBoxOnTab(_isSendedBox, args);
+        _isSendedBox.PreviewKeyDown += (_, args) => FocusDateEditorOnTab(_sendedAtEditor, args);
+        _sendedAtEditor.OnTab = (_, args) => FocusDropdownOnTab(_statusBox, args);
+        _statusBox.OnTab = StatusBox_OnTab;
+        _statusBox.SelectionCommitted += StatusBox_SelectionCommitted;
+        _completedAtEditor.OnTab = (_, args) => FocusDateEditor(_closedAtEditor, args);
+        _closedAtEditor.OnTab = (_, args) => FocusCheckBoxOnTab(_toRegistryBox, args);
+        _toRegistryBox.PreviewKeyDown += (_, args) => FocusTextBoxOnTab(_registryQuarterBox, args);
+        _registryQuarterBox.PreviewKeyDown += (_, args) => FocusTextBoxOnTab(_registryYearBox, args);
+        _registryYearBox.PreviewKeyDown += (_, args) => FocusTextBoxOnTab(_commentBox, args);
+    }
+
+    private void FocusCheckBox(CheckBox checkBox)
+    {
+        DispatcherQueue.TryEnqueue(() => checkBox.Focus(FocusState.Programmatic));
+    }
+
+    private void FocusCheckBoxOnTab(CheckBox checkBox, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Tab)
+        {
+            return;
+        }
+
+        FocusCheckBox(checkBox);
+        args.Handled = true;
+    }
+
+    private void FocusDateEditorOnTab(CalendarInput editor, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Tab)
+        {
+            return;
+        }
+
+        FocusDateEditor(editor, args);
+    }
+
+    private void FocusDropdownOnTab(Dropdown dropdown, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Tab)
+        {
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(() => dropdown.FocusInput(FocusState.Programmatic));
+        args.Handled = true;
+    }
+
+    private void FocusDateEditor(CalendarInput editor, KeyRoutedEventArgs args)
+    {
+        FocusDateEditor(editor);
+        args.Handled = true;
+    }
+
+    private void FocusDateEditor(CalendarInput editor)
+    {
+        DispatcherQueue.TryEnqueue(() => editor.FocusInput(FocusState.Programmatic));
+    }
+
+    private void FocusTextBoxOnTab(TextBox textBox, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Tab)
+        {
+            return;
+        }
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            textBox.Focus(FocusState.Programmatic);
+            textBox.Select(textBox.Text.Length, 0);
+        });
+        args.Handled = true;
+    }
+
+    private void StatusBox_OnTab(Dropdown dropdown, KeyRoutedEventArgs args)
+    {
+        dropdown.CloseDropDown();
+        FocusDateEditor(_completedAtEditor);
+        args.Handled = true;
+    }
+
+    private void StatusBox_SelectionCommitted(object? sender, EventArgs args)
+    {
+        ApplyBusinessLogic();
+        FocusDateEditor(_completedAtEditor);
     }
 
     private void RenderStageContent()
@@ -206,12 +322,24 @@ public sealed class StageOziEditDialog : AppEditDialog
 
     private void UpdateStageSummaryPanel()
     {
+        UpdateContractSummaryPanel();
         UpdateStageTitle();
         UpdateStageNavigationButtons();
         _view.StartAtValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.StartAt));
         _view.PrepaymentValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.PrepaymentAt ?? _stage.PaymentAt));
         _view.DeadlineAtValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.DeadlineAt));
         _view.TasksValue.Text = FormatSummaryValue(BuildTasksText());
+    }
+
+    private void UpdateContractSummaryPanel()
+    {
+        var contract = RequireContract();
+        _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(contract.SignedAt));
+        _view.ContractClosedAtValue.Text = FormatSummaryValue(FormatDisplayDate(contract.ClosedAt));
+        _view.ContractStatusSlot.Content = BuildStatusBadge(
+            contract.Status.Name!,
+            contract.Status.Id,
+            horizontalAlignment: HorizontalAlignment.Left);
     }
 
     private void UpdateStageTitle()
@@ -258,7 +386,7 @@ public sealed class StageOziEditDialog : AppEditDialog
             _toRegistryBox.IsChecked = _stage.RegistryQuarter is not null || _stage.RegistryYear is not null;
             _registryQuarterBox.Text = _stage.RegistryQuarter?.ToString() ?? string.Empty;
             _registryYearBox.Text = _stage.RegistryYear?.ToString() ?? string.Empty;
-            ConfigureStatusDropdown(_statusBox, BuildStageStatusOptions(_statusOptions), _stage.Status.Id);
+            ConfigureStatusDropdown(_statusBox, BuildOziStageStatusOptions(_statusOptions), _stage.Status.Id);
         }
         finally
         {
@@ -266,7 +394,6 @@ public sealed class StageOziEditDialog : AppEditDialog
         }
 
         ConfigurePerformersMultiSelect();
-        ApplyBusinessLogic();
     }
 
     private static string FormatSummaryValue(string value)
@@ -288,7 +415,6 @@ public sealed class StageOziEditDialog : AppEditDialog
         _isSendedBox.Unchecked += (_, _) => ApplyBusinessLogic();
         _toRegistryBox.Checked += (_, _) => ApplyBusinessLogic();
         _toRegistryBox.Unchecked += (_, _) => ApplyBusinessLogic();
-        _statusBox.SelectionChanged += (_, _) => ApplyBusinessLogic();
     }
 
     private void ApplyBusinessLogic()
@@ -313,15 +439,22 @@ public sealed class StageOziEditDialog : AppEditDialog
             }
             _sendedAtEditor.IsReadOnly = _isSendedBox.IsChecked != true;
 
-            if (GetSelectedStatusOption()?.Value == StatusDone && _completedAtEditor.Date is null)
+            if (GetSelectedStatusOption()?.Value == WorkflowStatusIds.Done && _completedAtEditor.Date is null)
             {
                 _completedAtEditor.Date = DateTimeOffset.Now;
             }
 
-            if (GetSelectedStatusOption()?.Value == StatusClosed && _closedAtEditor.Date is null)
+            var statusId = GetSelectedStatusOption()?.Value;
+            if (statusId != WorkflowStatusIds.Closed)
+            {
+                _closedAtEditor.Date = null;
+            }
+            else if (_closedAtEditor.Date is null)
             {
                 _closedAtEditor.Date = DateTimeOffset.Now;
             }
+
+            ApplyContractClosePreview();
 
             var hasRegistry = _toRegistryBox.IsChecked == true;
             _registryQuarterBox.IsEnabled = hasRegistry;
@@ -362,6 +495,28 @@ public sealed class StageOziEditDialog : AppEditDialog
 
     private void SyncStageStateFromEditors()
     {
+        SyncStageStateFromEditorsCore();
+        AppendContractCloseCommentIfNeeded();
+    }
+
+    private void ApplyContractClosePreview()
+    {
+        SyncStageStateFromEditorsCore();
+        var contract = RequireContract();
+        if (_shouldCloseContractAfterSelectedStageClosed())
+        {
+            contract.ApplyClosedStatusPreview(_closedAtEditor.Date);
+        }
+        else
+        {
+            contract.RestoreStatusPreview();
+        }
+
+        UpdateContractSummaryPanel();
+    }
+
+    private void SyncStageStateFromEditorsCore()
+    {
         _stage.Status = new StatusEditState(GetSelectedStatusOption()?.Value, GetSelectedStatusOption()?.Label);
         _stage.CompletedAt = _completedAtEditor.Date;
         _stage.ClosedAt = _closedAtEditor.Date;
@@ -372,6 +527,26 @@ public sealed class StageOziEditDialog : AppEditDialog
         _stage.RegistryQuarter = _toRegistryBox.IsChecked == true ? TryGetInt(_registryQuarterBox.Text) : null;
         _stage.RegistryYear = _toRegistryBox.IsChecked == true ? TryGetInt(_registryYearBox.Text) : null;
         _stage.Performers = BuildSelectedPerformers();
+    }
+
+    private void AppendContractCloseCommentIfNeeded()
+    {
+        if (_contractCloseCommentApplied
+            || !_shouldCloseContractAfterSelectedStageClosed())
+        {
+            return;
+        }
+
+        AppendAutomaticComment("Статус контракта был изменен автоматически на \"Закрыт\"");
+        _contractCloseCommentApplied = true;
+    }
+
+    private void AppendAutomaticComment(string text)
+    {
+        _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
+            ? text
+            : $"{_commentBox.Text.TrimEnd()}; {text}";
+        _commentBox.Select(_commentBox.Text.Length, 0);
     }
 
     private IReadOnlyList<StagePerformerEditState> BuildSelectedPerformers()
@@ -429,6 +604,16 @@ public sealed class StageOziEditDialog : AppEditDialog
     private EnumSelectOption? GetSelectedStatusOption()
     {
         return StageContractStatusDialogControls.GetSelectedStatusOption(_statusBox);
+    }
+
+    private static IReadOnlyList<EnumSelectOption> BuildOziStageStatusOptions(
+        IReadOnlyList<CbsTableFilterOptionDefinition> statusOptions)
+    {
+        return statusOptions
+            .Select(option => new EnumSelectOption(null, option.Label, JsonDataReader.TryGetLong(option.Value)))
+            .Where(option => option.Value is long id && OziStageStatusIds.Contains(id))
+            .OrderBy(option => option.Value)
+            .ToList();
     }
 
     private ContractEditState RequireContract()

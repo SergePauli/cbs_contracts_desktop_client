@@ -13,7 +13,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
 using Windows.System;
-using static CbsContractsDesktopClient.Shared.Dates.BusinessCalendar;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 using static CbsContractsDesktopClient.Shared.Dialogs.StageContractStatusDialogControls;
 using static CbsContractsDesktopClient.Shared.Formatting.AppFormatters;
@@ -106,8 +105,8 @@ public sealed class StageFinEditDialog : AppEditDialog
         try
         {
             _holidays = await _holidayRecalculationService.GetHolidayCalendarDaysAsync();
-            ApplyBusinessLogicAfterPaymentChange();
-            ApplyBusinessLogicAfterFundedAtChange();
+            ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: false);
+            ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: false);
             UpdateCalculatedSummary();
             FocusExternalNumberBox();
         }
@@ -302,8 +301,8 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         UpdateCalculatedSummary();
-        ApplyBusinessLogicAfterPaymentChange();
-        ApplyBusinessLogicAfterFundedAtChange();
+        ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: false);
+        ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: false);
     }
 
     private static string FormatSummaryValue(string value)
@@ -382,12 +381,12 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         _businessLogicHandlersAttached = true;
-        _prepaymentAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange();
-        _paymentAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange();
-        _fundedAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterFundedAtChange();
+        _prepaymentAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
+        _paymentAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
+        _fundedAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: true);
     }
 
-    private void ApplyBusinessLogicAfterPaymentChange()
+    private void ApplyBusinessLogicAfterPaymentChange(bool appendAutomaticComment)
     {
         if (_isApplyingBusinessLogic)
         {
@@ -397,7 +396,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         _isApplyingBusinessLogic = true;
         try
         {
-            ApplyDeadlineFromPaymentBusinessLogic();
+            ApplyDeadlineFromPaymentBusinessLogic(appendAutomaticComment);
             UpdateCalculatedSummary();
         }
         finally
@@ -406,7 +405,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
     }
 
-    private void ApplyBusinessLogicAfterFundedAtChange()
+    private void ApplyBusinessLogicAfterFundedAtChange(bool appendAutomaticComment)
     {
         if (_isApplyingBusinessLogic)
         {
@@ -417,7 +416,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         try
         {
             _isFunded = _fundedAtEditor.Date is not null;
-            ApplyPaymentDeadlineBusinessLogic();
+            ApplyPaymentDeadlineBusinessLogic(appendAutomaticComment);
             UpdateCalculatedSummary();
         }
         finally
@@ -426,50 +425,77 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
     }
 
-    private void ApplyDeadlineFromPaymentBusinessLogic()
+    private void ApplyDeadlineFromPaymentBusinessLogic(bool appendAutomaticComment)
     {
-        var payment = _prepaymentAtEditor.Date ?? _paymentAtEditor.Date;
-        var deadlineKind = _stage.DeadlineKind;
-        var duration = _stage.Duration;
-        if (payment is null || duration is null)
+        var calculation = StageDeadlineBusinessRules.CalculatePaymentBasedStageDeadline(
+            _stage.DeadlineKind,
+            _paymentAtEditor.Date,
+            _prepaymentAtEditor.Date,
+            _stage.Duration,
+            _holidays);
+        if (calculation is null)
         {
             return;
         }
 
-        if (string.Equals(deadlineKind, "calendar_prepayment", StringComparison.OrdinalIgnoreCase))
-        {
-            _deadlineAt = payment.Value.Date.AddDays(duration.Value);
-        }
-        else if (string.Equals(deadlineKind, "working_prepayment", StringComparison.OrdinalIgnoreCase))
-        {
-            _deadlineAt = AddWorkingDaysToDate(payment.Value, duration.Value, _holidays);
-        }
-        else
+        var previousStartAt = _startAt;
+        var previousDeadlineAt = _deadlineAt;
+        _startAt = calculation.StartAt;
+        _deadlineAt = calculation.DeadlineAt;
+
+        if (!appendAutomaticComment)
         {
             return;
         }
 
-        _startAt = payment;
+        var changes = new List<string>();
+        if (!SameDate(previousStartAt, _startAt))
+        {
+            changes.Add($"Дата начала этапа была изменена автоматически на {FormatDisplayDate(_startAt)}");
+        }
+
+        if (!SameDate(previousDeadlineAt, _deadlineAt))
+        {
+            changes.Add($"срок завершения был изменен автоматически на {FormatDisplayDate(_deadlineAt)}");
+        }
+
+        if (changes.Count > 0)
+        {
+            AppendAutomaticComment(string.Join("; ", changes));
+        }
     }
 
-    private void ApplyPaymentDeadlineBusinessLogic()
+    private void ApplyPaymentDeadlineBusinessLogic(bool appendAutomaticComment)
     {
-        var paymentKind = _stage.PaymentDeadlineKind;
-        var duration = _stage.PaymentDuration;
-        var fundedAt = _fundedAtEditor.Date;
-        if (fundedAt is null || duration is null)
+        var paymentDeadline = StageDeadlineBusinessRules.CalculatePaymentDeadline(
+            _stage.PaymentDeadlineKind,
+            _fundedAtEditor.Date,
+            _stage.PaymentDuration,
+            _holidays);
+        if (paymentDeadline is null)
         {
             return;
         }
 
-        if (string.Equals(paymentKind, "c_days", StringComparison.OrdinalIgnoreCase))
+        var previousDeadline = _paymentDeadlineAt;
+        _paymentDeadlineAt = paymentDeadline;
+        if (appendAutomaticComment && !SameDate(previousDeadline, paymentDeadline))
         {
-            _paymentDeadlineAt = fundedAt.Value.Date.AddDays(duration.Value);
+            AppendAutomaticComment($"Срок оплаты был изменен автоматически на {FormatDisplayDate(paymentDeadline)}");
         }
-        else if (string.Equals(paymentKind, "w_days", StringComparison.OrdinalIgnoreCase))
+    }
+
+    private void AppendAutomaticComment(string text)
+    {
+        if (!_commentBox.IsEnabled)
         {
-            _paymentDeadlineAt = AddWorkingDaysToDate(fundedAt.Value, duration.Value, _holidays);
+            return;
         }
+
+        _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
+            ? text
+            : $"{_commentBox.Text.TrimEnd()}; {text}";
+        _commentBox.Select(_commentBox.Text.Length, 0);
     }
 
     private void UpdateCalculatedSummary()
@@ -489,6 +515,16 @@ public sealed class StageFinEditDialog : AppEditDialog
         _stage.StartAt = _startAt;
         _stage.DeadlineAt = _deadlineAt;
         _stage.PaymentDeadlineAt = _paymentDeadlineAt;
+    }
+
+    private static bool SameDate(DateTimeOffset? left, DateTimeOffset? right)
+    {
+        if (left is null || right is null)
+        {
+            return left is null && right is null;
+        }
+
+        return left.Value.Date == right.Value.Date;
     }
 
     private string ResolvePaymentDeadlineKindLabel()

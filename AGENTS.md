@@ -13,6 +13,8 @@ Workflow rules:
 - Do not use the standard WinUI ComboBox in project UI. Use the custom Pauli.WinUiKit Dropdown control instead.
 - Do not add defensive fallbacks to code without approval; propose them first, explain the scenario they handle, and wait for confirmation.
 - Do not mask data contract violations with defensive fallbacks, nullable workarounds, or silent checks; throw an exception at the boundary where invalid data is detected.
+- Do not produce excessive code: avoid needless parameters, wrapper methods, generic abstractions, or defensive branches when a single concrete business operation is required.
+- Keep new functions minimal and contract-specific: do not add checks beyond the function contract or false universality. Wrap function bodies in try/catch only where it adds code-location context to rethrown exceptions; responsibility for satisfying the callee contract belongs to the calling code.
 - Keep API request builders next to the entity store/state they serialize.
 - Dialogs must not build API update payloads directly; they should collect UI input and delegate change serialization to the entity store/state payload builder.
 - Follow SRP strictly. This is especially important for asynchronous event handlers: memory cleanup, state updates, data loading, and UI invalidation must stay separate unless a single responsibility explicitly requires crossing that boundary.

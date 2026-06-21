@@ -26,6 +26,7 @@ public sealed class Dropdown : UserControl
     private bool _isSyncingText;
     private bool _isSyncingListSelection;
     private bool _isPointerOverEditor;
+    private bool _isCommittingListSelection;
     private string _lastAcceptedText = string.Empty;
 
     public Dropdown()
@@ -505,14 +506,17 @@ public sealed class Dropdown : UserControl
 
     private void OnItemClick(object sender, ItemClickEventArgs args)
     {
+        if (_isCommittingListSelection)
+        {
+            return;
+        }
+
         if (!TryGetListItemValue(args.ClickedItem, out var item))
         {
             return;
         }
 
-        SelectedItem = item;
-        SelectionCommitted?.Invoke(this, EventArgs.Empty);
-        _flyout.Hide();
+        CommitListSelection(item);
     }
 
     private void OnListSelectionChanged(object sender, SelectionChangedEventArgs args)
@@ -522,9 +526,27 @@ public sealed class Dropdown : UserControl
             return;
         }
 
-        SelectedItem = item;
-        SelectionCommitted?.Invoke(this, EventArgs.Empty);
-        _flyout.Hide();
+        CommitListSelection(item);
+    }
+
+    private void CommitListSelection(object item)
+    {
+        if (_isCommittingListSelection)
+        {
+            return;
+        }
+
+        _isCommittingListSelection = true;
+        try
+        {
+            SelectedItem = item;
+            SelectionCommitted?.Invoke(this, EventArgs.Empty);
+            _flyout.Hide();
+        }
+        finally
+        {
+            _isCommittingListSelection = false;
+        }
     }
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs args)
@@ -745,12 +767,6 @@ public sealed class Dropdown : UserControl
         if (listItem is ListViewItem { Tag: object tag })
         {
             item = tag;
-            return true;
-        }
-
-        if (listItem is not null)
-        {
-            item = listItem;
             return true;
         }
 

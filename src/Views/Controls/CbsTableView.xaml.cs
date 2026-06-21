@@ -156,6 +156,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private int _lastWindowStart = -1;
         private int _lastWindowEnd = -1;
         private int _lastSourceCount = -1;
+        private int _sameViewportViewChangedCount;
         private IEnumerable? _lastItemsSourceReference;
         private readonly List<CbsTableRowView> _rowPool = [];
         private readonly HashSet<int> _selectedIndexes = [];
@@ -573,7 +574,25 @@ namespace CbsContractsDesktopClient.Views.Controls
         private async void OnScrollViewerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
         {
             UpdateHeaderViewportCompensation();
-            RebuildRows();
+            if (IsCurrentViewportWindowUnchanged(out var currentWindowTrace))
+            {
+                _sameViewportViewChangedCount++;
+                if (_sameViewportViewChangedCount == 1 || _sameViewportViewChangedCount % 10 == 0)
+                {
+                    AppendTrace(
+                        $"TABLE VIEWCHANGED SAME count={_sameViewportViewChangedCount} intermediate={e.IsIntermediate} {currentWindowTrace}");
+                }
+            }
+            else
+            {
+                if (_sameViewportViewChangedCount > 0)
+                {
+                    AppendTrace($"TABLE VIEWCHANGED SAME END count={_sameViewportViewChangedCount}");
+                    _sameViewportViewChangedCount = 0;
+                }
+
+                RebuildRows();
+            }
 
             if (LoadedCount != _lastTriggeredLoadedCount)
             {
@@ -902,6 +921,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             _lastWindowStart = -1;
             _lastWindowEnd = -1;
             _lastSourceCount = -1;
+            _sameViewportViewChangedCount = 0;
             _lastItemsSourceReference = null;
         }
 
@@ -1264,6 +1284,21 @@ namespace CbsContractsDesktopClient.Views.Controls
             return ItemsSource?.OfType<TableDataRow>().ToList() ?? [];
         }
 
+        private bool IsCurrentViewportWindowUnchanged(out string trace)
+        {
+            var sourceRows = GetSourceRows();
+            var totalRows = sourceRows.Count;
+            var window = CalculateWindow(totalRows);
+            trace =
+                $"{BuildWindowTrace(sourceRows, window.Start, window.End, totalRows)} " +
+                $"offset={RowsScrollViewer.VerticalOffset:F1} viewport={RowsScrollViewer.ViewportHeight:F1} extent={RowsScrollViewer.ExtentHeight:F1}";
+
+            return window.Start == _lastWindowStart
+                && window.End == _lastWindowEnd
+                && totalRows == _lastSourceCount
+                && ReferenceEquals(ItemsSource, _lastItemsSourceReference);
+        }
+
         private (int Start, int End) CalculateWindow(int totalRows)
         {
             if (totalRows <= 0 || RowHeight <= 0)
@@ -1520,6 +1555,8 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnRowsScrollViewerSizeChanged(object sender, SizeChangedEventArgs e)
         {
+            AppendTrace(
+                $"TABLE VIEWPORT SIZE old={e.PreviousSize.Width:F1}x{e.PreviousSize.Height:F1} new={e.NewSize.Width:F1}x{e.NewSize.Height:F1}");
             UpdateHeaderViewportCompensation();
         }
 

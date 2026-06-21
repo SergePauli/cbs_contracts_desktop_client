@@ -71,6 +71,14 @@
                             <ColumnDefinition Width="135" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
+                        <TextBlock Text="Дата закрытия" Foreground="{StaticResource ShellSecondaryTextBrush}" />
+                        <TextBlock x:Name="ContractClosedAtText" Grid.Column="1" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    </Grid>
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="135" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <TextBlock Text="Стоимость" Foreground="{StaticResource ShellSecondaryTextBrush}" />
                         <TextBlock
                             x:Name="ContractCostText"
@@ -202,7 +210,7 @@
 
                 <Border
                     Padding="10,8,10,10"
-                    Background="{StaticResource ShellPanelBackgroundBrush}"
+                    Background="#EFFFF2"
                     BorderBrush="{StaticResource ShellPanelBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="6">
@@ -281,12 +289,14 @@
                                 <TextBlock FontSize="12" Text="Работа выполнена" />
                                 <ContentControl
                                     x:Name="CompletedAtHost"
+                                    HorizontalAlignment="Left"
                                     HorizontalContentAlignment="Stretch" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="4">
                                 <TextBlock FontSize="12" Text="Закрыт" />
                                 <ContentControl
                                     x:Name="ClosedAtHost"
+                                    HorizontalAlignment="Left"
                                     HorizontalContentAlignment="Stretch" />
                             </StackPanel>
                         </Grid>

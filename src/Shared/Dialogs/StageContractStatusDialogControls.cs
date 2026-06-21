@@ -1,5 +1,6 @@
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Data;
+using CbsContractsDesktopClient.ViewModels.Workflow;
 using Pauli.WinUiKit.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -10,7 +11,14 @@ namespace CbsContractsDesktopClient.Shared.Dialogs;
 
 public static class StageContractStatusDialogControls
 {
-    public static readonly IReadOnlySet<long> StageStatusIds = new HashSet<long> { 2, 4, 5, 6, 7 };
+    public static readonly IReadOnlySet<long> StageStatusIds = new HashSet<long>
+    {
+        WorkflowStatusIds.InProgress,
+        WorkflowStatusIds.Done,
+        WorkflowStatusIds.Closed,
+        WorkflowStatusIds.Annulled,
+        WorkflowStatusIds.Frozen
+    };
 
     public static IReadOnlyList<EnumSelectOption> BuildStageStatusOptions(
         IReadOnlyList<CbsTableFilterOptionDefinition> options)
@@ -211,9 +219,9 @@ public static class StageContractStatusDialogControls
     {
         return statusId switch
         {
-            4 or 5 => (Color.FromArgb(255, 201, 233, 212), Color.FromArgb(255, 64, 64, 64)),
-            6 => (Color.FromArgb(255, 255, 205, 210), Color.FromArgb(255, 64, 64, 64)),
-            1 or 2 => (Color.FromArgb(254, 194, 237, 246), Color.FromArgb(255, 64, 64, 64)),
+            WorkflowStatusIds.Done or WorkflowStatusIds.Closed => (Color.FromArgb(255, 201, 233, 212), Color.FromArgb(255, 64, 64, 64)),
+            WorkflowStatusIds.Annulled => (Color.FromArgb(255, 255, 205, 210), Color.FromArgb(255, 64, 64, 64)),
+            1 or WorkflowStatusIds.InProgress => (Color.FromArgb(254, 194, 237, 246), Color.FromArgb(255, 64, 64, 64)),
             3 => (Color.FromArgb(254, 246, 227, 194), Color.FromArgb(255, 64, 64, 64)),
             _ => (Color.FromArgb(255, 222, 226, 230), Color.FromArgb(255, 64, 64, 64))
         };

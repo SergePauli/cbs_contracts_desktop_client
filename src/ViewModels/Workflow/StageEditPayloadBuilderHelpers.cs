@@ -9,7 +9,7 @@ public static class StageEditPayloadBuilderHelpers
         return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
             ["id"] = contractId,
-            ["status_id"] = 5L,
+            ["status_id"] = WorkflowStatusIds.Closed,
             ["closed_at"] = Shared.Formatting.AppFormatters.FormatDate(closedAt)
         };
     }
