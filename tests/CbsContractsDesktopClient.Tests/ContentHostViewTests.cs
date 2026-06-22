@@ -298,7 +298,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("public void DetachTableState()", codeBehind);
         Assert.Contains("private ICbsTableRows<TableDataRow>? _rows;", codeBehind);
         Assert.Contains("private IReadOnlyList<CbsTableColumnDefinition> _columns = [];", codeBehind);
-        Assert.Contains("TableView.ItemsSource = _items;", codeBehind);
+        Assert.Contains("TableView.ItemsSource = _rows?.Items ?? [];", codeBehind);
         Assert.Contains("TableView.ShowStageCostFraction", codeBehind);
         Assert.Contains("public event EventHandler<CbsTableSortRequestedEventArgs>? SortRequested;", codeBehind);
         Assert.Contains("public event EventHandler<CbsTableRowSelectionChangedEventArgs>? RowSelectionChanged;", codeBehind);

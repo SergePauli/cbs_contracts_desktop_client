@@ -28,8 +28,6 @@ namespace CbsContractsDesktopClient.Views.Functional
 {
     public sealed class ContractCommerEditDialog : AppEditDialog
     {
-        private const double TabAreaHeight = 500;
-
         private readonly ContractWorkflowStore _workflowStore;
         private readonly TableDataRow _contract;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _taskKindOptions;
@@ -78,12 +76,17 @@ namespace CbsContractsDesktopClient.Views.Functional
         private TabViewItem? _contractTab;
         private TabViewItem? _stagesTab;
         private TabViewItem? _revisionsTab;
+        private ContractCommerEditView? _view;
         private Button? _contractDocAttachButton;
         private Button? _contractScanAttachButton;
         private Button? _contractProtocolAttachButton;
         private Dropdown? _firstStageDeadlineKindBox;
+        private Dropdown? _initialStageFocusTarget;
+        private readonly bool _openStagesTabOnLoad;
         private bool _isUpdatingExtAgreementBox;
         private bool _isSyncingTaskKindSelection;
+        private bool _contractClosePreviewApplied;
+        private bool _contractCloseCommentApplied;
 
         public ContractCommerEditDialog(
             ContractWorkflowStore workflowStore,
@@ -93,7 +96,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             IReadOnlyList<CbsTableFilterOptionDefinition> contractStatusOptions,
             IReadOnlyList<CbsTableFilterOptionDefinition> stageStatusOptions,
             Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> loadContragentOptionsAsync,
-            bool isCreateMode = false)
+            bool isCreateMode = false,
+            bool openStagesTabOnLoad = false)
         {
             ArgumentNullException.ThrowIfNull(workflowStore);
             ArgumentNullException.ThrowIfNull(contract);
@@ -112,6 +116,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _loadContragentOptionsAsync = loadContragentOptionsAsync;
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _isCreateMode = isCreateMode;
+            _openStagesTabOnLoad = openStagesTabOnLoad;
             ResetStageEditorsFromContract();
             ResetRevisionEditorsFromContract();
             FullSizeDesired = false;
@@ -123,6 +128,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             Content = BuildEditContent(BuildContent());
             Loaded += ContractCommerEditDialog_Loaded;
             DialogChrome.Apply(this);
+            if (!string.IsNullOrWhiteSpace(_workflowStore.ContractEditGraphRepairMessage))
+            {
+                ShowErrorInfo(_workflowStore.ContractEditGraphRepairMessage);
+            }
         }
 
         public ObservableCollection<string> ContragentSuggestionLabels { get; } = [];
@@ -191,29 +200,6 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private FrameworkElement BuildContent()
         {
-            var root = new Grid
-            {
-                MinWidth = 1208,
-                MaxWidth = 1208,
-                RowSpacing = 8
-            };
-            root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-            root.Children.Add(BuildHeader());
-
-            var tabsHost = new Border
-            {
-                Padding = new Thickness(8, 0, 8, 0),
-                Child = BuildTabs()
-            };
-            Grid.SetRow(tabsHost, 1);
-            root.Children.Add(tabsHost);
-            return root;
-        }
-
-        private UIElement BuildHeader()
-        {
             ConfigureTaskKindCombo();
             ConfigureYearBox();
             ConfigureOrderBox();
@@ -225,120 +211,47 @@ namespace CbsContractsDesktopClient.Views.Functional
             ConfigureFlagBoxes();
             ConfigureResetChangesButton();
 
-            var header = new StackPanel
-            {
-                Spacing = 6
-            };
-            header.Children.Add(BuildHeaderIdentityRow());
-            header.Children.Add(BuildHeaderCommentRow());
+            var view = new ContractCommerEditView();
+            _view = view;
+            _tabs = view.Tabs;
+            _contractTab = view.ContractTabItem;
+            _stagesTab = view.StagesTabItem;
+            _revisionsTab = view.RevisionsTabItem;
 
-            return new Border
-            {
-                Padding = new Thickness(8, 4, 8, 0),
-                Child = header
-            };
+            view.TaskKindSlot.Content = _taskKindBox;
+            view.YearSlot.Content = _yearBox;
+            view.OrderSlot.Content = _orderBox;
+            view.ContragentSlot.Content = BuildContragentEditor();
+            view.StatusSlot.Content = _statusBox;
+            view.SignedAtSlot.Content = _signedAtEditor;
+            view.CostSlot.Content = _costBox;
+            view.CommentSlot.Content = _commentBox;
+            view.ExtAgreementSlot.Content = BuildFlagHost(_extAgreementBox, "ДС");
+            view.MultiStageSlot.Content = BuildFlagHost(_multiStageBox, "МЭ");
+            view.ResetChangesSlot.Content = _isCreateMode ? null : _resetChangesButton;
+            PopulateContractTab(view);
+            view.StagesTabSlot.Content = BuildStagesTabContent();
+            view.RevisionsTabSlot.Content = BuildRevisionsTabContent();
+
+            return view;
         }
 
-        private UIElement BuildHeaderIdentityRow()
+        private void PopulateContractTab(ContractCommerEditView view)
         {
-            var grid = new Grid
-            {
-                ColumnSpacing = 8
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(390) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(10) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            ResetMainTabEditorsFromContract();
+            ConfigureMainTabEditors();
 
-            grid.Children.Add(BuildLabeledControl("Тип", _taskKindBox));
+            view.GovernmentalSlot.Content = BuildInputLineCheckBox(_governmentalBox, "ГосКонтракт");
+            view.RevisionPresentSlot.Content = BuildInputLineCheckBox(_revisionPresentBox, "В наличии");
+            view.RevisionDescriptionSlot.Content = _revisionDescriptionBox;
+            view.ExternalNumberSlot.Content = _externalNumberBox;
+            view.DeadlineAtSlot.Content = _deadlineAtEditor;
+            view.ClosedAtSlot.Content = _closedAtEditor;
+            view.DocLinkRowSlot.Content = BuildFileRow("Исходник", "\uf000", _revisionDocLinkBox, button => _contractDocAttachButton = button);
+            view.ScanLinkRowSlot.Content = BuildFileRow("Скан", "\uea90", _revisionScanLinkBox, button => _contractScanAttachButton = button);
+            view.ProtocolLinkRowSlot.Content = BuildFileRow("Протокол", "\ue9a4", _revisionProtocolLinkBox, button => _contractProtocolAttachButton = button);
 
-            var firstSeparator = BuildNumberSeparator();
-            Grid.SetColumn(firstSeparator, 1);
-            grid.Children.Add(firstSeparator);
-
-            var yearEditor = (FrameworkElement)BuildLabeledControl("Год", _yearBox);
-            Grid.SetColumn(yearEditor, 2);
-            grid.Children.Add(yearEditor);
-
-            var secondSeparator = BuildNumberSeparator();
-            Grid.SetColumn(secondSeparator, 3);
-            grid.Children.Add(secondSeparator);
-
-            var orderEditor = (FrameworkElement)BuildLabeledControl("П№", _orderBox);
-            Grid.SetColumn(orderEditor, 4);
-            grid.Children.Add(orderEditor);
-
-            var contragentEditor = (FrameworkElement)BuildLabeledControl("Контрагент", BuildContragentEditor());
-            Grid.SetColumn(contragentEditor, 6);
-            grid.Children.Add(contragentEditor);
-
-            var statusEditor = (FrameworkElement)BuildLabeledControl("Статус", _statusBox);
-            Grid.SetColumn(statusEditor, 8);
-            grid.Children.Add(statusEditor);
-
-            var signedAtEditor = (FrameworkElement)BuildLabeledControl("Подписан", _signedAtEditor);
-            Grid.SetColumn(signedAtEditor, 10);
-            grid.Children.Add(signedAtEditor);
-
-            var costEditor = (FrameworkElement)BuildLabeledControl("Сумма", _costBox);
-            Grid.SetColumn(costEditor, 12);
-            grid.Children.Add(costEditor);
-
-            return grid;
-        }
-
-        private UIElement BuildHeaderCommentRow()
-        {
-            var grid = new Grid
-            {
-                ColumnSpacing = 8,
-                RowSpacing = 3
-            };
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(640) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            grid.Children.Add(new TextBlock
-            {
-                Text = "Комментарий контракта",
-                FontSize = 12
-            });
-
-            Grid.SetRow(_commentBox, 1);
-            grid.Children.Add(_commentBox);
-
-            var extAgreement = BuildFlagHost(_extAgreementBox, "ДС");
-            Grid.SetRow(extAgreement, 1);
-            Grid.SetColumn(extAgreement, 1);
-            grid.Children.Add(extAgreement);
-
-            var multiStage = BuildFlagHost(_multiStageBox, "МЭ");
-            Grid.SetRow(multiStage, 1);
-            Grid.SetColumn(multiStage, 2);
-            grid.Children.Add(multiStage);
-
-            if (!_isCreateMode)
-            {
-                Grid.SetRow(_resetChangesButton, 1);
-                Grid.SetColumn(_resetChangesButton, 3);
-                grid.Children.Add(_resetChangesButton);
-            }
-
-            return grid;
+            ConfigureContractFileAttachTabChain();
         }
 
         private void ConfigureYearBox()
@@ -392,18 +305,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             return hasStageCost ? sum : null;
-        }
-
-        private static FrameworkElement BuildNumberSeparator()
-        {
-            return new TextBlock
-            {
-                Text = "/",
-                Margin = new Thickness(0, 19, 0, 0),
-                FontSize = 20,
-                LineHeight = 22,
-                VerticalAlignment = VerticalAlignment.Top
-            };
         }
 
         private void ConfigureTaskKindCombo()
@@ -512,12 +413,28 @@ namespace CbsContractsDesktopClient.Views.Functional
                 _holidays = [];
             }
 
+            if (_openStagesTabOnLoad)
+            {
+                FocusInitialStageEditor();
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(_taskKindBox.Text))
             {
                 return;
             }
 
             DispatcherQueue.TryEnqueue(() => _statusBox.Focus(FocusState.Programmatic));
+        }
+
+        private void FocusInitialStageEditor()
+        {
+            if (_tabs is not null && _stagesTab is not null)
+            {
+                _tabs.SelectedItem = _stagesTab;
+            }
+
+            DispatcherQueue.TryEnqueue(() => (_initialStageFocusTarget ?? _firstStageDeadlineKindBox)?.FocusInput());
         }
 
         private void ConfigureStatusCombo()
@@ -1025,11 +942,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             SyncSingleStageTaskKindFromContract();
         }
 
-        private bool HasExtAgreement()
-        {
-            return RevisionEditors.Count > 0;
-        }
-
         private void ExtAgreementBox_Checked(object sender, RoutedEventArgs e)
         {
             if (_isUpdatingExtAgreementBox || RevisionEditors.Count > 0)
@@ -1168,112 +1080,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
         }
 
-        private TabView BuildTabs()
-        {
-            var tabView = new TabView
-            {
-                IsAddTabButtonVisible = false,
-                Height = TabAreaHeight,
-                TabWidthMode = TabViewWidthMode.Equal
-            };
-            _tabs = tabView;
-
-            _contractTab = BuildColoredTab(
-                "Контракт",
-                Microsoft.UI.ColorHelper.FromArgb(255, 255, 251, 237),
-                Microsoft.UI.ColorHelper.FromArgb(255, 237, 233, 220),
-                BuildMainTabContent());
-            tabView.TabItems.Add(_contractTab);
-            _stagesTab = BuildColoredTab(
-                "Этапы",
-                Microsoft.UI.ColorHelper.FromArgb(255, 239, 255, 242),
-                Microsoft.UI.ColorHelper.FromArgb(255, 220, 235, 223),
-                BuildStagesTabContent());
-            tabView.TabItems.Add(_stagesTab);
-            _revisionsTab = BuildColoredTab(
-                "Ревизии",
-                Microsoft.UI.ColorHelper.FromArgb(255, 239, 250, 255),
-                Microsoft.UI.ColorHelper.FromArgb(255, 222, 233, 237),
-                BuildRevisionsTabContent());
-            tabView.TabItems.Add(_revisionsTab);
-
-            return tabView;
-        }
-
-        private UIElement BuildMainTabContent()
-        {
-            ResetMainTabEditorsFromContract();
-            ConfigureMainTabEditors();
-
-            var grid = new Grid
-            {
-                Padding = new Thickness(8),
-                ColumnSpacing = 8,
-                RowSpacing = 8
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(260) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var governmental = BuildInputLineCheckBox(_governmentalBox, "ГосКонтракт");
-            grid.Children.Add(governmental);
-
-            var revisionPresent = BuildInputLineCheckBox(_revisionPresentBox, "В наличии");
-            Grid.SetColumn(revisionPresent, 1);
-            grid.Children.Add(revisionPresent);
-
-            var revisionDescription = (FrameworkElement)BuildLabeledControl("Тип документа", _revisionDescriptionBox, spacing: 3);
-            Grid.SetColumn(revisionDescription, 2);
-            Grid.SetColumnSpan(revisionDescription, 2);
-            grid.Children.Add(revisionDescription);
-
-            var externalNumber = (FrameworkElement)BuildLabeledControl("Внешний номер", _externalNumberBox, spacing: 3);
-            Grid.SetRow(externalNumber, 1);
-            grid.Children.Add(externalNumber);
-
-            var deadlineAt = (FrameworkElement)BuildLabeledControl("Срок завершения", _deadlineAtEditor, spacing: 3);
-            Grid.SetRow(deadlineAt, 1);
-            Grid.SetColumn(deadlineAt, 1);
-            grid.Children.Add(deadlineAt);
-
-            var closedAt = (FrameworkElement)BuildLabeledControl("Дата закрытия", _closedAtEditor, spacing: 3);
-            Grid.SetRow(closedAt, 1);
-            Grid.SetColumn(closedAt, 2);
-            grid.Children.Add(closedAt);
-
-            var filesHeader = BuildSectionSeparator("Файл");
-            Grid.SetRow(filesHeader, 2);
-            Grid.SetColumnSpan(filesHeader, 5);
-            grid.Children.Add(filesHeader);
-
-            var docLink = BuildFileRow("Исходник", "\uf000", _revisionDocLinkBox, button => _contractDocAttachButton = button);
-            Grid.SetRow(docLink, 3);
-            Grid.SetColumnSpan(docLink, 4);
-            grid.Children.Add(docLink);
-
-            var scanLink = BuildFileRow("Скан", "\uea90", _revisionScanLinkBox, button => _contractScanAttachButton = button);
-            Grid.SetRow(scanLink, 4);
-            Grid.SetColumnSpan(scanLink, 4);
-            grid.Children.Add(scanLink);
-
-            var protocolLink = BuildFileRow("Протокол", "\ue9a4", _revisionProtocolLinkBox, button => _contractProtocolAttachButton = button);
-            Grid.SetRow(protocolLink, 5);
-            Grid.SetColumnSpan(protocolLink, 4);
-            grid.Children.Add(protocolLink);
-
-            ConfigureContractFileAttachTabChain();
-
-            return grid;
-        }
-
         private UIElement BuildStagesTabContent()
         {
             _stagesStack = new StackPanel
@@ -1331,6 +1137,11 @@ namespace CbsContractsDesktopClient.Views.Functional
             var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage);
             var stageStatusDropdown = BuildStageStatusDropdown(stage);
             var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
+            if (_openStagesTabOnLoad && ReferenceEquals(stage, _workflowStore.SelectedStageEditState))
+            {
+                _initialStageFocusTarget = stageDeadlineKindDropdown;
+            }
+
             var stageDurationEditor = BuildStageDurationEditor(stage.Duration, value => stage.Duration = value);
             var stageDeadlineEditor = BuildDateEditor(stage.DeadlineAt, value => stage.DeadlineAt = value);
             var stageCostEditor = BuildStageCostEditor(stage);
@@ -1743,18 +1554,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return editor;
         }
 
-        private static ComboBox BuildSingleOptionCombo(string? text)
-        {
-            var comboBox = new ComboBox
-            {
-                ItemsSource = string.IsNullOrWhiteSpace(text) ? Array.Empty<string>() : new[] { text },
-                SelectedIndex = string.IsNullOrWhiteSpace(text) ? -1 : 0,
-                IsHitTestVisible = false,
-                IsTabStop = false,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            return comboBox;
-        }
 
         private Dropdown BuildStageTaskKindDropdown(StageEditState stage)
         {
@@ -1813,8 +1612,81 @@ namespace CbsContractsDesktopClient.Views.Functional
                 }
 
                 stage.Status = new StatusEditState(option.Value, option.Label);
+                ApplyStageStatusBusinessLogic(stage);
             });
             return dropdown;
+        }
+
+        private void ApplyStageStatusBusinessLogic(StageEditState stage)
+        {
+            if (stage.Status.Id == WorkflowStatusIds.Closed)
+            {
+                stage.ClosedAt ??= DateTimeOffset.Now;
+            }
+            else
+            {
+                stage.ClosedAt = null;
+            }
+
+            ApplyContractClosePreview(stage);
+        }
+
+        private void ApplyContractClosePreview(StageEditState stage)
+        {
+            var contract = _workflowStore.SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractCommerEditDialog.ApplyContractClosePreview: SelectedContractEditState is not set.");
+
+            if (_workflowStore.ShouldCloseContractAfterStageClosed(stage))
+            {
+                contract.ApplyClosedStatusPreview(stage.ClosedAt);
+                SelectContractStatus(WorkflowStatusIds.Closed);
+                _closedAtEditor.Date = stage.ClosedAt;
+                AppendContractCloseCommentIfNeeded();
+                _contractClosePreviewApplied = true;
+                return;
+            }
+
+            if (!_contractClosePreviewApplied)
+            {
+                return;
+            }
+
+            contract.RestoreStatusPreview();
+            SelectContractStatus(contract.Status.Id);
+            _closedAtEditor.Date = contract.ClosedAt;
+            _contractClosePreviewApplied = false;
+        }
+
+        private void SelectContractStatus(long? statusId)
+        {
+            var option = _statusBox.ItemsSource
+                ?.OfType<EnumSelectOption>()
+                .FirstOrDefault(item => item.Value == statusId);
+            if (option is null)
+            {
+                throw new InvalidOperationException($"ContractCommerEditDialog.SelectContractStatus: contract status options must contain status id {statusId}.");
+            }
+
+            _statusBox.SelectedItem = option;
+        }
+
+        private void AppendContractCloseCommentIfNeeded()
+        {
+            if (_contractCloseCommentApplied)
+            {
+                return;
+            }
+
+            AppendAutomaticContractComment("Статус контракта был изменен автоматически на \"Закрыт\"");
+            _contractCloseCommentApplied = true;
+        }
+
+        private void AppendAutomaticContractComment(string text)
+        {
+            _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
+                ? text
+                : $"{_commentBox.Text.TrimEnd()}; {text}";
+            _commentBox.Select(_commentBox.Text.Length, 0);
         }
 
         private List<TaskKindSelectOption> BuildTaskKindOptions()
@@ -2290,23 +2162,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return value?.ToString("N2", CultureInfo.CurrentCulture) ?? string.Empty;
         }
 
-        private static decimal? TryGetDecimal(JsonElement? element)
-        {
-            if (element is null)
-            {
-                return null;
-            }
-
-            var value = element.Value;
-            return value.ValueKind switch
-            {
-                JsonValueKind.Number when value.TryGetDecimal(out var decimalValue) => decimalValue,
-                JsonValueKind.String when decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.InvariantCulture, out var decimalValue) => decimalValue,
-                JsonValueKind.String when decimal.TryParse(value.GetString(), NumberStyles.Number, CultureInfo.CurrentCulture, out var decimalValue) => decimalValue,
-                _ => null
-            };
-        }
-
         private static decimal? TryParseMoney(string? text)
         {
             if (string.IsNullOrWhiteSpace(text))
@@ -2350,37 +2205,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return option.Label.StartsWith(prefix, StringComparison.CurrentCultureIgnoreCase)
                 ? option.Label[prefix.Length..]
                 : option.Label;
-        }
-
-        private static IReadOnlyList<StageTaskRecord> ReadStageTaskRecords(JsonElement stage)
-        {
-            return EnumerateObjectArray(TryGetArray(stage, "tasks"))
-                .Select(static task =>
-                {
-                    var taskKind = TryGetObject(task, "task_kind");
-                    var taskKindId = taskKind is null
-                        ? TryGetLong(TryGetValue(task, "task_kind_id"))
-                        : TryGetLong(TryGetValue(taskKind.Value, "id")) ?? TryGetLong(TryGetValue(task, "task_kind_id"));
-                    var name = taskKind is null
-                        ? TryGetString(task, "name") ?? string.Empty
-                        : TryGetString(taskKind.Value, "name") ?? TryGetString(task, "name") ?? string.Empty;
-                    return new StageTaskRecord(
-                        TryGetLong(TryGetValue(task, "id")),
-                        TryGetString(task, "list_key"),
-                        taskKindId,
-                        name);
-                })
-                .Where(static task => task.TaskKindId is not null && !string.IsNullOrWhiteSpace(task.Name))
-                .ToList();
-        }
-
-        private static HashSet<long> ReadSelectedStageTaskKindIds(JsonElement stage)
-        {
-            return ReadStageTaskRecords(stage)
-                .Select(static task => task.TaskKindId)
-                .Where(static id => id is not null)
-                .Select(static id => id!.Value)
-                .ToHashSet();
         }
 
         private static string FormatStageFlagText(bool? isSet, DateTimeOffset? date)
@@ -2661,47 +2485,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             {
                 ShowErrorInfo($"Не удалось открыть файл: {ex.Message}");
             }
-        }
-
-        private static TabViewItem BuildColoredTab(
-            string title,
-            Windows.UI.Color backgroundColor,
-            Windows.UI.Color borderColor,
-            UIElement content)
-        {
-            var background = new Microsoft.UI.Xaml.Media.SolidColorBrush(backgroundColor);
-            var selectedBorder = new Microsoft.UI.Xaml.Media.SolidColorBrush(borderColor);
-            var item = new TabViewItem
-            {
-                Header = new Border
-                {
-                    Background = background,
-                    Padding = new Thickness(8, 2, 8, 2),
-                    Child = new TextBlock
-                    {
-                        Text = title,
-                        TextWrapping = TextWrapping.NoWrap
-                    }
-                },
-                Content = new Border
-                {
-                    Background = background,
-                    Child = new ScrollViewer
-                    {
-                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                        VerticalScrollMode = ScrollMode.Enabled,
-                        Content = content
-                    }
-                }
-            };
-            item.Resources["TabViewItemHeaderBackground"] = background;
-            item.Resources["TabViewItemHeaderBackgroundSelected"] = background;
-            item.Resources["TabViewItemHeaderBackgroundPointerOver"] = background;
-            item.Resources["TabViewItemHeaderBackgroundPressed"] = background;
-            item.Resources["TabViewItemHeaderBackgroundDisabled"] = background;
-            item.Resources["TabViewItemBorderBrush"] = selectedBorder;
-            item.Resources["TabViewSelectedItemBorderBrush"] = selectedBorder;
-            return item;
         }
 
         private static FrameworkElement BuildInlineCheckBox(CheckBox checkBox, string label)

@@ -16,6 +16,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         [ObservableProperty]
         public partial IReadOnlyList<RevisionEditState> ContractRevisionEditStates { get; set; } = [];
 
+        public string? ContractEditGraphRepairMessage { get; private set; }
+
         public void BeginContractEdit(TableDataRow contract, TableDataRow? contragent = null)
         {
             ArgumentNullException.ThrowIfNull(contract);
@@ -46,8 +48,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         public void ResetEditGraph()
         {
-            ContractStageEditStates = EnsureInitialStage(ReadStageEditStates(Contract));
-            ContractRevisionEditStates = EnsureInitialRevision(ReadRevisionEditStates(Contract));
+            var wasRepaired = false;
+            ContractStageEditStates = EnsureInitialStage(ReadStageEditStates(Contract), ref wasRepaired);
+            ContractRevisionEditStates = EnsureInitialRevision(ReadRevisionEditStates(Contract), ref wasRepaired);
+            ContractEditGraphRepairMessage = wasRepaired
+                ? "Структура контракта содержала ошибки и была исправлена - сохраните изменения."
+                : null;
             SelectedStageEditState = ResolveSelectedStageEditState();
         }
 
@@ -183,8 +189,14 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             var selectedStage = SelectedStageEditState
                 ?? throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed: SelectedStageEditState is not set.");
+            return ShouldCloseContractAfterStageClosed(selectedStage);
+        }
+
+        public bool ShouldCloseContractAfterStageClosed(StageEditState selectedStage)
+        {
+            ArgumentNullException.ThrowIfNull(selectedStage);
             var selectedContract = SelectedContractEditState
-                ?? throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed: SelectedContractEditState is not set.");
+                ?? throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterStageClosed: SelectedContractEditState is not set.");
 
             if (selectedStage.Status.Id != WorkflowStatusIds.Closed
                 || selectedStage.ClosedAt is null
@@ -196,7 +208,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             var stages = GetVisibleStageEditStates();
             if (!stages.Any(stage => SameIdentity(stage.Id, stage.ListKey, selectedStage.Id, selectedStage.ListKey)))
             {
-                throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed: selected stage is absent from ContractStageEditStates.");
+                throw new InvalidOperationException("ContractWorkflowStore.ShouldCloseContractAfterStageClosed: selected stage is absent from ContractStageEditStates.");
             }
 
             return stages
@@ -333,14 +345,24 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 .ToList();
         }
 
-        private IReadOnlyList<StageEditState> EnsureInitialStage(IReadOnlyList<StageEditState> stages)
+        private IReadOnlyList<StageEditState> EnsureInitialStage(IReadOnlyList<StageEditState> stages, ref bool wasRepaired)
         {
-            if (stages.Count > 0 || !IsNewContractEditGraph())
+            if (stages.Count == 0)
+            {
+                wasRepaired |= !IsNewContractEditGraph();
+                return [StageEditState.CreateNew(0, used: true)];
+            }
+
+            var visibleStages = stages.Where(static stage => !stage.IsDestroyed).ToList();
+            var isMultiStageShape = visibleStages.Any(static stage => (stage.Priority ?? 0) > 0);
+            if (!isMultiStageShape || visibleStages.Any(static stage => stage.Priority == 1))
             {
                 return stages;
             }
 
-            return [StageEditState.CreateNew(0, used: true)];
+            wasRepaired |= !IsNewContractEditGraph();
+            var firstStage = StageEditState.CreateNew(1, used: visibleStages.All(static stage => !stage.Used));
+            return [firstStage, .. stages];
         }
 
         private static IReadOnlyList<RevisionEditState> ReadRevisionEditStates(TableDataRow? contract)
@@ -357,13 +379,14 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 .ToList();
         }
 
-        private IReadOnlyList<RevisionEditState> EnsureInitialRevision(IReadOnlyList<RevisionEditState> revisions)
+        private IReadOnlyList<RevisionEditState> EnsureInitialRevision(IReadOnlyList<RevisionEditState> revisions, ref bool wasRepaired)
         {
-            if (revisions.Any(static revision => revision.Priority == 0) || !IsNewContractEditGraph())
+            if (revisions.Any(static revision => revision.Priority == 0))
             {
                 return revisions;
             }
 
+            wasRepaired |= !IsNewContractEditGraph();
             return [RevisionEditState.CreateNew(0, ContractRevisionDescription), .. revisions];
         }
 

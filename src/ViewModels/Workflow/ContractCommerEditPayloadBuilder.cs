@@ -99,7 +99,7 @@ public static class ContractCommerEditPayloadBuilder
         int? profileId)
     {
         var attributes = stages
-            .Where(stage => isCreateMode || stage.HasChanges || HasTaskChanges(stage) || !string.IsNullOrWhiteSpace(stage.Comment))
+            .Where(stage => isCreateMode || IsNewStage(stage) || stage.HasChanges || HasTaskChanges(stage) || !string.IsNullOrWhiteSpace(stage.Comment))
             .Select(stage => BuildStageAttributes(stage, profileId))
             .Where(static item => item.Count > 0)
             .ToList();
@@ -123,6 +123,11 @@ public static class ContractCommerEditPayloadBuilder
             .Select(static id => id!.Value)
             .ToHashSet();
         return !originalTaskKindIds.SetEquals(currentTaskKindIds);
+    }
+
+    private static bool IsNewStage(StageEditState stage)
+    {
+        return stage.Id <= 0;
     }
 
     private static Dictionary<string, object?> BuildStageAttributes(StageEditState stage, int? inputProfileId)
@@ -175,7 +180,7 @@ public static class ContractCommerEditPayloadBuilder
         bool isCreateMode)
     {
         var attributes = revisions
-            .Where(revision => isCreateMode || revision.HasChanges)
+            .Where(revision => isCreateMode || IsNewRevision(revision) || revision.HasChanges)
             .Select(BuildRevisionAttributes)
             .Where(static item => item.Count > 0)
             .ToList();
@@ -216,6 +221,11 @@ public static class ContractCommerEditPayloadBuilder
         AppendStageText(payload, isNew, "protocol_link", revision.Original.ProtocolLink, revision.ProtocolLink);
         AppendStageText(payload, isNew, "zip_link", revision.Original.ZipLink, revision.ZipLink);
         return payload;
+    }
+
+    private static bool IsNewRevision(RevisionEditState revision)
+    {
+        return revision.Id is null or <= 0;
     }
 
     private static void AppendCommentAttributes(

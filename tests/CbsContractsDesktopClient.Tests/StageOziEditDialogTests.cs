@@ -71,8 +71,8 @@ public sealed class StageOziEditDialogTests
         var code = File.ReadAllText(DialogPath);
         var xaml = File.ReadAllText(ViewPath);
 
-        Assert.Contains("StageEditDialogNavigationState? navigationState = null", code);
-        Assert.Contains("Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync = null", code);
+        Assert.Contains("StageEditDialogNavigationState? navigationState,", code);
+        Assert.Contains("Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? navigateAsync,", code);
         Assert.Contains("x:Name=\"PreviousStageButton\"", xaml);
         Assert.Contains("x:Name=\"NextStageButton\"", xaml);
         Assert.Contains("InitializeNavigationButton(_view.PreviousButton", code);

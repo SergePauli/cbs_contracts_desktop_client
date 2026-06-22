@@ -45,6 +45,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IEmployeeEditWorkflow _employeeEditWorkflow;
+        private readonly IContragentLookupService _contragentLookupService;
         private readonly ILocalUserSettingsService _localUserSettingsService;
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
@@ -66,6 +67,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _employeeEditWorkflow = App.Services.GetRequiredService<IEmployeeEditWorkflow>();
+            _contragentLookupService = App.Services.GetRequiredService<IContragentLookupService>();
             _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
@@ -164,6 +166,21 @@ namespace CbsContractsDesktopClient.Views.Shell
                 })
                 .Where(static option => option.Value is not null && !string.IsNullOrWhiteSpace(option.Label))
                 .DistinctBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+        }
+
+        private static IReadOnlyList<CbsTableFilterOptionDefinition> BuildContractTaskKindOptions(
+            IReadOnlyList<ReferenceLookupItem> items)
+        {
+            return items
+                .Where(static item => !string.IsNullOrWhiteSpace(item.Code))
+                .Select(static item => new CbsTableFilterOptionDefinition
+                {
+                    Value = item.Code,
+                    Label = FormatTaskKindOptionLabel(item.Code, item.DisplayName)
+                })
+                .DistinctBy(static option => option.Value?.ToString(), StringComparer.OrdinalIgnoreCase)
                 .OrderBy(static option => option.Label, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
         }
@@ -363,7 +380,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (_userService.CurrentUser?.DepartmentId == CommersDepartmentId)
             {
-                await ShowStageCommerEditDialogAsync();
+                await ShowStageContractCommerEditDialogAsync();
                 return;
             }
 
@@ -859,6 +876,92 @@ namespace CbsContractsDesktopClient.Views.Shell
                     ? GetBrush("ShellPrimaryTextBrush")
                     : GetBrush("ShellSecondaryTextBrush");
             }
+        }
+
+        private async Task ShowStageContractCommerEditDialogAsync(TableDataRow? sourceRowOverride = null)
+        {
+            var sourceRow = sourceRowOverride ?? await LoadStageEditRowAsync();
+            if (sourceRow is null)
+            {
+                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                return;
+            }
+
+            if (!await PrepareStageEditContextAsync(sourceRow))
+            {
+                return;
+            }
+
+            var contract = _contractWorkflowStore.Contract
+                ?? throw new InvalidOperationException("StageHostView.ShowStageContractCommerEditDialogAsync: ContractWorkflowStore.Contract is not set.");
+
+            ContractCommerEditDialog dialog;
+            try
+            {
+                var allStatusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
+                var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
+                var taskKindOptions = BuildContractTaskKindOptions(taskKindItems);
+                if (!string.IsNullOrWhiteSpace(_contractWorkflowStore.ContractEditGraphRepairMessage))
+                {
+                    Store.AppendUiTrace($"CONTRACT EDIT GRAPH REPAIRED contract={TryGetLongValue(contract, "id")} message={_contractWorkflowStore.ContractEditGraphRepairMessage}");
+                }
+
+                dialog = new ContractCommerEditDialog(
+                    _contractWorkflowStore,
+                    contract,
+                    taskKindOptions,
+                    taskKindItems,
+                    allStatusOptions,
+                    allStatusOptions,
+                    _contragentLookupService.LoadOptionsAsync,
+                    openStagesTabOnLoad: true)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                Store.AppendUiTrace($"CONTRACT EDIT OPEN FAILED contract={TryGetLongValue(contract, "id")} exception={ex}");
+                await ShowErrorDialogAsync("Редактирование этапа", ex.Message);
+                return;
+            }
+
+            TableDataRow? savedContractRow = null;
+            dialog.SaveRequestedAsync += async args =>
+            {
+                try
+                {
+                    var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
+                    if (!HasUpdatePayloadChanges(payload))
+                    {
+                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
+                        args.Cancel = true;
+                        return;
+                    }
+
+                    savedContractRow = await _modelMutationService.UpdateAsync(ContractModel, payload);
+                }
+                catch (Exception ex)
+                {
+                    dialog.ShowErrorInfo(ex.Message);
+                    args.Cancel = true;
+                }
+            };
+
+            await dialog.ShowAsync();
+            if (!dialog.WasSaved || savedContractRow is null)
+            {
+                return;
+            }
+
+            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
+            _referenceLookupCacheService.Invalidate(ContractModel);
+            await RefreshTableRowAfterSaveAsync(false, sourceRow);
+
+            await RefreshDetailAsync();
+            ShowSuccessNotification(
+                "Контракт сохранен",
+                "Изменения этапов контракта сохранены.");
         }
 
         private async Task<bool> PrepareStageEditContextAsync(TableDataRow sourceRow)

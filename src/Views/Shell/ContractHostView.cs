@@ -701,20 +701,36 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var allStatusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
-            var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
-            _contractWorkflowStore.BeginContractEdit(contract);
-            var dialog = new ContractCommerEditDialog(
-                _contractWorkflowStore,
-                contract,
-                OptionsRegistry.Get("TaskKind"),
-                taskKindItems,
-                OptionsRegistry.Get("ContractStatus"),
-                allStatusOptions,
-                _contragentLookupService.LoadOptionsAsync)
+            ContractCommerEditDialog dialog;
+            try
             {
-                XamlRoot = XamlRoot
-            };
+                var allStatusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
+                var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
+                _contractWorkflowStore.BeginContractEdit(contract);
+                if (!string.IsNullOrWhiteSpace(_contractWorkflowStore.ContractEditGraphRepairMessage))
+                {
+                    Store.AppendUiTrace($"CONTRACT EDIT GRAPH REPAIRED contract={TryGetSelectedRowId(contract)} message={_contractWorkflowStore.ContractEditGraphRepairMessage}");
+                }
+
+                dialog = new ContractCommerEditDialog(
+                    _contractWorkflowStore,
+                    contract,
+                    OptionsRegistry.Get("TaskKind"),
+                    taskKindItems,
+                    OptionsRegistry.Get("ContractStatus"),
+                    allStatusOptions,
+                    _contragentLookupService.LoadOptionsAsync)
+                {
+                    XamlRoot = XamlRoot
+                };
+            }
+            catch (Exception ex)
+            {
+                Store.AppendUiTrace($"CONTRACT EDIT OPEN FAILED contract={TryGetSelectedRowId(contract)} exception={ex}");
+                await ShowErrorDialogAsync("Редактирование контракта", ex.Message);
+                return;
+            }
+
             TableDataRow? savedRow = null;
             AttachContractCommerSaveHandler(dialog, isCreateMode: false, saved => savedRow = saved);
             await dialog.ShowAsync();
