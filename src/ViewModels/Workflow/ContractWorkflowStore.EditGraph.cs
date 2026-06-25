@@ -154,6 +154,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 .ToList();
         }
 
+        public RevisionEditState GetContractDocumentRevisionEditState()
+        {
+            return ContractRevisionEditStates.FirstOrDefault(static revision => revision.Priority == 0)
+                ?? throw new InvalidOperationException("ContractWorkflowStore.GetContractDocumentRevisionEditState: contract edit graph must contain revision priority 0.");
+        }
+
         public bool TrySelectAdjacentStageEditState(int direction)
         {
             if (direction == 0)

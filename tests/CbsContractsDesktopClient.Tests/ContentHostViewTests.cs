@@ -253,12 +253,18 @@ public sealed class ContentHostViewTests
         var contragentHost = File.ReadAllText(ContragentHostViewPath);
 
         Assert.Contains("ApplyEditButtonState(_editButton", contractHost);
+        Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", contractHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", contractHost);
         Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", contractHost);
         Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", contractHost);
         Assert.Contains("ApplyEditButtonState(_editButton", stageHost);
+        Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", stageHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", stageHost);
         Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", stageHost);
         Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", stageHost);
         Assert.Contains("ApplyEditButtonState(_editButton", revisionHost);
+        Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", revisionHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", revisionHost);
         Assert.Contains("ApplyDefaultActionButtonState(", revisionHost);
         Assert.Contains("ApplyEditButtonState(_editButton", employeeHost);
         Assert.Contains("ApplyDeleteButtonState(_deleteButton", employeeHost);
@@ -335,15 +341,16 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
-    public void StageHostView_PreparesStageEditContextFromContractId()
+    public void StageHostView_PreparesStageEditContextThroughWorkflowFactory()
     {
         var stageHost = File.ReadAllText(StageHostViewPath);
+        var workflowFactory = File.ReadAllText(Path.Combine(ProjectRoot, "src", "ViewModels", "Workflow", "ContractWorkflowFactory.cs"));
 
         Assert.Contains("private async Task<bool> PrepareStageEditContextAsync(TableDataRow sourceRow)", stageHost);
-        Assert.Contains("private long? ResolveStageContractId(TableDataRow sourceRow)", stageHost);
-        Assert.Contains("TryGetLongValue(sourceRow, \"contract.id\")", stageHost);
-        Assert.Contains("TryGetLongValue(sourceRow, \"contract_id\")", stageHost);
-        Assert.Contains("_contractWorkflowStore.BeginStageEdit(contract, sourceRow, contragent);", stageHost);
+        Assert.Contains("_contractWorkflowFactory.CreateFromStageRowAsync(sourceRow)", stageHost);
+        Assert.Contains("TryGetLong(row.GetValue(\"contract.id\"))", workflowFactory);
+        Assert.Contains("TryGetLong(row.GetValue(\"contract_id\"))", workflowFactory);
+        Assert.Contains("throw new InvalidOperationException(\"Contract workflow stage row must contain contract.id or contract_id.\")", workflowFactory);
     }
 
     [Fact]

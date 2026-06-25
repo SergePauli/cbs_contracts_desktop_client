@@ -82,7 +82,9 @@ namespace CbsContractsDesktopClient.Views.Functional
         private Button? _contractProtocolAttachButton;
         private Dropdown? _firstStageDeadlineKindBox;
         private Dropdown? _initialStageFocusTarget;
+        private FrameworkElement? _initialRevisionFocusTarget;
         private readonly bool _openStagesTabOnLoad;
+        private readonly bool _openRevisionsTabOnLoad;
         private bool _isUpdatingExtAgreementBox;
         private bool _isSyncingTaskKindSelection;
         private bool _contractClosePreviewApplied;
@@ -97,7 +99,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             IReadOnlyList<CbsTableFilterOptionDefinition> stageStatusOptions,
             Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> loadContragentOptionsAsync,
             bool isCreateMode = false,
-            bool openStagesTabOnLoad = false)
+            bool openStagesTabOnLoad = false,
+            bool openRevisionsTabOnLoad = false)
         {
             ArgumentNullException.ThrowIfNull(workflowStore);
             ArgumentNullException.ThrowIfNull(contract);
@@ -117,6 +120,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _isCreateMode = isCreateMode;
             _openStagesTabOnLoad = openStagesTabOnLoad;
+            _openRevisionsTabOnLoad = openRevisionsTabOnLoad;
             ResetStageEditorsFromContract();
             ResetRevisionEditorsFromContract();
             FullSizeDesired = false;
@@ -419,6 +423,12 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
+            if (_openRevisionsTabOnLoad)
+            {
+                FocusInitialRevisionEditor();
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(_taskKindBox.Text))
             {
                 return;
@@ -435,6 +445,12 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             DispatcherQueue.TryEnqueue(() => (_initialStageFocusTarget ?? _firstStageDeadlineKindBox)?.FocusInput());
+        }
+
+        private void FocusInitialRevisionEditor()
+        {
+            SelectRevisionsTab();
+            DispatcherQueue.TryEnqueue(() => _initialRevisionFocusTarget?.Focus(FocusState.Programmatic));
         }
 
         private void ConfigureStatusCombo()
@@ -1301,6 +1317,12 @@ namespace CbsContractsDesktopClient.Views.Functional
                 Text = revision.Description ?? string.Empty,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
+            if (_openRevisionsTabOnLoad
+                && _workflowStore.FocusedRevisionPriority == revision.Priority)
+            {
+                _initialRevisionFocusTarget = descriptionBox;
+            }
+
             descriptionBox.TextChanged += (_, _) => revision.Description = descriptionBox.Text ?? string.Empty;
             var description = (FrameworkElement)BuildLabeledControl(
                 "Тип документа",

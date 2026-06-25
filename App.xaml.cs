@@ -56,6 +56,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<AuditStore>();
             services.AddSingleton<TablePageStore>();
             services.AddSingleton<ContractWorkflowStore>();
+            services.AddSingleton<ContractWorkflowFactory>();
             services.AddSingleton<StatusTableViewModel>();
             services.AddHttpClient(nameof(HolidayRecalculationService), client =>
             {

@@ -14,6 +14,7 @@ using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
+using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dialogs;
@@ -49,11 +50,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ILocalUserSettingsService _localUserSettingsService;
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
+        private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly StageRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private CancellationTokenSource? _detailCts;
         private bool _showStageCostFraction;
         private Button? _editButton;
+        private Button? _infoButton;
         private Button? _copyButton;
         private Button? _commentButton;
         private Button? _createEmployeeButton;
@@ -71,6 +74,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
+            _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             SetDetailContent(_detailView, isVisible: false);
         }
@@ -79,6 +83,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             _editButton = CreateHeaderIconButton("\uE70F", "Редактировать этап");
             _editButton.Click += async (_, _) => await ShowStageEditDialogAsync();
+
+            _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
+            _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
             _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать этап");
             _copyButton.Click += (_, _) => CopyStageInfo();
@@ -100,6 +107,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             return
             [
                 _editButton,
+                _infoButton,
                 _copyButton,
                 _commentButton,
                 _createEmployeeButton,
@@ -226,10 +234,18 @@ namespace CbsContractsDesktopClient.Views.Shell
             var hasSelectedRow = Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder;
 
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
+            ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
             ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
             ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
             ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
             ApplyDefaultActionButtonState(_saveFiltersButton, Store.HasActiveReference);
+        }
+
+        private bool HasContractInfoSelection()
+        {
+            return Store.SelectedRow is { IsPlaceholder: false } row
+                && TryGetSelectedRowId(row) == _contractWorkflowStore.SelectedStageEditState?.Id
+                && _contractWorkflowStore.SelectedContractEditState is not null;
         }
 
         private void UpdateDetailView(TableDataRow? row)
@@ -259,57 +275,23 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
-            var contractId = _rowDetailStrategy.ResolveContractId(Store.SelectedRow);
-            var listContragentId = _rowDetailStrategy.ResolveContragentId(Store.SelectedRow);
-            if (contractId is null && listContragentId is null)
-            {
-                UpdateActionButtonState();
-                return;
-            }
-
             var cancellationTokenSource = new CancellationTokenSource();
             _detailCts = cancellationTokenSource;
 
             try
             {
-                var contractTask = contractId is long selectedContractId
-                    ? LoadRowDetailRowSafelyAsync(
-                        () => LoadContractCardAsync(selectedContractId, cancellationTokenSource.Token),
-                        cancellationTokenSource.Token)
-                    : Task.FromResult<TableDataRow?>(null);
-                var contragentTask = listContragentId is long selectedContragentId
-                    ? LoadRowDetailRowSafelyAsync(
-                        () => LoadContragentCardAsync(selectedContragentId, cancellationTokenSource.Token),
-                        cancellationTokenSource.Token)
-                    : Task.FromResult<TableDataRow?>(null);
-
-                var contract = await contractTask;
-                var contragent = await contragentTask;
+                var context = await _contractWorkflowFactory.CreateFromStageRowAsync(
+                    Store.SelectedRow,
+                    cancellationTokenSource.Token);
                 if (cancellationTokenSource.IsCancellationRequested)
                 {
                     return;
                 }
 
-                if (Store.SelectedRow is null || !_rowDetailStrategy.IsSameSelection(Store.SelectedRow, contractId))
+                if (!ApplyStageWorkflowContextIfCurrent(context))
                 {
                     return;
                 }
-
-                var contractContragentId = contract is null
-                    ? null
-                    : TryGetLongValue(contract, "contragent.id");
-                if (contragent is null && contractContragentId is long loadedContragentId)
-                {
-                    contragent = await LoadRowDetailRowSafelyAsync(
-                        () => LoadContragentCardAsync(loadedContragentId, cancellationTokenSource.Token),
-                        cancellationTokenSource.Token);
-                }
-
-                _rowDetailStrategy.ApplySelection(_contractWorkflowStore, Store.SelectedRow, contract, contragent);
-                _detailView.ContractRow = contract;
-                _detailView.ContragentRow = contragent;
-                RefreshSelectedFooterText();
-                UpdateActionButtonState();
             }
             catch (OperationCanceledException)
             {
@@ -347,24 +329,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             RefreshSelectedFooterText();
         }
 
-        private static async Task<TableDataRow?> LoadRowDetailRowSafelyAsync(
-            Func<Task<TableDataRow?>> loadAsync,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await loadAsync();
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch when (!cancellationToken.IsCancellationRequested)
-            {
-                return null;
-            }
-        }
-
         private async Task ShowStageEditDialogAsync()
         {
             if (Store.SelectedRow is null)
@@ -390,17 +354,15 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            await ShowErrorDialogAsync(
-                "Редактирование этапа",
-                "Диалог редактирования этапа для вашего отдела пока не реализован.");
+            await ShowContractInfoDialogAsync();
         }
 
         private async Task ShowStageOziEditDialogAsync(TableDataRow? sourceRowOverride = null)
         {
-            var sourceRow = sourceRowOverride ?? await LoadStageEditRowAsync();
-            if (sourceRow is null)
+            var sourceRow = sourceRowOverride ?? Store.SelectedRow;
+            if (sourceRow is null || sourceRow.IsPlaceholder)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Редактирование этапа", "Не выбран этап для редактирования.");
                 return;
             }
 
@@ -414,13 +376,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             StageOziEditDialog dialog;
             try
             {
+                var selectedStageEditState = _contractWorkflowStore.SelectedStageEditState
+                    ?? throw new InvalidOperationException("StageHostView.ShowStageOziEditDialogAsync: SelectedStageEditState is not set.");
                 dialog = new StageOziEditDialog(
-                    _contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),
+                    selectedStageEditState,
                     _contractWorkflowStore.SelectedContractEditState,
                     statusOptions,
                     employeeItems,
                     _userService.CurrentUser?.ProfileId,
-                    BuildStageNavigationState(_contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow)),
+                    BuildStageNavigationState(selectedStageEditState),
                     NavigateStageEditDialogAsync,
                     _contractWorkflowStore.ShouldCloseContractAfterSelectedStageClosed)
                 {
@@ -478,12 +442,12 @@ namespace CbsContractsDesktopClient.Views.Shell
                 BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
         }
 
-        private async Task ShowStageCommerEditDialogAsync(TableDataRow? sourceRowOverride = null)
+        private async Task ShowContractInfoDialogAsync(TableDataRow? sourceRowOverride = null)
         {
-            var sourceRow = sourceRowOverride ?? await LoadStageEditRowAsync();
-            if (sourceRow is null)
+            var sourceRow = sourceRowOverride ?? Store.SelectedRow;
+            if (sourceRow is null || sourceRow.IsPlaceholder)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Информация о контракте", "Не выбран этап для просмотра.");
                 return;
             }
 
@@ -492,18 +456,23 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var statusOptions = OptionsRegistry.Get("StageStatus");
-            var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
-            StageCommerEditDialog dialog;
+            ContractInfoDialog dialog;
             try
             {
-                dialog = new StageCommerEditDialog(
-                    _contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),
-                    _contractWorkflowStore.SelectedContractEditState,
-                    statusOptions,
-                    taskKindItems,
-                    _userService.CurrentUser?.ProfileId,
-                    BuildStageNavigationState(_contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow)),
+                var contract = _contractWorkflowStore.SelectedContractEditState
+                    ?? throw new InvalidOperationException("StageHostView.ShowContractInfoDialogAsync: SelectedContractEditState is not set.");
+                var auditSummary = await ContractInfoAuditLoader.LoadAsync(
+                    _dataQueryService,
+                    contract.Id,
+                    contract.Status.Id == WorkflowStatusIds.Closed);
+                var stage = _contractWorkflowStore.SelectedStageEditState
+                    ?? throw new InvalidOperationException("StageHostView.ShowContractInfoDialogAsync: SelectedStageEditState is not set.");
+                dialog = new ContractInfoDialog(
+                    stage,
+                    contract,
+                    _contractWorkflowStore.GetContractDocumentRevisionEditState(),
+                    auditSummary,
+                    BuildStageNavigationState(stage),
                     NavigateStageEditDialogAsync)
                 {
                     XamlRoot = XamlRoot
@@ -511,58 +480,19 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch (Exception ex)
             {
-                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
+                await ShowErrorDialogAsync("Не удалось открыть информацию о контракте.", ex.Message);
                 return;
             }
-
-            TableDataRow? savedRow = null;
-            dialog.SaveRequestedAsync += async args =>
-            {
-                try
-                {
-                    var stagePayload = dialog.BuildPayload();
-                    if (!HasUpdatePayloadChanges(stagePayload))
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    savedRow = await SaveStagePayloadAsync(stagePayload);
-
-                    if (dialog.ShouldCloseContract())
-                    {
-                        await _modelMutationService.UpdateAsync(
-                            ContractModel,
-                            dialog.BuildContractClosePayload());
-                    }
-                }
-                catch (Exception ex)
-                {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
-                }
-            };
 
             await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow);
-            ShowSuccessNotification(
-                "Этап сохранен",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
         }
 
         private async Task ShowStageFinEditDialogAsync(TableDataRow? sourceRowOverride = null)
         {
-            var sourceRow = sourceRowOverride ?? await LoadStageEditRowAsync();
-            if (sourceRow is null)
+            var sourceRow = sourceRowOverride ?? Store.SelectedRow;
+            if (sourceRow is null || sourceRow.IsPlaceholder)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Редактирование этапа", "Не выбран этап для редактирования.");
                 return;
             }
 
@@ -575,12 +505,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             StageFinEditDialog dialog;
             try
             {
+                var selectedStageEditState = _contractWorkflowStore.SelectedStageEditState
+                    ?? throw new InvalidOperationException("StageHostView.ShowStageFinEditDialogAsync: SelectedStageEditState is not set.");
                 dialog = new StageFinEditDialog(
-                    _contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow),
+                    selectedStageEditState,
                     _contractWorkflowStore.SelectedContractEditState,
                     statusOptions,
                     _userService.CurrentUser?.ProfileId,
-                    BuildStageNavigationState(_contractWorkflowStore.SelectedStageEditState ?? StageEditState.FromRow(sourceRow)),
+                    BuildStageNavigationState(selectedStageEditState),
                     NavigateStageEditDialogAsync)
                 {
                     XamlRoot = XamlRoot
@@ -878,12 +810,27 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
+        private bool ApplyStageWorkflowContextIfCurrent(ContractWorkflowContext context)
+        {
+            if (!context.Matches(Store.SelectedRow))
+            {
+                return false;
+            }
+
+            context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
+            _detailView.ContractRow = context.Contract;
+            _detailView.ContragentRow = context.Contragent;
+            RefreshSelectedFooterText();
+            UpdateActionButtonState();
+            return true;
+        }
+
         private async Task ShowStageContractCommerEditDialogAsync(TableDataRow? sourceRowOverride = null)
         {
-            var sourceRow = sourceRowOverride ?? await LoadStageEditRowAsync();
-            if (sourceRow is null)
+            var sourceRow = sourceRowOverride ?? Store.SelectedRow;
+            if (sourceRow is null || sourceRow.IsPlaceholder)
             {
-                await ShowErrorDialogAsync("Редактирование этапа", "Не удалось загрузить карточку выбранного этапа.");
+                await ShowErrorDialogAsync("Редактирование этапа", "Не выбран этап для редактирования.");
                 return;
             }
 
@@ -966,56 +913,23 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task<bool> PrepareStageEditContextAsync(TableDataRow sourceRow)
         {
-            var contractId = ResolveStageContractId(sourceRow);
-            if (contractId is null)
-            {
-                await ShowErrorDialogAsync(
-                    "Редактирование этапа",
-                    "StageHostView.PrepareStageEditContextAsync.ResolveStageContractId: В выбранном этапе отсутствует contract.id.");
-                return false;
-            }
-
-            var contract = await LoadContractCardAsync(contractId.Value);
-            if (contract is null)
-            {
-                await ShowErrorDialogAsync(
-                    "Редактирование этапа",
-                    "StageHostView.PrepareStageEditContextAsync.LoadContractCardAsync: Не удалось загрузить контракт выбранного этапа.");
-                return false;
-            }
-
-            var contragent = _contractWorkflowStore.Contragent;
-            var contractContragentId = TryGetLongValue(contract, "contragent.id")
-                ?? _rowDetailStrategy.ResolveContragentId(sourceRow);
-            if (contractContragentId is long contragentId)
-            {
-                contragent = await LoadContragentCardAsync(contragentId);
-            }
-
             try
             {
-                _contractWorkflowStore.BeginStageEdit(contract, sourceRow, contragent);
+                var context = await _contractWorkflowFactory.CreateFromStageRowAsync(sourceRow);
+                if (!ApplyStageWorkflowContextIfCurrent(context))
+                {
+                    return false;
+                }
+
+                return true;
             }
             catch (Exception ex)
             {
                 await ShowErrorDialogAsync(
                     "Не удалось открыть этап.",
-                    FormatStageEditNavigationError("StageHostView.PrepareStageEditContextAsync.BeginStageEdit", ex));
+                    FormatStageEditNavigationError("StageHostView.PrepareStageEditContextAsync", ex));
                 return false;
             }
-
-            _detailView.ContractRow = contract;
-            _detailView.ContragentRow = contragent;
-            RefreshSelectedFooterText();
-            return true;
-        }
-
-        private long? ResolveStageContractId(TableDataRow sourceRow)
-        {
-            return TryGetLongValue(sourceRow, "contract.id")
-                ?? TryGetLongValue(sourceRow, "contract_id")
-                ?? (Store.SelectedRow is null ? null : _rowDetailStrategy.ResolveContractId(Store.SelectedRow))
-                ?? (Store.SelectedRow is null ? null : TryGetLongValue(Store.SelectedRow, "contract_id"));
         }
 
         private StageEditDialogNavigationState BuildStageNavigationState(StageEditState stage)
@@ -1081,82 +995,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             return -1;
-        }
-
-        private async Task<TableDataRow?> LoadStageEditRowAsync(CancellationToken cancellationToken = default)
-        {
-            if (Store.SelectedRow is null)
-            {
-                return null;
-            }
-
-            var id = TryGetSelectedRowId(Store.SelectedRow);
-            if (id is null)
-            {
-                return null;
-            }
-
-            return await LoadStageEditRowAsync(id.Value, cancellationToken);
-        }
-
-        private async Task<TableDataRow?> LoadStageEditRowAsync(
-            long id,
-            CancellationToken cancellationToken = default)
-        {
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = "Stage",
-                    Preset = "edit",
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = id
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
-        }
-
-        private async Task<TableDataRow?> LoadContractCardAsync(
-            long contractId,
-            CancellationToken cancellationToken = default)
-        {
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = ContractModel,
-                    Preset = "edit",
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = contractId
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
-        }
-
-        private async Task<TableDataRow?> LoadContragentCardAsync(
-            long contragentId,
-            CancellationToken cancellationToken = default)
-        {
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = "Contragent",
-                    Preset = "card",
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = contragentId
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
         private async Task<IReadOnlyList<ReferenceLookupItem>> LoadOziEmployeeItemsAsync(

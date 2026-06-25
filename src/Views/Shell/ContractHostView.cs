@@ -14,6 +14,7 @@ using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
+using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dialogs;
@@ -55,12 +56,14 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ILocalUserSettingsService _localUserSettingsService;
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
+        private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly ContractTableRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private CancellationTokenSource? _detailCts;
         private bool _showContractCostFraction;
         private Button? _createButton;
         private Button? _editButton;
+        private Button? _infoButton;
         private Button? _copyButton;
         private Button? _commentButton;
         private Button? _createEmployeeButton;
@@ -81,6 +84,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
+            _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _showContractCostFraction = _localUserSettingsService.Get().ShowContractCostFraction;
             SetDetailContent(_detailView, isVisible: false);
         }
@@ -92,6 +96,9 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             _editButton = CreateHeaderIconButton("\uE70F", "Редактировать контракт");
             _editButton.Click += async (_, _) => await ShowEditDialogForCurrentUserAsync();
+
+            _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
+            _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
             _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать контракт");
             _copyButton.Click += (_, _) => CopyContractInfo();
@@ -118,6 +125,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             [
                 _createButton,
                 _editButton,
+                _infoButton,
                 _copyButton,
                 _commentButton,
                 _createEmployeeButton,
@@ -253,11 +261,19 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             ApplyCreateButtonState(_createButton, canCreateContract);
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
+            ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
             ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
             ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
             ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
             ApplyCreateButtonState(_contragentMenuButton, !_isContragentWorkflowInProgress);
             ApplyDefaultActionButtonState(_saveFiltersButton, Store.HasActiveReference);
+        }
+
+        private bool HasContractInfoSelection()
+        {
+            return Store.SelectedRow is { IsPlaceholder: false } row
+                && TryGetSelectedRowId(row) == _contractWorkflowStore.SelectedContractEditState?.Id
+                && _contractWorkflowStore.SelectedStageEditState is not null;
         }
 
         private void UpdateDetailView(TableDataRow? row)
@@ -292,62 +308,29 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
-            var contractId = _rowDetailStrategy.ResolveContractId(selectedRow);
-            var listContragentId = _rowDetailStrategy.ResolveContragentId(selectedRow);
-            if (contractId is null && listContragentId is null)
-            {
-                UpdateActionButtonState();
-                return;
-            }
-
             var cancellationTokenSource = new CancellationTokenSource();
             _detailCts = cancellationTokenSource;
 
             try
             {
-                var contractTask = contractId is long selectedContractId
-                    ? LoadRowDetailRowSafelyAsync(
-                        () => LoadContractEditRowAsync(selectedContractId, cancellationTokenSource.Token),
-                        cancellationTokenSource.Token)
-                    : Task.FromResult<TableDataRow?>(null);
-                var contragentTask = listContragentId is long selectedContragentId
-                    ? LoadRowDetailRowSafelyAsync(
-                        () => LoadContragentCardAsync(selectedContragentId, cancellationTokenSource.Token),
-                        cancellationTokenSource.Token)
-                    : Task.FromResult<TableDataRow?>(null);
-
-                var contract = await contractTask;
-                var contragent = await contragentTask;
+                var context = await _contractWorkflowFactory.CreateFromContractRowAsync(
+                    selectedRow,
+                    cancellationTokenSource.Token);
                 if (cancellationTokenSource.IsCancellationRequested)
                 {
                     Store.AppendUiTrace($"CONTRACT DETAIL REFRESH canceled selected={DescribeDetailRow(selectedRow)}");
                     return;
                 }
 
-                if (Store.SelectedRow is null || !_rowDetailStrategy.IsSameSelection(Store.SelectedRow, contractId))
+                if (!ApplyContractWorkflowContextIfCurrent(context))
                 {
                     Store.AppendUiTrace(
                         $"CONTRACT DETAIL REFRESH stale selected={DescribeDetailRow(selectedRow)} current={DescribeDetailRow(Store.SelectedRow)}");
                     return;
                 }
 
-                var contractContragentId = contract is null
-                    ? null
-                    : TryGetLongValue(contract, "contragent.id");
-                if (contragent is null && contractContragentId is long loadedContragentId)
-                {
-                    contragent = await LoadRowDetailRowSafelyAsync(
-                        () => LoadContragentCardAsync(loadedContragentId, cancellationTokenSource.Token),
-                        cancellationTokenSource.Token);
-                }
-
-                _rowDetailStrategy.ApplySelection(_contractWorkflowStore, selectedRow, contract ?? selectedRow, contragent);
-                _detailView.ContractRow = contract ?? selectedRow;
-                _detailView.ContragentRow = contragent;
-                RefreshSelectedFooterText();
-                UpdateActionButtonState();
                 Store.AppendUiTrace(
-                    $"CONTRACT DETAIL REFRESH applied selected={DescribeDetailRow(selectedRow)} contract={DescribeDetailRow(contract)} contragent={DescribeDetailRow(contragent)}");
+                    $"CONTRACT DETAIL REFRESH applied selected={DescribeDetailRow(selectedRow)} contract={DescribeDetailRow(context.Contract)} contragent={DescribeDetailRow(context.Contragent)}");
             }
             catch (OperationCanceledException)
             {
@@ -360,6 +343,43 @@ namespace CbsContractsDesktopClient.Views.Shell
                     Store.AppendUiTrace($"CONTRACT DETAIL REFRESH failed selected={DescribeDetailRow(selectedRow)}");
                     UpdateActionButtonState();
                 }
+            }
+        }
+
+        private bool ApplyContractWorkflowContextIfCurrent(ContractWorkflowContext context)
+        {
+            if (!context.Matches(Store.SelectedRow))
+            {
+                return false;
+            }
+
+            context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
+            _detailView.ContractRow = context.Contract;
+            _detailView.ContragentRow = context.Contragent;
+            RefreshSelectedFooterText();
+            UpdateActionButtonState();
+            return true;
+        }
+
+        private async Task<ContractWorkflowContext?> EnsureContractWorkflowContextForDialogAsync(string title)
+        {
+            if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
+            {
+                return null;
+            }
+
+            try
+            {
+                var context = await _contractWorkflowFactory.CreateFromContractRowAsync(Store.SelectedRow);
+                return ApplyContractWorkflowContextIfCurrent(context)
+                    ? context
+                    : null;
+            }
+            catch (Exception ex)
+            {
+                Store.AppendUiTrace($"CONTRACT WORKFLOW CONTEXT FAILED title={title} exception={ex}");
+                await ShowErrorDialogAsync(title, ex.Message);
+                return null;
             }
         }
 
@@ -389,64 +409,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             return TryGetSelectedRowId(row)?.ToString() ?? "<no-id>";
-        }
-
-        private static async Task<TableDataRow?> LoadRowDetailRowSafelyAsync(
-            Func<Task<TableDataRow?>> loadAsync,
-            CancellationToken cancellationToken)
-        {
-            try
-            {
-                return await loadAsync();
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch when (!cancellationToken.IsCancellationRequested)
-            {
-                return null;
-            }
-        }
-
-        private async Task<TableDataRow?> LoadContractEditRowAsync(
-            long contractId,
-            CancellationToken cancellationToken = default)
-        {
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = ContractModel,
-                    Preset = "edit",
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = contractId
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
-        }
-
-        private async Task<TableDataRow?> LoadContragentCardAsync(
-            long contragentId,
-            CancellationToken cancellationToken = default)
-        {
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = "Contragent",
-                    Preset = "card",
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = contragentId
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            return rows.FirstOrDefault(static row => !row.IsPlaceholder);
         }
 
         private void CopyContractInfo()
@@ -687,26 +649,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var contract = _contractWorkflowStore.Contract;
-            if (contract is null && TryGetSelectedRowId(Store.SelectedRow) is long contractId)
+            var context = await EnsureContractWorkflowContextForDialogAsync("Редактирование контракта");
+            if (context is null)
             {
-                contract = await LoadContractEditRowAsync(contractId);
-            }
-
-            if (contract is null)
-            {
-                await ShowErrorDialogAsync(
-                    "Редактирование контракта",
-                    "Не удалось загрузить карточку контракта для редактирования.");
                 return;
             }
 
+            var contract = context.Contract;
             ContractCommerEditDialog dialog;
             try
             {
                 var allStatusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
                 var taskKindItems = await _referenceLookupCacheService.GetItemsAsync("TaskKind");
-                _contractWorkflowStore.BeginContractEdit(contract);
                 if (!string.IsNullOrWhiteSpace(_contractWorkflowStore.ContractEditGraphRepairMessage))
                 {
                     Store.AppendUiTrace($"CONTRACT EDIT GRAPH REPAIRED contract={TryGetSelectedRowId(contract)} message={_contractWorkflowStore.ContractEditGraphRepairMessage}");
@@ -761,7 +715,43 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            await ShowContractCommerEditDialogAsync();
+            if (IsContractCommerEditAllowedForCurrentUser())
+            {
+                await ShowContractCommerEditDialogAsync();
+                return;
+            }
+
+            await ShowContractInfoDialogAsync();
+        }
+
+        private async Task ShowContractInfoDialogAsync()
+        {
+            if (await EnsureContractWorkflowContextForDialogAsync("Информация о контракте") is null)
+            {
+                return;
+            }
+
+            var stage = _contractWorkflowStore.SelectedStageEditState
+                ?? throw new InvalidOperationException("ContractHostView.ShowContractInfoDialogAsync: SelectedStageEditState is not set.");
+            var contract = _contractWorkflowStore.SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractHostView.ShowContractInfoDialogAsync: SelectedContractEditState is not set.");
+            var auditSummary = await ContractInfoAuditLoader.LoadAsync(
+                _dataQueryService,
+                contract.Id,
+                contract.Status.Id == WorkflowStatusIds.Closed);
+
+            var dialog = new ContractInfoDialog(
+                stage,
+                contract,
+                _contractWorkflowStore.GetContractDocumentRevisionEditState(),
+                auditSummary,
+                BuildStageNavigationState(stage),
+                NavigateStageEditDialogAsync)
+            {
+                XamlRoot = XamlRoot
+            };
+
+            await dialog.ShowAsync();
         }
 
         private async Task ShowContractOziStageEditDialogAsync()
@@ -771,27 +761,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var contract = _contractWorkflowStore.Contract;
-            if (contract is null && TryGetSelectedRowId(Store.SelectedRow) is long contractId)
+            if (await EnsureContractWorkflowContextForDialogAsync("Редактирование этапа") is null)
             {
-                contract = await LoadContractEditRowAsync(contractId);
-            }
-
-            if (contract is null)
-            {
-                await ShowErrorDialogAsync(
-                    "Редактирование этапа",
-                    "Не удалось загрузить карточку контракта для редактирования этапа.");
-                return;
-            }
-
-            try
-            {
-                _contractWorkflowStore.BeginContractEdit(contract, _contractWorkflowStore.Contragent);
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
                 return;
             }
 
@@ -881,27 +852,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            var contract = _contractWorkflowStore.Contract;
-            if (contract is null && TryGetSelectedRowId(Store.SelectedRow) is long contractId)
+            if (await EnsureContractWorkflowContextForDialogAsync("Редактирование этапа") is null)
             {
-                contract = await LoadContractEditRowAsync(contractId);
-            }
-
-            if (contract is null)
-            {
-                await ShowErrorDialogAsync(
-                    "Редактирование этапа",
-                    "Не удалось загрузить карточку контракта для редактирования этапа.");
-                return;
-            }
-
-            try
-            {
-                _contractWorkflowStore.BeginContractEdit(contract, _contractWorkflowStore.Contragent);
-            }
-            catch (Exception ex)
-            {
-                await ShowErrorDialogAsync("Не удалось открыть этап.", ex.Message);
                 return;
             }
 
@@ -1058,9 +1010,13 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private bool IsContractCreateAllowedForCurrentUser()
         {
+            return IsContractCommerEditAllowedForCurrentUser();
+        }
+
+        private bool IsContractCommerEditAllowedForCurrentUser()
+        {
             var user = _userService.CurrentUser;
-            return user?.DepartmentId == CommersDepartmentId
-                || UserHasRole(user?.Role, "admin");
+            return user?.DepartmentId == CommersDepartmentId;
         }
 
         private static TableDataRow BuildNewContractRow()
@@ -1072,13 +1028,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     ["year"] = JsonSerializer.SerializeToElement(DateTime.Now.Year)
                 }
             };
-        }
-
-        private static bool UserHasRole(string? roleCsv, string role)
-        {
-            return !string.IsNullOrWhiteSpace(roleCsv)
-                && roleCsv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Any(item => string.Equals(item, role, StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)
