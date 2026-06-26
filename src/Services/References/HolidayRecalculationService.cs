@@ -10,8 +10,11 @@ namespace CbsContractsDesktopClient.Services.References
         private IReadOnlyList<TableDataRow>? _holidayCalendarCache;
         private IReadOnlyList<HolidayCalendarDay>? _holidayCalendarDaysCache;
 
-        public HolidayRecalculationService(HttpClient httpClient, IUserService userService)
-            : base(httpClient, userService)
+        public HolidayRecalculationService(
+            HttpClient httpClient,
+            IUserService userService,
+            IAccessTokenRefreshService? accessTokenRefreshService = null)
+            : base(httpClient, userService, accessTokenRefreshService)
         {
         }
 

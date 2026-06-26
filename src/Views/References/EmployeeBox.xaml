@@ -22,7 +22,7 @@
             <TextBlock
                 Style="{StaticResource BodyStrongTextBlockStyle}"
                 Foreground="{StaticResource ShellTertiaryTextBrush}"
-                Text="Сотрудники" />
+                Text="СОТРУДНИКИ" />
 
             <Grid Grid.Row="1">
                 <ListView

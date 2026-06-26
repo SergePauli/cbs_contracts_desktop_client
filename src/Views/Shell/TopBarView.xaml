@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:shellModels="using:CbsContractsDesktopClient.Models.Shell"
+    xmlns:shellViews="using:CbsContractsDesktopClient.Views.Shell"
     xmlns:primitives="using:Microsoft.UI.Xaml.Controls.Primitives"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -17,6 +18,7 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
@@ -59,9 +61,13 @@
                 VerticalAlignment="Center"
                 Content="{x:Bind RightContent, Mode=OneWay}" />
 
+            <shellViews:TopBarUserProfileView
+                Grid.Column="3"
+                VerticalAlignment="Center" />
+
             <primitives:ToggleButton
                 x:Name="AuditPanelToggleButton"
-                Grid.Column="3"
+                Grid.Column="4"
                 Width="{StaticResource ShellBackButtonSize}"
                 Height="{StaticResource ShellBackButtonSize}"
                 Padding="0"

@@ -22,6 +22,7 @@ using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Functional;
+using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -76,6 +77,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
+            _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
         }
 
@@ -736,6 +738,44 @@ namespace CbsContractsDesktopClient.Views.Shell
             ShowSuccessNotification(
                 "Сотрудник создан",
                 BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
+        }
+
+        private async void DetailView_EmployeeEditRequested(object? sender, EmployeeBoxEditRequestedEventArgs e)
+        {
+            await EditEmployeeFromDetailAsync(e.Employee);
+        }
+
+        private async Task EditEmployeeFromDetailAsync(EmployeeBoxItem employee)
+        {
+            if (employee.Id is not long employeeId)
+            {
+                return;
+            }
+
+            try
+            {
+                var result = await _employeeEditWorkflow.ShowAsync(
+                    new EmployeeEditWorkflowRequest
+                    {
+                        XamlRoot = XamlRoot,
+                        IsCreateMode = false,
+                        EmployeeId = employeeId
+                    });
+
+                if (result is null)
+                {
+                    return;
+                }
+
+                await RefreshDetailAsync();
+                ShowSuccessNotification(
+                    "Изменения сотрудника сохранены",
+                    BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
+            }
+            catch (InvalidOperationException ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть сотрудника.", ex.Message);
+            }
         }
 
         private async Task SaveStageFiltersAsync()

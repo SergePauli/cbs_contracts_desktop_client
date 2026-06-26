@@ -130,14 +130,64 @@ public class DataQueryServiceTests
         Assert.Null(capturedPayload.Offset);
     }
 
-    private static DataQueryService CreateService(IUserService userService, HttpMessageHandler handler)
+    [Fact]
+    public async Task GetDataAsync_RefreshesAccessTokenAndRetriesOnce_WhenApiReturnsUnauthorized()
+    {
+        var authorizationTokens = new List<string?>();
+        var userService = new StubUserService
+        {
+            CurrentUser = new User
+            {
+                Token = "expired-access-token",
+                RefreshToken = "refresh-token"
+            }
+        };
+        var refreshService = new StubAccessTokenRefreshService(
+            expiredAccessToken =>
+            {
+                Assert.Equal("expired-access-token", expiredAccessToken);
+                userService.CurrentUser!.Token = "new-access-token";
+                return "new-access-token";
+            });
+        var service = CreateService(
+            userService,
+            new StubHttpMessageHandler(request =>
+            {
+                authorizationTokens.Add(request.Headers.Authorization?.Parameter);
+                if (authorizationTokens.Count == 1)
+                {
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+                }
+
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""[{ "id": 10, "name": "Анна" }]""", Encoding.UTF8, "application/json")
+                });
+            }),
+            refreshService);
+
+        var items = await service.GetDataAsync<TestRecord>(new DataQueryRequest
+        {
+            Model = "Employee"
+        });
+
+        Assert.Single(items);
+        Assert.Equal("Анна", items[0].Name);
+        Assert.Equal(["expired-access-token", "new-access-token"], authorizationTokens);
+        Assert.Equal(1, refreshService.RefreshCount);
+    }
+
+    private static DataQueryService CreateService(
+        IUserService userService,
+        HttpMessageHandler handler,
+        IAccessTokenRefreshService? accessTokenRefreshService = null)
     {
         var httpClient = new HttpClient(handler)
         {
             BaseAddress = new Uri("http://localhost/")
         };
 
-        return new DataQueryService(httpClient, userService);
+        return new DataQueryService(httpClient, userService, accessTokenRefreshService);
     }
 
     private sealed class StubHttpMessageHandler : HttpMessageHandler
@@ -174,6 +224,24 @@ public class DataQueryServiceTests
         public bool HasRole(string role)
         {
             return CurrentUser?.Role?.Equals(role, StringComparison.OrdinalIgnoreCase) == true;
+        }
+    }
+
+    private sealed class StubAccessTokenRefreshService : IAccessTokenRefreshService
+    {
+        private readonly Func<string, string> _refresh;
+
+        public StubAccessTokenRefreshService(Func<string, string> refresh)
+        {
+            _refresh = refresh;
+        }
+
+        public int RefreshCount { get; private set; }
+
+        public Task<string> RefreshAccessTokenAsync(string expiredAccessToken, CancellationToken cancellationToken = default)
+        {
+            RefreshCount++;
+            return Task.FromResult(_refresh(expiredAccessToken));
         }
     }
 

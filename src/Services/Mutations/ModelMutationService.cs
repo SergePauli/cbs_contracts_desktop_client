@@ -22,8 +22,11 @@ namespace CbsContractsDesktopClient.Services.Mutations
             "tasks"
         };
 
-        public ModelMutationService(HttpClient httpClient, IUserService userService)
-            : base(httpClient, userService)
+        public ModelMutationService(
+            HttpClient httpClient,
+            IUserService userService,
+            IAccessTokenRefreshService? accessTokenRefreshService = null)
+            : base(httpClient, userService, accessTokenRefreshService)
         {
         }
 

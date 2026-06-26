@@ -17,6 +17,7 @@ using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Functional;
+using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -32,6 +33,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IDataQueryService _dataQueryService;
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
+        private readonly IEmployeeEditWorkflow _employeeEditWorkflow;
         private readonly IUserService _userService;
         private readonly IContragentLookupService _contragentLookupService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
@@ -48,10 +50,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
+            _employeeEditWorkflow = App.Services.GetRequiredService<IEmployeeEditWorkflow>();
             _userService = App.Services.GetRequiredService<IUserService>();
             _contragentLookupService = App.Services.GetRequiredService<IContragentLookupService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
+            _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
         }
 
@@ -406,6 +410,44 @@ namespace CbsContractsDesktopClient.Views.Shell
             ShowSuccessNotification(
                 "Данные скопированы",
                 "Карточка контракта скопирована в буфер обмена.");
+        }
+
+        private async void DetailView_EmployeeEditRequested(object? sender, EmployeeBoxEditRequestedEventArgs e)
+        {
+            await EditEmployeeFromDetailAsync(e.Employee);
+        }
+
+        private async Task EditEmployeeFromDetailAsync(EmployeeBoxItem employee)
+        {
+            if (employee.Id is not long employeeId)
+            {
+                return;
+            }
+
+            try
+            {
+                var result = await _employeeEditWorkflow.ShowAsync(
+                    new EmployeeEditWorkflowRequest
+                    {
+                        XamlRoot = XamlRoot,
+                        IsCreateMode = false,
+                        EmployeeId = employeeId
+                    });
+
+                if (result is null)
+                {
+                    return;
+                }
+
+                await RefreshDetailAsync();
+                ShowSuccessNotification(
+                    "Изменения сотрудника сохранены",
+                    BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
+            }
+            catch (InvalidOperationException ex)
+            {
+                await ShowErrorDialogAsync("Не удалось открыть сотрудника.", ex.Message);
+            }
         }
 
         protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)

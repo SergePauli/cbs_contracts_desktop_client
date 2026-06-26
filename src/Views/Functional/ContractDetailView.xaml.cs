@@ -39,10 +39,13 @@ namespace CbsContractsDesktopClient.Views.Functional
                 typeof(ContractDetailView),
                 new PropertyMetadata(null, OnDetailChanged));
 
+        public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EmployeeEditRequested;
+
         public ContractDetailView()
         {
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             InitializeComponent();
+            EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
             Refresh();

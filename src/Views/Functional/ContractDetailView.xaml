@@ -90,9 +90,7 @@
             <Border
                 Grid.Column="1"
                 Style="{StaticResource ShellDetailFooterColumnSeparatorStyle}">
-                <references:EmployeeBox
-                    x:Name="EmployeesBox"
-                    CanEdit="False" />
+                <references:EmployeeBox x:Name="EmployeesBox" />
             </Border>
         </Grid>
     </Border>

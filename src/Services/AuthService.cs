@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -10,10 +11,11 @@ using CbsContractsDesktopClient.Services.Workspace;
 
 namespace CbsContractsDesktopClient.Services
 {
-    public class AuthService : IAuthService
+    public class AuthService : IAuthService, IAccessTokenRefreshService
     {
         private readonly HttpClient _httpClient;
         private readonly IUserService _userService;
+        private readonly SemaphoreSlim _refreshGate = new(1, 1);
 
         public AuthService(HttpClient httpClient, IUserService userService)
         {
@@ -59,13 +61,15 @@ namespace CbsContractsDesktopClient.Services
                     Id = authResponse.User.Id,
                     ProfileId = authResponse.User.GetProfileId(),
                     Username = authResponse.User.Name ?? username,
-                    FullName = authResponse.User.Name ?? username,
+                    FullName = authResponse.User.GetFullName() ?? authResponse.User.Name ?? username,
+                    Email = authResponse.User.GetEmail(),
                     Role = authResponse.User.Role ?? string.Empty,
                     DepartmentId = authResponse.User.GetDepartmentId(),
                     DepartmentName = authResponse.User.GetDepartmentName(),
                     Statuses = authResponse.User.GetStatuses(),
                     ContractsTypes = authResponse.User.GetContractsTypes(),
                     Token = authResponse.Tokens?.Access ?? string.Empty,
+                    RefreshToken = authResponse.Tokens?.Refresh ?? string.Empty,
                     LoginTime = DateTime.Now
                 };
                 var stageFilterDefaults = StageTableFilterDefaultsReader.FromUser(user);
@@ -88,6 +92,62 @@ namespace CbsContractsDesktopClient.Services
                     Success = false,
                     Message = $"Ошибка сети: {ex.Message}"
                 };
+            }
+        }
+
+        public async Task<string> RefreshAccessTokenAsync(string expiredAccessToken, CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(expiredAccessToken))
+            {
+                throw new InvalidOperationException("Expired access token is required to refresh authorization.");
+            }
+
+            await _refreshGate.WaitAsync(cancellationToken);
+            try
+            {
+                var currentUser = _userService.CurrentUser
+                    ?? throw new InvalidOperationException("Cannot refresh authorization without a current user.");
+
+                if (!string.Equals(currentUser.Token, expiredAccessToken, StringComparison.Ordinal)
+                    && !string.IsNullOrWhiteSpace(currentUser.Token))
+                {
+                    return currentUser.Token;
+                }
+
+                if (string.IsNullOrWhiteSpace(currentUser.RefreshToken))
+                {
+                    throw new InvalidOperationException("Cannot refresh authorization without a refresh token.");
+                }
+
+                using var request = new HttpRequestMessage(HttpMethod.Get, "auth/refresh");
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", currentUser.RefreshToken);
+
+                using var response = await _httpClient.SendAsync(request, cancellationToken);
+                var rawJson = await response.Content.ReadAsStringAsync(cancellationToken);
+                if (!response.IsSuccessStatusCode)
+                {
+                    _userService.ClearCurrentUser();
+                    throw new HttpRequestException(
+                        $"HTTP {(int)response.StatusCode} ({response.StatusCode}). {rawJson}".Trim(),
+                        inner: null,
+                        response.StatusCode);
+                }
+
+                var authResponse = JsonSerializer.Deserialize<AuthApiResponse>(rawJson);
+                if (authResponse?.Tokens == null
+                    || string.IsNullOrWhiteSpace(authResponse.Tokens.Access)
+                    || string.IsNullOrWhiteSpace(authResponse.Tokens.Refresh))
+                {
+                    throw new InvalidOperationException("Refresh response does not contain access and refresh tokens.");
+                }
+
+                currentUser.Token = authResponse.Tokens.Access;
+                currentUser.RefreshToken = authResponse.Tokens.Refresh;
+                return currentUser.Token;
+            }
+            finally
+            {
+                _refreshGate.Release();
             }
         }
 
@@ -212,6 +272,56 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return null;
+        }
+
+        public string? GetFullName()
+        {
+            if (TryGetNestedString("person", "full_name", out var personFullName))
+            {
+                return personFullName;
+            }
+
+            if (TryGetNestedString("person", "name", out var personName))
+            {
+                return personName;
+            }
+
+            if (TryGetNestedString("profile", "person", "full_name", out personFullName))
+            {
+                return personFullName;
+            }
+
+            if (TryGetFirstArrayNestedString("profiles", "person", "full_name", out personFullName))
+            {
+                return personFullName;
+            }
+
+            return null;
+        }
+
+        public string GetEmail()
+        {
+            if (TryGetString("email", out var email))
+            {
+                return email;
+            }
+
+            if (TryGetNestedString("email", "name", out email))
+            {
+                return email;
+            }
+
+            if (TryGetNestedString("profile", "user", "email", "name", out email))
+            {
+                return email;
+            }
+
+            if (TryGetFirstArrayNestedString("profiles", "user", "email", "name", out email))
+            {
+                return email;
+            }
+
+            return string.Empty;
         }
 
         public string? GetStatuses()
@@ -368,6 +478,33 @@ namespace CbsContractsDesktopClient.Services
             return child.TryGetProperty(grandChildKey, out var grandChild) && TryReadString(grandChild, out value);
         }
 
+        private bool TryGetNestedString(
+            string parentKey,
+            string childKey,
+            string grandChildKey,
+            string greatGrandChildKey,
+            out string value)
+        {
+            value = string.Empty;
+            if (!TryGetObject(parentKey, out var parent))
+            {
+                return false;
+            }
+
+            if (!parent.TryGetProperty(childKey, out var child) || child.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (!child.TryGetProperty(grandChildKey, out var grandChild) || grandChild.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            return grandChild.TryGetProperty(greatGrandChildKey, out var greatGrandChild)
+                && TryReadString(greatGrandChild, out value);
+        }
+
         private bool TryGetFirstArrayNestedString(string arrayKey, string childKey, string grandChildKey, out string value)
         {
             value = string.Empty;
@@ -382,6 +519,33 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return child.TryGetProperty(grandChildKey, out var grandChild) && TryReadString(grandChild, out value);
+        }
+
+        private bool TryGetFirstArrayNestedString(
+            string arrayKey,
+            string childKey,
+            string grandChildKey,
+            string greatGrandChildKey,
+            out string value)
+        {
+            value = string.Empty;
+            if (!TryGetFirstArrayItem(arrayKey, out var item))
+            {
+                return false;
+            }
+
+            if (!item.TryGetProperty(childKey, out var child) || child.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            if (!child.TryGetProperty(grandChildKey, out var grandChild) || grandChild.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            return grandChild.TryGetProperty(greatGrandChildKey, out var greatGrandChild)
+                && TryReadString(greatGrandChild, out value);
         }
 
         private bool TryGetObject(string key, out JsonElement element)

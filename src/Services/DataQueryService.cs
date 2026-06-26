@@ -5,8 +5,11 @@ namespace CbsContractsDesktopClient.Services
 {
     public sealed class DataQueryService : ApiServiceBase, IDataQueryService
     {
-        public DataQueryService(HttpClient httpClient, IUserService userService)
-            : base(httpClient, userService)
+        public DataQueryService(
+            HttpClient httpClient,
+            IUserService userService,
+            IAccessTokenRefreshService? accessTokenRefreshService = null)
+            : base(httpClient, userService, accessTokenRefreshService)
         {
         }
 

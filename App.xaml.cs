@@ -22,9 +22,11 @@ namespace CbsContractsDesktopClient
 {
     public partial class App : Application
     {
-        private static readonly Uri PrimaryApiUri = new("http://serge-lenovo:5000/");
-        private static readonly Uri DataQueryApiUri = new("http://serge-lenovo:8080/");
-        private static readonly Uri FnsApiUri = new("https://api-fns.ru/api/");
+        public const string API_SERVER = "serge-lenovo";
+
+        public static Uri PrimaryApiUri { get; } = new($"http://{API_SERVER}:5000/");
+        public static Uri DataQueryApiUri { get; } = new($"http://{API_SERVER}:8080/");
+        public static Uri FnsApiUri { get; } = new("https://api-fns.ru/api/");
 
         public static IServiceProvider Services { get; private set; } = null!;
 
@@ -58,6 +60,18 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<ContractWorkflowFactory>();
             services.AddSingleton<StatusTableViewModel>();
+            services.AddHttpClient(nameof(AuthService), client =>
+            {
+                client.BaseAddress = PrimaryApiUri;
+                client.DefaultRequestHeaders.Accept.Clear();
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            });
+            services.AddSingleton(provider =>
+                new AuthService(
+                    provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(AuthService)),
+                    provider.GetRequiredService<IUserService>()));
+            services.AddSingleton<IAuthService>(provider => provider.GetRequiredService<AuthService>());
+            services.AddSingleton<IAccessTokenRefreshService>(provider => provider.GetRequiredService<AuthService>());
             services.AddHttpClient(nameof(HolidayRecalculationService), client =>
             {
                 client.BaseAddress = PrimaryApiUri;
@@ -67,7 +81,8 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IHolidayRecalculationService>(provider =>
                 new HolidayRecalculationService(
                     provider.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(HolidayRecalculationService)),
-                    provider.GetRequiredService<IUserService>()));
+                    provider.GetRequiredService<IUserService>(),
+                    provider.GetRequiredService<IAccessTokenRefreshService>()));
             services.AddHttpClient<IModelMutationService, ModelMutationService>(client =>
             {
                 client.BaseAddress = PrimaryApiUri;
@@ -83,12 +98,6 @@ namespace CbsContractsDesktopClient
             services.AddHttpClient<IFnsContragentService, FnsContragentService>(client =>
             {
                 client.BaseAddress = FnsApiUri;
-                client.DefaultRequestHeaders.Accept.Clear();
-                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            });
-            services.AddHttpClient<IAuthService, AuthService>(client =>
-            {
-                client.BaseAddress = PrimaryApiUri;
                 client.DefaultRequestHeaders.Accept.Clear();
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             });

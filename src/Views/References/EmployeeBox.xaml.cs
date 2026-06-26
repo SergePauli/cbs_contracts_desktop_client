@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
 using Microsoft.Extensions.DependencyInjection;
@@ -11,6 +12,15 @@ namespace CbsContractsDesktopClient.Views.References
 {
     public sealed partial class EmployeeBox : UserControl
     {
+        private const int MaxVisiblePositionLength = 50;
+        private const int OziDepartmentId = 1;
+        private const int CommercialDepartmentId = 2;
+        private const int FinanceDepartmentId = 3;
+        private static readonly Brush EmployeePositionBrush = new SolidColorBrush(Microsoft.UI.Colors.DarkCyan);
+        private static readonly Brush EmployeeEditButtonBrush = new SolidColorBrush(Microsoft.UI.Colors.MediumPurple);
+        private static readonly Brush EmployeeCopyButtonBrush = new SolidColorBrush(Microsoft.UI.Colors.SeaGreen);
+        private static readonly Brush EmployeeContactBrush = (Brush)Application.Current.Resources["ShellAccentBrush"];
+
         public static readonly DependencyProperty EmployeesProperty =
             DependencyProperty.Register(
                 nameof(Employees),
@@ -71,8 +81,8 @@ namespace CbsContractsDesktopClient.Views.References
                 {
                     Content = BuildEmployeeRow(employee, itemIndex),
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
-                    Padding = new Thickness(2),
-                    MinHeight = 42
+                    Padding = new Thickness(0),
+                    MinHeight = 32
                 };
                 DisableContainerHover(listViewItem);
                 if (!string.IsNullOrWhiteSpace(employee.Description))
@@ -88,16 +98,16 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var row = new Grid
             {
-                ColumnSpacing = 4,
-                MinWidth = 340,
-                Padding = new Thickness(2, 4, 2, 4),
+                ColumnSpacing = 6,
+                MinWidth = 300,
+                Padding = new Thickness(2, 2, 4, 2),
                 Background = itemIndex % 2 == 1
-                    ? (Brush)Application.Current.Resources["ShellAccentPanelBackgroundAltBrush"]
+                    ? (Brush)Application.Current.Resources["ShellTableRowPressedBackgroundBrush"]
                     : new SolidColorBrush(Microsoft.UI.Colors.Transparent)
             };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5, GridUnitType.Star), MinWidth = 120 });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(3, GridUnitType.Star), MinWidth = 82 });
 
             var buttons = BuildButtons(employee);
             Grid.SetColumn(buttons, 0);
@@ -128,34 +138,35 @@ namespace CbsContractsDesktopClient.Views.References
             var panel = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 2,
+                Spacing = 1,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
             if (CanEdit)
             {
-                var editButton = BuildIconButton("\uE70F", "Редактировать");
+                var editButton = BuildIconButton("\uE70F", "Редактировать", EmployeeEditButtonBrush);
                 editButton.Click += (_, _) => EditRequested?.Invoke(this, new EmployeeBoxEditRequestedEventArgs(employee));
                 panel.Children.Add(editButton);
             }
 
-            var copyButton = BuildIconButton("\uE8C8", "Скопировать в буфер обмена");
+            var copyButton = BuildIconButton("\uE8C8", "Скопировать в буфер обмена", EmployeeCopyButtonBrush);
             copyButton.Click += (_, _) => CopyEmployee(employee);
             panel.Children.Add(copyButton);
 
             return panel;
         }
 
-        private static Button BuildIconButton(string glyph, string tooltip)
+        private static Button BuildIconButton(string glyph, string tooltip, Brush foreground)
         {
             var button = new Button
             {
                 Content = glyph,
-                Width = 24,
-                Height = 24,
+                Width = 20,
+                Height = 20,
                 Padding = new Thickness(0),
                 FontFamily = new FontFamily("Segoe Fluent Icons"),
-                FontSize = 11,
+                FontSize = 10,
+                Foreground = foreground,
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderThickness = new Thickness(0)
@@ -169,9 +180,8 @@ namespace CbsContractsDesktopClient.Views.References
             var info = new Grid
             {
                 RowSpacing = 1,
-                MaxWidth = 200,
                 VerticalAlignment = VerticalAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
             };
             info.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             info.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -181,6 +191,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Text = string.IsNullOrWhiteSpace(employee.FullName) ? "Сотрудник" : employee.FullName,
                 Style = (Style)Application.Current.Resources["BodyTextBlockStyle"],
                 Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
+                FontSize = 12,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap
             };
@@ -190,10 +201,12 @@ namespace CbsContractsDesktopClient.Views.References
                 Text = BuildMetaText(employee),
                 Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
                 Foreground = employee.IsActive
-                    ? (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
+                    ? EmployeePositionBrush
                     : new SolidColorBrush(Microsoft.UI.Colors.Firebrick),
+                FontSize = 10,
                 TextTrimming = TextTrimming.CharacterEllipsis,
-                TextWrapping = TextWrapping.NoWrap
+                TextWrapping = TextWrapping.NoWrap,
+                HorizontalAlignment = HorizontalAlignment.Right
             };
 
             Grid.SetRow(name, 0);
@@ -206,7 +219,15 @@ namespace CbsContractsDesktopClient.Views.References
         private static string BuildMetaText(EmployeeBoxItem employee)
         {
             var position = string.IsNullOrWhiteSpace(employee.Position) ? "должность не указана" : employee.Position;
-            return employee.IsActive ? position : $"{position} | {employee.StatusText}";
+            var visiblePosition = TruncatePosition(position);
+            return employee.IsActive ? visiblePosition : $"{visiblePosition} | {employee.StatusText}";
+        }
+
+        private static string TruncatePosition(string position)
+        {
+            return position.Length <= MaxVisiblePositionLength
+                ? position
+                : position[..MaxVisiblePositionLength];
         }
 
         private static Grid BuildContacts(EmployeeBoxItem employee)
@@ -214,15 +235,12 @@ namespace CbsContractsDesktopClient.Views.References
             var contactsPanel = new Grid
             {
                 ColumnSpacing = 0,
-                RowSpacing = 0,
-                VerticalAlignment = VerticalAlignment.Center
+                RowSpacing = 1,
+                VerticalAlignment = VerticalAlignment.Center,
+                HorizontalAlignment = HorizontalAlignment.Stretch
             };
-            contactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            contactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            contactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-            var column = 0;
             var row = 0;
             foreach (var contact in employee.Contacts)
             {
@@ -236,20 +254,65 @@ namespace CbsContractsDesktopClient.Views.References
                     contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 }
 
-                var element = (FrameworkElement)DialogContactsEditor.BuildContactElement(contact, match, showRemoveButton: false);
-                Grid.SetColumn(element, column);
+                var element = BuildContactLinkElement(contact, match);
+                Grid.SetColumn(element, 0);
                 Grid.SetRow(element, row);
                 contactsPanel.Children.Add(element);
 
-                column++;
-                if (column == 2)
-                {
-                    column = 0;
-                    row++;
-                }
+                row++;
             }
 
             return contactsPanel;
+        }
+
+        private static FrameworkElement BuildContactLinkElement(string value, ContactTypeMatch match)
+        {
+            var grid = new Grid
+            {
+                Height = 16,
+                MinWidth = 0,
+                HorizontalAlignment = HorizontalAlignment.Left
+            };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var icon = new FontIcon
+            {
+                Glyph = match.Glyph,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontSize = 8,
+                Width = 13,
+                Foreground = EmployeeContactBrush,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            var linkText = new TextBlock
+            {
+                Text = value,
+                FontSize = 10,
+                FontWeight = Microsoft.UI.Text.FontWeights.Light,
+                Foreground = EmployeeContactBrush,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap
+            };
+
+            var link = new HyperlinkButton
+            {
+                Content = linkText,
+                NavigateUri = ContactTypeClassifier.TryCreateLaunchUri(value, match),
+                Padding = new Thickness(0),
+                MinWidth = 0,
+                MinHeight = 0,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            Grid.SetColumn(icon, 0);
+            Grid.SetColumn(link, 1);
+            grid.Children.Add(icon);
+            grid.Children.Add(link);
+            return grid;
         }
 
         private static void CopyEmployee(EmployeeBoxItem employee)
@@ -262,10 +325,34 @@ namespace CbsContractsDesktopClient.Views.References
         private static bool ResolveDefaultCanEdit()
         {
             var userService = App.Services.GetService<IUserService>();
-            var role = userService?.CurrentUser?.Role ?? string.Empty;
-            return !role
+            return CanCurrentUserEditEmployees(userService?.CurrentUser);
+        }
+
+        private static bool CanCurrentUserEditEmployees(User? user)
+        {
+            return user is not null
+                && !HasRole(user, "intern")
+                && IsProfileDepartment(user);
+        }
+
+        private static bool HasRole(User user, string role)
+        {
+            return user.Role
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Any(static role => string.Equals(role, "intern", StringComparison.OrdinalIgnoreCase));
+                .Any(currentRole => string.Equals(currentRole, role, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool IsProfileDepartment(User user)
+        {
+            return user.DepartmentId is OziDepartmentId or CommercialDepartmentId or FinanceDepartmentId
+                || IsProfileDepartmentName(user.DepartmentName);
+        }
+
+        private static bool IsProfileDepartmentName(string departmentName)
+        {
+            return departmentName.Contains("ОЗИ", StringComparison.OrdinalIgnoreCase)
+                || departmentName.Contains("Коммер", StringComparison.OrdinalIgnoreCase)
+                || departmentName.Contains("Финанс", StringComparison.OrdinalIgnoreCase);
         }
     }
 

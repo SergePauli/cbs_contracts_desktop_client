@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Net;
 using System.Text.Json;
 
 namespace CbsContractsDesktopClient.Services
@@ -17,11 +18,16 @@ namespace CbsContractsDesktopClient.Services
 
         private readonly HttpClient _httpClient;
         private readonly IUserService _userService;
+        private readonly IAccessTokenRefreshService? _accessTokenRefreshService;
 
-        protected ApiServiceBase(HttpClient httpClient, IUserService userService)
+        protected ApiServiceBase(
+            HttpClient httpClient,
+            IUserService userService,
+            IAccessTokenRefreshService? accessTokenRefreshService = null)
         {
             _httpClient = httpClient;
             _userService = userService;
+            _accessTokenRefreshService = accessTokenRefreshService;
         }
 
         protected JsonSerializerOptions SerializerOptions => JsonOptions;
@@ -32,10 +38,8 @@ namespace CbsContractsDesktopClient.Services
             timeoutCts.CancelAfter(DiagnosticRequestTimeout);
             var requestPayload = SerializeForTrace(request);
             EmitTrace(FormatRequestTrace("HTTP PUT", requestUri, request));
-            using var message = CreateJsonRequest(HttpMethod.Put, requestUri, request);
-            EmitApiSend(message.Method, requestUri);
-            using var response = await SendAsyncWithWatchdog(
-                message,
+            using var response = await SendAsyncWithAccessTokenRefreshAsync(
+                () => CreateJsonRequest(HttpMethod.Put, requestUri, request),
                 requestUri,
                 requestPayload,
                 HttpCompletionOption.ResponseContentRead,
@@ -66,10 +70,8 @@ namespace CbsContractsDesktopClient.Services
             timeoutCts.CancelAfter(DiagnosticRequestTimeout);
             const string requestPayload = "<empty>";
             EmitTrace($"HTTP DELETE uri={requestUri}");
-            using var message = CreateRequest(HttpMethod.Delete, requestUri);
-            EmitApiSend(message.Method, requestUri);
-            using var response = await SendAsyncWithWatchdog(
-                message,
+            using var response = await SendAsyncWithAccessTokenRefreshAsync(
+                () => CreateRequest(HttpMethod.Delete, requestUri),
                 requestUri,
                 requestPayload,
                 HttpCompletionOption.ResponseContentRead,
@@ -96,19 +98,17 @@ namespace CbsContractsDesktopClient.Services
 
         protected async Task<TResponse> PostAsync<TRequest, TResponse>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
-            using var message = CreatePostRequest(requestUri, request);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(DiagnosticRequestTimeout);
             var requestPayload = SerializeForTrace(request);
             EmitTrace(FormatRequestTrace("HTTP POST", requestUri, request));
-            EmitApiSend(message.Method, requestUri);
             EmitTrace($"STEP API 01 before-send uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
 
             HttpResponseMessage response;
             try
             {
-                response = await SendAsyncWithWatchdog(
-                    message,
+                response = await SendAsyncWithAccessTokenRefreshAsync(
+                    () => CreatePostRequest(requestUri, request),
                     requestUri,
                     requestPayload,
                     HttpCompletionOption.ResponseHeadersRead,
@@ -183,13 +183,11 @@ namespace CbsContractsDesktopClient.Services
         protected async Task<JsonElement> PostForJsonAsync<TRequest>(string requestUri, TRequest request, CancellationToken cancellationToken = default)
         {
             EmitTrace(FormatRequestTrace("HTTP POST JSON", requestUri, request));
-            using var message = CreatePostRequest(requestUri, request);
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             timeoutCts.CancelAfter(DiagnosticRequestTimeout);
             var requestPayload = SerializeForTrace(request);
-            EmitApiSend(message.Method, requestUri);
-            using var response = await SendAsyncWithWatchdog(
-                message,
+            using var response = await SendAsyncWithAccessTokenRefreshAsync(
+                () => CreatePostRequest(requestUri, request),
                 requestUri,
                 requestPayload,
                 HttpCompletionOption.ResponseContentRead,
@@ -250,6 +248,59 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return message;
+        }
+
+        private async Task<HttpResponseMessage> SendAsyncWithAccessTokenRefreshAsync(
+            Func<HttpRequestMessage> createMessage,
+            string requestUri,
+            string requestPayload,
+            HttpCompletionOption completionOption,
+            CancellationToken timeoutToken,
+            CancellationToken cancellationToken)
+        {
+            var attemptedAccessToken = _userService.CurrentUser?.Token ?? string.Empty;
+            using var message = createMessage();
+            EmitApiSend(message.Method, requestUri);
+            var response = await SendAsyncWithWatchdog(
+                message,
+                requestUri,
+                requestPayload,
+                completionOption,
+                timeoutToken,
+                cancellationToken);
+
+            if (!ShouldRefreshAccessToken(response, requestUri, attemptedAccessToken))
+            {
+                return response;
+            }
+
+            response.Dispose();
+            EmitTrace($"HTTP 401 uri={requestUri} action=refresh-access-token");
+            await _accessTokenRefreshService!.RefreshAccessTokenAsync(attemptedAccessToken, cancellationToken);
+
+            using var retryMessage = createMessage();
+            EmitApiSend(retryMessage.Method, requestUri);
+            return await SendAsyncWithWatchdog(
+                retryMessage,
+                requestUri,
+                requestPayload,
+                completionOption,
+                timeoutToken,
+                cancellationToken);
+        }
+
+        private bool ShouldRefreshAccessToken(HttpResponseMessage response, string requestUri, string attemptedAccessToken)
+        {
+            return response.StatusCode == HttpStatusCode.Unauthorized
+                && _accessTokenRefreshService is not null
+                && !string.IsNullOrWhiteSpace(attemptedAccessToken)
+                && !IsAuthEndpoint(requestUri);
+        }
+
+        private static bool IsAuthEndpoint(string requestUri)
+        {
+            return requestUri.StartsWith("auth/login", StringComparison.OrdinalIgnoreCase)
+                || requestUri.StartsWith("auth/refresh", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<HttpResponseMessage> SendAsyncWithWatchdog(

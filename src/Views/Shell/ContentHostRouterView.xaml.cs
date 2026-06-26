@@ -13,6 +13,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly AppShellViewModel _shellViewModel;
         private ContentHostRouteKind _currentRouteKind = ContentHostRouteKind.None;
         private HolidayHostView? _holidayHostView;
+        private DiagnosticsHostView? _diagnosticsHostView;
         private ProfileHostView? _profileHostView;
         private EmployeeHostView? _employeeHostView;
         private ContragentHostView? _contragentHostView;
@@ -66,6 +67,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 ContentHostRouteKind.Reference => GetReferenceHostView(route),
                 ContentHostRouteKind.Holiday => GetHolidayHostView(route),
+                ContentHostRouteKind.Diagnostics => GetDiagnosticsHostView(),
                 ContentHostRouteKind.Profile => GetProfileHostView(route),
                 ContentHostRouteKind.Employee => GetEmployeeHostView(route),
                 ContentHostRouteKind.Contragent => GetContragentHostView(route),
@@ -86,6 +88,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                         _holidayHostView.Route = route;
                     }
 
+                    break;
+                case ContentHostRouteKind.Diagnostics:
                     break;
                 case ContentHostRouteKind.Profile:
                     if (_profileHostView is not null)
@@ -137,6 +141,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (string.Equals(route, "/holidays", StringComparison.OrdinalIgnoreCase))
             {
                 return ContentHostRouteKind.Holiday;
+            }
+
+            if (string.Equals(route, "/diagnostics", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Diagnostics;
             }
 
             if (string.Equals(route, "/users", StringComparison.OrdinalIgnoreCase))
@@ -193,6 +202,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             _holidayHostView ??= new HolidayHostView();
             _holidayHostView.Route = route;
             return _holidayHostView;
+        }
+
+        private DiagnosticsHostView GetDiagnosticsHostView()
+        {
+            _diagnosticsHostView ??= new DiagnosticsHostView();
+            return _diagnosticsHostView;
         }
 
         private ProfileHostView GetProfileHostView(string? route)
@@ -263,6 +278,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             Placeholder,
             Reference,
             Holiday,
+            Diagnostics,
             Profile,
             Employee,
             Contragent,

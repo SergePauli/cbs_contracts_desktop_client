@@ -17,7 +17,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private const int FinDepartmentId = 3;
         private const int LeadDepartmentId = 4;
 
-        private const string ContractRoute = "/contract";
+        private const string DiagnosticsRoute = "/diagnostics";
         private const string ContractsRoute = "/contracts";
         private const string StagesRoute = "/stages";
         private const string RevisionsRoute = "/revisions";
@@ -48,10 +48,11 @@ namespace CbsContractsDesktopClient.Services.Navigation
                     new NavigationMenuSection
                     {
                         Title = "База",
-                        Items =
-                        [
-                            CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, internRoute)
-                        ]
+                Items =
+                [
+                    CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, internRoute),
+                    CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, internRoute)
+                ]
                     },
                     BuildSessionSection(internRoute)
                 ];
@@ -63,7 +64,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
             var isOzi = departmentId == OziDepartmentId;
             var isFin = departmentId == FinDepartmentId;
             var route = string.IsNullOrWhiteSpace(currentRoute)
-                ? (isAdmin || isCommer ? ContractRoute : ContractsRoute)
+                ? ContractsRoute
                 : currentRoute;
 
             var baseSection = new NavigationMenuSection
@@ -72,11 +73,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Items = []
             };
 
-            if (isAdmin || isCommer)
-            {
-                baseSection.Items.Add(CreateItem(ResolveMenuTitle(ContractRoute, "Контракт"), "\uE8A5", ContractRoute, route));
-            }
-
+            baseSection.Items.Add(CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveMenuTitle(ContractsRoute, "Контракты"), "\uE762", ContractsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, route));
             baseSection.Items.Add(CreateItem(ResolveMenuTitle(RevisionsRoute, "ДС-ки"), "\uE8A7", RevisionsRoute, route));
