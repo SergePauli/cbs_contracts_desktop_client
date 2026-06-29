@@ -151,7 +151,7 @@
                 </StackPanel>
 
                 <TextBlock Grid.Row="2"
-                           Text="версия 1.0.0"
+                           Text="версия 1.0.0-beta"
                            HorizontalAlignment="Center"
                            Margin="0,18,0,0"
                            Foreground="#87A0B8"

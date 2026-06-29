@@ -22,10 +22,10 @@ namespace CbsContractsDesktopClient
 {
     public partial class App : Application
     {
-        public const string API_SERVER = "serge-lenovo";
+        public const string API_SERVER = "192.168.0.251";
 
         public static Uri PrimaryApiUri { get; } = new($"http://{API_SERVER}:5000/");
-        public static Uri DataQueryApiUri { get; } = new($"http://{API_SERVER}:8080/");
+        public static Uri DataQueryApiUri { get; } = new($"http://{API_SERVER}:8085/");
         public static Uri FnsApiUri { get; } = new("https://api-fns.ru/api/");
 
         public static IServiceProvider Services { get; private set; } = null!;
