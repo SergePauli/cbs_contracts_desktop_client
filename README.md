@@ -34,6 +34,7 @@
 - `Microsoft.Extensions.Http`
 - `app.manifest` с `PerMonitorV2` DPI awareness
 - композиция сервисов в `App.xaml.cs`
+- кастомная библиотека `Pauli.WinUiKit` для переиспользуемых WinUI controls: `CalendarInput`, `Dropdown`, `MultiSelect`
 
 ### Авторизация
 
@@ -52,7 +53,7 @@
   - `FooterBarView`
 - breadcrumbs, footer-state и audit panel state живут в `AppShellViewModel`
 - `BreadcrumbBar` показывает иерархию `Справочники -> {Текущий справочник}`
-- content-area маршрутизируется в отдельные host views: `ReferenceHostView`, `HolidayHostView`, `ProfileHostView`, `EmployeeHostView`, `ContragentHostView`, `RevisionHostView`, `StageHostView`
+- content-area маршрутизируется в отдельные host views: `ReferenceHostView`, `HolidayHostView`, `ProfileHostView`, `EmployeeHostView`, `ContragentHostView`, `ContractHostView`, `RevisionHostView`, `StageHostView`
 - `NavigationSidebarView` стал компактнее и отделен от content-area отдельной более темной gradient-панелью
 - `AuditPanelView` показывает события активного справочника или выбранной записи
 
@@ -128,7 +129,7 @@
 
 ### Фильтрация
 
-Поддержаны три режима фильтрации колонок:
+Поддержаны пять режимов фильтрации колонок:
 
 - `text`
 - `numeric`
@@ -198,20 +199,23 @@ Audit panel теперь является reusable частью reference worksp
 - крупный complex reference `/contragents`
 - первая функциональная таблица `/revisions`
 - самая крупная функциональная таблица `/stages` с раскладкой колонок, stage-specific фильтрами, workflow/detail refresh и профильными edit dialogs
+- функциональная таблица `/contracts` с contract-specific колонками, профильными фильтрами, workflow/detail refresh и диалогами контрактного workflow
+- кастомная UI-библиотека `Pauli.WinUiKit` с компактными контролами для доменных форм и фильтров
 - audit timeline как общий сценарий для всех справочников
 
-Текущая работа теперь смещается с «собрать основу приложения» и перенести таблицу этапов на:
+Текущая работа теперь смещается с «собрать основу приложения» и перенести основные контрактные таблицы на:
 
 - развитие выделенных content host views без возврата к монолитному orchestration-классу
 - шлифовку `DetailView` для сложных контрактных таблиц
-- перенос следующей функциональной таблицы `Контракты`
+- развитие `Pauli.WinUiKit` по мере выделения общих UI controls из доменных форм
+- разработку отчета `Активность`
 
 ## Ближайшие направления
 
-- развитие `ContentHostRouterView`, `ComplexHostViewBase` и конкретных host views для новых функциональных таблиц
-- подготовка content/table pattern к странице `Активность`, где возможно несколько таблиц одновременно
+- развитие `ContentHostRouterView`, `ComplexHostViewBase` и конкретных host views для новых рабочих экранов
+- подготовка и разработка отчета `Активность`, где возможно несколько таблиц одновременно
 - шлифовка `DetailView` для сложных таблиц
-- следующая функциональная таблица: `Контракты`
+- развитие `Pauli.WinUiKit`: компактные dropdown/date/multiselect controls и следующие переиспользуемые UI primitives
 - details/read scenarios и доменные ограничения CRUD
 - следующие специализированные типы колонок и фильтров поверх уже готовых `text` / `numeric` / `boolean` / `date-time` / `multiselect`
 - поиск по аудиту
@@ -242,6 +246,8 @@ Audit panel теперь является reusable частью reference worksp
 - alignment и filter mode дефолты колонок
 - table multiselect/date-time filter UI regressions
 - employee/profile specialized editor payload/state
+- contract workflow store, edit state, information dialog и commercial edit payload
+- stage commercial/financial/OZI edit dialogs и payload builders
 - видимость `СЗИ` в меню для `admin` / `ОЗИ`
 - регрессия на меню настроек `ComplexHostViewBase`
 - регрессия на `ReferenceEditDialog` без зависимости от `LostFocus`
@@ -258,6 +264,7 @@ dotnet test
 - `src/Services/` — API, auth, settings, navigation, reference definitions
 - `src/ViewModels/` — MVVM-логика
 - `src/Views/` — XAML и `UserControl`
+- `src/Pauli.WinUiKit/` — кастомная библиотека переиспользуемых WinUI controls
 - `src/Collections/` — lazy/virtual data pipeline
 - `tests/` — unit и integration tests
 - `docs/` — технические заметки и backlog
@@ -266,4 +273,5 @@ dotnet test
 
 - [docs/Project-Status.md](docs/Project-Status.md)
 - [docs/AppShell-Backlog.md](docs/AppShell-Backlog.md)
+- [src/Pauli.WinUiKit/README.md](src/Pauli.WinUiKit/README.md)
 - [docs/WinUI-Table-Control-Research.md](docs/WinUI-Table-Control-Research.md)
