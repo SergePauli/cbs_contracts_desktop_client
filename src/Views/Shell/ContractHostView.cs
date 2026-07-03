@@ -136,6 +136,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             ];
         }
 
+        protected override int PrimaryHeaderActionCount => 3;
+
         protected override async Task OnRouteLoaded(TablePageDefinition definition)
         {
             await LoadContractOptionsSourcesAsync();

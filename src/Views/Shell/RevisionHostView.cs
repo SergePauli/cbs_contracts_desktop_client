@@ -74,6 +74,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             return [_editButton, _infoButton, _copyButton];
         }
 
+        protected override int PrimaryHeaderActionCount => 2;
+
         protected override Task OnRouteLoaded(TablePageDefinition definition)
         {
             UpdateActionButtonState();

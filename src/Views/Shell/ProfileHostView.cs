@@ -51,8 +51,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             _createButton.Click += async (_, _) => await ShowProfileEditDialogAsync(isCreateMode: true);
 
             UpdateActionButtonState();
-            return [_editButton, _deleteButton, _createButton];
+            return [_createButton, _editButton, _deleteButton];
         }
+
+        protected override int PrimaryHeaderActionCount => 3;
 
         protected override Task OnRouteLoaded(TablePageDefinition definition)
         {

@@ -13,7 +13,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
             {
                 Route = "/contracts",
                 Model = "Contract",
-                Title = "Контракты",
+                Title = "Полная информация по заключенным договорам",
                 NavigationDescription = "Контракты",
                 Preset = "list",
                 Kind = TablePageKind.Functional,
