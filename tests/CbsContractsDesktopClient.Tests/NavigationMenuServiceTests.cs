@@ -99,6 +99,59 @@ public sealed class NavigationMenuServiceTests
         Assert.Equal("\u041f\u043e\u043b\u044c\u0437\u043e\u0432\u0430\u0442\u0435\u043b\u0438", usersItem.Title);
     }
 
+    [Fact]
+    public void BuildMenu_MovesDiagnosticsToSessionSection()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "admin",
+            DepartmentId = 99
+        };
+
+        var menu = service.BuildMenu(user);
+        var baseSection = menu.Single(static section => section.Title == "База");
+        var sessionSection = menu.Single(static section => section.IsSessionSection);
+
+        Assert.DoesNotContain(baseSection.Items, static item => item.Route == "/diagnostics");
+        Assert.Equal(["/diagnostics", "/logout"], sessionSection.Items.Select(static item => item.Route));
+    }
+
+    [Fact]
+    public void BuildMenu_ReferencesSection_IsExpandedByDefault()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "admin",
+            DepartmentId = 99
+        };
+
+        var menu = service.BuildMenu(user);
+        var referencesSection = menu.Single(static section => section.Title == "Справочники");
+
+        Assert.True(referencesSection.IsCollapsible);
+        Assert.True(referencesSection.IsExpanded);
+    }
+
+    [Fact]
+    public void BuildMenu_InternUser_MovesDiagnosticsToSessionSection()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "intern",
+            DepartmentId = 2
+        };
+
+        var menu = service.BuildMenu(user);
+        var baseSection = menu.Single(static section => section.Title == "База");
+        var sessionSection = menu.Single(static section => section.IsSessionSection);
+
+        Assert.DoesNotContain(baseSection.Items, static item => item.Route == "/diagnostics");
+        Assert.Equal(["/diagnostics", "/logout"], sessionSection.Items.Select(static item => item.Route));
+    }
+
     private sealed class FakeReferenceDefinitionService : IReferenceDefinitionService
     {
         public bool TryGetByRoute(string? route, out ReferenceDefinition definition)

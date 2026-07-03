@@ -7,6 +7,7 @@ The package is intentionally independent from application models, stores, API cl
 ## Current Controls
 
 - `CalendarInput` - compact date editor with manual text input, clear button, and calendar flyout.
+- `Dropdown` - compact searchable/selectable dropdown with custom selected/item content, clear button, hover/highlight styling, and keyboard focus hooks.
 - `MultiSelect` - dropdown multi-select with search, selected chips, `Options`, `Value`, `OptionLabel`, `OptionItemLabel`, `Display`, `MaxSelectedLabels`, `Placeholder`, `SelectionChanged`, and `Tooltip`.
 
 ## Design Rules

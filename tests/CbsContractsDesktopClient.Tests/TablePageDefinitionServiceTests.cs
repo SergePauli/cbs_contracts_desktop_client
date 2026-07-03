@@ -133,6 +133,26 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsContractsFunctionalTableDefinition()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/contracts", out var definition);
+
+        Assert.True(found);
+        Assert.Equal(TablePageKind.Functional, definition.Kind);
+        Assert.Equal("Contract", definition.Model);
+        Assert.Equal("list", definition.Preset);
+        Assert.Equal("Полная информация по заключенным договорам", definition.Title);
+        Assert.Equal("Контракты", definition.EffectiveNavigationDescription);
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Create));
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Edit));
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
+        Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
+        Assert.Equal(CbsTableRowStyleKey.ContractDeadline, definition.RowStyleKey);
+    }
+
+    [Fact]
     public async Task SaveColumnLayoutAsync_PersistsStagesOrderAndVisibility()
     {
         var service = CreateService();

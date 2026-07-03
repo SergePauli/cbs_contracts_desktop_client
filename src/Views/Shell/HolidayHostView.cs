@@ -56,8 +56,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             _recalculateButton = CreateHeaderIconButton("\uE9D9", "Пересчитать сроки этапов");
             _recalculateButton.Click += async (_, _) => await RecalculateHolidayStagesAsync();
             UpdateActionButtonState();
-            return [_editButton, _deleteButton, _createButton, _recalculateButton];
+            return [_createButton, _editButton, _deleteButton, _recalculateButton];
         }
+
+        protected override int PrimaryHeaderActionCount => 3;
 
         protected override Task OnRouteLoaded(TablePageDefinition definition)
         {

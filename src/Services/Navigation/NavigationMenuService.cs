@@ -50,7 +50,6 @@ namespace CbsContractsDesktopClient.Services.Navigation
                         Title = "База",
                 Items =
                 [
-                    CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, internRoute),
                     CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, internRoute)
                 ]
                     },
@@ -73,7 +72,6 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Items = []
             };
 
-            baseSection.Items.Add(CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveMenuTitle(ContractsRoute, "Контракты"), "\uE762", ContractsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, route));
             baseSection.Items.Add(CreateItem(ResolveMenuTitle(RevisionsRoute, "ДС-ки"), "\uE8A7", RevisionsRoute, route));
@@ -83,7 +81,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Title = "Справочники",
                 Items = [],
                 IsCollapsible = true,
-                IsExpanded = false
+                IsExpanded = true
             };
 
             AddDistinct(referencesSection.Items, ResolveMenuTitle(EmployeesRoute, "Сотрудники"), "\uE716", EmployeesRoute, route);
@@ -138,6 +136,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 IsSessionSection = true,
                 Items =
                 [
+                    CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, currentRoute),
                     CreateItem("Выход", "\uEC19", "/logout", currentRoute, isAction: true)
                 ]
             };

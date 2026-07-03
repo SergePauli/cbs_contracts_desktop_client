@@ -32,14 +32,6 @@
                     </Grid.ColumnDefinitions>
 
                     <TextBlock
-                        VerticalAlignment="Center"
-                        Style="{StaticResource BodyStrongTextBlockStyle}"
-                        Foreground="{StaticResource ShellPrimaryTextBrush}"
-                        Text="{Binding CompactHeaderText}"
-                        TextTrimming="CharacterEllipsis"
-                        Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
-
-                    <TextBlock
                         Grid.Column="1"
                         VerticalAlignment="Center"
                         Margin="12,0,0,0"
@@ -49,14 +41,24 @@
                         Visibility="{Binding ShowPlaceholder, Converter={StaticResource BoolVisibilityConverter}}" />
 
                     <StackPanel
-                        Grid.Column="2"
+                        Grid.Column="0"
                         Orientation="Horizontal"
                         Spacing="6"
                         VerticalAlignment="Center">
-                        <ProgressRing
-                            Width="16"
-                            Height="16"
-                            IsActive="{Binding IsLoading}" />
+                        <Button
+                            x:Name="CreateRowButton"
+                            Width="{StaticResource ShellActionButtonSize}"
+                            Height="{StaticResource ShellActionButtonSize}"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderBrush="{x:Null}"
+                            Click="CreateRowButton_Click"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="14"
+                            Foreground="ForestGreen"
+                            ToolTipService.ToolTip="Добавить запись"
+                            Visibility="{Binding CanCreateRows, Converter={StaticResource BoolVisibilityConverter}}"
+                            Content="&#xF8AA;" />
 
                         <Button
                             x:Name="EditSelectedRowButton"
@@ -90,22 +92,21 @@
                             Visibility="{Binding CanDeleteRows, Converter={StaticResource BoolVisibilityConverter}}"
                             Content="&#xE74D;" />
 
-                        <Button
-                            x:Name="ResetFiltersButton"
-                            Width="{StaticResource ShellActionButtonSize}"
-                            Height="{StaticResource ShellActionButtonSize}"
-                            Padding="0"
-                            Background="Transparent"
-                            BorderBrush="{x:Null}"
-                            Click="CreateRowButton_Click"
-                            FontFamily="Segoe Fluent Icons"
-                            FontSize="14"
-                            Foreground="ForestGreen"
-                            ToolTipService.ToolTip="Добавить запись"
-                            Visibility="{Binding CanCreateRows, Converter={StaticResource BoolVisibilityConverter}}"
-                            Content="&#xF8AA;" />
+                        <Border
+                            Width="1"
+                            Height="18"
+                            Margin="2,0,2,0"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource ShellTableGridLineBrush}" />
+
+                        <ProgressRing
+                            Width="16"
+                            Height="16"
+                            IsActive="{Binding IsLoading}"
+                            Visibility="{Binding IsLoading, Converter={StaticResource BoolVisibilityConverter}}" />
 
                         <Button
+                            x:Name="ResetFiltersButton"
                             Width="{StaticResource ShellActionButtonSize}"
                             Height="{StaticResource ShellActionButtonSize}"
                             Padding="0"
@@ -145,6 +146,17 @@
                             </Button.Flyout>
                         </Button>
                     </StackPanel>
+
+                    <TextBlock
+                        Grid.Column="2"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Center"
+                        Margin="8,0,8,0"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Foreground="{StaticResource ShellPrimaryTextBrush}"
+                        Text="{Binding CompactHeaderText}"
+                        TextTrimming="CharacterEllipsis"
+                        Visibility="{Binding HasActiveReference, Converter={StaticResource BoolVisibilityConverter}}" />
                 </Grid>
 
                 <Grid

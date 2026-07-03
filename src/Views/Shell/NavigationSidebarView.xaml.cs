@@ -20,6 +20,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 {
     public sealed partial class NavigationSidebarView : UserControl
     {
+        private const double MenuItemLeftOffset = 10;
+
         private readonly IUserService _userService;
         private readonly AppShellViewModel _viewModel;
         private readonly ContractWorkflowStore _contractWorkflowStore;
@@ -61,16 +63,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 if (!section.IsSessionSection)
                 {
-                    if (section.IsCollapsible)
-                    {
-                        SidebarNavigationView.MenuItems.Add(CreateSectionItem(section));
-                        continue;
-                    }
-
-                    SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
-                    {
-                        Content = section.Title
-                    });
+                    SidebarNavigationView.MenuItems.Add(CreateSectionHeader(section.Title));
                 }
 
                 foreach (var item in section.Items)
@@ -102,10 +95,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (_viewModel.ContextNavigationItems.Count > 0)
             {
-                SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
-                {
-                    Content = "Контекст"
-                });
+                SidebarNavigationView.MenuItems.Add(CreateSectionHeader("Контекст"));
 
                 foreach (var item in _viewModel.ContextNavigationItems)
                 {
@@ -130,24 +120,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        private static NavigationViewItem CreateSectionItem(NavigationMenuSection section)
+        private static NavigationViewItemHeader CreateSectionHeader(string title)
         {
-            var sectionItem = new NavigationViewItem
+            return new NavigationViewItemHeader
             {
-                Content = section.Title,
-                SelectsOnInvoked = false,
-                IsExpanded = section.IsExpanded
+                Content = NormalizeSectionTitle(title)
             };
-
-            foreach (var item in section.Items)
-            {
-                item.SectionTitle = section.Title;
-                var childItem = CreateNavigationItem(item);
-                childItem.Margin = new Thickness(-14, 0, 2, 0);
-                sectionItem.MenuItems.Add(childItem);
-            }
-
-            return sectionItem;
         }
 
         private static NavigationViewItem CreateNavigationItem(NavigationMenuItem item)
@@ -156,7 +134,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 Glyph = item.Glyph,
                 FontFamily = new FontFamily("Segoe Fluent Icons"),
-                FontSize = 13,
+                FontSize = 14,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -164,13 +142,17 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 Text = item.Title,
                 VerticalAlignment = VerticalAlignment.Center,
+                FontSize = 14,
                 TextTrimming = TextTrimming.CharacterEllipsis
             };
 
             var content = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
-                Spacing = 4
+                Spacing = 4,
+                MinHeight = 20,
+                Margin = new Thickness(MenuItemLeftOffset, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center
             };
 
             content.Children.Add(icon);
@@ -181,7 +163,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Content = content,
                 DataContext = item,
                 Tag = item.Route,
-                SelectsOnInvoked = !item.IsAction
+                SelectsOnInvoked = !item.IsAction,
+                MinHeight = 22
             };
         }
 
@@ -193,10 +176,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            SidebarNavigationView.MenuItems.Add(new NavigationViewItemHeader
-            {
-                Content = "Файлы"
-            });
+            SidebarNavigationView.MenuItems.Add(CreateSectionHeader("Файлы"));
 
             foreach (var item in fileItems)
             {
@@ -255,6 +235,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                 FilePath = filePath,
                 IsAction = true
             });
+        }
+
+        private static string NormalizeSectionTitle(string title)
+        {
+            return title.ToUpperInvariant();
         }
 
         private static string? BuildFolderPath(IReadOnlyList<JsonElement> revisions)

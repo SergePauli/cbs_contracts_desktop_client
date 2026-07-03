@@ -79,8 +79,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             _copyButton.Click += (_, _) => CopyContragentDetails();
 
             UpdateActionButtonState();
-            return [_editButton, _deleteButton, _createButton, _createEmployeeButton, _fnsCompareButton, _fnsMenuButton, _copyButton];
+            return [_createButton, _editButton, _deleteButton, _createEmployeeButton, _fnsCompareButton, _fnsMenuButton, _copyButton];
         }
+
+        protected override int PrimaryHeaderActionCount => 3;
 
         protected override Task OnRouteLoaded(TablePageDefinition definition)
         {

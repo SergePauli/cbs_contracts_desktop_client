@@ -84,6 +84,20 @@ public sealed class ContentHostViewTests
         "Shell",
         "ReferenceHostView.xaml.cs");
 
+    private static readonly string NavigationSidebarViewXamlPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "NavigationSidebarView.xaml");
+
+    private static readonly string NavigationSidebarViewCodeBehindPath = Path.Combine(
+        ProjectRoot,
+        "src",
+        "Views",
+        "Shell",
+        "NavigationSidebarView.xaml.cs");
+
     private static readonly string StageHostViewPath = Path.Combine(
         ProjectRoot,
         "src",
@@ -209,6 +223,74 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ComplexHostViewBase_SplitsHeaderActionsAroundTitle()
+    {
+        var codeBehind = File.ReadAllText(ComplexHostViewBasePath);
+
+        Assert.Contains("private readonly StackPanel _primaryHeaderActionsPanel;", codeBehind);
+        Assert.Contains("private readonly StackPanel _secondaryHeaderActionsPanel;", codeBehind);
+        Assert.Contains("private readonly StackPanel _headerActionsHost;", codeBehind);
+        Assert.Contains("private readonly Border _headerActionSeparator;", codeBehind);
+        Assert.Contains("protected virtual int PrimaryHeaderActionCount => 0;", codeBehind);
+        Assert.Contains("_headerActionsHost.Children.Add(_primaryHeaderActionsPanel);", codeBehind);
+        Assert.Contains("_headerActionsHost.Children.Add(_headerActionSeparator);", codeBehind);
+        Assert.Contains("_headerActionsHost.Children.Add(_secondaryHeaderActionsPanel);", codeBehind);
+        Assert.Contains("Grid.SetColumn(_headerActionsHost, 0);", codeBehind);
+        Assert.Contains("Grid.SetColumn(_headerTitleTextBlock, 2);", codeBehind);
+        Assert.Contains("_headerTitleTextBlock.HorizontalAlignment = HorizontalAlignment.Right;", codeBehind);
+        Assert.Contains("Background = GetBrush(\"ShellTableGridLineBrush\")", codeBehind);
+        Assert.Contains("foreach (var action in actions.Take(primaryActionCount))", codeBehind);
+        Assert.Contains("foreach (var action in actions.Skip(primaryActionCount))", codeBehind);
+        Assert.Contains("_secondaryHeaderActionsPanel.Children.Add(CreateResetFiltersButton());", codeBehind);
+        Assert.Contains("_secondaryHeaderActionsPanel.Children.Add(CreateSettingsButton());", codeBehind);
+        Assert.Contains("_headerActionSeparator.Visibility =", codeBehind);
+    }
+
+    [Fact]
+    public void ReferenceHostView_SplitsHeaderActionsAroundDarkerSeparator()
+    {
+        var xaml = File.ReadAllText(ReferenceHostViewXamlPath);
+
+        Assert.Contains("x:Name=\"CreateRowButton\"", xaml);
+        Assert.Contains("x:Name=\"EditSelectedRowButton\"", xaml);
+        Assert.Contains("x:Name=\"DeleteSelectedRowButton\"", xaml);
+        Assert.Contains("Background=\"{StaticResource ShellTableGridLineBrush}\"", xaml);
+        Assert.Contains("x:Name=\"ResetFiltersButton\"", xaml);
+        Assert.Contains("x:Name=\"HeaderSettingsButton\"", xaml);
+        Assert.Contains("Grid.Column=\"2\"", xaml);
+        Assert.Contains("HorizontalAlignment=\"Right\"", xaml);
+        Assert.True(xaml.IndexOf("x:Name=\"CreateRowButton\"", StringComparison.Ordinal) < xaml.IndexOf("x:Name=\"EditSelectedRowButton\"", StringComparison.Ordinal));
+        Assert.True(xaml.IndexOf("x:Name=\"DeleteSelectedRowButton\"", StringComparison.Ordinal) < xaml.IndexOf("x:Name=\"ResetFiltersButton\"", StringComparison.Ordinal));
+        Assert.True(xaml.IndexOf("x:Name=\"ResetFiltersButton\"", StringComparison.Ordinal) < xaml.IndexOf("x:Name=\"HeaderSettingsButton\"", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NavigationSidebar_UsesCompactSeparatedSectionHeaders()
+    {
+        var xaml = File.ReadAllText(NavigationSidebarViewXamlPath);
+        var codeBehind = File.ReadAllText(NavigationSidebarViewCodeBehindPath);
+
+        Assert.Contains("<x:Double x:Key=\"NavigationViewItemOnLeftMinHeight\">20</x:Double>", xaml);
+        Assert.Contains("<Thickness x:Key=\"NavigationViewItemButtonMargin\">0</Thickness>", xaml);
+        Assert.Contains("<Thickness x:Key=\"NavigationViewItemInnerHeaderMargin\">8,0</Thickness>", xaml);
+        Assert.Contains("<Setter Property=\"MinHeight\" Value=\"{StaticResource ShellMenuItemMinHeight}\" />", xaml);
+        Assert.Contains("<Setter Property=\"Padding\" Value=\"0\" />", xaml);
+        Assert.Contains("<Setter Property=\"FontSize\" Value=\"14\" />", xaml);
+        Assert.Contains("<Setter Property=\"Margin\" Value=\"8,8,6,1\" />", xaml);
+        Assert.Contains("<Setter Property=\"FontSize\" Value=\"10\" />", xaml);
+        Assert.Contains("<Setter Property=\"FontWeight\" Value=\"SemiBold\" />", xaml);
+        Assert.Contains("<ControlTemplate TargetType=\"NavigationViewItemHeader\">", xaml);
+        Assert.Contains("FontSize=\"{TemplateBinding FontSize}\"", xaml);
+        Assert.Contains("private const double MenuItemLeftOffset = 10;", codeBehind);
+        Assert.Contains("FontSize = 14,", codeBehind);
+        Assert.Contains("Margin = new Thickness(MenuItemLeftOffset, 0, 0, 0)", codeBehind);
+        Assert.Contains("SidebarNavigationView.MenuItems.Add(CreateSectionHeader(section.Title));", codeBehind);
+        Assert.DoesNotContain("childItem.Margin = new Thickness(-14", codeBehind);
+        Assert.Contains("Content = NormalizeSectionTitle(title)", codeBehind);
+        Assert.Contains("return title.ToUpperInvariant();", codeBehind);
+    }
+
+    [Fact]
     public void ComplexHostViewBase_OwnsHeaderActionButtonVisualStates()
     {
         var codeBehind = File.ReadAllText(ComplexHostViewBasePath);
@@ -257,23 +339,32 @@ public sealed class ContentHostViewTests
         Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", contractHost);
         Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", contractHost);
         Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", contractHost);
+        Assert.Contains("protected override int PrimaryHeaderActionCount => 3;", contractHost);
+        Assert.True(contractHost.IndexOf("_createButton,", StringComparison.Ordinal) < contractHost.IndexOf("_editButton,", StringComparison.Ordinal));
+        Assert.True(contractHost.IndexOf("_editButton,", StringComparison.Ordinal) < contractHost.IndexOf("_infoButton,", StringComparison.Ordinal));
         Assert.Contains("ApplyEditButtonState(_editButton", stageHost);
         Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", stageHost);
         Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", stageHost);
         Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", stageHost);
         Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", stageHost);
+        Assert.Contains("protected override int PrimaryHeaderActionCount => 2;", stageHost);
         Assert.Contains("ApplyEditButtonState(_editButton", revisionHost);
         Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", revisionHost);
         Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", revisionHost);
         Assert.Contains("ApplyDefaultActionButtonState(", revisionHost);
+        Assert.Contains("protected override int PrimaryHeaderActionCount => 2;", revisionHost);
         Assert.Contains("ApplyEditButtonState(_editButton", employeeHost);
         Assert.Contains("ApplyDeleteButtonState(_deleteButton", employeeHost);
         Assert.Contains("ApplyCreateButtonState(_createButton", employeeHost);
+        Assert.Contains("protected override int PrimaryHeaderActionCount => 3;", employeeHost);
+        Assert.Contains("return [_createButton, _editButton, _deleteButton];", employeeHost);
         Assert.Contains("ApplyEditButtonState(_editButton", contragentHost);
         Assert.Contains("ApplyDeleteButtonState(_deleteButton", contragentHost);
         Assert.Contains("ApplyCreateButtonState(_createButton", contragentHost);
         Assert.Contains("ApplyDefaultActionButtonState(_fnsCompareButton", contragentHost);
         Assert.Contains("ApplyDefaultActionButtonState(_copyButton", contragentHost);
+        Assert.Contains("protected override int PrimaryHeaderActionCount => 3;", contragentHost);
+        Assert.Contains("return [_createButton, _editButton, _deleteButton,", contragentHost);
     }
 
     [Fact]

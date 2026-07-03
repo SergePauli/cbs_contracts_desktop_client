@@ -28,7 +28,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         private CancellationTokenSource? _routeCts;
         private CancellationTokenSource? _filterDebounceCts;
         private CancellationTokenSource? _viewportCts;
-        private readonly StackPanel _headerActionsPanel;
+        private readonly StackPanel _primaryHeaderActionsPanel;
+        private readonly StackPanel _secondaryHeaderActionsPanel;
+        private readonly StackPanel _headerActionsHost;
+        private readonly Border _headerActionSeparator;
         private readonly ContentControl _detailContentControl;
         private readonly Grid _tableHost;
         private readonly TextBlock _headerTitleTextBlock;
@@ -73,7 +76,27 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Width = 16,
                 Height = 16
             };
-            _headerActionsPanel = new StackPanel
+            _primaryHeaderActionsPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _secondaryHeaderActionsPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 6,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _headerActionSeparator = new Border
+            {
+                Width = 1,
+                Height = 18,
+                Margin = new Thickness(2, 0, 2, 0),
+                Background = GetBrush("ShellTableGridLineBrush"),
+                VerticalAlignment = VerticalAlignment.Center
+            };
+            _headerActionsHost = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Spacing = 6,
@@ -131,6 +154,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             return [];
         }
+
+        protected virtual int PrimaryHeaderActionCount => 0;
 
         protected virtual Task OnRouteLoaded(TablePageDefinition definition)
         {
@@ -199,16 +224,31 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected void RebuildHeaderActions()
         {
-            _headerActionsPanel.Children.Clear();
-            _headerActionsPanel.Children.Add(_progressRing);
+            _primaryHeaderActionsPanel.Children.Clear();
+            _secondaryHeaderActionsPanel.Children.Clear();
 
-            foreach (var action in BuildHeaderActions().Where(static action => action is not null))
+            var actions = BuildHeaderActions()
+                .Where(static action => action is not null)
+                .ToList();
+            var primaryActionCount = Math.Clamp(PrimaryHeaderActionCount, 0, actions.Count);
+
+            foreach (var action in actions.Take(primaryActionCount))
             {
-                _headerActionsPanel.Children.Add(action);
+                _primaryHeaderActionsPanel.Children.Add(action);
             }
 
-            _headerActionsPanel.Children.Add(CreateResetFiltersButton());
-            _headerActionsPanel.Children.Add(CreateSettingsButton());
+            _secondaryHeaderActionsPanel.Children.Add(_progressRing);
+            foreach (var action in actions.Skip(primaryActionCount))
+            {
+                _secondaryHeaderActionsPanel.Children.Add(action);
+            }
+
+            _secondaryHeaderActionsPanel.Children.Add(CreateResetFiltersButton());
+            _secondaryHeaderActionsPanel.Children.Add(CreateSettingsButton());
+            _headerActionSeparator.Visibility =
+                _primaryHeaderActionsPanel.Children.Count > 0 && _secondaryHeaderActionsPanel.Children.Count > 0
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
         }
 
         protected void RefreshSelectedFooterText()
@@ -331,14 +371,20 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             _headerTitleTextBlock.Style = Application.Current.Resources["BodyStrongTextBlockStyle"] as Style;
             _headerTitleTextBlock.Foreground = GetBrush("ShellPrimaryTextBrush");
+            _headerTitleTextBlock.Margin = new Thickness(8, 0, 8, 0);
+            _headerTitleTextBlock.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(_headerTitleTextBlock, 2);
             header.Children.Add(_headerTitleTextBlock);
 
             Grid.SetColumn(_placeholderTextBlock, 1);
             _placeholderTextBlock.Foreground = GetBrush("ShellSecondaryTextBrush");
             header.Children.Add(_placeholderTextBlock);
 
-            Grid.SetColumn(_headerActionsPanel, 2);
-            header.Children.Add(_headerActionsPanel);
+            _headerActionsHost.Children.Add(_primaryHeaderActionsPanel);
+            _headerActionsHost.Children.Add(_headerActionSeparator);
+            _headerActionsHost.Children.Add(_secondaryHeaderActionsPanel);
+            Grid.SetColumn(_headerActionsHost, 0);
+            header.Children.Add(_headerActionsHost);
 
             var errorHost = new Grid
             {
@@ -846,6 +892,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _headerTitleTextBlock.Text = Store.CompactHeaderText;
             _placeholderTextBlock.Text = Store.PlaceholderMessage;
             _progressRing.IsActive = Store.IsLoading;
+            _progressRing.Visibility = Store.IsLoading ? Visibility.Visible : Visibility.Collapsed;
             _errorInfoBar.IsOpen = Store.HasError;
             _errorInfoBar.Message = Store.ErrorMessage;
             _headerTitleTextBlock.Visibility = Store.HasActiveReference ? Visibility.Visible : Visibility.Collapsed;

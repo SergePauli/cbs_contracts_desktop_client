@@ -104,6 +104,7 @@
   - комментарии этапов сохраняются через `comments_attributes`
   - закрытие последнего открытого этапа может закрывать контракт по бизнес-правилам коммерческого профиля
   - общие UI-компоненты и форматтеры вынесены в `Pauli.WinUiKit` и `Shared`
+  - `Pauli.WinUiKit` содержит reusable controls `CalendarInput`, `Dropdown` и `MultiSelect`
 
 ### 4. Табличная платформа
 
@@ -163,26 +164,29 @@
 - `EmployeeBox` reusable UI contract/rendering hooks
 - `/revisions` functional table definition, metadata, detail footer, workflow-store hooks, edit dialog и copy action
 - `/stages` functional table definition, filters/defaults, row update, workflow-store hooks, edit dialogs, payload builders и button behavior
+- `/contracts` functional table definition, route/host wiring, workflow-store hooks, contract info dialog и commercial edit payload
 
 ## Что сейчас в разработке по смыслу
 
 Текущая фаза проекта:
 
-**масштабирование функциональных контрактных таблиц поверх готовой shell + table platform**
+**развитие рабочих экранов поверх готовой shell + table platform**
 
-То есть команда больше не строит “скелет”, завершила крупный этап сложных справочников и закрыла функциональные таблицы `/revisions` и `/stages`. Следующий фокус - снижение архитектурной сложности shell/content слоя и подготовка к таблице контрактов.
+То есть команда больше не строит “скелет”, завершила крупный этап сложных справочников и закрыла функциональные таблицы `/revisions`, `/stages` и `/contracts`. Следующий фокус - снижение архитектурной сложности shell/content слоя и подготовка отчета `Активность`.
 
 Отдельно важно:
 
 - общий диагностический слой lazy/table/API-пайплайна сохранен и штатно выключен
 - временная диагностика `ReferenceEditDialog` снята после фикса регрессии с `PrimaryButton`
 - монолитный `ContentHostView` удален; content-area разбита на router, общий table-host слой и конкретные host views
+- `Pauli.WinUiKit` стал отдельной точкой владения компактными WinUI controls для форм и фильтров
 
 ## Что еще не является завершенным
 
-- дальнейшая чистка конкретных host views и вынос повторяющихся detail/workflow-паттернов по мере появления контрактов и активности
+- дальнейшая чистка конкретных host views и вынос повторяющихся detail/workflow-паттернов по мере развития отчета `Активность`
 - полировка `DetailView` для сложных таблиц, где одновременно нужны contract/stage/revision-specific summaries
-- функциональная таблица `Контракты`
+- развитие `Pauli.WinUiKit` по мере появления повторяемых UI primitives
+- отчет `Активность`
 - доменные действия над строками
 - полноценный CRUD справочников:
   - read/details
@@ -194,9 +198,10 @@
 ## Что логично делать дальше
 
 1. Продолжить развитие `ContentHostRouterView`, `ComplexHostViewBase` и конкретных host views без возврата к монолитному content host.
-2. Отполировать `DetailView` для сложных таблиц и подготовить его к нескольким таблицам на одной странице, особенно для будущей страницы `Активность`.
-3. Начать разработку функциональной таблицы `Контракты`.
-4. Довести CRUD справочников до details/archive и backend-aware ограничений.
-5. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect.
-6. Расширять доменный контекст в audit/context panel.
-7. Укреплять тестовое покрытие вокруг новых shell/table сценариев.
+2. Отполировать `DetailView` для сложных таблиц и подготовить его к нескольким таблицам на одной странице.
+3. Начать разработку отчета `Активность`.
+4. Развивать `Pauli.WinUiKit` как общий набор compact desktop controls для доменных форм.
+5. Довести CRUD справочников до details/archive и backend-aware ограничений.
+6. Добавлять следующие специализированные типы колонок и фильтров поверх уже готовых text/numeric/date-time/multiselect.
+7. Расширять доменный контекст в audit/context panel.
+8. Укреплять тестовое покрытие вокруг новых shell/table сценариев.
