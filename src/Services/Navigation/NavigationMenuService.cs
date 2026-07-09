@@ -4,6 +4,7 @@ using System.Linq;
 using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Navigation;
 using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.References;
 
 namespace CbsContractsDesktopClient.Services.Navigation
@@ -11,6 +12,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
     public class NavigationMenuService : INavigationMenuService
     {
         private readonly IReferenceDefinitionService? _referenceDefinitionService;
+        private readonly ITablePageDefinitionService? _tablePageDefinitionService;
 
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
@@ -28,9 +30,12 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private const string UsersRoute = "/users";
         private const string ReportRoute = "/report";
 
-        public NavigationMenuService(IReferenceDefinitionService? referenceDefinitionService = null)
+        public NavigationMenuService(
+            IReferenceDefinitionService? referenceDefinitionService = null,
+            ITablePageDefinitionService? tablePageDefinitionService = null)
         {
             _referenceDefinitionService = referenceDefinitionService;
+            _tablePageDefinitionService = tablePageDefinitionService;
         }
 
         public IReadOnlyList<NavigationMenuSection> BuildMenu(User? user, string? currentRoute = null)
@@ -50,7 +55,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                         Title = "База",
                 Items =
                 [
-                    CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, internRoute)
+                    CreateItem(ResolveFunctionalTableTitle(StagesRoute), "\uE7C1", StagesRoute, internRoute)
                 ]
                     },
                     BuildSessionSection(internRoute)
@@ -72,9 +77,9 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Items = []
             };
 
-            baseSection.Items.Add(CreateItem(ResolveMenuTitle(ContractsRoute, "Контракты"), "\uE762", ContractsRoute, route));
-            baseSection.Items.Add(CreateItem(ResolveMenuTitle(StagesRoute, "Этапы"), "\uE7C1", StagesRoute, route));
-            baseSection.Items.Add(CreateItem(ResolveMenuTitle(RevisionsRoute, "ДС-ки"), "\uE8A7", RevisionsRoute, route));
+            baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(ContractsRoute), "\uE762", ContractsRoute, route));
+            baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(StagesRoute), "\uE7C1", StagesRoute, route));
+            baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(RevisionsRoute), "\uE8A7", RevisionsRoute, route));
 
             var referencesSection = new NavigationMenuSection
             {
@@ -183,6 +188,17 @@ namespace CbsContractsDesktopClient.Services.Navigation
             }
 
             return fallbackTitle;
+        }
+
+        private string ResolveFunctionalTableTitle(string route)
+        {
+            if (_tablePageDefinitionService is not null
+                && _tablePageDefinitionService.TryGetByRoute(route, out var definition))
+            {
+                return definition.Title;
+            }
+
+            return $"{route} (маршрут не зарегистрирован)";
         }
     }
 }

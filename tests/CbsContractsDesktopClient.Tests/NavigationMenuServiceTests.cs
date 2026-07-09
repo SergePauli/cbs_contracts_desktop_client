@@ -1,12 +1,17 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models;
+using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
+using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Settings;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
@@ -100,6 +105,47 @@ public sealed class NavigationMenuServiceTests
     }
 
     [Fact]
+    public void BuildMenu_UsesFunctionalTableTitles_AsMenuFallbacks()
+    {
+        var service = new NavigationMenuService(
+            tablePageDefinitionService: new FakeTablePageDefinitionService(
+                ("/contracts", "Контракты"),
+                ("/stages", "Этапы"),
+                ("/revisions", "ДСоглашения")));
+        var user = new User
+        {
+            Role = "admin",
+            DepartmentId = 99
+        };
+
+        var menu = service.BuildMenu(user);
+        var baseItems = menu.Single(static section => section.Title == "База").Items;
+
+        Assert.Equal("Контракты", baseItems.Single(static item => item.Route == "/contracts").Title);
+        Assert.Equal("Этапы", baseItems.Single(static item => item.Route == "/stages").Title);
+        Assert.Equal("ДСоглашения", baseItems.Single(static item => item.Route == "/revisions").Title);
+    }
+
+    [Fact]
+    public void BuildMenu_ShowsUnregisteredRoute_ForMissingFunctionalTableDefinition()
+    {
+        var service = new NavigationMenuService(tablePageDefinitionService: new FakeTablePageDefinitionService());
+        var user = new User
+        {
+            Role = "admin",
+            DepartmentId = 99
+        };
+
+        var menu = service.BuildMenu(user);
+        var contractsItem = menu
+            .Single(static section => section.Title == "База")
+            .Items
+            .Single(static item => item.Route == "/contracts");
+
+        Assert.Equal("/contracts (маршрут не зарегистрирован)", contractsItem.Title);
+    }
+
+    [Fact]
     public void BuildMenu_MovesDiagnosticsToSessionSection()
     {
         var service = new NavigationMenuService();
@@ -170,6 +216,57 @@ public sealed class NavigationMenuServiceTests
 
             definition = null!;
             return false;
+        }
+    }
+
+    private sealed class FakeTablePageDefinitionService : ITablePageDefinitionService
+    {
+        private readonly Dictionary<string, string> _titlesByRoute;
+
+        public FakeTablePageDefinitionService(params (string Route, string Title)[] definitions)
+        {
+            _titlesByRoute = definitions.ToDictionary(
+                static definition => definition.Route,
+                static definition => definition.Title,
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        public bool TryGetByRoute(string? route, out TablePageDefinition definition)
+        {
+            if (!string.IsNullOrWhiteSpace(route)
+                && _titlesByRoute.TryGetValue(route, out var title))
+            {
+                definition = new TablePageDefinition
+                {
+                    Route = route,
+                    Model = title,
+                    Title = title
+                };
+                return true;
+            }
+
+            definition = null!;
+            return false;
+        }
+
+        public Task SaveColumnWidthAsync(TableColumnWidthSettings settings, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveSortAsync(TableSortSettings settings, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveFiltersAsync(string route, IReadOnlyList<DataFilterCriterion> filters, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task SaveColumnLayoutAsync(TableColumnLayoutSettings settings, CancellationToken cancellationToken = default)
+        {
+            return Task.CompletedTask;
         }
     }
 }
