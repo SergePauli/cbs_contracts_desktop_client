@@ -16,6 +16,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
+using Windows.System;
 
 namespace CbsContractsDesktopClient.Views.Controls
 {
@@ -198,6 +199,8 @@ namespace CbsContractsDesktopClient.Views.Controls
         public CbsTableView()
         {
             InitializeComponent();
+            IsTabStop = true;
+            PreviewKeyDown += OnPreviewKeyDown;
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
         }
@@ -569,6 +572,127 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             RowsScrollViewer.ViewChanged -= OnScrollViewerViewChanged;
             RowsScrollViewer.SizeChanged -= OnRowsScrollViewerSizeChanged;
+        }
+
+        private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
+        {
+            if (e.Key is not VirtualKey.Up and not VirtualKey.Down)
+            {
+                return;
+            }
+
+            e.Handled = MoveSelectionOrScroll(e.Key == VirtualKey.Down ? 1 : -1);
+        }
+
+        private bool MoveSelectionOrScroll(int direction)
+        {
+            if (direction == 0)
+            {
+                return false;
+            }
+
+            if (SupportsRowSelection && TryMoveSelectedRow(direction))
+            {
+                return true;
+            }
+
+            return ScrollByRows(direction, 1);
+        }
+
+        private bool TryMoveSelectedRow(int direction)
+        {
+            if (SelectedItem is null || SelectedItem.IsPlaceholder)
+            {
+                return false;
+            }
+
+            var sourceRows = GetSourceRows();
+            var selectedIndex = FindRowIndex(sourceRows, SelectedItem);
+            if (selectedIndex < 0)
+            {
+                return false;
+            }
+
+            var targetIndex = selectedIndex + direction;
+            if (targetIndex < 0 || targetIndex >= sourceRows.Count || sourceRows[targetIndex].IsPlaceholder)
+            {
+                return false;
+            }
+
+            SelectSingleRow(sourceRows[targetIndex], targetIndex);
+            ScrollRowIntoView(targetIndex);
+            return true;
+        }
+
+        private bool ScrollByRows(int direction, int rowCount)
+        {
+            if (RowHeight <= 0 || RowsScrollViewer.ExtentHeight <= RowsScrollViewer.ViewportHeight)
+            {
+                return false;
+            }
+
+            var maxOffset = Math.Max(0, RowsScrollViewer.ExtentHeight - RowsScrollViewer.ViewportHeight);
+            var targetOffset = Math.Clamp(
+                RowsScrollViewer.VerticalOffset + (direction * rowCount * RowHeight),
+                0,
+                maxOffset);
+
+            if (Math.Abs(targetOffset - RowsScrollViewer.VerticalOffset) < 0.1)
+            {
+                return false;
+            }
+
+            RowsScrollViewer.ChangeView(null, targetOffset, null, disableAnimation: true);
+            return true;
+        }
+
+        private void ScrollRowIntoView(int rowIndex)
+        {
+            if (RowHeight <= 0)
+            {
+                return;
+            }
+
+            var rowTop = rowIndex * RowHeight;
+            var rowBottom = rowTop + RowHeight;
+            var viewportTop = RowsScrollViewer.VerticalOffset;
+            var viewportBottom = viewportTop + RowsScrollViewer.ViewportHeight;
+
+            if (rowTop < viewportTop)
+            {
+                RowsScrollViewer.ChangeView(null, rowTop, null, disableAnimation: true);
+                return;
+            }
+
+            if (rowBottom > viewportBottom)
+            {
+                var targetOffset = Math.Max(0, rowBottom - RowsScrollViewer.ViewportHeight);
+                RowsScrollViewer.ChangeView(null, targetOffset, null, disableAnimation: true);
+            }
+        }
+
+        private void SelectSingleRow(TableDataRow row, int rowIndex)
+        {
+            _selectedIndexes.Clear();
+            _selectedIndexes.Add(rowIndex);
+            SelectedItem = row;
+            UpdateVisibleRowSelectionStates();
+            RowSelectionChanged?.Invoke(
+                this,
+                new CbsTableRowSelectionChangedEventArgs(row, rowIndex, isSelected: true));
+        }
+
+        private static int FindRowIndex(IReadOnlyList<TableDataRow> sourceRows, TableDataRow row)
+        {
+            for (var index = 0; index < sourceRows.Count; index++)
+            {
+                if (ReferenceEquals(sourceRows[index], row))
+                {
+                    return index;
+                }
+            }
+
+            return -1;
         }
 
         private async void OnScrollViewerViewChanged(object? sender, ScrollViewerViewChangedEventArgs e)
@@ -1437,12 +1561,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                     return;
                 }
 
-                _selectedIndexes.Clear();
-                _selectedIndexes.Add(rowIndex);
-                SelectedItem = rowView.Row;
-                RowSelectionChanged?.Invoke(
-                    this,
-                    new CbsTableRowSelectionChangedEventArgs(rowView.Row, rowIndex, isSelected: true));
+                Focus(FocusState.Programmatic);
+                SelectSingleRow(rowView.Row!, rowIndex);
             }
 
             UpdateVisibleRowSelectionStates();
@@ -1460,13 +1580,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
-            _selectedIndexes.Clear();
-            _selectedIndexes.Add(rowIndex);
-            SelectedItem = rowView.Row;
-            UpdateVisibleRowSelectionStates();
-            RowSelectionChanged?.Invoke(
-                this,
-                new CbsTableRowSelectionChangedEventArgs(rowView.Row, rowIndex, isSelected: true));
+            Focus(FocusState.Programmatic);
+            SelectSingleRow(rowView.Row!, rowIndex);
 
             RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));
         }
