@@ -200,13 +200,13 @@ namespace CbsContractsDesktopClient.Views.References
             var link = new HyperlinkButton
             {
                 Content = contact.Value,
-                NavigateUri = contact.NavigateUri,
                 Padding = new Thickness(2, 0, 2, 0),
                 MinWidth = 0,
                 FontSize = 10,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            link.Click += (_, _) => ContactLaunchService.Launch(contact.NavigateUri);
 
             var removeButton = new Button
             {
@@ -274,13 +274,13 @@ namespace CbsContractsDesktopClient.Views.References
             var link = new HyperlinkButton
             {
                 Content = value,
-                NavigateUri = ContactTypeClassifier.TryCreateLaunchUri(value, match),
                 Padding = new Thickness(2, 0, 2, 0),
                 MinWidth = 0,
                 FontSize = 10,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            link.Click += (_, _) => ContactLaunchService.Launch(ContactTypeClassifier.TryCreateLaunchUri(value, match));
 
             Grid.SetColumn(icon, 0);
             Grid.SetColumn(link, 1);

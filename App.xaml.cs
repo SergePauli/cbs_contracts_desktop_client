@@ -14,6 +14,7 @@ using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels;
+using CbsContractsDesktopClient.Stores.Contragents;
 using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
@@ -56,6 +57,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IContragentFnsWorkflow, ContragentFnsWorkflow>();
             services.AddSingleton<AppShellViewModel>();
             services.AddSingleton<AuditStore>();
+            services.AddSingleton<ContragentDetailStore>();
             services.AddSingleton<TablePageStore>();
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<ContractWorkflowFactory>();
