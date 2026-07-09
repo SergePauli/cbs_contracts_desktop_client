@@ -33,8 +33,8 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal(TablePageKind.Functional, definition.Kind);
         Assert.Equal("Revision", definition.Model);
         Assert.Equal("list", definition.Preset);
-        Assert.Equal("Дополнительные соглашения", definition.Title);
-        Assert.Equal("Дополнительные соглашения контрактов", definition.EffectiveNavigationDescription);
+        Assert.Equal("ДСоглашения", definition.Title);
+        Assert.Equal("Выборка в разрезе Дополнительных соглашений", definition.EffectiveNavigationDescription);
         Assert.False(definition.Capabilities.HasFlag(TablePageCapabilities.Create));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Edit));
         Assert.False(definition.Capabilities.HasFlag(TablePageCapabilities.Delete));
@@ -100,7 +100,8 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal(TablePageKind.Functional, definition.Kind);
         Assert.Equal("Stage", definition.Model);
         Assert.Equal("list", definition.Preset);
-        Assert.Equal("Этапы контрактов", definition.Title);
+        Assert.Equal("Этапы", definition.Title);
+        Assert.Equal("Bыборка в разрезе этапов", definition.EffectiveNavigationDescription);
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
         Assert.Equal(CbsTableRowStyleKey.StageDeadline, definition.RowStyleKey);
@@ -143,8 +144,8 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal(TablePageKind.Functional, definition.Kind);
         Assert.Equal("Contract", definition.Model);
         Assert.Equal("list", definition.Preset);
-        Assert.Equal("Полная информация по заключенным договорам", definition.Title);
-        Assert.Equal("Контракты", definition.EffectiveNavigationDescription);
+        Assert.Equal("Контракты", definition.Title);
+        Assert.Equal("Выборка в разрезе договоров", definition.EffectiveNavigationDescription);
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Create));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Edit));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));

@@ -1,5 +1,6 @@
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Stores.Contragents;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -10,6 +11,7 @@ namespace CbsContractsDesktopClient.Views.References
 {
     public sealed partial class ContragentDetailView : UserControl
     {
+        private readonly ContragentDetailStore _contragentDetailStore;
         private readonly IReferenceLookupCacheService? _referenceLookupCacheService;
         private CancellationTokenSource? _ownershipLookupCts;
         private int _refreshVersion;
@@ -32,6 +34,7 @@ namespace CbsContractsDesktopClient.Views.References
 
         public ContragentDetailView()
         {
+            _contragentDetailStore = App.Services.GetRequiredService<ContragentDetailStore>();
             InitializeComponent();
             _referenceLookupCacheService = App.Services.GetService<IReferenceLookupCacheService>();
             EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);
@@ -95,10 +98,12 @@ namespace CbsContractsDesktopClient.Views.References
                 AddressesTextBlock.Text = string.Empty;
                 ContactsPanel.Children.Clear();
                 ContractLinksPanel.Children.Clear();
+                _contragentDetailStore.SetContragent(null);
                 EmployeesBox.Employees = [];
                 return;
             }
 
+            _contragentDetailStore.SetContragent(row);
             var fullName = TryGetText(row, "requisites.organization.full_name", "full_name");
 
             OwnershipFullNameTextBlock.Text = BuildOwnershipFullNameText(row);
@@ -110,7 +115,7 @@ namespace CbsContractsDesktopClient.Views.References
             AddressesTextBlock.Text = BuildAddressesText(row);
             RenderContacts(BuildContactsText(row));
             RefreshContractLinks();
-            EmployeesBox.Employees = ReadEmployees(row);
+            EmployeesBox.Employees = _contragentDetailStore.Employees;
         }
 
         private void RefreshContractLinks()
@@ -448,64 +453,6 @@ namespace CbsContractsDesktopClient.Views.References
                 : null;
         }
 
-        private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(TableDataRow row)
-        {
-            var employeesElement = TryGetArray(row, "employees");
-            if (employeesElement is null)
-            {
-                return [];
-            }
-
-            return EnumerateObjectArray(employeesElement)
-                .Select(ReadEmployee)
-                .Where(static employee => !string.IsNullOrWhiteSpace(employee.FullName) || employee.Id is not null)
-                .ToList();
-        }
-
-        private static EmployeeBoxItem ReadEmployee(JsonElement item)
-        {
-            return new EmployeeBoxItem
-            {
-                Id = ReadLongProperty(item, "id"),
-                FullName = ReadStringProperty(item, "full_name")
-                    ?? ReadStringProperty(item, "name")
-                    ?? ReadNestedStringProperty(item, "person", "full_name")
-                    ?? ReadNestedStringProperty(item, "person", "name")
-                    ?? string.Empty,
-                Position = ReadStringProperty(item, "position")
-                    ?? ReadNestedStringProperty(item, "position", "name")
-                    ?? string.Empty,
-                Contacts = ReadEmployeeContacts(item),
-                Description = ReadStringProperty(item, "description") ?? string.Empty,
-                IsActive = ReadBooleanProperty(item, "used") ?? ReadBooleanProperty(item, "activated") ?? true
-            };
-        }
-
-        private static IReadOnlyList<string> ReadEmployeeContacts(JsonElement item)
-        {
-            if (item.TryGetProperty("contacts", out var contactsElement))
-            {
-                return ReadContacts(contactsElement);
-            }
-
-            if (item.TryGetProperty("person", out var personElement)
-                && personElement.ValueKind == JsonValueKind.Object
-                && personElement.TryGetProperty("contacts", out contactsElement))
-            {
-                return ReadContacts(contactsElement);
-            }
-
-            return [];
-        }
-
-        private static string? ReadNestedStringProperty(JsonElement item, string propertyName, string nestedPropertyName)
-        {
-            return item.ValueKind == JsonValueKind.Object
-                && item.TryGetProperty(propertyName, out var nested)
-                ? ReadStringProperty(nested, nestedPropertyName)
-                : null;
-        }
-
         private static long? ReadLongProperty(JsonElement item, string propertyName)
         {
             if (item.ValueKind != JsonValueKind.Object
@@ -518,23 +465,6 @@ namespace CbsContractsDesktopClient.Views.References
             {
                 JsonValueKind.Number when value.TryGetInt64(out var number) => number,
                 JsonValueKind.String when long.TryParse(value.GetString(), out var number) => number,
-                _ => null
-            };
-        }
-
-        private static bool? ReadBooleanProperty(JsonElement item, string propertyName)
-        {
-            if (item.ValueKind != JsonValueKind.Object
-                || !item.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            return value.ValueKind switch
-            {
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.String when bool.TryParse(value.GetString(), out var parsedValue) => parsedValue,
                 _ => null
             };
         }

@@ -13,8 +13,8 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
             {
                 Route = "/stages",
                 Model = "Stage",
-                Title = "Этапы контрактов",
-                NavigationDescription = "Этапы контрактов",
+                Title = "Этапы",
+                NavigationDescription = "Bыборка в разрезе этапов",
                 Preset = "list",
                 Kind = TablePageKind.Functional,
                 Capabilities =

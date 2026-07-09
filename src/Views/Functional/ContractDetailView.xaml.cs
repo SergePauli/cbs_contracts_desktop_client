@@ -4,6 +4,7 @@ using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Stores.Contragents;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ namespace CbsContractsDesktopClient.Views.Functional
     public sealed partial class ContractDetailView : UserControl
     {
         private readonly ContractWorkflowStore _contractWorkflowStore;
+        private readonly ContragentDetailStore _contragentDetailStore;
         private bool _isStoreSubscribed;
 
         public static readonly DependencyProperty RevisionRowProperty =
@@ -44,6 +46,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         public ContractDetailView()
         {
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
+            _contragentDetailStore = App.Services.GetRequiredService<ContragentDetailStore>();
             InitializeComponent();
             EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);
             Loaded += OnLoaded;
@@ -139,6 +142,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ContractNameTextBlock.Text = "Контракт не выбран";
                 ContragentNameTextBlock.Text = string.Empty;
                 ContactsPanel.Children.Clear();
+                _contragentDetailStore.SetContragent(null);
                 EmployeesBox.Employees = [];
                 CommentsBox.Comments = [];
                 return;
@@ -148,14 +152,16 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ?? TryGetText(selectedRow, "contract.name")
                 ?? TryGetText(selectedRow, "name")
                 ?? "Контракт не выбран";
-            ContragentNameTextBlock.Text = TryGetText(contragent, "name", "requisites.organization.name")
+            _contragentDetailStore.SetContragent(contragent);
+            ContragentNameTextBlock.Text = !string.IsNullOrWhiteSpace(_contragentDetailStore.Name)
+                ? _contragentDetailStore.Name
+                : TryGetText(contragent, "name", "requisites.organization.name")
                 ?? TryGetText(selectedRow, "contract.contragent.name")
                 ?? TryGetText(selectedRow, "contragent.name")
                 ?? string.Empty;
 
-            RenderContacts(ReadContragentContacts(contragent));
-            var employees = ReadEmployees(contragent);
-            EmployeesBox.Employees = employees;
+            RenderContacts(_contragentDetailStore.Contacts);
+            EmployeesBox.Employees = _contragentDetailStore.Employees;
             CommentsBox.Comments = _contractWorkflowStore.Comments;
         }
 
@@ -244,101 +250,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 .ToList();
         }
 
-        private static IReadOnlyList<EmployeeBoxItem> ReadEmployees(TableDataRow? row)
-        {
-            var employees = TryGetFirstArray(row, "employees", "emploees");
-            if (employees is null)
-            {
-                return [];
-            }
-
-            return employees.Value
-                .EnumerateArray()
-                .Where(static item => item.ValueKind == JsonValueKind.Object)
-                .Select(ReadEmployee)
-                .Where(static employee => !string.IsNullOrWhiteSpace(employee.FullName) || employee.Id is not null)
-                .ToList();
-        }
-
-        private static EmployeeBoxItem ReadEmployee(JsonElement item)
-        {
-            return new EmployeeBoxItem
-            {
-                Id = ReadLongProperty(item, "id"),
-                FullName = ReadDisplayName(item)
-                    ?? string.Empty,
-                Position = ReadStringProperty(item, "position")
-                    ?? ReadNestedStringProperty(item, "position", "name")
-                    ?? string.Empty,
-                Contacts = ReadContacts(item),
-                Description = ReadStringProperty(item, "description") ?? string.Empty,
-                IsActive = ReadBooleanProperty(item, "used") ?? ReadBooleanProperty(item, "activated") ?? true
-            };
-        }
-
-        private static IReadOnlyList<string> ReadContragentContacts(TableDataRow? row)
-        {
-            var contacts = TryGetArray(row, "contacts");
-            if (contacts is null)
-            {
-                return [];
-            }
-
-            return ReadContactValues(contacts.Value);
-        }
-
-        private static IReadOnlyList<string> ReadContacts(JsonElement item)
-        {
-            if (item.TryGetProperty("contacts", out var contacts))
-            {
-                return ReadContactValues(contacts);
-            }
-
-            if (item.TryGetProperty("person", out var person)
-                && person.ValueKind == JsonValueKind.Object
-                && person.TryGetProperty("contacts", out contacts))
-            {
-                return ReadContactValues(contacts);
-            }
-
-            return [];
-        }
-
-        private static IReadOnlyList<string> ReadContactValues(JsonElement contacts)
-        {
-            if (contacts.ValueKind != JsonValueKind.Array)
-            {
-                return [];
-            }
-
-            return contacts
-                .EnumerateArray()
-                .Select(ReadContactValue)
-                .Where(static value => !string.IsNullOrWhiteSpace(value))
-                .Distinct(StringComparer.CurrentCultureIgnoreCase)
-                .ToList()!;
-        }
-
-        private static string? ReadContactValue(JsonElement item)
-        {
-            if (item.ValueKind != JsonValueKind.Object)
-            {
-                return item.ValueKind == JsonValueKind.String ? item.GetString() : null;
-            }
-
-            return ReadNestedContactValue(item, "contact_attributes")
-                ?? ReadNestedContactValue(item, "contact")
-                ?? ReadStringProperty(item, "value")
-                ?? ReadStringProperty(item, "name");
-        }
-
-        private static string? ReadNestedContactValue(JsonElement item, string propertyName)
-        {
-            return item.TryGetProperty(propertyName, out var nested)
-                ? ReadStringProperty(nested, "value") ?? ReadStringProperty(nested, "name")
-                : null;
-        }
-
         private static string? ReadDisplayName(JsonElement item)
         {
             return ReadStringProperty(item, "name")
@@ -402,22 +313,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 && nested.TryGetProperty(nestedPropertyName, out var doubleNested)
                 ? ReadStringProperty(doubleNested, valuePropertyName)
                 : null;
-        }
-
-        private static long? ReadLongProperty(JsonElement item, string propertyName)
-        {
-            if (item.ValueKind != JsonValueKind.Object
-                || !item.TryGetProperty(propertyName, out var value))
-            {
-                return null;
-            }
-
-            return value.ValueKind switch
-            {
-                JsonValueKind.Number when value.TryGetInt64(out var number) => number,
-                JsonValueKind.String when long.TryParse(value.GetString(), out var number) => number,
-                _ => null
-            };
         }
 
         private static bool? ReadBooleanProperty(JsonElement item, string propertyName)

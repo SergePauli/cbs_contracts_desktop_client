@@ -192,7 +192,7 @@ public sealed class CbsTableViewTests
         Assert.Contains("public event EventHandler<CbsTableRowDoubleTappedEventArgs>? RowDoubleTapped;", code);
         Assert.Contains("rowView.DoubleTapped += OnRowDoubleTapped;", code);
         Assert.Contains("private void OnRowDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)", code);
-        Assert.Contains("SelectedItem = rowView.Row;", code);
+        Assert.Contains("SelectSingleRow(rowView.Row!, rowIndex);", code);
         Assert.Contains("RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));", code);
         Assert.Contains("public sealed class CbsTableRowDoubleTappedEventArgs : EventArgs", code);
     }
@@ -207,6 +207,46 @@ public sealed class CbsTableViewTests
         Assert.Contains("SelectedItem = null;", code);
         Assert.Contains("new CbsTableRowSelectionChangedEventArgs(null, rowIndex, isSelected: false)", code);
         Assert.Contains("public sealed class CbsTableRowSelectionChangedEventArgs : EventArgs", code);
+    }
+
+    [Fact]
+    public void CbsTableView_HandlesUpDownKeysWhenTableHasFocus()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("IsTabStop = true;", code);
+        Assert.Contains("PreviewKeyDown += OnPreviewKeyDown;", code);
+        Assert.Contains("private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)", code);
+        Assert.Contains("e.Key is not VirtualKey.Up and not VirtualKey.Down", code);
+        Assert.Contains("e.Handled = MoveSelectionOrScroll(e.Key == VirtualKey.Down ? 1 : -1);", code);
+    }
+
+    [Fact]
+    public void CbsTableView_ArrowKeysMoveSelectionBeforeScrolling()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("if (SupportsRowSelection && TryMoveSelectedRow(direction))", code);
+        Assert.Contains("return ScrollByRows(direction, 1);", code);
+        Assert.Contains("var selectedIndex = FindRowIndex(sourceRows, SelectedItem);", code);
+        Assert.Contains("var targetIndex = selectedIndex + direction;", code);
+        Assert.Contains("sourceRows[targetIndex].IsPlaceholder", code);
+        Assert.Contains("SelectSingleRow(sourceRows[targetIndex], targetIndex);", code);
+        Assert.Contains("ScrollRowIntoView(targetIndex);", code);
+    }
+
+    [Fact]
+    public void CbsTableView_KeyboardAndPointerSelectionUseSharedSelectionPath()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("private void SelectSingleRow(TableDataRow row, int rowIndex)", code);
+        Assert.Contains("_selectedIndexes.Clear();", code);
+        Assert.Contains("_selectedIndexes.Add(rowIndex);", code);
+        Assert.Contains("SelectedItem = row;", code);
+        Assert.Contains("new CbsTableRowSelectionChangedEventArgs(row, rowIndex, isSelected: true)", code);
+        Assert.Contains("Focus(FocusState.Programmatic);", code);
+        Assert.Contains("SelectSingleRow(rowView.Row!, rowIndex);", code);
     }
 
     [Fact]

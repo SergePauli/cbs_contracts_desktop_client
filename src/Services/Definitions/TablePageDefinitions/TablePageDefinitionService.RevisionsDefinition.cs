@@ -13,8 +13,8 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                 {
                     Route = "/revisions",
                     Model = "Revision",
-                    Title = "Дополнительные соглашения",
-                    NavigationDescription = "Дополнительные соглашения контрактов",
+                    Title = "ДСоглашения",
+                    NavigationDescription = "Выборка в разрезе Дополнительных соглашений",
                     Preset = "list",
                     Kind = TablePageKind.Functional,
                     Capabilities =

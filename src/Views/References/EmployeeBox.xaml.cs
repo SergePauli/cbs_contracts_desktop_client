@@ -16,10 +16,15 @@ namespace CbsContractsDesktopClient.Views.References
         private const int OziDepartmentId = 1;
         private const int CommercialDepartmentId = 2;
         private const int FinanceDepartmentId = 3;
+        private const double RegularScaleThreshold = 1.125;
+        private static readonly EmployeeBoxTextMetrics RegularScaleTextMetrics = new(14, 12, 12, 10, 18);
+        private static readonly EmployeeBoxTextMetrics HighScaleTextMetrics = new(12, 10, 10, 8, 16);
         private static readonly Brush EmployeePositionBrush = new SolidColorBrush(Microsoft.UI.Colors.DarkCyan);
         private static readonly Brush EmployeeEditButtonBrush = new SolidColorBrush(Microsoft.UI.Colors.MediumPurple);
         private static readonly Brush EmployeeCopyButtonBrush = new SolidColorBrush(Microsoft.UI.Colors.SeaGreen);
         private static readonly Brush EmployeeContactBrush = (Brush)Application.Current.Resources["ShellAccentBrush"];
+        private EmployeeBoxTextMetrics _textMetrics = HighScaleTextMetrics;
+        private XamlRoot? _subscribedXamlRoot;
 
         public static readonly DependencyProperty EmployeesProperty =
             DependencyProperty.Register(
@@ -41,6 +46,8 @@ namespace CbsContractsDesktopClient.Views.References
         {
             InitializeComponent();
             CanEdit = ResolveDefaultCanEdit();
+            Loaded += OnLoaded;
+            Unloaded += OnUnloaded;
             Render();
         }
 
@@ -66,6 +73,65 @@ namespace CbsContractsDesktopClient.Views.References
             ((EmployeeBox)d).Render();
         }
 
+        private void OnLoaded(object sender, RoutedEventArgs e)
+        {
+            AttachXamlRootChanged();
+            UpdateTextMetrics();
+        }
+
+        private void OnUnloaded(object sender, RoutedEventArgs e)
+        {
+            DetachXamlRootChanged();
+        }
+
+        private void AttachXamlRootChanged()
+        {
+            if (_subscribedXamlRoot == XamlRoot)
+            {
+                return;
+            }
+
+            DetachXamlRootChanged();
+            _subscribedXamlRoot = XamlRoot;
+            if (_subscribedXamlRoot is not null)
+            {
+                _subscribedXamlRoot.Changed += OnXamlRootChanged;
+            }
+        }
+
+        private void DetachXamlRootChanged()
+        {
+            if (_subscribedXamlRoot is not null)
+            {
+                _subscribedXamlRoot.Changed -= OnXamlRootChanged;
+                _subscribedXamlRoot = null;
+            }
+        }
+
+        private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
+        {
+            UpdateTextMetrics();
+        }
+
+        private void UpdateTextMetrics()
+        {
+            var textMetrics = ResolveTextMetrics();
+            if (textMetrics == _textMetrics)
+            {
+                return;
+            }
+
+            _textMetrics = textMetrics;
+            Render();
+        }
+
+        private EmployeeBoxTextMetrics ResolveTextMetrics()
+        {
+            return XamlRoot?.RasterizationScale < RegularScaleThreshold
+                ? RegularScaleTextMetrics
+                : HighScaleTextMetrics;
+        }
+
         private void Render()
         {
             EmployeesListView.Items.Clear();
@@ -79,7 +145,7 @@ namespace CbsContractsDesktopClient.Views.References
                 var itemIndex = EmployeesListView.Items.Count;
                 var listViewItem = new ListViewItem
                 {
-                    Content = BuildEmployeeRow(employee, itemIndex),
+                    Content = BuildEmployeeRow(employee, itemIndex, _textMetrics),
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Padding = new Thickness(0),
                     MinHeight = 32
@@ -94,7 +160,7 @@ namespace CbsContractsDesktopClient.Views.References
             }
         }
 
-        private Grid BuildEmployeeRow(EmployeeBoxItem employee, int itemIndex)
+        private Grid BuildEmployeeRow(EmployeeBoxItem employee, int itemIndex, EmployeeBoxTextMetrics textMetrics)
         {
             var row = new Grid
             {
@@ -113,11 +179,11 @@ namespace CbsContractsDesktopClient.Views.References
             Grid.SetColumn(buttons, 0);
             row.Children.Add(buttons);
 
-            var info = BuildInfo(employee);
+            var info = BuildInfo(employee, textMetrics);
             Grid.SetColumn(info, 1);
             row.Children.Add(info);
 
-            var contacts = BuildContacts(employee);
+            var contacts = BuildContacts(employee, textMetrics);
             Grid.SetColumn(contacts, 2);
             row.Children.Add(contacts);
 
@@ -137,8 +203,8 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var panel = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
-                Spacing = 1,
+                Orientation = Orientation.Vertical,
+                Spacing = 0,
                 VerticalAlignment = VerticalAlignment.Center
             };
 
@@ -175,7 +241,7 @@ namespace CbsContractsDesktopClient.Views.References
             return button;
         }
 
-        private static Grid BuildInfo(EmployeeBoxItem employee)
+        private static Grid BuildInfo(EmployeeBoxItem employee, EmployeeBoxTextMetrics textMetrics)
         {
             var info = new Grid
             {
@@ -191,7 +257,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Text = string.IsNullOrWhiteSpace(employee.FullName) ? "Сотрудник" : employee.FullName,
                 Style = (Style)Application.Current.Resources["BodyTextBlockStyle"],
                 Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
-                FontSize = 12,
+                FontSize = textMetrics.NameFontSize,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap
             };
@@ -203,7 +269,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Foreground = employee.IsActive
                     ? EmployeePositionBrush
                     : new SolidColorBrush(Microsoft.UI.Colors.Firebrick),
-                FontSize = 10,
+                FontSize = textMetrics.MetaFontSize,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap,
                 HorizontalAlignment = HorizontalAlignment.Right
@@ -230,7 +296,7 @@ namespace CbsContractsDesktopClient.Views.References
                 : position[..MaxVisiblePositionLength];
         }
 
-        private static Grid BuildContacts(EmployeeBoxItem employee)
+        private static Grid BuildContacts(EmployeeBoxItem employee, EmployeeBoxTextMetrics textMetrics)
         {
             var contactsPanel = new Grid
             {
@@ -254,7 +320,7 @@ namespace CbsContractsDesktopClient.Views.References
                     contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 }
 
-                var element = BuildContactLinkElement(contact, match);
+                var element = BuildContactLinkElement(contact, match, textMetrics);
                 Grid.SetColumn(element, 0);
                 Grid.SetRow(element, row);
                 contactsPanel.Children.Add(element);
@@ -265,11 +331,14 @@ namespace CbsContractsDesktopClient.Views.References
             return contactsPanel;
         }
 
-        private static FrameworkElement BuildContactLinkElement(string value, ContactTypeMatch match)
+        private static FrameworkElement BuildContactLinkElement(
+            string value,
+            ContactTypeMatch match,
+            EmployeeBoxTextMetrics textMetrics)
         {
             var grid = new Grid
             {
-                Height = 16,
+                Height = textMetrics.ContactRowHeight,
                 MinWidth = 0,
                 HorizontalAlignment = HorizontalAlignment.Left
             };
@@ -280,7 +349,7 @@ namespace CbsContractsDesktopClient.Views.References
             {
                 Glyph = match.Glyph,
                 FontFamily = new FontFamily("Segoe Fluent Icons"),
-                FontSize = 8,
+                FontSize = textMetrics.ContactIconFontSize,
                 Width = 13,
                 Foreground = EmployeeContactBrush,
                 VerticalAlignment = VerticalAlignment.Center
@@ -289,7 +358,7 @@ namespace CbsContractsDesktopClient.Views.References
             var linkText = new TextBlock
             {
                 Text = value,
-                FontSize = 10,
+                FontSize = textMetrics.ContactFontSize,
                 FontWeight = Microsoft.UI.Text.FontWeights.Light,
                 Foreground = EmployeeContactBrush,
                 TextTrimming = TextTrimming.CharacterEllipsis,
@@ -299,7 +368,6 @@ namespace CbsContractsDesktopClient.Views.References
             var link = new HyperlinkButton
             {
                 Content = linkText,
-                NavigateUri = ContactTypeClassifier.TryCreateLaunchUri(value, match),
                 Padding = new Thickness(0),
                 MinWidth = 0,
                 MinHeight = 0,
@@ -307,6 +375,7 @@ namespace CbsContractsDesktopClient.Views.References
                 HorizontalContentAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
+            link.Click += (_, _) => ContactLaunchService.Launch(ContactTypeClassifier.TryCreateLaunchUri(value, match));
 
             Grid.SetColumn(icon, 0);
             Grid.SetColumn(link, 1);
@@ -360,4 +429,11 @@ namespace CbsContractsDesktopClient.Views.References
     {
         public EmployeeBoxItem Employee { get; } = employee;
     }
+
+    internal sealed record EmployeeBoxTextMetrics(
+        double NameFontSize,
+        double MetaFontSize,
+        double ContactFontSize,
+        double ContactIconFontSize,
+        double ContactRowHeight);
 }
