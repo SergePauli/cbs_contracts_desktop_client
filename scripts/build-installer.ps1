@@ -1,8 +1,8 @@
 param(
     [string]$Configuration = "Release",
     [string]$RuntimeIdentifier = "win-x64",
-    [string]$Version = "1.0.0-beta",
-    [string]$InnoSetupCompiler = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+    [string]$Version = "1.0.1-beta",
+    [string]$InnoSetupCompiler = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +13,32 @@ $installerDir = Join-Path $repoRoot "artifacts\installer"
 $buildOutputDir = Join-Path $repoRoot "bin\$Configuration\net8.0-windows10.0.19041.0\$RuntimeIdentifier"
 $projectPath = Join-Path $repoRoot "CbsContractsDesktopClient.csproj"
 $innoScriptPath = Join-Path $repoRoot "installer\CbsContractsDesktopClient.iss"
+
+function Resolve-InnoSetupCompiler {
+    param(
+        [string]$ConfiguredPath
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($ConfiguredPath)) {
+        return $ConfiguredPath
+    }
+
+    $candidatePaths = @(
+        (Join-Path $PSScriptRoot "ISCC.exe"),
+        (Join-Path $repoRoot "ISCC.exe"),
+        "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+        "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+    )
+
+    foreach ($candidatePath in $candidatePaths) {
+        if (Test-Path -LiteralPath $candidatePath) {
+            return $candidatePath
+        }
+    }
+
+    return $candidatePaths[2]
+}
 
 function Invoke-NativeCommand {
     param(
@@ -29,8 +55,9 @@ function Invoke-NativeCommand {
     }
 }
 
-if (-not (Test-Path -LiteralPath $InnoSetupCompiler)) {
-    throw "Inno Setup compiler was not found: $InnoSetupCompiler"
+$resolvedInnoSetupCompiler = Resolve-InnoSetupCompiler $InnoSetupCompiler
+if (-not (Test-Path -LiteralPath $resolvedInnoSetupCompiler)) {
+    throw "Inno Setup compiler was not found: $resolvedInnoSetupCompiler"
 }
 
 Remove-Item -LiteralPath $publishDir -Recurse -Force -ErrorAction SilentlyContinue
@@ -64,7 +91,7 @@ $env:CBS_INSTALLER_VERSION = $Version
 $env:CBS_INSTALLER_PUBLISH_DIR = $publishDir
 
 try {
-    Invoke-NativeCommand $InnoSetupCompiler @($innoScriptPath)
+    Invoke-NativeCommand $resolvedInnoSetupCompiler @($innoScriptPath)
 }
 finally {
     Remove-Item Env:\CBS_INSTALLER_VERSION -ErrorAction SilentlyContinue
@@ -72,4 +99,8 @@ finally {
 }
 
 $setupPath = Join-Path $installerDir "CbsContractsDesktopClient-$Version-Setup.exe"
+if (-not (Test-Path -LiteralPath $setupPath)) {
+    throw "Installer output was not found after Inno Setup completed: $setupPath"
+}
+
 Write-Host "Installer created: $setupPath"

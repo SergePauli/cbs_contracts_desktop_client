@@ -25,7 +25,7 @@ From the repository root:
 The generated installer is written to:
 
 ```text
-artifacts\installer\CbsContractsDesktopClient-1.0.0-beta-Setup.exe
+artifacts\installer\CbsContractsDesktopClient-1.0.1-beta-Setup.exe
 ```
 
 ## Installation
