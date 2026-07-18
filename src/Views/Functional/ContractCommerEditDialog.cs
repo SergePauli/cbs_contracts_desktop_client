@@ -29,7 +29,8 @@ namespace CbsContractsDesktopClient.Views.Functional
     public sealed class ContractCommerEditDialog : AppEditDialog
     {
         private readonly ContractWorkflowStore _workflowStore;
-        private readonly TableDataRow _contract;
+        private TableDataRow _contract;
+        private readonly ContractCommentWorkflow _commentWorkflow;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _taskKindOptions;
         private readonly IReadOnlyList<ReferenceLookupItem> _stageTaskKindItems;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _contractStatusOptions;
@@ -44,6 +45,8 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _orderBox = new();
         private readonly TextBox _costBox = new();
         private readonly TextBox _commentBox = new();
+        private readonly Dictionary<long, CommentBox> _stageCommentBoxes = [];
+        private CommentBox? _contractCommentsBox;
         private readonly CheckBox _governmentalBox = new();
         private readonly CheckBox _revisionPresentBox = new();
         private readonly TextBox _externalNumberBox = new();
@@ -70,7 +73,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         private IReadOnlyList<StageEditState> StageEditors => _workflowStore.ContractStageEditStates
             .Where(static stage => !stage.IsDestroyed)
             .ToList();
-        private StackPanel? _stagesStack;
+        private TreeView? _stagesTree;
         private StackPanel? _revisionsStack;
         private TabView? _tabs;
         private TabViewItem? _contractTab;
@@ -112,6 +115,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             _workflowStore = workflowStore;
             _contract = contract;
+            _commentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
             _taskKindOptions = taskKindOptions;
             _stageTaskKindItems = stageTaskKindItems;
             _contractStatusOptions = contractStatusOptions;
@@ -553,6 +557,47 @@ namespace CbsContractsDesktopClient.Views.Functional
             _commentBox.MinWidth = 640;
             _commentBox.Width = 640;
             _commentBox.HorizontalAlignment = HorizontalAlignment.Stretch;
+            _commentBox.KeyDown += ContractCommentBox_KeyDown;
+        }
+
+        private async void ContractCommentBox_KeyDown(object sender, KeyRoutedEventArgs args)
+        {
+            var contractId = TryGetLong(_contract.GetValue("id"));
+            if (args.Key != VirtualKey.Enter || contractId is null or <= 0)
+            {
+                return;
+            }
+
+            args.Handled = true;
+            if (string.IsNullOrWhiteSpace(_commentBox.Text))
+            {
+                return;
+            }
+
+            _commentBox.IsEnabled = false;
+            try
+            {
+                var result = await _commentWorkflow.SaveContractCommentAsync(
+                    contractId.Value,
+                    _contract.GetValue("list_key")?.ToString(),
+                    _commentBox.Text);
+                _contract = result.Contract;
+                _commentBox.Text = string.Empty;
+                if (_contractCommentsBox is not null)
+                {
+                    _contractCommentsBox.Comments = result.Comments;
+                }
+
+                ShowErrorInfo(string.Empty);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo(ex.Message);
+            }
+            finally
+            {
+                _commentBox.IsEnabled = true;
+            }
         }
 
         private void ConfigureFlagBoxes()
@@ -1098,39 +1143,177 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private UIElement BuildStagesTabContent()
         {
-            _stagesStack = new StackPanel
+            _stagesTree = new TreeView
             {
-                Padding = new Thickness(8),
-                Spacing = 10
+                Margin = new Thickness(8),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                ItemTemplate = (DataTemplate?)_view?.Resources["StageTreeItemTemplate"]
             };
             RefreshStagesStack();
-            return _stagesStack;
+            return _stagesTree;
         }
 
         private void RefreshStagesStack()
         {
-            if (_stagesStack is null)
+            if (_stagesTree is null)
             {
                 return;
             }
 
             NormalizeStageNumbering();
-            _stagesStack.Children.Clear();
             _firstStageDeadlineKindBox = null;
-            foreach (var stage in StageEditors.OrderBy(static stage => stage.Priority))
-            {
-                _stagesStack.Children.Add(BuildStageSection(stage));
-            }
+            _stageCommentBoxes.Clear();
+            _contractCommentsBox = null;
+            var items = StageEditors
+                .OrderBy(static stage => stage.Priority)
+                .Select(BuildStageTreeItem)
+                .ToList();
+            items.Add(BuildContractCommentsTreeItem());
+            _stagesTree.ItemsSource = items;
         }
 
-        private UIElement BuildStageSection(StageEditState stage)
+        private ContractStageTreeItem BuildStageTreeItem(StageEditState stage)
+        {
+            if (stage.Priority == 0)
+            {
+                SyncStageTaskKindFromContract(stage);
+            }
+
+            var header = BuildStageTreeHeader(GetStageTreeName(stage));
+            return new ContractStageTreeItem(
+                header,
+                [
+                    new ContractStageTreeItem(BuildStageSection(stage, header)),
+                    BuildStageCommentsTreeItem(stage)
+                ],
+                stage.Used);
+        }
+
+        private ContractStageTreeItem BuildStageCommentsTreeItem(StageEditState stage)
+        {
+            return new ContractStageTreeItem(
+                BuildStageTreeHeader("Комментарии"),
+                [new ContractStageTreeItem(BuildStageCommentsBox(stage))]);
+        }
+
+        private CommentBox BuildStageCommentsBox(StageEditState stage)
+        {
+            var commentBox = BuildCompactCommentBox(ReadStageComments(stage));
+            if (stage.Id > 0)
+            {
+                _stageCommentBoxes[stage.Id] = commentBox;
+            }
+
+            return commentBox;
+        }
+
+        private ContractStageTreeItem BuildContractCommentsTreeItem()
+        {
+            _contractCommentsBox = BuildCompactCommentBox(ReadContractComments());
+            return new ContractStageTreeItem(
+                BuildStageTreeHeader("Комментарии контракта"),
+                [new ContractStageTreeItem(_contractCommentsBox)]);
+        }
+
+        private static CommentBox BuildCompactCommentBox(IReadOnlyList<TableDataRow> comments)
+        {
+            return new CommentBox
+            {
+                Height = 220,
+                MaxHeight = 220,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                Comments = comments
+            };
+        }
+
+        private IReadOnlyList<TableDataRow> ReadStageComments(StageEditState stage)
+        {
+            if (stage.Id <= 0)
+            {
+                return [];
+            }
+
+            var stages = TryGetArray(_contract, "stages");
+            if (stages is null)
+            {
+                return [];
+            }
+
+            foreach (var stageElement in stages.Value.EnumerateArray())
+            {
+                if (stageElement.ValueKind == JsonValueKind.Object
+                    && TryGetLong(stageElement, "id") == stage.Id
+                    && TryGetArray(stageElement, "comments") is JsonElement comments)
+                {
+                    return ToCommentRows(comments);
+                }
+            }
+
+            return [];
+        }
+
+        private IReadOnlyList<TableDataRow> ReadContractComments()
+        {
+            var comments = TryGetArray(_contract, "comments");
+            return comments is null ? [] : ToCommentRows(comments.Value);
+        }
+
+        private static IReadOnlyList<TableDataRow> ToCommentRows(JsonElement comments)
+        {
+            if (comments.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            return comments
+                .EnumerateArray()
+                .Where(static comment => comment.ValueKind == JsonValueKind.Object)
+                .Select(ToTableDataRow)
+                .ToList();
+        }
+
+        private static TextBlock BuildStageTreeHeader(string stageName)
+        {
+            return new TextBlock
+            {
+                Text = stageName,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                TextWrapping = TextWrapping.NoWrap
+            };
+        }
+
+        private string GetStageTreeName(StageEditState stage)
+        {
+            if (stage.Id > 0)
+            {
+                return !string.IsNullOrWhiteSpace(stage.Name)
+                    ? stage.Name
+                    : throw new InvalidOperationException("Stage read model must contain Stage.name for contract stages tree.");
+            }
+
+            if (string.IsNullOrWhiteSpace(stage.TaskKind.Name))
+            {
+                return "Новый этап";
+            }
+
+            if (StageEditors.Count == 1 && stage.Priority == 0)
+            {
+                return stage.TaskKind.Name;
+            }
+
+            var priority = stage.Priority
+                ?? throw new InvalidOperationException("New stage edit state must contain priority for tree name.");
+            return $"Э{priority}_{stage.TaskKind.Name}";
+        }
+
+        private UIElement BuildStageSection(StageEditState stage, TextBlock treeHeader)
         {
             var grid = new Grid
             {
                 ColumnSpacing = 8,
                 RowSpacing = 8
             };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(34) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
@@ -1147,10 +1330,9 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
-            AddGridChild(grid, BuildLabeledControl("№", BuildCompactReadonlyTextBox(FormatStageNumber(stage)), spacing: 3), 0, 0);
-            AddGridChild(grid, BuildInputLineCheckBox(BuildActiveStageCheckBox(stage), "АЭ"), 0, 1);
-            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 2);
-            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage);
+            AddGridChild(grid, BuildInputLineCheckBox(BuildActiveStageCheckBox(stage), "АЭ"), 0, 0);
+            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 1);
+            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeHeader);
             var stageStatusDropdown = BuildStageStatusDropdown(stage);
             var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
             if (_openStagesTabOnLoad && ReferenceEquals(stage, _workflowStore.SelectedStageEditState))
@@ -1176,20 +1358,20 @@ namespace CbsContractsDesktopClient.Views.Functional
             stageDeadlineEditor.OnTab = (_, args) => FocusStageCostEditor(stageCostEditor, args);
             ApplyStageStartMode(stage, stageStartEditor);
             ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
-            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 3);
-            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 4);
-            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 5);
+            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 2);
+            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 3);
+            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 4);
             AddGridChild(grid, BuildLabeledControl(
                 "Дней",
                 stageDurationEditor,
-                spacing: 3), 0, 6);
-            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 7);
-            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 8);
-            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 9);
+                spacing: 3), 0, 5);
+            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 6);
+            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 7);
+            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 8);
 
             var paymentRow = BuildStagePaymentRow(stage);
             Grid.SetRow(paymentRow, 1);
-            Grid.SetColumnSpan(paymentRow, 11);
+            Grid.SetColumnSpan(paymentRow, 10);
             grid.Children.Add(paymentRow);
 
             var comment = BuildLabeledControl("Комментарий этапа", BuildStageCommentEditor(stage), spacing: 3);
@@ -1197,7 +1379,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var separator = BuildSectionSeparator(null);
             Grid.SetRow(separator, 3);
-            Grid.SetColumnSpan(separator, 11);
+            Grid.SetColumnSpan(separator, 10);
             grid.Children.Add(separator);
 
             return grid;
@@ -1517,19 +1699,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
         }
 
-        private static TextBox BuildCompactReadonlyTextBox(string? text)
-        {
-            return new TextBox
-            {
-                Text = text ?? string.Empty,
-                IsReadOnly = true,
-                IsTabStop = false,
-                MinWidth = 0,
-                Padding = new Thickness(4, 0, 4, 0),
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-        }
-
         private CheckBox BuildActiveStageCheckBox(StageEditState stage)
         {
             var hasChoice = StageEditors.Count > 1;
@@ -1577,13 +1746,8 @@ namespace CbsContractsDesktopClient.Views.Functional
         }
 
 
-        private Dropdown BuildStageTaskKindDropdown(StageEditState stage)
+        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, TextBlock treeHeader)
         {
-            if (stage.Priority == 0)
-            {
-                SyncStageTaskKindFromContract(stage);
-            }
-
             var dropdown = new Dropdown
             {
                 DisplayMemberPath = nameof(TaskKindSelectOption.Label),
@@ -1612,6 +1776,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 }
 
                 stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
+                treeHeader.Text = GetStageTreeName(stage);
             };
 
             return dropdown;
@@ -2042,6 +2207,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
             commentBox.TextChanged += (_, _) => stage.Comment = commentBox.Text ?? string.Empty;
+            commentBox.KeyDown += (_, args) => StageCommentBox_KeyDown(stage, commentBox, args);
             grid.Children.Add(commentBox);
 
             var addButton = BuildRevisionActionButton(
@@ -2070,6 +2236,51 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.Children.Add(deleteButton);
 
             return grid;
+        }
+
+        private async void StageCommentBox_KeyDown(
+            StageEditState stage,
+            TextBox editor,
+            KeyRoutedEventArgs args)
+        {
+            if (args.Key != VirtualKey.Enter || stage.Id <= 0)
+            {
+                return;
+            }
+
+            args.Handled = true;
+            if (string.IsNullOrWhiteSpace(editor.Text))
+            {
+                return;
+            }
+
+            editor.IsEnabled = false;
+            try
+            {
+                var contractId = TryGetLong(_contract.GetValue("id"))
+                    ?? throw new InvalidOperationException("Persisted stage comment requires contract id.");
+                var result = await _commentWorkflow.SaveStageCommentAsync(
+                    contractId,
+                    stage.Id,
+                    stage.ListKey,
+                    editor.Text);
+                _contract = result.Contract;
+                editor.Text = string.Empty;
+                if (_stageCommentBoxes.TryGetValue(stage.Id, out var commentsBox))
+                {
+                    commentsBox.Comments = result.Comments;
+                }
+
+                ShowErrorInfo(string.Empty);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo(ex.Message);
+            }
+            finally
+            {
+                editor.IsEnabled = true;
+            }
         }
 
         private static TextBox BuildStageDurationEditor(int? duration, Action<int?> updateDuration)
@@ -2156,17 +2367,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return number > 0
                 ? number.ToString(CultureInfo.InvariantCulture)
                 : string.Empty;
-        }
-
-        private string FormatStageNumber(StageEditState stage)
-        {
-            var priority = stage.Priority ?? 0;
-            if (priority <= 0)
-            {
-                return string.Empty;
-            }
-
-            return $"Э{priority.ToString(CultureInfo.InvariantCulture)}";
         }
 
         private static string FormatNullableNumber(int? value)

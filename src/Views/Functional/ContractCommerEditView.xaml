@@ -3,8 +3,24 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:functional="using:CbsContractsDesktopClient.Views.Functional"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
+    <UserControl.Resources>
+        <DataTemplate
+            x:Key="StageTreeItemTemplate"
+            x:DataType="functional:ContractStageTreeItem">
+            <TreeViewItem
+                IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
+                ItemsSource="{x:Bind Children}">
+                <TreeViewItem.Content>
+                    <ContentControl
+                        HorizontalContentAlignment="Stretch"
+                        Content="{x:Bind Content}" />
+                </TreeViewItem.Content>
+            </TreeViewItem>
+        </DataTemplate>
+    </UserControl.Resources>
 
     <Grid
         MinWidth="1208"
@@ -257,9 +273,10 @@
                         <SolidColorBrush x:Key="TabViewSelectedItemBorderBrush" Color="#DCEBDF" />
                     </TabViewItem.Resources>
                     <Border Background="#EFFFF2">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" VerticalScrollMode="Enabled">
-                            <ContentControl x:Name="StagesTabContentHost" />
-                        </ScrollViewer>
+                        <ContentControl
+                            x:Name="StagesTabContentHost"
+                            HorizontalContentAlignment="Stretch"
+                            VerticalContentAlignment="Stretch" />
                     </Border>
                 </TabViewItem>
 

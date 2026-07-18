@@ -6,6 +6,24 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class StageEditPayloadBuilderHelpersTests
 {
     [Fact]
+    public void BuildCommentUpdate_ContainsOnlyCommentMutationFields()
+    {
+        var payload = StageEditPayloadBuilderHelpers.BuildCommentUpdate(
+            15L,
+            "stage-list-key",
+            "  новый комментарий  ",
+            7);
+
+        Assert.Equal(3, payload.Count);
+        Assert.Equal(15L, payload["id"]);
+        Assert.Equal("stage-list-key", payload["list_key"]);
+        var comments = Assert.IsType<Dictionary<string, object?>[]>(payload["comments_attributes"]);
+        var comment = Assert.Single(comments);
+        Assert.Equal("новый комментарий", comment["content"]);
+        Assert.Equal(7, comment["profile_id"]);
+    }
+
+    [Fact]
     public void AppendCommentAttributes_UsesRailsNestedAttributesShape()
     {
         var request = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)

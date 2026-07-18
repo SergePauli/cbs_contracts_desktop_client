@@ -57,6 +57,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
+        private readonly ContractCommentWorkflow _contractCommentWorkflow;
         private readonly ContractTableRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private CancellationTokenSource? _detailCts;
@@ -85,6 +86,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
+            _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
             _showContractCostFraction = _localUserSettingsService.Get().ShowContractCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -476,41 +478,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (_userService.CurrentUser?.ProfileId is not int profileId)
-            {
-                await ShowErrorDialogAsync(
-                    "Комментарий к контракту",
-                    "Не удалось определить profile_id пользователя.");
-                return;
-            }
-
-            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = contractId,
-                ["comments_attributes"] = new[]
-                {
-                    new Dictionary<string, object?>
-                    {
-                        ["content"] = normalizedComment,
-                        ["profile_id"] = profileId
-                    }
-                }
-            };
             var listKey = Store.SelectedRow.GetValue("list_key")?.ToString();
-            if (!string.IsNullOrWhiteSpace(listKey))
-            {
-                payload["list_key"] = listKey;
-            }
 
             try
             {
-                var savedRow = await _modelMutationService.UpdateAsync(ContractModel, payload);
+                await _contractCommentWorkflow.SaveContractCommentAsync(
+                    contractId,
+                    listKey,
+                    normalizedComment);
                 flyout.Hide();
                 ShowSuccessNotification(
                     "Комментарий сохранен",
                     "Комментарий к контракту добавлен.");
-                await RefreshTableRowAfterSaveAsync(isCreateMode: false, savedRow);
-                await RefreshDetailAsync();
             }
             catch (Exception ex)
             {

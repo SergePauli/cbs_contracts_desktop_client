@@ -5,6 +5,7 @@ using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
@@ -35,6 +36,7 @@ public sealed class StageOziEditDialog : AppEditDialog
     private StageEditDialogNavigationState? _navigationState;
     private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly Func<bool> _shouldCloseContractAfterSelectedStageClosed;
+    private readonly ContractCommentWorkflow _commentWorkflow;
     private readonly int _profileId;
     private readonly CalendarInput _rideOutAtEditor = new();
     private readonly CalendarInput _sendedAtEditor = new();
@@ -48,6 +50,7 @@ public sealed class StageOziEditDialog : AppEditDialog
     private readonly TextBox _registryYearBox = BuildNumberTextBox();
     private readonly MultiSelect _performersMultiSelect = new();
     private readonly TextBox _commentBox = new();
+    private readonly CommentBox _commentsBox = BuildCommentsBox();
     private readonly StageOziEditView _view = new();
     private bool _isApplyingBusinessLogic;
     private bool _businessLogicHandlersAttached;
@@ -77,6 +80,7 @@ public sealed class StageOziEditDialog : AppEditDialog
         _navigationState = navigationState;
         _navigateAsync = navigateAsync;
         _shouldCloseContractAfterSelectedStageClosed = shouldCloseContractAfterSelectedStageClosed;
+        _commentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
         _performerOptions = CreatePerformerOptions(employeeItems, stage.Performers);
         _view.PreviousButton.Click += StageNavigationButton_Click;
         _view.NextButton.Click += StageNavigationButton_Click;
@@ -145,16 +149,9 @@ public sealed class StageOziEditDialog : AppEditDialog
 
     private UIElement BuildContent()
     {
-        var scrollViewer = new ScrollViewer
-        {
-            MaxHeight = 640,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-
-        scrollViewer.Content = _view;
         InitializeStaticView();
         RenderStageContent();
-        return BuildEditContent(scrollViewer);
+        return BuildEditContent(_view);
     }
 
     private void InitializeStaticView()
@@ -200,7 +197,9 @@ public sealed class StageOziEditDialog : AppEditDialog
         _view.CompletedAtSlot.Content = _completedAtEditor;
         _view.ClosedAtSlot.Content = _closedAtEditor;
         _view.CommentSlot.Content = _commentBox;
+        _view.CommentListSlot.Content = _commentsBox;
         _commentBox.PlaceholderText = "Комментарий";
+        _commentBox.KeyDown += CommentBox_KeyDown;
         AttachBusinessLogicHandlers();
         ConfigureTabChain();
     }
@@ -318,6 +317,60 @@ public sealed class StageOziEditDialog : AppEditDialog
     {
         UpdateStageSummaryPanel();
         UpdateStageEditors();
+        _commentsBox.Comments = _stage.Id > 0
+            ? _commentWorkflow.ReadStageComments(_stage.Id)
+            : [];
+    }
+
+    private async void CommentBox_KeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Enter || _stage.Id <= 0)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        if (string.IsNullOrWhiteSpace(_commentBox.Text))
+        {
+            return;
+        }
+
+        _commentBox.IsEnabled = false;
+        try
+        {
+            var contractId = RequireContract().Id;
+            if (contractId <= 0)
+            {
+                throw new InvalidOperationException("Persisted stage comment requires contract id.");
+            }
+
+            var result = await _commentWorkflow.SaveStageCommentAsync(
+                contractId,
+                _stage.Id,
+                _stage.ListKey,
+                _commentBox.Text);
+            _commentBox.Text = string.Empty;
+            _commentsBox.Comments = result.Comments;
+            ShowErrorInfo(string.Empty);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo(ex.Message);
+        }
+        finally
+        {
+            _commentBox.IsEnabled = true;
+        }
+    }
+
+    private static CommentBox BuildCommentsBox()
+    {
+        return new CommentBox
+        {
+            Height = 220,
+            MaxHeight = 220,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
     }
 
     private void UpdateStageSummaryPanel()

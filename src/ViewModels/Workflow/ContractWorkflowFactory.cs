@@ -1,3 +1,5 @@
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
@@ -76,8 +78,7 @@ public sealed class ContractWorkflowFactory
     {
         try
         {
-            var contract = await LoadContractEditRowAsync(key.ContractId, cancellationToken)
-                ?? throw new InvalidOperationException("Contract edit row was not loaded.");
+            var contract = await ReloadContractEditRowAsync(key.ContractId, cancellationToken);
             var contragentId = key.ContragentId ?? TryGetLong(contract.GetValue("contragent.id"));
             var contragent = contragentId is long id
                 ? await LoadContragentCardAsync(id, cancellationToken)
@@ -117,6 +118,55 @@ public sealed class ContractWorkflowFactory
             cancellationToken);
 
         return rows.FirstOrDefault(static row => !row.IsPlaceholder);
+    }
+
+    public async Task<TableDataRow> ReloadContractEditRowAsync(
+        long contractId,
+        CancellationToken cancellationToken = default)
+    {
+        var contract = await LoadContractEditRowAsync(contractId, cancellationToken)
+            ?? throw new InvalidOperationException("Contract edit row was not loaded.");
+        AddComputedStageNames(contract);
+        return contract;
+    }
+
+    private static void AddComputedStageNames(TableDataRow contract)
+    {
+        var stages = TryGetArray(contract, "stages");
+        if (stages is null)
+        {
+            return;
+        }
+
+        var stageItems = stages.Value
+            .EnumerateArray()
+            .Where(static stage => stage.ValueKind == JsonValueKind.Object)
+            .ToList();
+        var isSingleZeroStage = stageItems.Count == 1 && TryGetInt(stageItems[0], "priority") == 0;
+        var enrichedStages = new JsonArray();
+
+        foreach (var stage in stageItems)
+        {
+            var priority = TryGetInt(stage, "priority")
+                ?? throw new InvalidOperationException("Contract edit stage row must contain priority for computed name.");
+            var taskKindName = TryGetObject(stage, "task_kind") is { } taskKind
+                ? TryGetString(taskKind, "name")
+                : null;
+            if (string.IsNullOrWhiteSpace(taskKindName))
+            {
+                throw new InvalidOperationException("Contract edit stage row must contain task_kind.name for computed name.");
+            }
+
+            var stageObject = JsonNode.Parse(stage.GetRawText())?.AsObject()
+                ?? throw new InvalidOperationException("Contract edit stage row must be a JSON object.");
+            stageObject["name"] = isSingleZeroStage
+                ? taskKindName
+                : $"Э{priority}_{taskKindName}";
+            enrichedStages.Add(stageObject);
+        }
+
+        contract.Values["stages"] = JsonSerializer.SerializeToElement(enrichedStages);
+        contract.RefreshResolvedValues();
     }
 
     private async Task<TableDataRow?> LoadContragentCardAsync(

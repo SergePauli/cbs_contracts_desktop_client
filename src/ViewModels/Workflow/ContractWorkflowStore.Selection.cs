@@ -7,6 +7,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 {
     public partial class ContractWorkflowStore
     {
+        private ContractRowDetailSelectionKind _selectionKind = ContractRowDetailSelectionKind.Contract;
+
         public void SetRevisionSelection(
             TableDataRow revision,
             TableDataRow? contract,
@@ -56,6 +58,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             TableDataRow? contragent,
             string? selectedRowHeader = null)
         {
+            _selectionKind = selectionKind;
             SelectedRevision = null;
             SelectedStage = null;
             SelectedStageEditState = null;
@@ -81,6 +84,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         public void ClearRowDetailSelection()
         {
+            _selectionKind = ContractRowDetailSelectionKind.Contract;
             SelectedRevision = null;
             SelectedStage = null;
             SelectedStageEditState = null;

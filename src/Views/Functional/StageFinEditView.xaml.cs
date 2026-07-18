@@ -33,4 +33,5 @@ public sealed partial class StageFinEditView : UserControl
     public ContentControl PrepaymentAtSlot => PrepaymentAtHost;
     public ContentControl FundedAtSlot => FundedAtHost;
     public ContentControl CommentSlot => CommentHost;
+    public ContentControl CommentListSlot => CommentListHost;
 }

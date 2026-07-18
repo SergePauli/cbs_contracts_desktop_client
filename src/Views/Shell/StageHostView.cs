@@ -52,6 +52,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
+        private readonly ContractCommentWorkflow _contractCommentWorkflow;
         private readonly StageRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private CancellationTokenSource? _detailCts;
@@ -76,6 +77,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
+            _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -646,34 +648,21 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (_userService.CurrentUser?.ProfileId is not int profileId)
-            {
-                await ShowErrorDialogAsync(
-                    "Комментарий к этапу",
-                    "Не удалось определить profile_id пользователя.");
-                return;
-            }
-
-            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = stageId
-            };
             var listKey = Store.SelectedRow.GetValue("list_key")?.ToString();
-            if (!string.IsNullOrWhiteSpace(listKey))
-            {
-                payload["list_key"] = listKey;
-            }
-
-            StageEditPayloadBuilderHelpers.AppendCommentAttributes(payload, normalizedComment, profileId);
 
             try
             {
-                await SaveStagePayloadAsync(payload);
+                var contractId = TryGetLongValue(Store.SelectedRow, "contract.id")
+                    ?? throw new InvalidOperationException("Selected stage must contain contract.id for comment save.");
+                await _contractCommentWorkflow.SaveStageCommentAsync(
+                    contractId,
+                    stageId,
+                    listKey,
+                    normalizedComment);
                 flyout.Hide();
                 ShowSuccessNotification(
                     "Комментарий сохранен",
                     "Комментарий к этапу добавлен.");
-                await RefreshDetailAsync();
             }
             catch (Exception ex)
             {

@@ -24,6 +24,7 @@ public sealed class StageFinEditDialog : AppEditDialog
     private StageEditState _stage;
     private ContractEditState? _contract;
     private readonly IHolidayRecalculationService _holidayRecalculationService;
+    private readonly ContractCommentWorkflow _commentWorkflow;
     private StageEditDialogNavigationState? _navigationState;
     private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly int? _profileId;
@@ -36,6 +37,7 @@ public sealed class StageFinEditDialog : AppEditDialog
     private DateTimeOffset? _paymentDeadlineAt;
     private readonly TextBox _externalNumberBox = new();
     private readonly TextBox _commentBox = new();
+    private readonly CommentBox _commentsBox = BuildCommentsBox();
     private readonly StageFinEditView _view = new();
     private IReadOnlyList<HolidayCalendarDay> _holidays = [];
     private bool _isApplyingBusinessLogic;
@@ -59,6 +61,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         _navigationState = navigationState;
         _navigateAsync = navigateAsync;
         _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
+        _commentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
         _isFunded = stage.IsFunded;
         _view.PreviousButton.Click += StageNavigationButton_Click;
         _view.NextButton.Click += StageNavigationButton_Click;
@@ -120,16 +123,9 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     private UIElement BuildContent()
     {
-        var scrollViewer = new ScrollViewer
-        {
-            MaxHeight = 620,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-
-        scrollViewer.Content = _view;
         InitializeStaticView();
         RenderStageContent();
-        return BuildEditContent(scrollViewer);
+        return BuildEditContent(_view);
     }
 
     private void InitializeStaticView()
@@ -171,10 +167,12 @@ public sealed class StageFinEditDialog : AppEditDialog
         _view.PrepaymentAtSlot.Content = _prepaymentAtEditor;
         _view.FundedAtSlot.Content = _fundedAtEditor;
         _view.CommentSlot.Content = _commentBox;
+        _view.CommentListSlot.Content = _commentsBox;
         _commentBox.PlaceholderText = _profileId is null
             ? "Комментарий недоступен: не получен profile_id пользователя"
             : "Комментарий";
         _commentBox.IsEnabled = _profileId is not null;
+        _commentBox.KeyDown += CommentBox_KeyDown;
         AttachBusinessLogicHandlers();
         ConfigureTabChain();
     }
@@ -234,6 +232,60 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         UpdateStageSummaryPanel();
         UpdateStageEditors();
+        _commentsBox.Comments = _stage.Id > 0
+            ? _commentWorkflow.ReadStageComments(_stage.Id)
+            : [];
+    }
+
+    private async void CommentBox_KeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Enter || _stage.Id <= 0)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        if (string.IsNullOrWhiteSpace(_commentBox.Text))
+        {
+            return;
+        }
+
+        _commentBox.IsEnabled = false;
+        try
+        {
+            var contractId = RequireContract().Id;
+            if (contractId <= 0)
+            {
+                throw new InvalidOperationException("Persisted stage comment requires contract id.");
+            }
+
+            var result = await _commentWorkflow.SaveStageCommentAsync(
+                contractId,
+                _stage.Id,
+                _stage.ListKey,
+                _commentBox.Text);
+            _commentBox.Text = string.Empty;
+            _commentsBox.Comments = result.Comments;
+            ShowErrorInfo(string.Empty);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo(ex.Message);
+        }
+        finally
+        {
+            _commentBox.IsEnabled = true;
+        }
+    }
+
+    private static CommentBox BuildCommentsBox()
+    {
+        return new CommentBox
+        {
+            Height = 220,
+            MaxHeight = 220,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
     }
 
     private void UpdateStageSummaryPanel()

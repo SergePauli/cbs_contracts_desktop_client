@@ -88,7 +88,6 @@ public sealed class StageOziEditDialogTests
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("private readonly StageOziEditView _view = new();", code);
-        Assert.Contains("scrollViewer.Content = _view;", code);
         Assert.Contains("private readonly Dropdown _statusBox = new();", code);
         Assert.Contains("ConfigureStatusDropdown(_statusBox", code);
         Assert.DoesNotContain("private readonly ComboBox _statusBox", code);

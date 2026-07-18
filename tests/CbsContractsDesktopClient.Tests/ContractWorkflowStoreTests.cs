@@ -299,6 +299,57 @@ public sealed class ContractWorkflowStoreTests
     }
 
     [Fact]
+    public void ApplyCommentReadModel_RefreshesCommentsWithoutResettingStageEditState()
+    {
+        var store = new ContractWorkflowStore();
+        var selectedStage = CreateRow(("id", 100));
+        var contract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("comments", Array.Empty<object>()),
+            ("stages", new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 100,
+                    ["priority"] = 1,
+                    ["comments"] = Array.Empty<object>()
+                }
+            }));
+        store.SetStageSelection(selectedStage, contract, contragent: null);
+        var editState = Assert.IsType<StageEditState>(store.SelectedStageEditState);
+        editState.Duration = 42;
+
+        var refreshedContract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("comments", new object[]
+            {
+                new Dictionary<string, object?> { ["id"] = 30, ["content"] = "contract comment" }
+            }),
+            ("stages", new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 100,
+                    ["priority"] = 1,
+                    ["comments"] = new object[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = 20, ["content"] = "stage comment" }
+                    }
+                }
+            }));
+
+        store.ApplyCommentReadModel(refreshedContract, commentedStageId: 100);
+
+        Assert.Same(refreshedContract, store.Contract);
+        Assert.Same(editState, store.SelectedStageEditState);
+        Assert.Equal(42, store.SelectedStageEditState.Duration);
+        Assert.Equal([20L, 30L], store.Comments.Select(GetCommentId));
+        Assert.Equal(["stage comment", "contract comment"], store.Comments.Select(GetCommentText));
+    }
+
+    [Fact]
     public void SetContractSelection_SelectsUsedStageAndBuildsStandardFooter()
     {
         var store = new ContractWorkflowStore();

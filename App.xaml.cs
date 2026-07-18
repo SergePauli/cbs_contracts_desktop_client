@@ -61,6 +61,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<TablePageStore>();
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<ContractWorkflowFactory>();
+            services.AddSingleton<ContractCommentWorkflow>();
             services.AddSingleton<StatusTableViewModel>();
             services.AddHttpClient(nameof(AuthService), client =>
             {

@@ -200,6 +200,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <Grid ColumnSpacing="14">
@@ -342,6 +343,11 @@
                     x:Name="CommentHost"
                     HorizontalContentAlignment="Stretch" />
             </StackPanel>
+
+            <ContentControl
+                x:Name="CommentListHost"
+                Grid.Row="2"
+                HorizontalContentAlignment="Stretch" />
         </Grid>
     </Grid>
 </UserControl>

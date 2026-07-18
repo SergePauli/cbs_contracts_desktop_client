@@ -8,6 +8,24 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContractCommerEditPayloadBuilderTests
 {
     [Fact]
+    public void BuildCommentUpdate_ContainsOnlyCommentMutationFields()
+    {
+        var payload = ContractCommerEditPayloadBuilder.BuildCommentUpdate(
+            15L,
+            "contract-list-key",
+            "  новый комментарий  ",
+            7);
+
+        Assert.Equal(3, payload.Count);
+        Assert.Equal(15L, payload["id"]);
+        Assert.Equal("contract-list-key", payload["list_key"]);
+        var comments = Assert.IsType<Dictionary<string, object?>[]>(payload["comments_attributes"]);
+        var comment = Assert.Single(comments);
+        Assert.Equal("новый комментарий", comment["content"]);
+        Assert.Equal(7, comment["profile_id"]);
+    }
+
+    [Fact]
     public void Build_CreatePayload_MatchesAddContractJsonContract()
     {
         var stage = StageEditState.FromRow(CreateRow(
