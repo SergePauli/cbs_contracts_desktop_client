@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Orders;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Dialogs;
 using Windows.UI;
@@ -283,9 +284,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 {
                     var valueKey = Columns[index].DisplayField ?? Columns[index].ApiField ?? Columns[index].FieldKey;
                     var value = Row?.GetValue(valueKey);
-                    if (IsStatusBadgeTemplate(Columns[index]))
+                    if (IsBadgeTemplate(Columns[index]))
                     {
-                        ApplyStatusBadgeContent(_badgeCells[index], _badgeTexts[index], Row, value);
+                        ApplyBadgeContent(Columns[index], _badgeCells[index], _badgeTexts[index], Row, value);
                         _textCells[index].Text = string.Empty;
                         _textCells[index].Visibility = Visibility.Collapsed;
                         _badgeCells[index].Visibility = string.IsNullOrWhiteSpace(_badgeTexts[index].Text)
@@ -377,6 +378,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 "StageCost" => FormatStageCost(value, showStageCostFraction),
                 "StageDuration" => FormatStageDuration(row, value),
                 "StageSzi" => HasStageTaskKind(row, 10) ? "\u2713" : string.Empty,
+                "IsecurityToolKind" => FormatIsecurityToolKind(value),
                 "ContractDsp" => FormatContractDsp(row),
                 "ContractRegion" => FirstText(
                     row.GetValue("contragent.region.name"),
@@ -386,6 +388,18 @@ namespace CbsContractsDesktopClient.Views.Controls
                 "ContractFunded" => FormatContractFunded(value),
                 _ => null
             };
+        }
+
+        private static string FormatIsecurityToolKind(object? value)
+        {
+            var numericValue = value switch
+            {
+                long longValue => longValue,
+                decimal decimalValue when decimal.Truncate(decimalValue) == decimalValue => (long)decimalValue,
+                _ => throw new InvalidOperationException("IsecurityTool.kind должен содержать целочисленное значение.")
+            };
+
+            return IsecurityToolKindText.GetLabel(IsecurityToolKindText.Parse(numericValue));
         }
 
         private static string FormatContractDsp(TableDataRow row)
@@ -429,9 +443,44 @@ namespace CbsContractsDesktopClient.Views.Controls
                 : string.Empty;
         }
 
-        private static bool IsStatusBadgeTemplate(CbsTableColumnDefinition column)
+        private static bool IsBadgeTemplate(CbsTableColumnDefinition column)
         {
-            return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void ApplyBadgeContent(CbsTableColumnDefinition column, Border badgeCell, TextBlock badgeText, TableDataRow? row, object? value)
+        {
+            if (string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyStageOrderSeverityBadgeContent(badgeCell, badgeText, value);
+                return;
+            }
+
+            ApplyStatusBadgeContent(badgeCell, badgeText, row, value);
+        }
+
+        private static void ApplyStageOrderSeverityBadgeContent(Border badgeCell, TextBlock badgeText, object? value)
+        {
+            var rawSeverity = TryGetLong(value);
+            if (rawSeverity is null)
+            {
+                badgeText.Text = string.Empty;
+                return;
+            }
+
+            var severity = StageOrderSeverityText.Parse(checked((int)rawSeverity.Value));
+            var background = severity switch
+            {
+                StageOrderSeverity.Need => Windows.UI.Color.FromArgb(255, 255, 193, 7),
+                StageOrderSeverity.InStock => Windows.UI.Color.FromArgb(255, 0, 176, 80),
+                _ => throw new ArgumentOutOfRangeException(nameof(value))
+            };
+            badgeText.Text = StageOrderSeverityText.GetLabel(severity);
+            badgeText.Foreground = new SolidColorBrush(severity == StageOrderSeverity.Need
+                ? Microsoft.UI.Colors.Black
+                : Microsoft.UI.Colors.White);
+            badgeCell.Background = new SolidColorBrush(background);
         }
 
         private static void ApplyStatusBadgeContent(Border badgeCell, TextBlock badgeText, TableDataRow? row, object? value)

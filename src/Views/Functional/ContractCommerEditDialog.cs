@@ -4,13 +4,17 @@ using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.Shared.Formatting;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
+using CbsContractsDesktopClient.Views.Orders;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -46,6 +50,9 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _costBox = new();
         private readonly TextBox _commentBox = new();
         private readonly Dictionary<long, CommentBox> _stageCommentBoxes = [];
+        private readonly Dictionary<long, StageSupplyView> _stageSupplyViews = [];
+        private readonly StageSupplyEditWorkflow _stageSupplyEditWorkflow;
+        private readonly IDataQueryService _dataQueryService;
         private CommentBox? _contractCommentsBox;
         private readonly CheckBox _governmentalBox = new();
         private readonly CheckBox _revisionPresentBox = new();
@@ -116,6 +123,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             _workflowStore = workflowStore;
             _contract = contract;
             _commentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
+            _stageSupplyEditWorkflow = App.Services.GetRequiredService<StageSupplyEditWorkflow>();
+            _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _taskKindOptions = taskKindOptions;
             _stageTaskKindItems = stageTaskKindItems;
             _contractStatusOptions = contractStatusOptions;
@@ -1185,7 +1194,8 @@ namespace CbsContractsDesktopClient.Views.Functional
                 header,
                 [
                     new ContractStageTreeItem(BuildStageSection(stage, header)),
-                    BuildStageCommentsTreeItem(stage)
+                    BuildStageCommentsTreeItem(stage),
+                    BuildStageSupplyTreeItem(stage)
                 ],
                 stage.Used);
         }
@@ -1195,6 +1205,78 @@ namespace CbsContractsDesktopClient.Views.Functional
             return new ContractStageTreeItem(
                 BuildStageTreeHeader("Комментарии"),
                 [new ContractStageTreeItem(BuildStageCommentsBox(stage))]);
+        }
+
+        private ContractStageTreeItem BuildStageSupplyTreeItem(StageEditState stage)
+        {
+            return new ContractStageTreeItem(
+                BuildStageTreeHeader("Поставка"),
+                [
+                    new ContractStageTreeItem(
+                        BuildStageSupplyContent(stage),
+                        contentMargin: new Thickness(-56, 0, 0, 0))
+                ]);
+        }
+
+        private FrameworkElement BuildStageSupplyContent(StageEditState stage)
+        {
+            if (stage.Id <= 0)
+            {
+                return new TextBlock
+                {
+                    Text = "Поставка станет доступна после сохранения этапа.",
+                    FontSize = 11,
+                    Margin = new Thickness(4)
+                };
+            }
+
+            if (_stageSupplyViews.TryGetValue(stage.Id, out var existing))
+            {
+                return existing;
+            }
+
+            var view = new StageSupplyView(new StageSupplyStore(_dataQueryService, stage.Id));
+            view.CreateRequested += async (_, args) =>
+                await ShowStageSupplyFlyoutAsync(stage, view, null, args.Anchor);
+            view.EditRequested += async (_, args) =>
+                await ShowStageSupplyFlyoutAsync(stage, view, args.Row, args.Anchor);
+            view.DeleteRequested += async (_, args) =>
+                await DeleteStageSupplyAsync(view, args.Row);
+            view.LoadFailed += (_, args) => ShowErrorInfo($"Не удалось загрузить поставку этапа: {args.Exception.Message}");
+            _stageSupplyViews[stage.Id] = view;
+            return view;
+        }
+
+        private async Task ShowStageSupplyFlyoutAsync(
+            StageEditState stage,
+            StageSupplyView supplyView,
+            TableDataRow? sourceRow,
+            FrameworkElement anchor)
+        {
+            try
+            {
+                var viewModel = await _stageSupplyEditWorkflow.CreateViewModelAsync(stage.Id, sourceRow);
+                var flyout = new StageSupplyEditFlyout(_stageSupplyEditWorkflow, viewModel);
+                if (await flyout.ShowAsync(anchor))
+                    await supplyView.ReloadAsync(flyout.SavedRowId);
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo($"Не удалось открыть позицию поставки: {ex.Message}");
+            }
+        }
+
+        private async Task DeleteStageSupplyAsync(StageSupplyView supplyView, TableDataRow sourceRow)
+        {
+            try
+            {
+                await _stageSupplyEditWorkflow.DeleteAsync(sourceRow);
+                await supplyView.ReloadAsync();
+            }
+            catch (Exception ex)
+            {
+                ShowErrorInfo($"Не удалось удалить позицию поставки: {ex.Message}");
+            }
         }
 
         private CommentBox BuildStageCommentsBox(StageEditState stage)

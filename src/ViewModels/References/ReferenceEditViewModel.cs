@@ -21,7 +21,9 @@ namespace CbsContractsDesktopClient.ViewModels.References
                     definitionItem,
                     isCreateMode,
                     sourceRow?.GetValue(definitionItem.ApiField ?? definitionItem.FieldKey)))
-                .Where(item => !(isCreateMode && string.Equals(item.FieldKey, "id", StringComparison.OrdinalIgnoreCase))));
+                .Where(item => !(isCreateMode
+                    && !definition.IncludeIdOnCreate
+                    && string.Equals(item.FieldKey, "id", StringComparison.OrdinalIgnoreCase))));
 
             foreach (var item in Fields)
             {

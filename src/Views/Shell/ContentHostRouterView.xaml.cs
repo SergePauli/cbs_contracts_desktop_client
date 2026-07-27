@@ -20,6 +20,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private ContractHostView? _contractHostView;
         private RevisionHostView? _revisionHostView;
         private StageHostView? _stageHostView;
+        private OrderHostView? _orderHostView;
 
         public ContentHostRouterView()
         {
@@ -74,6 +75,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ContentHostRouteKind.Contract => GetContractHostView(route),
                 ContentHostRouteKind.Revision => GetRevisionHostView(route),
                 ContentHostRouteKind.Stage => GetStageHostView(route),
+                ContentHostRouteKind.Order => GetOrderHostView(route),
                 _ => CreatePlaceholder()
             };
         }
@@ -133,6 +135,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     break;
+                case ContentHostRouteKind.Order:
+                    if (_orderHostView is not null)
+                    {
+                        _orderHostView.Route = route;
+                    }
+
+                    break;
             }
         }
 
@@ -176,6 +185,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (string.Equals(route, "/stages", StringComparison.OrdinalIgnoreCase))
             {
                 return ContentHostRouteKind.Stage;
+            }
+
+            if (string.Equals(route, "/orders", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Order;
             }
 
             if (IsSimpleReferenceRoute(route))
@@ -252,6 +266,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             return _stageHostView;
         }
 
+        private OrderHostView GetOrderHostView(string? route)
+        {
+            _orderHostView ??= new OrderHostView();
+            _orderHostView.Route = route;
+            return _orderHostView;
+        }
+
         private static FrameworkElement CreatePlaceholder()
         {
             return new Border
@@ -284,7 +305,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             Contragent,
             Contract,
             Revision,
-            Stage
+            Stage,
+            Order
         }
     }
 }

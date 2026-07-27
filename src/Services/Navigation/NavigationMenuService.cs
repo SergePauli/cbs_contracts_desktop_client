@@ -23,6 +23,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private const string ContractsRoute = "/contracts";
         private const string StagesRoute = "/stages";
         private const string RevisionsRoute = "/revisions";
+        private const string OrdersRoute = "/orders";
         private const string EmployeesRoute = "/employees";
         private const string ContragentsRoute = "/contragents";
         private const string ReferencesRoute = "/references";
@@ -80,6 +81,10 @@ namespace CbsContractsDesktopClient.Services.Navigation
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(ContractsRoute), "\uE762", ContractsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(StagesRoute), "\uE7C1", StagesRoute, route));
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(RevisionsRoute), "\uE8A7", RevisionsRoute, route));
+            if (isOzi || isAdmin)
+            {
+                baseSection.Items.Add(CreateItem(ResolveMenuTitle(OrdersRoute, "Заказы"), "\uE7BF", OrdersRoute, route));
+            }
 
             var referencesSection = new NavigationMenuSection
             {

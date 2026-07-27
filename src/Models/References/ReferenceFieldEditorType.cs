@@ -5,6 +5,7 @@ namespace CbsContractsDesktopClient.Models.References
         Text,
         Number,
         Boolean,
-        Date
+        Date,
+        Enum
     }
 }

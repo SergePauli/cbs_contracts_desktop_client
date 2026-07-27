@@ -1,3 +1,4 @@
+using System.Globalization;
 using CbsContractsDesktopClient.ViewModels.References;
 
 namespace CbsContractsDesktopClient.Services.References
@@ -31,8 +32,24 @@ namespace CbsContractsDesktopClient.Services.References
         {
             return fields.ToDictionary(
                 static item => item.ApiField ?? item.FieldKey,
-                static item => item.CurrentValue,
+                static item => NormalizeValue(item.ApiField ?? item.FieldKey, item.CurrentValue),
                 StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static object? NormalizeValue(string apiField, object? value)
+        {
+            if (!string.Equals(apiField, "name", StringComparison.OrdinalIgnoreCase))
+            {
+                return value;
+            }
+
+            var name = value as string;
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new InvalidOperationException("Reference.name должен содержать непустую строку.");
+            }
+
+            return char.ToUpper(name[0], CultureInfo.CurrentCulture) + name[1..];
         }
     }
 }

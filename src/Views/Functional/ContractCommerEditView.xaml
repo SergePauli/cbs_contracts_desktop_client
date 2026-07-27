@@ -15,6 +15,7 @@
                 ItemsSource="{x:Bind Children}">
                 <TreeViewItem.Content>
                     <ContentControl
+                        Margin="{x:Bind ContentMargin}"
                         HorizontalContentAlignment="Stretch"
                         Content="{x:Bind Content}" />
                 </TreeViewItem.Content>

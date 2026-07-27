@@ -298,28 +298,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             long id,
             CancellationToken cancellationToken = default)
         {
-            var definition = CurrentDefinition ?? Store.CurrentTablePage;
-            if (definition is null)
-            {
-                return false;
-            }
-
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = definition.Model,
-                    Preset = definition.Preset,
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = id
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            var freshRow = rows.FirstOrDefault(static row => !row.IsPlaceholder);
-            if (freshRow is null
-                || !Store.ApplySavedRowUpdate(freshRow))
+            var freshRow = await Store.RefreshLoadedRowByIdAsync(id, cancellationToken);
+            if (freshRow is null)
             {
                 return false;
             }

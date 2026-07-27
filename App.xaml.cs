@@ -13,9 +13,11 @@ using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.Stores.Contragents;
 using CbsContractsDesktopClient.Stores.Table;
+using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 
@@ -52,6 +54,8 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
+            services.AddSingleton<IsecurityToolCatalogService>();
+            services.AddSingleton<IsecurityToolEditWorkflow>();
             services.AddSingleton<IContragentLookupService, ContragentLookupService>();
             services.AddSingleton<IEmployeeEditWorkflow, EmployeeEditWorkflow>();
             services.AddSingleton<IContragentFnsWorkflow, ContragentFnsWorkflow>();
@@ -60,6 +64,12 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ContragentDetailStore>();
             services.AddSingleton<TablePageStore>();
             services.AddSingleton<ContractWorkflowStore>();
+            services.AddSingleton<OrderWorkflowStore>();
+            services.AddSingleton<OrderPositionsStore>();
+            services.AddSingleton<OrderWorkflowFactory>();
+            services.AddSingleton<OrderEditWorkflow>();
+            services.AddSingleton<StageOrderEditWorkflow>();
+            services.AddSingleton<StageSupplyEditWorkflow>();
             services.AddSingleton<ContractWorkflowFactory>();
             services.AddSingleton<ContractCommentWorkflow>();
             services.AddSingleton<StatusTableViewModel>();

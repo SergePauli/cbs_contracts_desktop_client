@@ -14,6 +14,10 @@ namespace CbsContractsDesktopClient.Models.Data
         [JsonPropertyName("filters")]
         public object? Filters { get; init; }
 
+        [JsonPropertyName("unique_by")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? UniqueBy { get; init; }
+
         [JsonPropertyName("sorts")]
         public IReadOnlyList<string>? Sorts { get; init; }
 

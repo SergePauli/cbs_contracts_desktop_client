@@ -322,6 +322,35 @@ namespace CbsContractsDesktopClient.Stores.Table
             return ReplaceLoadedRow(id.Value, savedRow);
         }
 
+        public async Task<TableDataRow?> RefreshLoadedRowByIdAsync(
+            long id,
+            CancellationToken cancellationToken = default)
+        {
+            var definition = CurrentTablePage;
+            if (definition is null)
+            {
+                return null;
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
+                new DataQueryRequest
+                {
+                    Model = definition.Model,
+                    Preset = definition.Preset,
+                    Filters = new Dictionary<string, object?>
+                    {
+                        ["id__eq"] = id
+                    },
+                    Limit = 1
+                },
+                cancellationToken);
+
+            var freshRow = rows.FirstOrDefault(static row => !row.IsPlaceholder);
+            return freshRow is not null && ApplySavedRowUpdate(freshRow)
+                ? freshRow
+                : null;
+        }
+
         private bool ReplaceLoadedRow(long id, TableDataRow patchedRow)
         {
             var replaced = _state?.Items.TryReplaceLoadedItem(
