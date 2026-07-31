@@ -43,5 +43,33 @@ namespace CbsContractsDesktopClient.Services.References
                 row.GetValue("name")?.ToString() ?? throw new InvalidOperationException("IsecurityTool.card не содержит name."),
                 row.GetValue("default_cost") is { } cost ? Convert.ToDecimal(cost) : null)).ToList();
         }
+
+        public async Task<IReadOnlyList<IsecurityToolCatalogItem>> SearchToolOptionsAsync(
+            string searchText,
+            CancellationToken cancellationToken = default)
+        {
+            var normalized = searchText.Trim();
+            if (normalized.Length == 0)
+            {
+                return [];
+            }
+
+            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
+                new DataQueryRequest
+                {
+                    Model = "IsecurityTool",
+                    Preset = "card",
+                    Filters = new Dictionary<string, object?> { ["name__cnt"] = normalized },
+                    Sorts = ["name asc"],
+                    Limit = 25
+                },
+                cancellationToken);
+            return rows.Select(row => new IsecurityToolCatalogItem(
+                JsonDataReader.TryGetLong(row.GetValue("id"))
+                    ?? throw new InvalidOperationException("IsecurityTool.card не содержит id."),
+                JsonDataReader.TryGetText(row, "name")
+                    ?? throw new InvalidOperationException("IsecurityTool.card не содержит name."),
+                row.GetValue("default_cost") is { } cost ? Convert.ToDecimal(cost) : null)).ToList();
+        }
     }
 }

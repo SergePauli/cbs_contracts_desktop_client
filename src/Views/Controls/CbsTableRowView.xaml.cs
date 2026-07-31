@@ -446,7 +446,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static bool IsBadgeTemplate(CbsTableColumnDefinition column)
         {
             return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase);
+                || string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(column.BodyTemplateKey, "OrderDeliveryStatus", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(column.BodyTemplateKey, "OrderStatusBadge", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void ApplyBadgeContent(CbsTableColumnDefinition column, Border badgeCell, TextBlock badgeText, TableDataRow? row, object? value)
@@ -454,6 +456,18 @@ namespace CbsContractsDesktopClient.Views.Controls
             if (string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase))
             {
                 ApplyStageOrderSeverityBadgeContent(badgeCell, badgeText, value);
+                return;
+            }
+
+            if (string.Equals(column.BodyTemplateKey, "OrderDeliveryStatus", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyOrderStatusBadgeContent(badgeCell, badgeText, row, value, "order.status.id");
+                return;
+            }
+
+            if (string.Equals(column.BodyTemplateKey, "OrderStatusBadge", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyOrderStatusBadgeContent(badgeCell, badgeText, row, value, "status.id");
                 return;
             }
 
@@ -474,12 +488,44 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 StageOrderSeverity.Need => Windows.UI.Color.FromArgb(255, 255, 193, 7),
                 StageOrderSeverity.InStock => Windows.UI.Color.FromArgb(255, 0, 176, 80),
+                StageOrderSeverity.OnControl => Windows.UI.Color.FromArgb(255, 220, 53, 69),
+                StageOrderSeverity.NotApproved => Windows.UI.Color.FromArgb(255, 137, 207, 240),
+                StageOrderSeverity.Delivered => Windows.UI.Color.FromArgb(255, 224, 224, 224),
                 _ => throw new ArgumentOutOfRangeException(nameof(value))
             };
             badgeText.Text = StageOrderSeverityText.GetLabel(severity);
-            badgeText.Foreground = new SolidColorBrush(severity == StageOrderSeverity.Need
-                ? Microsoft.UI.Colors.Black
-                : Microsoft.UI.Colors.White);
+            badgeText.Foreground = new SolidColorBrush(
+                severity is StageOrderSeverity.Need or StageOrderSeverity.NotApproved or StageOrderSeverity.Delivered
+                    ? Microsoft.UI.Colors.Black
+                    : Microsoft.UI.Colors.White);
+            badgeCell.Background = new SolidColorBrush(background);
+        }
+
+        private static void ApplyOrderStatusBadgeContent(
+            Border badgeCell,
+            TextBlock badgeText,
+            TableDataRow? row,
+            object? value,
+            string statusIdField)
+        {
+            var statusName = value?.ToString();
+            if (string.IsNullOrWhiteSpace(statusName))
+            {
+                badgeText.Text = string.Empty;
+                return;
+            }
+
+            var statusId = TryGetLong(row?.GetValue(statusIdField));
+            var background = statusId switch
+            {
+                2 => Windows.UI.Color.FromArgb(255, 194, 237, 246),
+                3 => Windows.UI.Color.FromArgb(255, 201, 233, 212),
+                4 => Windows.UI.Color.FromArgb(255, 255, 235, 156),
+                _ => Windows.UI.Color.FromArgb(255, 224, 224, 224)
+            };
+
+            badgeText.Text = statusName;
+            badgeText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 64, 64, 64));
             badgeCell.Background = new SolidColorBrush(background);
         }
 

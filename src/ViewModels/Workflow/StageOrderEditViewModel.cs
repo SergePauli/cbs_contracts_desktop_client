@@ -9,21 +9,26 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
     public partial class StageOrderEditViewModel : ObservableObject
     {
         private readonly IReadOnlyList<StageOrderStageOption> _allStages;
+        private readonly Func<string, CancellationToken, Task<IReadOnlyList<IsecurityToolCatalogItem>>> _searchToolsAsync;
+        private CancellationTokenSource? _toolSearchCts;
 
         public StageOrderEditViewModel(
             StageOrderEditState state,
             IReadOnlyList<StageOrderStageOption> stages,
-            IReadOnlyList<IsecurityToolCatalogItem> tools)
+            IReadOnlyList<IsecurityToolCatalogItem> tools,
+            Func<string, CancellationToken, Task<IReadOnlyList<IsecurityToolCatalogItem>>> searchToolsAsync)
         {
             State = state;
             _allStages = stages;
+            _searchToolsAsync = searchToolsAsync;
             ToolOptions = tools;
             SelectedStage = stages.SingleOrDefault(option => option.Id == state.StageId);
             StageInput = SelectedStage?.Label ?? string.Empty;
             StageSuggestions = SelectedStage is null ? [] : [SelectedStage.Label];
             SelectedTool = tools.SingleOrDefault(option => option.Id == state.ToolId);
+            ToolInput = SelectedTool?.Name ?? state.ToolName;
+            ToolSuggestions = [];
             SeverityOptions = Enum.GetValues<StageOrderSeverity>()
-                .Take(2)
                 .Select(severity => new ReferenceEnumOption((long)severity, StageOrderSeverityText.GetLabel(severity)))
                 .ToList();
             SelectedSeverity = SeverityOptions.SingleOrDefault(option => option.Value == state.Severity);
@@ -35,13 +40,15 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         }
 
         public StageOrderEditState State { get; }
-        public IReadOnlyList<IsecurityToolCatalogItem> ToolOptions { get; }
+        [ObservableProperty] public partial IReadOnlyList<IsecurityToolCatalogItem> ToolOptions { get; set; }
         public IReadOnlyList<ReferenceEnumOption> SeverityOptions { get; }
 
         [ObservableProperty] public partial string StageInput { get; set; } = string.Empty;
         [ObservableProperty] public partial IReadOnlyList<string> StageSuggestions { get; set; } = [];
         [ObservableProperty] public partial StageOrderStageOption? SelectedStage { get; set; }
         [ObservableProperty] public partial IsecurityToolCatalogItem? SelectedTool { get; set; }
+        [ObservableProperty] public partial string ToolInput { get; set; } = string.Empty;
+        [ObservableProperty] public partial IReadOnlyList<string> ToolSuggestions { get; set; } = [];
         [ObservableProperty] public partial ReferenceEnumOption? SelectedSeverity { get; set; }
         [ObservableProperty] public partial string PriceCost { get; set; } = string.Empty;
         [ObservableProperty] public partial string Amount { get; set; } = string.Empty;
@@ -89,10 +96,58 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
         }
 
+        public async Task UpdateToolSuggestionsAsync(string input)
+        {
+            ToolInput = input;
+            SelectedTool = null;
+            _toolSearchCts?.Cancel();
+            var normalized = input.Trim();
+            if (normalized.Length == 0)
+            {
+                ToolSuggestions = [];
+                return;
+            }
+
+            var cancellationTokenSource = new CancellationTokenSource();
+            _toolSearchCts = cancellationTokenSource;
+            try
+            {
+                await Task.Delay(300, cancellationTokenSource.Token);
+                ToolOptions = await _searchToolsAsync(normalized, cancellationTokenSource.Token);
+                ToolSuggestions = ToolOptions.Select(static option => option.Name).ToList();
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        public bool TrySelectTool(string? name)
+        {
+            var option = ToolOptions.FirstOrDefault(item =>
+                string.Equals(item.Name, name, StringComparison.CurrentCultureIgnoreCase));
+            if (option is null)
+            {
+                return false;
+            }
+
+            SelectedTool = option;
+            ToolInput = option.Name;
+            return true;
+        }
+
+        public void CommitTool(string? input)
+        {
+            if (!TrySelectTool(input?.Trim()))
+            {
+                ToolInput = SelectedTool?.Name ?? string.Empty;
+            }
+        }
+
         partial void OnSelectedToolChanged(IsecurityToolCatalogItem? value)
         {
             if (value is not null)
             {
+                ToolInput = value.Name;
                 PriceCost = Text(value.DefaultCost);
                 RecalculateCost();
             }

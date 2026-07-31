@@ -524,6 +524,8 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(SupportsMultipleRowSelectionProperty, value);
         }
 
+        public Func<TableDataRow, bool>? CanSelectRow { get; set; }
+
         public TableDataRow? SelectedItem
         {
             get => (TableDataRow?)GetValue(SelectedItemProperty);
@@ -614,7 +616,10 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             var targetIndex = selectedIndex + direction;
-            if (targetIndex < 0 || targetIndex >= sourceRows.Count || sourceRows[targetIndex].IsPlaceholder)
+            if (targetIndex < 0
+                || targetIndex >= sourceRows.Count
+                || sourceRows[targetIndex].IsPlaceholder
+                || !IsRowSelectable(sourceRows[targetIndex]))
             {
                 return false;
             }
@@ -1537,6 +1542,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            if (!IsRowSelectable(rowView.Row!))
+            {
+                return;
+            }
+
             if (SupportsMultipleRowSelection)
             {
                 if (!_selectedIndexes.Add(rowIndex))
@@ -1580,10 +1590,20 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            if (!IsRowSelectable(rowView.Row!))
+            {
+                return;
+            }
+
             Focus(FocusState.Programmatic);
             SelectSingleRow(rowView.Row!, rowIndex);
 
             RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));
+        }
+
+        private bool IsRowSelectable(TableDataRow row)
+        {
+            return CanSelectRow?.Invoke(row) ?? true;
         }
 
         private void UpdateVisibleRowSelectionStates()

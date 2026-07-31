@@ -1,4 +1,5 @@
 using System.Globalization;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.Shared.Data;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow
@@ -9,12 +10,20 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             var state = vm.State;
             var stageId = vm.SelectedStage?.Id;
-            var toolId = vm.SelectedTool?.Id ?? throw new InvalidOperationException("Выберите товар.");
             var severity = vm.SelectedSeverity is null ? (int?)null : checked((int)vm.SelectedSeverity.Value);
             var values = new Dictionary<string, object?>();
             if (state.IsCreateMode && state.OrderId is not null) values["order_id"] = state.OrderId;
             else values["id"] = state.Id ?? throw new InvalidOperationException("StageOrder.id отсутствует.");
             values["list_key"] = state.ListKey;
+            if (state.AccessMode == StageOrderEditAccessMode.ControlFieldsOnly)
+            {
+                Add(values, "severity", severity, state.Severity, create: false);
+                Add(values, "priority", Integer(vm.Priority), state.Priority, create: false);
+                Add(values, "description", Empty(vm.Description), Empty(state.Description), create: false);
+                return values;
+            }
+
+            var toolId = vm.SelectedTool?.Id ?? throw new InvalidOperationException("Выберите товар.");
             Add(values, "stage_id", stageId, state.StageId, state.IsCreateMode);
             Add(values, "isecurity_tool_id", toolId, state.ToolId, state.IsCreateMode);
             Add(values, "severity", severity, state.Severity, state.IsCreateMode);

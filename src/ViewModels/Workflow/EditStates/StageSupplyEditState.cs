@@ -11,6 +11,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates
         public long? Id { get; init; }
         public required string ListKey { get; init; }
         public long? ToolId { get; init; }
+        public string ToolName { get; init; } = string.Empty;
         public decimal? PriceCost { get; init; }
         public decimal? Amount { get; init; }
         public decimal? Cost { get; init; }
@@ -37,6 +38,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates
                 ListKey = JsonDataReader.TryGetString(row, "list_key")
                     ?? throw new InvalidOperationException("StageOrder.stage не содержит обязательный list_key."),
                 ToolId = JsonDataReader.TryGetLong(JsonDataReader.TryGetObject(row, "isecurity_tool")?.GetProperty("id")),
+                ToolName = JsonDataReader.TryGetString(
+                    JsonDataReader.TryGetObject(row, "isecurity_tool") ?? default,
+                    "name") ?? string.Empty,
                 PriceCost = ParseDecimal(row, "price_cost"),
                 Amount = ParseDecimal(row, "amount"),
                 Cost = ParseDecimal(row, "cost"),

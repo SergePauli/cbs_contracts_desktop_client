@@ -10,7 +10,15 @@ namespace CbsContractsDesktopClient.Services.Orders
         public long? StageId { get; init; }
         public string StageLabel { get; init; } = string.Empty;
         public JsonElement? SourceRow { get; init; }
+        public required Action<string> Trace { get; init; }
+        public StageOrderEditAccessMode AccessMode { get; init; } = StageOrderEditAccessMode.Full;
         public bool IsCreateMode => SourceRow is null;
         public bool IsStageFixed => StageId is not null;
+    }
+
+    public enum StageOrderEditAccessMode
+    {
+        Full,
+        ControlFieldsOnly
     }
 }

@@ -422,11 +422,14 @@ public sealed class ContentHostViewTests
 
         Assert.Contains("OptionsRegistry.Set(\"StageStatus\"", stageHost);
         Assert.Contains("OptionsRegistry.Set(\"TaskKind\"", stageHost);
-        Assert.Contains("LoadStageStatusOptionsAsync", stageHost);
+        Assert.Contains("StageStatusFilterOptionsProvider _stageStatusFilterOptionsProvider", stageHost);
+        Assert.Contains("_stageStatusFilterOptionsProvider.LoadAsync()", stageHost);
         Assert.Contains("LoadStageTaskKindOptionsAsync", stageHost);
         Assert.Contains("FormatTaskKindOptionLabel", stageHost);
         Assert.Contains("OptionsRegistry.Get(\"StageStatus\")", stageHost);
         Assert.DoesNotContain("NormalizeStageStatusOptions", tablePageStore);
+        Assert.DoesNotContain("\"StageStatus\"", tablePageStore);
+        Assert.DoesNotContain("\"OrderStatus\"", tablePageStore);
         Assert.DoesNotContain("LoadTaskKindOptionsAsync", tablePageStore);
         Assert.DoesNotContain("FormatTaskKindOptionLabel", tablePageStore);
     }

@@ -8,19 +8,23 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 {
     public partial class StageSupplyEditViewModel : ObservableObject
     {
-        private readonly IReadOnlyList<IsecurityToolCatalogItem> _allTools;
+        private readonly Func<string, CancellationToken, Task<IReadOnlyList<IsecurityToolCatalogItem>>> _searchToolsAsync;
+        private CancellationTokenSource? _toolSearchCts;
         private bool _isInitializing;
 
         public StageSupplyEditViewModel(
             StageSupplyEditState state,
-            IReadOnlyList<IsecurityToolCatalogItem> tools)
+            Func<string, CancellationToken, Task<IReadOnlyList<IsecurityToolCatalogItem>>> searchToolsAsync)
         {
             _isInitializing = true;
             State = state;
-            _allTools = tools;
-            SelectedTool = tools.SingleOrDefault(option => option.Id == state.ToolId);
-            ToolInput = SelectedTool?.Name ?? string.Empty;
-            ToolSuggestions = tools.Select(static option => option.Name).ToList();
+            _searchToolsAsync = searchToolsAsync;
+            SelectedTool = state.ToolId is long toolId
+                ? new IsecurityToolCatalogItem(toolId, state.ToolName, state.PriceCost)
+                : null;
+            ToolInput = state.ToolName;
+            ToolOptions = SelectedTool is null ? [] : [SelectedTool];
+            ToolSuggestions = [];
             SeverityOptions = Enum.GetValues<StageOrderSeverity>()
                 .Select(value => new ReferenceEnumOption((long)value, StageOrderSeverityText.GetLabel(value)))
                 .ToList();
@@ -31,32 +35,58 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             _isInitializing = false;
         }
 
+        public StageSupplyEditViewModel(
+            StageSupplyEditState state,
+            IReadOnlyList<IsecurityToolCatalogItem> tools)
+            : this(state, (_, _) => Task.FromResult(tools))
+        {
+            ToolOptions = tools;
+            SelectedTool = tools.SingleOrDefault(option => option.Id == state.ToolId);
+            ToolInput = SelectedTool?.Name ?? string.Empty;
+            PriceCost = state.PriceCost;
+            Cost = state.Cost;
+        }
+
         public StageSupplyEditState State { get; }
         public IReadOnlyList<ReferenceEnumOption> SeverityOptions { get; }
 
         [ObservableProperty] public partial string ToolInput { get; set; } = string.Empty;
         [ObservableProperty] public partial IReadOnlyList<string> ToolSuggestions { get; set; } = [];
+        [ObservableProperty] public partial IReadOnlyList<IsecurityToolCatalogItem> ToolOptions { get; set; } = [];
         [ObservableProperty] public partial IsecurityToolCatalogItem? SelectedTool { get; set; }
         [ObservableProperty] public partial ReferenceEnumOption? SelectedSeverity { get; set; }
         [ObservableProperty] public partial string Amount { get; set; } = string.Empty;
         [ObservableProperty] public partial decimal? PriceCost { get; set; }
         [ObservableProperty] public partial decimal? Cost { get; set; }
 
-        public Task UpdateToolSuggestionsAsync(string input)
+        public async Task UpdateToolSuggestionsAsync(string input)
         {
             ToolInput = input;
             SelectedTool = null;
-            ToolSuggestions = _allTools
-                .Where(option => option.Name.Contains(input.Trim(), StringComparison.CurrentCultureIgnoreCase))
-                .Select(static option => option.Name)
-                .Take(25)
-                .ToList();
-            return Task.CompletedTask;
+            _toolSearchCts?.Cancel();
+            var normalized = input.Trim();
+            if (normalized.Length == 0)
+            {
+                ToolSuggestions = [];
+                return;
+            }
+
+            var cancellationTokenSource = new CancellationTokenSource();
+            _toolSearchCts = cancellationTokenSource;
+            try
+            {
+                await Task.Delay(300, cancellationTokenSource.Token);
+                ToolOptions = await _searchToolsAsync(normalized, cancellationTokenSource.Token);
+                ToolSuggestions = ToolOptions.Select(static option => option.Name).ToList();
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
 
         public bool TrySelectTool(string? name)
         {
-            var option = _allTools.FirstOrDefault(item =>
+            var option = ToolOptions.FirstOrDefault(item =>
                 string.Equals(item.Name, name, StringComparison.CurrentCultureIgnoreCase));
             if (option is null)
                 return false;

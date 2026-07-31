@@ -30,7 +30,7 @@ namespace CbsContractsDesktopClient.Services.Mutations
         {
         }
 
-        public Task<TableDataRow> CreateAsync(
+        public async Task<TableDataRow> CreateAsync(
             string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default)
@@ -39,13 +39,16 @@ namespace CbsContractsDesktopClient.Services.Mutations
             ArgumentNullException.ThrowIfNull(payload);
 
             var request = BuildRequest(model, payload);
-            return PostAsync<Dictionary<string, object?>, TableDataRow>(
+            LogOrderMutationRequest("CREATE", model, request);
+            var response = await PostAsync<Dictionary<string, object?>, TableDataRow>(
                 $"model/add/{model}",
                 request,
                 cancellationToken);
+            LogOrderMutationResponse("CREATE", model, response);
+            return response;
         }
 
-        public Task<TableDataRow> UpdateAsync(
+        public async Task<TableDataRow> UpdateAsync(
             string model,
             IReadOnlyDictionary<string, object?> payload,
             CancellationToken cancellationToken = default)
@@ -57,10 +60,13 @@ namespace CbsContractsDesktopClient.Services.Mutations
             ValidateUpdatePayload(model, payload);
             var request = BuildRequest(model, payload);
             LogTrackedUpdateRequest(model, id, request);
-            return PutAsync<Dictionary<string, object?>, TableDataRow>(
+            LogOrderMutationRequest("UPDATE", model, request);
+            var response = await PutAsync<Dictionary<string, object?>, TableDataRow>(
                 $"model/{model}/{id}",
                 request,
                 cancellationToken);
+            LogOrderMutationResponse("UPDATE", model, response);
+            return response;
         }
 
         public Task<TableDataRow> DeleteAsync(
@@ -139,6 +145,36 @@ namespace CbsContractsDesktopClient.Services.Mutations
             return string.Equals(model, "Contract", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(model, "Stage", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(model, "Revision", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void LogOrderMutationRequest(
+            string operation,
+            string model,
+            IReadOnlyDictionary<string, object?> request)
+        {
+            if (!string.Equals(model, "Order", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            DiagnosticsFileLogger.AppendBlock(
+                $"ORDER {operation} REQUEST",
+                JsonSerializer.Serialize(request, SerializerOptions));
+        }
+
+        private void LogOrderMutationResponse(
+            string operation,
+            string model,
+            TableDataRow response)
+        {
+            if (!string.Equals(model, "Order", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            DiagnosticsFileLogger.AppendBlock(
+                $"ORDER {operation} RESPONSE",
+                JsonSerializer.Serialize(response, SerializerOptions));
         }
 
         private string SerializeForDiagnostics(IReadOnlyDictionary<string, object?> request)

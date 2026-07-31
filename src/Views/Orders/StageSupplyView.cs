@@ -1,6 +1,10 @@
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Models.Data;
+using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.Views.Controls;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -17,11 +21,14 @@ namespace CbsContractsDesktopClient.Views.Orders
         };
         private readonly Button _editButton;
         private readonly Button _deleteButton;
+        private readonly IReferenceLookupCacheService _lookupCache;
+        private IReadOnlySet<long> _selectedStatusIds = new HashSet<long>();
         private bool _isLoaded;
 
         public StageSupplyView(StageSupplyStore store)
         {
             _store = store;
+            _lookupCache = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _table.TableStateKey = $"/stages/{store.StageId}/supply";
             var addButton = CompactButton("\uE710", "Добавить позицию");
             _editButton = CompactButton("\uE70F", "Редактировать позицию");
@@ -50,13 +57,21 @@ namespace CbsContractsDesktopClient.Views.Orders
                 if (CanEdit(args.Row))
                     EditRequested?.Invoke(this, new StageSupplyEditRequestedEventArgs(args.Row, _table));
             };
+            _table.FilterRequested += (_, args) =>
+            {
+                if (!string.Equals(args.FieldKey, "status", StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                _selectedStatusIds = ReadSelectedStatusIds(args.Value);
+                ApplyRows();
+            };
             _store.PropertyChanged += (_, args) =>
             {
                 if (args.PropertyName == nameof(StageSupplyStore.Rows))
                 {
-                    _table.ItemsSource = _store.Rows;
-                    _table.LoadedCount = _store.Rows.Count;
-                    _table.TotalCount = _store.Rows.Count;
+                    ApplyRows();
                 }
                 else if (args.PropertyName == nameof(StageSupplyStore.IsLoading))
                 {
@@ -82,7 +97,20 @@ namespace CbsContractsDesktopClient.Views.Orders
             {
                 if (_isLoaded) return;
                 _isLoaded = true;
-                await ReloadAsync();
+                try
+                {
+                    var statusOptions = await _lookupCache.GetOptionsAsync("OrderStatus");
+                    _table.MultiSelectOptionsSources =
+                        new Dictionary<string, IReadOnlyList<CbsTableFilterOptionDefinition>>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            ["OrderStatus"] = statusOptions
+                        };
+                    await ReloadAsync();
+                }
+                catch (Exception ex)
+                {
+                    LoadFailed?.Invoke(this, new StageSupplyLoadFailedEventArgs(ex));
+                }
             };
         }
 
@@ -127,11 +155,63 @@ namespace CbsContractsDesktopClient.Views.Orders
             Column("severity", "Важность", "severity", "10rem", bodyTemplateKey: "StageOrderSeverity"),
             Column("order", "Заказ", "order.order_number", "9rem"),
             Column("supplier", "Поставщик", "order.supplier.name", "14rem"),
-            Column("status", "Статус", "order.status.name", "10rem"),
+            StatusColumn(),
             Column("price_cost", "Цена", "price_cost", "8rem", CbsTableColumnAlignment.Right),
             Column("cost", "Сумма", "cost", "9rem", CbsTableColumnAlignment.Right),
             Column("description", "Описание", "description", "16rem")
         ];
+
+        private static CbsTableColumnDefinition StatusColumn() => new()
+        {
+            FieldKey = "status",
+            Header = "Статус",
+            ApiField = "order.status.name",
+            DisplayField = "order.status.name",
+            FilterField = "order.status.id",
+            DefaultWidth = "10rem",
+            Alignment = CbsTableColumnAlignment.Left,
+            IsSortable = false,
+            BodyTemplateKey = "OrderDeliveryStatus",
+            IsFilterable = true,
+            Filter = new CbsTableColumnFilterDefinition
+            {
+                IsEnabled = true,
+                EditorKind = CbsTableFilterEditorKind.MultiSelect,
+                Mode = DataFilterMode.Numeric,
+                MatchMode = DataFilterMatchMode.In,
+                OptionsSourceKey = "OrderStatus"
+            }
+        };
+
+        private void ApplyRows()
+        {
+            var rows = _selectedStatusIds.Count == 0
+                ? _store.Rows
+                : _store.Rows
+                    .Where(row => JsonDataReader.TryGetLong(row.GetValue("order.status.id")) is long statusId
+                        && _selectedStatusIds.Contains(statusId))
+                    .ToList();
+            _table.ItemsSource = rows;
+            _table.LoadedCount = rows.Count;
+            _table.TotalCount = rows.Count;
+            _store.SelectedRow = null;
+            _editButton.IsEnabled = false;
+            _deleteButton.IsEnabled = false;
+        }
+
+        private static IReadOnlySet<long> ReadSelectedStatusIds(object? value)
+        {
+            if (value is not System.Collections.IEnumerable values || value is string)
+            {
+                return new HashSet<long>();
+            }
+
+            return values.Cast<object?>()
+                .Select(JsonDataReader.TryGetLong)
+                .Where(static id => id is not null)
+                .Select(static id => id!.Value)
+                .ToHashSet();
+        }
 
         private static CbsTableColumnDefinition Column(
             string key,

@@ -45,6 +45,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IDataQueryService _dataQueryService;
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
+        private readonly StageStatusFilterOptionsProvider _stageStatusFilterOptionsProvider;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IEmployeeEditWorkflow _employeeEditWorkflow;
         private readonly IContragentLookupService _contragentLookupService;
@@ -70,6 +71,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
+            _stageStatusFilterOptionsProvider = App.Services.GetRequiredService<StageStatusFilterOptionsProvider>();
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _employeeEditWorkflow = App.Services.GetRequiredService<IEmployeeEditWorkflow>();
             _contragentLookupService = App.Services.GetRequiredService<IContragentLookupService>();
@@ -136,37 +138,9 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task LoadStageOptionsSourcesAsync()
         {
-            OptionsRegistry.Set("StageStatus", await LoadStageStatusOptionsAsync());
+            OptionsRegistry.Set("StageStatus", await _stageStatusFilterOptionsProvider.LoadAsync());
             OptionsRegistry.Set("TaskKind", await LoadStageTaskKindOptionsAsync());
             TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot());
-        }
-
-        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageStatusOptionsAsync()
-        {
-            var statusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
-            var optionsById = statusOptions
-                .Where(static option => JsonDataReader.TryGetLong(option.Value) is not null)
-                .GroupBy(static option => JsonDataReader.TryGetLong(option.Value)!.Value)
-                .ToDictionary(static group => group.Key, static group => group.First());
-
-            var result = new List<CbsTableFilterOptionDefinition>
-            {
-                new()
-                {
-                    Value = null,
-                    Label = "Не определен"
-                }
-            };
-
-            foreach (var statusId in StageContractStatusDialogControls.StageStatusIds.Order())
-            {
-                if (optionsById.TryGetValue(statusId, out var option))
-                {
-                    result.Add(option);
-                }
-            }
-
-            return result;
         }
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageTaskKindOptionsAsync()

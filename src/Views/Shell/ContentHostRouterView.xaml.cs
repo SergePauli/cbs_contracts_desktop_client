@@ -21,6 +21,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private RevisionHostView? _revisionHostView;
         private StageHostView? _stageHostView;
         private OrderHostView? _orderHostView;
+        private StageOrderNeedsHostView? _stageOrderNeedsHostView;
 
         public ContentHostRouterView()
         {
@@ -76,6 +77,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ContentHostRouteKind.Revision => GetRevisionHostView(route),
                 ContentHostRouteKind.Stage => GetStageHostView(route),
                 ContentHostRouteKind.Order => GetOrderHostView(route),
+                ContentHostRouteKind.Needs => GetStageOrderNeedsHostView(route),
                 _ => CreatePlaceholder()
             };
         }
@@ -142,6 +144,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     break;
+                case ContentHostRouteKind.Needs:
+                    if (_stageOrderNeedsHostView is not null)
+                    {
+                        _stageOrderNeedsHostView.Route = route;
+                    }
+
+                    break;
             }
         }
 
@@ -190,6 +199,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (string.Equals(route, "/orders", StringComparison.OrdinalIgnoreCase))
             {
                 return ContentHostRouteKind.Order;
+            }
+
+            if (string.Equals(route, "/needs", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Needs;
             }
 
             if (IsSimpleReferenceRoute(route))
@@ -273,6 +287,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             return _orderHostView;
         }
 
+        private StageOrderNeedsHostView GetStageOrderNeedsHostView(string? route)
+        {
+            _stageOrderNeedsHostView ??= new StageOrderNeedsHostView();
+            _stageOrderNeedsHostView.Route = route;
+            return _stageOrderNeedsHostView;
+        }
+
         private static FrameworkElement CreatePlaceholder()
         {
             return new Border
@@ -306,7 +327,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             Contract,
             Revision,
             Stage,
-            Order
+            Order,
+            Needs
         }
     }
 }

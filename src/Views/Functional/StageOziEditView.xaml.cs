@@ -37,6 +37,5 @@ public sealed partial class StageOziEditView : UserControl
     public ContentControl StatusSlot => StatusHost;
     public ContentControl CompletedAtSlot => CompletedAtHost;
     public ContentControl ClosedAtSlot => ClosedAtHost;
-    public ContentControl CommentSlot => CommentHost;
-    public ContentControl CommentListSlot => CommentListHost;
+    public ContentControl BranchesSlot => BranchesHost;
 }

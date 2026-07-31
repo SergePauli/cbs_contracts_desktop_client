@@ -143,6 +143,7 @@ namespace CbsContractsDesktopClient.Services
                 cancellationToken,
                 "STEP API 05");
             EmitResponseTrace(requestUri, body);
+            LogSuccessfulResponseBody(requestUri, request, body);
             TResponse? result;
             try
             {
@@ -489,6 +490,13 @@ namespace CbsContractsDesktopClient.Services
             }
 
             TraceEmitted?.Invoke(message);
+        }
+
+        protected virtual void LogSuccessfulResponseBody<TRequest>(
+            string requestUri,
+            TRequest request,
+            string responseBody)
+        {
         }
 
         public static void EmitExternalTrace(string message)

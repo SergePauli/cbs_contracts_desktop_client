@@ -1,6 +1,7 @@
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Orders;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.Shared.Dialogs;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.Views.Controls;
@@ -29,6 +30,7 @@ namespace CbsContractsDesktopClient.Views.Orders
         }
         private FrameworkElement BuildContent()
         {
+            var isControlFieldsOnly = _vm.State.AccessMode == StageOrderEditAccessMode.ControlFieldsOnly;
             var g = new Grid { Padding = new Thickness(8, 0, 8, 8), RowSpacing = 7, ColumnSpacing = 8 };
             for (var i = 0; i < 3; i++) g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -45,11 +47,24 @@ namespace CbsContractsDesktopClient.Views.Orders
                 maxWidth: 360,
                 maxSuggestionListHeight: 240,
                 bindingSource: _vm);
+            stageEditor.IsEnabled = !isControlFieldsOnly;
             if (!_vm.State.IsStageFixed)
             {
                 Add(g, Labeled("Этап", stageEditor), 0, 0);
             }
-            var toolControl = Labeled("Товар *", Dropdown(_vm.ToolOptions, _vm.SelectedTool, x => _vm.SelectedTool = x as IsecurityToolCatalogItem));
+            var toolEditor = DialogLookupEditors.BuildAutoSuggestBox(
+                nameof(StageOrderEditViewModel.ToolSuggestions),
+                () => _vm.ToolInput,
+                _vm.UpdateToolSuggestionsAsync,
+                _vm.TrySelectTool,
+                _vm.CommitTool,
+                () => _vm.ToolInput,
+                minWidth: 290,
+                maxWidth: 360,
+                maxSuggestionListHeight: 240,
+                bindingSource: _vm);
+            toolEditor.IsEnabled = !isControlFieldsOnly;
+            var toolControl = Labeled("Товар *", toolEditor);
             if (_vm.State.IsStageFixed)
             {
                 Grid.SetColumnSpan(toolControl, 2);
@@ -65,9 +80,15 @@ namespace CbsContractsDesktopClient.Views.Orders
             values.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(110) });
             values.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(120) });
             values.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) });
-            Add(values, Labeled("Цена", Text(nameof(StageOrderEditViewModel.PriceCost))), 0, 0);
-            Add(values, Labeled("Количество", Text(nameof(StageOrderEditViewModel.Amount))), 0, 1);
-            Add(values, Labeled("Сумма", Text(nameof(StageOrderEditViewModel.Cost))), 0, 2);
+            var priceEditor = Text(nameof(StageOrderEditViewModel.PriceCost));
+            var amountEditor = Text(nameof(StageOrderEditViewModel.Amount));
+            var costEditor = Text(nameof(StageOrderEditViewModel.Cost));
+            priceEditor.IsEnabled = !isControlFieldsOnly;
+            amountEditor.IsEnabled = !isControlFieldsOnly;
+            costEditor.IsEnabled = !isControlFieldsOnly;
+            Add(values, Labeled("Цена", priceEditor), 0, 0);
+            Add(values, Labeled("Количество", amountEditor), 0, 1);
+            Add(values, Labeled("Сумма", costEditor), 0, 2);
             Add(values, Labeled("Приоритет", Text(nameof(StageOrderEditViewModel.Priority))), 0, 3);
             Grid.SetColumnSpan(values, 3); Add(g, values, 1, 0);
             var description = Text(nameof(StageOrderEditViewModel.Description)); description.AcceptsReturn = true; description.MinHeight = 58;

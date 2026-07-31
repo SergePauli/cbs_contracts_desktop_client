@@ -1490,6 +1490,7 @@ namespace CbsContractsDesktopClient.Stores.Table
                 || message.StartsWith("CONTRACT DETAIL ", StringComparison.Ordinal)
                 || message.StartsWith("CONTRACT EDIT ", StringComparison.Ordinal)
                 || message.StartsWith("CONTRACT CLOSE CHECK ", StringComparison.Ordinal)
+                || message.StartsWith("ORDER POSITION ", StringComparison.Ordinal)
                 || message.StartsWith("TABLE ", StringComparison.Ordinal)
                 || message.StartsWith("VIEWPORT CHANGED ", StringComparison.Ordinal)
                 || message.StartsWith("Trigger load more ", StringComparison.Ordinal)

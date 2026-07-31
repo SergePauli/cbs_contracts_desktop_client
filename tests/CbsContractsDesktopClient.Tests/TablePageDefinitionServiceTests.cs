@@ -134,6 +134,31 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsNeedsStatusMultiSelectContracts()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/needs", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("StageOrder", definition.Model);
+        Assert.Equal("card", definition.Preset);
+
+        var stageStatus = definition.Columns.Single(static column => column.FieldKey == "stage_status");
+        Assert.Equal("stage.status_id", stageStatus.FilterField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, stageStatus.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, stageStatus.Filter.MatchMode);
+        Assert.Equal("StageStatus", stageStatus.Filter.OptionsSourceKey);
+
+        var orderStatus = definition.Columns.Single(static column => column.FieldKey == "order_status");
+        Assert.Equal("order.order_status_id", orderStatus.FilterField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, orderStatus.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, orderStatus.Filter.MatchMode);
+        Assert.Equal("OrderStatus", orderStatus.Filter.OptionsSourceKey);
+        Assert.Equal("OrderDeliveryStatus", orderStatus.BodyTemplateKey);
+    }
+
+    [Fact]
     public void TryGetByRoute_ReturnsContractsFunctionalTableDefinition()
     {
         var service = CreateService();

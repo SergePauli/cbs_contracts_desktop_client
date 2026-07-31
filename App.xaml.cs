@@ -54,6 +54,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
+            services.AddSingleton<StageStatusFilterOptionsProvider>();
             services.AddSingleton<IsecurityToolCatalogService>();
             services.AddSingleton<IsecurityToolEditWorkflow>();
             services.AddSingleton<IContragentLookupService, ContragentLookupService>();
@@ -66,6 +67,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<OrderWorkflowStore>();
             services.AddSingleton<OrderPositionsStore>();
+            services.AddSingleton<StageOrderNeedsStore>();
             services.AddSingleton<OrderWorkflowFactory>();
             services.AddSingleton<OrderEditWorkflow>();
             services.AddSingleton<StageOrderEditWorkflow>();

@@ -34,7 +34,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                     CreateNumberColumn("id", "ID", width: "5rem"),
                     CreateTextColumn("order_number", "Номер", width: "12rem"),
                     CreateOrderRelationColumn("supplier", "Поставщик", "supplier.name", "18rem"),
-                    CreateOrderRelationColumn("status", "Статус", "status.name", "10rem"),
+                    CreateOrderStatusColumn(),
                     CreateNumberColumn("cost", "Стоимость", width: "10rem"),
                     CreateDateColumn("requested_at", "Запрошен"),
                     CreateDateColumn("ordered_at", "Заказан"),
@@ -69,6 +69,31 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                     Mode = DataFilterMode.Text,
                     MatchMode = DataFilterMatchMode.Contains,
                     PlaceholderText = "\u2315"
+                }
+            };
+        }
+
+        private static CbsTableColumnDefinition CreateOrderStatusColumn()
+        {
+            return new CbsTableColumnDefinition
+            {
+                FieldKey = "status",
+                Header = "Статус",
+                ApiField = "status.name",
+                DisplayField = "status.name",
+                FilterField = "status_id",
+                SortField = "status_id",
+                DefaultWidth = "10rem",
+                Alignment = CbsTableColumnAlignment.Center,
+                BodyTemplateKey = "OrderStatusBadge",
+                IsFilterable = true,
+                Filter = new CbsTableColumnFilterDefinition
+                {
+                    IsEnabled = true,
+                    EditorKind = CbsTableFilterEditorKind.MultiSelect,
+                    Mode = DataFilterMode.Numeric,
+                    MatchMode = DataFilterMatchMode.In,
+                    OptionsSourceKey = "OrderStatus"
                 }
             };
         }

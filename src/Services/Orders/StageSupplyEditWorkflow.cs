@@ -11,7 +11,7 @@ namespace CbsContractsDesktopClient.Services.Orders
         IsecurityToolCatalogService catalog,
         IModelMutationService mutations)
     {
-        public async Task<StageSupplyEditViewModel> CreateViewModelAsync(
+        public Task<StageSupplyEditViewModel> CreateViewModelAsync(
             long stageId,
             TableDataRow? sourceRow,
             CancellationToken cancellationToken = default)
@@ -21,8 +21,7 @@ namespace CbsContractsDesktopClient.Services.Orders
                 : StageSupplyEditState.FromRow(stageId, JsonSerializer.SerializeToElement(sourceRow.Values));
             if (!state.CanEdit)
                 throw new InvalidOperationException($"Позиция уже включена в заказ {state.OrderNumber} и недоступна для изменения.");
-            var tools = await catalog.LoadToolOptionsAsync(cancellationToken);
-            return new StageSupplyEditViewModel(state, tools);
+            return Task.FromResult(new StageSupplyEditViewModel(state, catalog.SearchToolOptionsAsync));
         }
 
         public async Task<long> SaveAsync(
