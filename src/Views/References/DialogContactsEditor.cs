@@ -74,7 +74,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Width = 28,
                 Height = 28,
                 Padding = new Thickness(0),
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 12,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -190,7 +190,7 @@ namespace CbsContractsDesktopClient.Views.References
             var icon = new FontIcon
             {
                 Glyph = contact.Glyph,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Width = 16,
                 Foreground = (Brush)Application.Current.Resources["ShellAccentBrush"],
@@ -214,7 +214,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Width = 16,
                 Height = 16,
                 Padding = new Thickness(0),
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -264,7 +264,7 @@ namespace CbsContractsDesktopClient.Views.References
             var icon = new FontIcon
             {
                 Glyph = match.Glyph,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Width = 16,
                 Foreground = (Brush)Application.Current.Resources["ShellAccentBrush"],
@@ -296,7 +296,7 @@ namespace CbsContractsDesktopClient.Views.References
                     Width = 16,
                     Height = 16,
                     Padding = new Thickness(0),
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     FontSize = 10,
                     Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                     BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),

@@ -177,7 +177,7 @@ namespace CbsContractsDesktopClient.Views.References
             var icon = new FontIcon
             {
                 Glyph = "\uE70D",
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Margin = new Thickness(6, 0, 0, 0),
                 Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],

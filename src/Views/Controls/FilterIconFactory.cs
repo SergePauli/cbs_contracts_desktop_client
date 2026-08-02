@@ -19,7 +19,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             iconHost.Children.Add(new FontIcon
             {
                 Glyph = "\uE71C",
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 16,
                 Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"]
             });
@@ -27,7 +27,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             iconHost.Children.Add(new FontIcon
             {
                 Glyph = "\uE733",
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 16,
                 Foreground = (Brush)Application.Current.Resources["StageDeadlineTextBrush"]
             });

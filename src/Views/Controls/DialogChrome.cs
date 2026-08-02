@@ -137,7 +137,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 Content = new FontIcon
                 {
                     Glyph = "\uE711",
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     FontSize = 11
                 }
             };

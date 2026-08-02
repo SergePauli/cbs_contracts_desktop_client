@@ -873,7 +873,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderBrush = null,
                 Content = iconGlyph,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 14,
                 Foreground = GetBrush("ShellSecondaryTextBrush")
             };

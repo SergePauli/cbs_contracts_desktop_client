@@ -37,7 +37,7 @@
                 ToolTipService.ToolTip="Свернуть или раскрыть меню">
                 <FontIcon
                     Glyph="&#xE700;"
-                    FontFamily="Segoe Fluent Icons"
+                    FontFamily="{StaticResource SymbolThemeFontFamily}"
                     FontSize="14"
                     Foreground="{StaticResource ShellSecondaryTextBrush}" />
             </Button>
@@ -79,7 +79,7 @@
                 ToolTipService.ToolTip="{x:Bind AuditPanelToolTip, Mode=OneWay}">
                 <FontIcon
                     Glyph="{x:Bind AuditPanelGlyph, Mode=OneWay}"
-                    FontFamily="Segoe Fluent Icons"
+                    FontFamily="{StaticResource SymbolThemeFontFamily}"
                     FontSize="14"
                     Foreground="{x:Bind AuditPanelIconBrush, Mode=OneWay}" />
             </primitives:ToggleButton>

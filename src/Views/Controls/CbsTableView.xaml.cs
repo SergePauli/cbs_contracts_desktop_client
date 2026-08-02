@@ -2342,7 +2342,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 new FontIcon
                 {
                     Glyph = "\uE711",
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     FontSize = 10
                 },
                 "закрыть");
@@ -2518,7 +2518,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 adornmentHost.Children.Add(new FontIcon
                 {
                     Glyph = CurrentSortDirection == DataSortDirection.Descending ? "\uE70D" : "\uE70E",
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     FontSize = 10,
                     Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -3177,7 +3177,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             var icon = new FontIcon
             {
                 Glyph = "\uE70D",
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Margin = new Thickness(6, 0, 0, 0),
                 Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],

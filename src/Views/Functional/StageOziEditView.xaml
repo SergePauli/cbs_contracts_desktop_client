@@ -135,7 +135,7 @@
                     Padding="0"
                     BorderThickness="0"
                     CornerRadius="5"
-                    FontFamily="Segoe Fluent Icons"
+                    FontFamily="{StaticResource SymbolThemeFontFamily}"
                     FontSize="12"
                     Content="&#xE76B;" />
                 <TextBlock
@@ -159,7 +159,7 @@
                     Padding="0"
                     BorderThickness="0"
                     CornerRadius="5"
-                    FontFamily="Segoe Fluent Icons"
+                    FontFamily="{StaticResource SymbolThemeFontFamily}"
                     FontSize="12"
                     Content="&#xE76C;" />
             </Grid>

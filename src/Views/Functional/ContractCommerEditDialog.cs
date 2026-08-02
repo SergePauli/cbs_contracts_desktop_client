@@ -2594,7 +2594,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 Content = new TextBlock
                 {
                     Text = iconGlyph,
-                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center,
                     Foreground = foreground
@@ -2696,7 +2696,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             var icon = new TextBlock
             {
                 Text = iconGlyph,
-                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -2732,7 +2732,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 Content = new TextBlock
                 {
                     Text = iconGlyph,
-                    FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 }
