@@ -32,7 +32,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                 columns:
                 [
                     CreateNumberColumn("id", "ID", width: "5rem"),
-                    CreateTextColumn("order_number", "Номер", width: "12rem"),
+                    CreateTextColumn("order_number", "Номер счёта", width: "12rem"),
                     CreateOrderRelationColumn("supplier", "Поставщик", "supplier.name", "18rem"),
                     CreateOrderStatusColumn(),
                     CreateNumberColumn("cost", "Стоимость", width: "10rem"),

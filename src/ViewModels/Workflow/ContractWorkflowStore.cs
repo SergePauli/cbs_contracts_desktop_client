@@ -6,6 +6,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 {
     public partial class ContractWorkflowStore : ObservableObject
     {
+        public event EventHandler? SelectionApplied;
+
         [ObservableProperty]
         public partial TableDataRow? SelectedRevision { get; set; }
 
@@ -35,5 +37,10 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         [ObservableProperty]
         public partial IReadOnlyList<TableDataRow> Comments { get; set; } = [];
+
+        private void NotifySelectionApplied()
+        {
+            SelectionApplied?.Invoke(this, EventArgs.Empty);
+        }
     }
 }

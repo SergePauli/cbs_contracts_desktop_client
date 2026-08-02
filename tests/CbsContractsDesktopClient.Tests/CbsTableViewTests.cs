@@ -250,6 +250,31 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
+    public void CbsTableView_SelectsCellRangesAndCopiesSpreadsheetText()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("SupportsCellSelectionProperty", code);
+        Assert.Contains("private CbsTableCellPosition? _cellSelectionAnchor;", code);
+        Assert.Contains("rowView.PointerMoved += OnRowPointerMoved;", code);
+        Assert.Contains("TryMoveCellSelection", code);
+        Assert.Contains("CopyCellSelection(includeHeaders: false)", code);
+        Assert.Contains("package.SetText(text.ToString());", code);
+        Assert.Contains("text.AppendJoin('\\t'", code);
+    }
+
+    [Fact]
+    public void CbsTableView_ContextMenuCanCopySelectionWithHeaders()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("CreateCellSelectionContextMenu", code);
+        Assert.Contains("Text = \"Копировать с заголовками\"", code);
+        Assert.Contains("CopyCellSelection(includeHeaders: true)", code);
+        Assert.Contains("Columns[index].Header", code);
+    }
+
+    [Fact]
     public void CbsTableView_PropagatesStageCostFractionModeToRows()
     {
         var code = File.ReadAllText(CbsTableViewPath);

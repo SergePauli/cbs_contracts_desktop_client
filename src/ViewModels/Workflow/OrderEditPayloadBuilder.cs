@@ -10,16 +10,16 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         private static IReadOnlyDictionary<string, object?> Build(OrderEditViewModel vm, bool create)
         {
-            var number = vm.OrderNumber.Trim();
+            var number = NullIfEmpty(vm.OrderNumber);
             var contragentId = JsonDataReader.TryGetLong(vm.SelectedContragent?.Value);
             var statusId = JsonDataReader.TryGetLong(vm.SelectedStatus?.Value);
-            if (string.IsNullOrWhiteSpace(number) || contragentId is null || statusId is null)
-                throw new InvalidOperationException("Номер, поставщик и статус обязательны.");
+            if (contragentId is null || statusId is null)
+                throw new InvalidOperationException("Поставщик и статус обязательны.");
 
             var state = vm.State;
             var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
             if (!create) payload["id"] = state.Id ?? throw new InvalidOperationException("Order.id отсутствует.");
-            Add(payload, "order_number", number, state.OrderNumber, create);
+            Add(payload, "order_number", number, NullIfEmpty(state.OrderNumber), create);
             Add(payload, "contragent_id", contragentId, state.ContragentId, create);
             Add(payload, "order_status_id", statusId, state.OrderStatusId, create);
             Add(payload, "cost", ParseCost(vm.CostText), state.Cost, create);

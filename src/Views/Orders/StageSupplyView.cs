@@ -1,6 +1,7 @@
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Services.References;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.Views.Controls;
@@ -146,7 +147,7 @@ namespace CbsContractsDesktopClient.Views.Orders
         }
 
         private static bool CanEdit(TableDataRow row) =>
-            string.IsNullOrWhiteSpace(row.GetValue("order.order_number")?.ToString());
+            OrderCompositionPolicy.CanModifyPosition(row);
 
         private static IReadOnlyList<CbsTableColumnDefinition> BuildColumns() =>
         [

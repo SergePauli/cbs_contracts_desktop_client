@@ -7,6 +7,7 @@ using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Orders;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Dialogs;
+using Windows.Foundation;
 using Windows.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -23,7 +24,10 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly List<Border> _skeletonCells = [];
         private readonly List<Border> _badgeCells = [];
         private readonly List<TextBlock> _badgeTexts = [];
+        private readonly List<Border> _cellSelectionBackgrounds = [];
         private bool _isConfiguring;
+        private int _selectedColumnStart = -1;
+        private int _selectedColumnEnd = -1;
 
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
@@ -172,6 +176,67 @@ namespace CbsContractsDesktopClient.Views.Controls
             RefreshRow();
         }
 
+        public void SetCellSelection(int columnStart, int columnEnd)
+        {
+            _selectedColumnStart = columnStart;
+            _selectedColumnEnd = columnEnd;
+            UpdateCellSelection();
+        }
+
+        public int GetColumnIndex(Point position)
+        {
+            var offset = 0d;
+            for (var index = 0; index < Columns.Count; index++)
+            {
+                offset += RowGrid.ColumnDefinitions[index].ActualWidth;
+                if (position.X < offset)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        internal static string GetCellText(
+            CbsTableColumnDefinition column,
+            TableDataRow row,
+            bool showStageCostFraction)
+        {
+            var valueKey = column.DisplayField ?? column.ApiField ?? column.FieldKey;
+            var value = row.GetValue(valueKey);
+            if (string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase))
+            {
+                var severity = StageOrderSeverityText.Parse(checked((int)(TryGetLong(value)
+                    ?? throw new InvalidOperationException("StageOrderSeverity должен содержать целочисленное значение."))));
+                return StageOrderSeverityText.GetLabel(severity);
+            }
+
+            if (!string.IsNullOrWhiteSpace(column.BodyTemplateKey))
+            {
+                var formatted = FormatTemplateValue(column.BodyTemplateKey, row, value, showStageCostFraction);
+                if (formatted is not null)
+                {
+                    return formatted;
+                }
+            }
+
+            if (column.BodyMode == CbsTableBodyMode.BooleanIcon)
+            {
+                return value switch
+                {
+                    true => "\u2713",
+                    false => string.Empty,
+                    null => "?",
+                    string textValue when bool.TryParse(textValue, out var parsedBoolean)
+                        => parsedBoolean ? "\u2713" : string.Empty,
+                    _ => "?"
+                };
+            }
+
+            return FormatCellValue(column, value);
+        }
+
         private static void OnStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var rowView = (CbsTableRowView)d;
@@ -214,6 +279,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             _skeletonCells.Clear();
             _badgeCells.Clear();
             _badgeTexts.Clear();
+            _cellSelectionBackgrounds.Clear();
             RowGrid.Children.Clear();
             RowGrid.ColumnDefinitions.Clear();
 
@@ -222,6 +288,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                 RowGrid.ColumnDefinitions.Add(CreateDataColumnDefinition(Columns[index]));
 
                 var cellHost = new Grid();
+                var selectionBackground = new Border
+                {
+                    Background = (Brush)Application.Current.Resources["ShellTableRowSelectedBackgroundBrush"],
+                    Visibility = Visibility.Collapsed
+                };
                 var textCell = CreateTextCell();
                 var skeletonCell = CreateSkeletonCell();
                 var badgeText = CreateBadgeText();
@@ -232,7 +303,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 _skeletonCells.Add(skeletonCell);
                 _badgeCells.Add(badgeCell);
                 _badgeTexts.Add(badgeText);
+                _cellSelectionBackgrounds.Add(selectionBackground);
 
+                cellHost.Children.Add(selectionBackground);
                 cellHost.Children.Add(textCell);
                 cellHost.Children.Add(skeletonCell);
                 cellHost.Children.Add(badgeCell);
@@ -264,6 +337,17 @@ namespace CbsContractsDesktopClient.Views.Controls
             RowGrid.Children.Add(fillerCell);
 
             ApplyDensity();
+            UpdateCellSelection();
+        }
+
+        private void UpdateCellSelection()
+        {
+            for (var index = 0; index < _cellSelectionBackgrounds.Count; index++)
+            {
+                _cellSelectionBackgrounds[index].Visibility = index >= _selectedColumnStart && index <= _selectedColumnEnd
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
         }
 
         private void UpdateCellContent()

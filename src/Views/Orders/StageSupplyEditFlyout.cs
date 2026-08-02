@@ -95,8 +95,8 @@ namespace CbsContractsDesktopClient.Views.Orders
         private FrameworkElement BuildContent()
         {
             var grid = new Grid { RowSpacing = 7, ColumnSpacing = 8 };
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(96) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(220) });
             for (var index = 0; index < 3; index++)
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 

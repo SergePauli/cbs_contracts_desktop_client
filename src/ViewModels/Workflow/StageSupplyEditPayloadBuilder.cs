@@ -7,8 +7,6 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         public static IReadOnlyDictionary<string, object?> Build(StageSupplyEditViewModel viewModel)
         {
             var state = viewModel.State;
-            if (!state.CanEdit)
-                throw new InvalidOperationException($"Позиция уже включена в заказ {state.OrderNumber} и недоступна для изменения.");
             var toolId = viewModel.SelectedTool?.Id ?? throw new InvalidOperationException("Выберите наименование.");
             var severity = checked((int)(viewModel.SelectedSeverity?.Value
                 ?? throw new InvalidOperationException("Выберите важность.")));

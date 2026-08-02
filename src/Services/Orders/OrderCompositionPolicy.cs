@@ -11,13 +11,7 @@ public static class OrderCompositionPolicy
 
         var statusId = JsonDataReader.TryGetLong(order.GetValue("status.id"))
             ?? throw new InvalidOperationException("Order.list не содержит обязательный status.id.");
-        if (!order.Values.ContainsKey("order_number"))
-        {
-            throw new InvalidOperationException("Order.list не содержит обязательное поле order_number.");
-        }
-
-        var orderNumber = order.GetValue("order_number");
-        return statusId == 0 && orderNumber is null;
+        return statusId == 0;
     }
 
     public static void EnsureCanModifyPositions(TableDataRow order)
@@ -25,18 +19,31 @@ public static class OrderCompositionPolicy
         if (!CanModifyPositions(order))
         {
             throw new InvalidOperationException(
-                "Состав заказа нельзя изменить: заказ уже получил статус или номер счета.");
+                "Состав заказа нельзя изменить при текущем статусе заказа.");
         }
     }
 
-    public static StageOrderEditAccessMode GetPositionEditAccessMode(TableDataRow order)
+    public static bool CanModifyPosition(TableDataRow position)
     {
-        ArgumentNullException.ThrowIfNull(order);
+        ArgumentNullException.ThrowIfNull(position);
 
-        var statusId = JsonDataReader.TryGetLong(order.GetValue("status.id"))
-            ?? throw new InvalidOperationException("Order.list не содержит обязательный status.id.");
-        return statusId == 0
-            ? StageOrderEditAccessMode.Full
-            : StageOrderEditAccessMode.ControlFieldsOnly;
+        if (JsonDataReader.TryGetLong(position.GetValue("order.id")) is null)
+        {
+            return true;
+        }
+
+        var statusId = JsonDataReader.TryGetLong(position.GetValue("order.status.id"))
+            ?? throw new InvalidOperationException("StageOrder.stage order не содержит обязательный status.id.");
+        return statusId == 0;
     }
+
+    public static void EnsureCanModifyPosition(TableDataRow position)
+    {
+        if (!CanModifyPosition(position))
+        {
+            throw new InvalidOperationException(
+                "Позицию нельзя изменить при текущем статусе заказа.");
+        }
+    }
+
 }

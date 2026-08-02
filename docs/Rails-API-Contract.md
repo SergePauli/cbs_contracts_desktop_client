@@ -5,6 +5,7 @@
 - Table/list/card/edit data is loaded through `api/index` and `api/count`.
 - `api/index` responses are read models. They may contain expanded objects and arrays such as `comments`, `contract`, `status`, `tasks`, `revision`, `stages`.
 - Read models must not be reused as update payloads.
+- YrestAPI grouped filters use an `or` array whose entries contain `and` groups. Filters placed alongside `or` apply to the complete grouped expression.
 
 ## Create and update requests
 

@@ -16,11 +16,14 @@ namespace CbsContractsDesktopClient.Services.Orders
             TableDataRow? sourceRow,
             CancellationToken cancellationToken = default)
         {
+            if (sourceRow is not null)
+            {
+                OrderCompositionPolicy.EnsureCanModifyPosition(sourceRow);
+            }
+
             var state = sourceRow is null
                 ? StageSupplyEditState.Create(stageId)
                 : StageSupplyEditState.FromRow(stageId, JsonSerializer.SerializeToElement(sourceRow.Values));
-            if (!state.CanEdit)
-                throw new InvalidOperationException($"Позиция уже включена в заказ {state.OrderNumber} и недоступна для изменения.");
             return Task.FromResult(new StageSupplyEditViewModel(state, catalog.SearchToolOptionsAsync));
         }
 
@@ -42,10 +45,7 @@ namespace CbsContractsDesktopClient.Services.Orders
             TableDataRow sourceRow,
             CancellationToken cancellationToken = default)
         {
-            var orderNumber = sourceRow.GetValue("order.order_number")?.ToString();
-            if (!string.IsNullOrWhiteSpace(orderNumber))
-                throw new InvalidOperationException(
-                    $"Позиция уже включена в заказ {orderNumber} и недоступна для удаления.");
+            OrderCompositionPolicy.EnsureCanModifyPosition(sourceRow);
             var id = sourceRow.GetValue("id") switch
             {
                 long value => value,

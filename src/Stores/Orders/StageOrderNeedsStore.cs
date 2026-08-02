@@ -37,8 +37,7 @@ namespace CbsContractsDesktopClient.Stores.Orders
                 Preset = "item",
                 Filters = new Dictionary<string, object?>
                 {
-                    ["status_id"] = 0L,
-                    ["order_number__null"] = true
+                    ["order_status_id"] = 0L
                 },
                 Sorts = ["id desc"],
                 Limit = 1000

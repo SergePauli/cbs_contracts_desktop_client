@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
@@ -16,7 +17,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
+using Windows.UI.Core;
 
 namespace CbsContractsDesktopClient.Views.Controls
 {
@@ -136,6 +139,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableView),
                 new PropertyMetadata(false));
 
+        public static readonly DependencyProperty SupportsCellSelectionProperty =
+            DependencyProperty.Register(
+                nameof(SupportsCellSelection),
+                typeof(bool),
+                typeof(CbsTableView),
+                new PropertyMetadata(true));
+
         public static readonly DependencyProperty SelectedItemProperty =
             DependencyProperty.Register(
                 nameof(SelectedItem),
@@ -161,6 +171,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         private IEnumerable? _lastItemsSourceReference;
         private readonly List<CbsTableRowView> _rowPool = [];
         private readonly HashSet<int> _selectedIndexes = [];
+        private CbsTableCellPosition? _cellSelectionAnchor;
+        private CbsTableCellPosition? _cellSelectionEnd;
+        private bool _isDraggingCellSelection;
         private readonly Dictionary<string, string> _filterTexts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
@@ -201,6 +214,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             InitializeComponent();
             IsTabStop = true;
             PreviewKeyDown += OnPreviewKeyDown;
+            ContextFlyout = CreateCellSelectionContextMenu();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
         }
@@ -524,6 +538,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(SupportsMultipleRowSelectionProperty, value);
         }
 
+        public bool SupportsCellSelection
+        {
+            get => (bool)GetValue(SupportsCellSelectionProperty);
+            set => SetValue(SupportsCellSelectionProperty, value);
+        }
+
         public Func<TableDataRow, bool>? CanSelectRow { get; set; }
 
         public TableDataRow? SelectedItem
@@ -578,12 +598,67 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (SupportsCellSelection && e.Key == VirtualKey.C && e.KeyStatus.IsMenuKeyDown == false
+                && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down))
+            {
+                e.Handled = CopyCellSelection(includeHeaders: false);
+                return;
+            }
+
+            if (SupportsCellSelection
+                && e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down
+                && TryMoveCellSelection(e.Key,
+                    InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down)))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key is not VirtualKey.Up and not VirtualKey.Down)
             {
                 return;
             }
 
             e.Handled = MoveSelectionOrScroll(e.Key == VirtualKey.Down ? 1 : -1);
+        }
+
+        private bool TryMoveCellSelection(VirtualKey key, bool extendSelection)
+        {
+            if (_cellSelectionEnd is not { } end)
+            {
+                return false;
+            }
+
+            var rows = GetSourceRows();
+            var rowOffset = key switch
+            {
+                VirtualKey.Up => -1,
+                VirtualKey.Down => 1,
+                _ => 0
+            };
+            var columnOffset = key switch
+            {
+                VirtualKey.Left => -1,
+                VirtualKey.Right => 1,
+                _ => 0
+            };
+            var target = new CbsTableCellPosition(end.RowIndex + rowOffset, end.ColumnIndex + columnOffset);
+            if (target.RowIndex < 0 || target.RowIndex >= rows.Count
+                || target.ColumnIndex < 0 || target.ColumnIndex >= Columns.Count
+                || rows[target.RowIndex].IsPlaceholder)
+            {
+                return false;
+            }
+
+            if (!extendSelection)
+            {
+                _cellSelectionAnchor = target;
+            }
+
+            _cellSelectionEnd = target;
+            UpdateVisibleCellSelectionStates();
+            ScrollRowIntoView(target.RowIndex);
+            return true;
         }
 
         private bool MoveSelectionOrScroll(int direction)
@@ -912,6 +987,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnColumnsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var control = (CbsTableView)d;
+            control.ClearCellSelection();
             control.InvalidateWindowCache();
             control.RebuildHeader();
             control.RebuildRows();
@@ -920,6 +996,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var control = (CbsTableView)d;
+            control.ClearCellSelection();
             control.InvalidateWindowCache();
             control.RebuildRows();
             if (control._lastSourceCount == 0 && control._rowPool.Count == 0)
@@ -1481,6 +1558,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 rowView.PointerEntered += OnRowPointerEntered;
                 rowView.PointerExited += OnRowPointerExited;
                 rowView.PointerPressed += OnRowPointerPressed;
+                rowView.PointerMoved += OnRowPointerMoved;
                 rowView.PointerReleased += OnRowPointerReleased;
                 rowView.Tapped += OnRowTapped;
                 rowView.DoubleTapped += OnRowDoubleTapped;
@@ -1512,12 +1590,69 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnRowPointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            if (!SupportsRowSelection || sender is not CbsTableRowView rowView)
+            if (sender is not CbsTableRowView rowView)
             {
                 return;
             }
 
-            rowView.IsPressed = true;
+            if (SupportsRowSelection)
+            {
+                rowView.IsPressed = true;
+            }
+
+            if (!SupportsCellSelection || rowView.Tag is not int rowIndex || rowView.Row?.IsPlaceholder == true)
+            {
+                return;
+            }
+
+            var point = e.GetCurrentPoint(rowView);
+            if (!point.Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            var columnIndex = rowView.GetColumnIndex(point.Position);
+            if (columnIndex < 0)
+            {
+                return;
+            }
+
+            var position = new CbsTableCellPosition(rowIndex, columnIndex);
+            if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) || _cellSelectionAnchor is null)
+            {
+                _cellSelectionAnchor = position;
+            }
+
+            _cellSelectionEnd = position;
+            _isDraggingCellSelection = true;
+            rowView.CapturePointer(e.Pointer);
+            Focus(FocusState.Programmatic);
+            UpdateVisibleCellSelectionStates();
+        }
+
+        private void OnRowPointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isDraggingCellSelection || sender is not CbsTableRowView rowView)
+            {
+                return;
+            }
+
+            var sourceRows = GetSourceRows();
+            if (sourceRows.Count == 0 || rowView.Tag is not int originRowIndex)
+            {
+                return;
+            }
+
+            var point = e.GetCurrentPoint(rowView);
+            var columnIndex = rowView.GetColumnIndex(point.Position);
+            var rowIndex = Math.Clamp(originRowIndex + (int)Math.Floor(point.Position.Y / RowHeight), 0, sourceRows.Count - 1);
+            if (columnIndex < 0 || sourceRows[rowIndex].IsPlaceholder)
+            {
+                return;
+            }
+
+            _cellSelectionEnd = new CbsTableCellPosition(rowIndex, columnIndex);
+            UpdateVisibleCellSelectionStates();
         }
 
         private void OnRowPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -1528,6 +1663,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             rowView.IsPressed = false;
+            if (_isDraggingCellSelection)
+            {
+                _isDraggingCellSelection = false;
+                rowView.ReleasePointerCapture(e.Pointer);
+            }
         }
 
         private void OnRowTapped(object sender, TappedRoutedEventArgs e)
@@ -1562,6 +1702,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 if (_selectedIndexes.Contains(rowIndex))
                 {
+                    if (SupportsCellSelection)
+                    {
+                        UpdateVisibleRowSelectionStates();
+                        return;
+                    }
+
                     _selectedIndexes.Clear();
                     SelectedItem = null;
                     RowSelectionChanged?.Invoke(
@@ -1620,6 +1766,108 @@ namespace CbsContractsDesktopClient.Views.Controls
         private void ApplyRowSelectionState(CbsTableRowView rowView, int rowIndex)
         {
             rowView.IsSelected = _selectedIndexes.Contains(rowIndex);
+            ApplyCellSelectionState(rowView, rowIndex);
+        }
+
+        private void UpdateVisibleCellSelectionStates()
+        {
+            foreach (var rowView in _rowPool)
+            {
+                if (rowView.Tag is int rowIndex)
+                {
+                    ApplyCellSelectionState(rowView, rowIndex);
+                }
+            }
+        }
+
+        private void ClearCellSelection()
+        {
+            _cellSelectionAnchor = null;
+            _cellSelectionEnd = null;
+            _isDraggingCellSelection = false;
+            UpdateVisibleCellSelectionStates();
+        }
+
+        private void ApplyCellSelectionState(CbsTableRowView rowView, int rowIndex)
+        {
+            if (!TryGetCellSelectionBounds(out var rowStart, out var rowEnd, out var columnStart, out var columnEnd)
+                || rowIndex < rowStart || rowIndex > rowEnd)
+            {
+                rowView.SetCellSelection(-1, -1);
+                return;
+            }
+
+            rowView.SetCellSelection(columnStart, columnEnd);
+        }
+
+        private bool TryGetCellSelectionBounds(out int rowStart, out int rowEnd, out int columnStart, out int columnEnd)
+        {
+            rowStart = rowEnd = columnStart = columnEnd = -1;
+            if (_cellSelectionAnchor is not { } anchor || _cellSelectionEnd is not { } end)
+            {
+                return false;
+            }
+
+            rowStart = Math.Min(anchor.RowIndex, end.RowIndex);
+            rowEnd = Math.Max(anchor.RowIndex, end.RowIndex);
+            columnStart = Math.Min(anchor.ColumnIndex, end.ColumnIndex);
+            columnEnd = Math.Max(anchor.ColumnIndex, end.ColumnIndex);
+            return true;
+        }
+
+        private MenuFlyout CreateCellSelectionContextMenu()
+        {
+            var menu = new MenuFlyout();
+            var copyItem = new MenuFlyoutItem { Text = "Копировать" };
+            copyItem.Click += (_, _) => CopyCellSelection(includeHeaders: false);
+            menu.Items.Add(copyItem);
+            var copyWithHeadersItem = new MenuFlyoutItem { Text = "Копировать с заголовками" };
+            copyWithHeadersItem.Click += (_, _) => CopyCellSelection(includeHeaders: true);
+            menu.Items.Add(copyWithHeadersItem);
+            menu.Opening += (_, _) =>
+            {
+                var hasSelection = _cellSelectionAnchor is not null && _cellSelectionEnd is not null;
+                copyItem.IsEnabled = hasSelection;
+                copyWithHeadersItem.IsEnabled = hasSelection;
+            };
+            return menu;
+        }
+
+        private bool CopyCellSelection(bool includeHeaders)
+        {
+            if (!TryGetCellSelectionBounds(out var rowStart, out var rowEnd, out var columnStart, out var columnEnd))
+            {
+                return false;
+            }
+
+            var rows = GetSourceRows();
+            var text = new StringBuilder();
+            if (includeHeaders)
+            {
+                AppendClipboardLine(text, Enumerable.Range(columnStart, columnEnd - columnStart + 1)
+                    .Select(index => Columns[index].Header));
+            }
+
+            for (var rowIndex = rowStart; rowIndex <= rowEnd; rowIndex++)
+            {
+                AppendClipboardLine(text, Enumerable.Range(columnStart, columnEnd - columnStart + 1)
+                    .Select(columnIndex => CbsTableRowView.GetCellText(Columns[columnIndex], rows[rowIndex], ShowStageCostFraction)));
+            }
+
+            var package = new DataPackage();
+            package.SetText(text.ToString());
+            Clipboard.SetContent(package);
+            return true;
+        }
+
+        private static void AppendClipboardLine(StringBuilder text, IEnumerable<string> values)
+        {
+            if (text.Length > 0)
+            {
+                text.AppendLine();
+            }
+
+            text.AppendJoin('\t', values.Select(static value => value.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ")));
         }
 
         private int GetEffectiveRetainedBufferRows(int currentWindowRows)
@@ -3314,4 +3562,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         public bool IsSelected { get; }
     }
+
+    internal readonly record struct CbsTableCellPosition(int RowIndex, int ColumnIndex);
 }

@@ -16,9 +16,6 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates
         public decimal? Amount { get; init; }
         public decimal? Cost { get; init; }
         public int? Severity { get; init; }
-        public string OrderNumber { get; init; } = string.Empty;
-
-        public bool CanEdit => string.IsNullOrWhiteSpace(OrderNumber);
 
         public static StageSupplyEditState Create(long stageId) => new()
         {
@@ -29,7 +26,6 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates
 
         public static StageSupplyEditState FromRow(long stageId, JsonElement row)
         {
-            var order = JsonDataReader.TryGetObject(row, "order");
             return new StageSupplyEditState
             {
                 IsCreateMode = false,
@@ -44,10 +40,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates
                 PriceCost = ParseDecimal(row, "price_cost"),
                 Amount = ParseDecimal(row, "amount"),
                 Cost = ParseDecimal(row, "cost"),
-                Severity = JsonDataReader.TryGetInt(row, "severity"),
-                OrderNumber = order is null
-                    ? string.Empty
-                    : JsonDataReader.TryGetString(order.Value, "order_number") ?? string.Empty
+                Severity = JsonDataReader.TryGetInt(row, "severity")
             };
         }
 

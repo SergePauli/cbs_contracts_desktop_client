@@ -149,7 +149,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 canModifyPositions && Store.CanEditRows);
             ApplyEditButtonState(
                 _editPositionButton,
-                _positionsStore.SelectedRow is not null && Store.CanEditRows);
+                canModifyPositions && _positionsStore.SelectedRow is not null && Store.CanEditRows);
             ApplyDeleteButtonState(
                 _unlinkPositionButton,
                 canModifyPositions && _positionsStore.SelectedRow is not null && Store.CanEditRows);
@@ -254,25 +254,19 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             try
             {
-                var accessMode = sourceRow is null
-                    ? StageOrderEditAccessMode.Full
-                    : OrderCompositionPolicy.GetPositionEditAccessMode(Store.SelectedRow!);
-                if (sourceRow is null)
-                {
-                    OrderCompositionPolicy.EnsureCanModifyPositions(Store.SelectedRow!);
-                }
+                OrderCompositionPolicy.EnsureCanModifyPositions(Store.SelectedRow!);
 
                 System.Text.Json.JsonElement? source = sourceRow is null
                     ? null
                     : System.Text.Json.JsonSerializer.SerializeToElement(sourceRow.Values);
                 Store.AppendUiTrace(
-                    $"ORDER POSITION OPEN WORKFLOW mode={mode} access={accessMode} order={orderId.Value}");
+                    $"ORDER POSITION OPEN WORKFLOW mode={mode} access={StageOrderEditAccessMode.Full} order={orderId.Value}");
                 var saved = await _stageOrderEditWorkflow.ShowAsync(new StageOrderEditWorkflowRequest
                 {
                     XamlRoot = XamlRoot,
                     OrderId = orderId.Value,
                     SourceRow = source,
-                    AccessMode = accessMode,
+                    AccessMode = StageOrderEditAccessMode.Full,
                     Trace = Store.AppendUiTrace
                 });
                 Store.AppendUiTrace($"ORDER POSITION OPEN RESULT mode={mode} order={orderId.Value} saved={saved}");

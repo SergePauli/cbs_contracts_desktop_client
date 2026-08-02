@@ -53,7 +53,7 @@ namespace CbsContractsDesktopClient.Views.Orders
 
             var number = new TextBox();
             number.SetBinding(TextBox.TextProperty, TwoWay(nameof(OrderEditViewModel.OrderNumber)));
-            Add(grid, BuildLabeledControl("Номер заказа *", number, 3), 0, 0);
+            Add(grid, BuildLabeledControl("Номер счёта", number, 3), 0, 0);
             Add(grid, BuildLabeledControl("Статус *", _status, 3), 0, 1);
             var cost = BuildMoneyInputTextBox();
             cost.SetBinding(TextBox.TextProperty, TwoWay(nameof(OrderEditViewModel.CostText)));
