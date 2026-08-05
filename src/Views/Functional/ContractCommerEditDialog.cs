@@ -41,7 +41,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _stageStatusOptions;
         private readonly Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> _loadContragentOptionsAsync;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
-        private readonly bool _isCreateMode;
+        private bool _isCreateMode;
         private readonly Dropdown _taskKindBox = new();
         private readonly Dropdown _statusBox = new();
         private readonly CalendarInput _signedAtEditor = new();
@@ -50,7 +50,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _costBox = new();
         private readonly TextBox _commentBox = new();
         private readonly Dictionary<long, CommentBox> _stageCommentBoxes = [];
-        private readonly Dictionary<long, StageSupplyView> _stageSupplyViews = [];
         private readonly StageSupplyEditWorkflow _stageSupplyEditWorkflow;
         private readonly IDataQueryService _dataQueryService;
         private CommentBox? _contractCommentsBox;
@@ -132,6 +131,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             _loadContragentOptionsAsync = loadContragentOptionsAsync;
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _isCreateMode = isCreateMode;
+            ConfigureSaveWithoutClose("Закрыть");
             _openStagesTabOnLoad = openStagesTabOnLoad;
             _openRevisionsTabOnLoad = openRevisionsTabOnLoad;
             ResetStageEditorsFromContract();
@@ -213,6 +213,48 @@ namespace CbsContractsDesktopClient.Views.Functional
                 DeadlineAt: _deadlineAtEditor.Date,
                 ClosedAt: _closedAtEditor.Date,
                 ProfileId: profileId));
+        }
+
+        public void ReloadAsEdit(TableDataRow contract)
+        {
+            ArgumentNullException.ThrowIfNull(contract);
+            if (TryGetLong(contract.GetValue("id")) is not > 0)
+            {
+                throw new InvalidOperationException("Saved contract edit row must contain id.");
+            }
+
+            _contract = contract;
+            _isCreateMode = false;
+            _workflowStore.BeginContractEdit(contract);
+            DialogTitle = BuildDialogTitle();
+            if (_view is not null)
+            {
+                _view.ResetChangesSlot.Content = _resetChangesButton;
+            }
+
+            ResetEditorsFromContract();
+        }
+
+        public void AcceptCreatedContractIdentity(long id, string? listKey)
+        {
+            if (id <= 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(id));
+            }
+
+            _contract.Values["id"] = JsonSerializer.SerializeToElement(id);
+            if (!string.IsNullOrWhiteSpace(listKey))
+            {
+                _contract.Values["list_key"] = JsonSerializer.SerializeToElement(listKey);
+            }
+
+            _contract.RefreshResolvedValues();
+            _isCreateMode = false;
+            DialogTitle = BuildDialogTitle();
+            if (_view is not null)
+            {
+                _view.ResetChangesSlot.Content = _resetChangesButton;
+            }
         }
 
         private FrameworkElement BuildContent()
@@ -1189,31 +1231,32 @@ namespace CbsContractsDesktopClient.Views.Functional
                 SyncStageTaskKindFromContract(stage);
             }
 
-            var header = BuildStageTreeHeader(GetStageTreeName(stage));
-            return new ContractStageTreeItem(
-                header,
+            ContractStageTreeItem? stageItem = null;
+            stageItem = new ContractStageTreeItem(
+                () => BuildStageTreeHeader(GetStageTreeName(stage)),
                 [
-                    new ContractStageTreeItem(BuildStageSection(stage, header)),
+                    new ContractStageTreeItem(() => BuildStageSection(stage, stageItem!)),
                     BuildStageCommentsTreeItem(stage),
                     BuildStageSupplyTreeItem(stage)
                 ],
                 stage.Used);
+            return stageItem;
         }
 
         private ContractStageTreeItem BuildStageCommentsTreeItem(StageEditState stage)
         {
             return new ContractStageTreeItem(
-                BuildStageTreeHeader("Комментарии"),
-                [new ContractStageTreeItem(BuildStageCommentsBox(stage))]);
+                () => BuildStageTreeHeader("Комментарии"),
+                [new ContractStageTreeItem(() => BuildStageCommentsBox(stage))]);
         }
 
         private ContractStageTreeItem BuildStageSupplyTreeItem(StageEditState stage)
         {
             return new ContractStageTreeItem(
-                BuildStageTreeHeader("Поставка"),
+                () => BuildStageTreeHeader("Поставка"),
                 [
                     new ContractStageTreeItem(
-                        BuildStageSupplyContent(stage),
+                        () => BuildStageSupplyContent(stage),
                         contentMargin: new Thickness(-56, 0, 0, 0))
                 ]);
         }
@@ -1230,11 +1273,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 };
             }
 
-            if (_stageSupplyViews.TryGetValue(stage.Id, out var existing))
-            {
-                return existing;
-            }
-
             var view = new StageSupplyView(new StageSupplyStore(_dataQueryService, stage.Id));
             view.CreateRequested += async (_, args) =>
                 await ShowStageSupplyFlyoutAsync(stage, view, null, args.Anchor);
@@ -1243,7 +1281,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.DeleteRequested += async (_, args) =>
                 await DeleteStageSupplyAsync(view, args.Row);
             view.LoadFailed += (_, args) => ShowErrorInfo($"Не удалось загрузить поставку этапа: {args.Exception.Message}");
-            _stageSupplyViews[stage.Id] = view;
             return view;
         }
 
@@ -1292,10 +1329,15 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private ContractStageTreeItem BuildContractCommentsTreeItem()
         {
-            _contractCommentsBox = BuildCompactCommentBox(ReadContractComments());
             return new ContractStageTreeItem(
-                BuildStageTreeHeader("Комментарии контракта"),
-                [new ContractStageTreeItem(_contractCommentsBox)]);
+                () => BuildStageTreeHeader("Комментарии контракта"),
+                [new ContractStageTreeItem(BuildContractCommentsBox)]);
+        }
+
+        private CommentBox BuildContractCommentsBox()
+        {
+            _contractCommentsBox = BuildCompactCommentBox(ReadContractComments());
+            return _contractCommentsBox;
         }
 
         private static CommentBox BuildCompactCommentBox(IReadOnlyList<TableDataRow> comments)
@@ -1389,7 +1431,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             return $"Э{priority}_{stage.TaskKind.Name}";
         }
 
-        private UIElement BuildStageSection(StageEditState stage, TextBlock treeHeader)
+        private UIElement BuildStageSection(StageEditState stage, ContractStageTreeItem treeItem)
         {
             var grid = new Grid
             {
@@ -1414,7 +1456,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
             AddGridChild(grid, BuildInputLineCheckBox(BuildActiveStageCheckBox(stage), "АЭ"), 0, 0);
             AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 1);
-            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeHeader);
+            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem);
             var stageStatusDropdown = BuildStageStatusDropdown(stage);
             var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
             if (_openStagesTabOnLoad && ReferenceEquals(stage, _workflowStore.SelectedStageEditState))
@@ -1828,7 +1870,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         }
 
 
-        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, TextBlock treeHeader)
+        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, ContractStageTreeItem treeItem)
         {
             var dropdown = new Dropdown
             {
@@ -1858,7 +1900,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 }
 
                 stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
-                treeHeader.Text = GetStageTreeName(stage);
+                treeItem.RefreshContent();
             };
 
             return dropdown;

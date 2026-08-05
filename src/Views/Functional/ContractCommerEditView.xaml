@@ -17,7 +17,7 @@
                     <ContentControl
                         Margin="{x:Bind ContentMargin}"
                         HorizontalContentAlignment="Stretch"
-                        Content="{x:Bind Content}" />
+                        Content="{x:Bind Content, Mode=OneWay}" />
                 </TreeViewItem.Content>
             </TreeViewItem>
         </DataTemplate>

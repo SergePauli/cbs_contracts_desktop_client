@@ -53,13 +53,30 @@ public sealed class NavigationMenuServiceTests
     }
 
     [Fact]
-    public void BuildMenu_RegularUser_DoesNotSeeIsecurityToolReference()
+    public void BuildMenu_CommerUser_SeesIsecurityToolReference()
     {
         var service = new NavigationMenuService();
         var user = new User
         {
             Role = "user",
             DepartmentId = 2
+        };
+
+        var menu = service.BuildMenu(user);
+
+        Assert.Contains(
+            menu.SelectMany(static section => section.Items),
+            static item => item.Route == "/references/IsecurityTool");
+    }
+
+    [Fact]
+    public void BuildMenu_RegularUser_DoesNotSeeIsecurityToolReference()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "user",
+            DepartmentId = 99
         };
 
         var menu = service.BuildMenu(user);

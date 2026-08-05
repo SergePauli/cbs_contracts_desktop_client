@@ -301,6 +301,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             TableView.InvalidateRows(request);
         }
 
+        public bool CopySelectedCellRangeToClipboard()
+        {
+            return TableView.CopySelectedCellRangeToClipboard();
+        }
+
         private void OnRowsPropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (e.PropertyName == nameof(ICbsTableRows<TableDataRow>.Items))

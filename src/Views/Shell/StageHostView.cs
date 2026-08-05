@@ -60,7 +60,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private bool _showStageCostFraction;
         private Button? _editButton;
         private Button? _infoButton;
-        private Button? _copyButton;
+        private Button? _copyStageDataButton;
+        private Button? _copyCellSelectionButton;
         private Button? _commentButton;
         private Button? _createEmployeeButton;
         private Button? _saveFiltersButton;
@@ -93,8 +94,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
             _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
-            _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать этап");
-            _copyButton.Click += (_, _) => CopyStageInfo();
+            _copyStageDataButton = CreateHeaderIconButton("\uE8F3", "Скопировать данные выбранного этапа в буфер");
+            _copyStageDataButton.Click += (_, _) => CopyStageInfo();
+
+            _copyCellSelectionButton = CreateHeaderIconButton("\uE8C8", "Скопировать выделенный диапазон");
+            _copyCellSelectionButton.Click += (_, _) => TableView.CopySelectedCellRangeToClipboard();
 
             _commentButton = CreateHeaderIconButton("\uE90A", "Добавить комментарий к этапу");
             _commentButton.Click += CommentStageButton_Click;
@@ -114,7 +118,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             [
                 _editButton,
                 _infoButton,
-                _copyButton,
+                _copyStageDataButton,
+                _copyCellSelectionButton,
                 _commentButton,
                 _createEmployeeButton,
                 _showCostFractionButton,
@@ -215,7 +220,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
             ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
-            ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyStageDataButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);
             ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
             ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
             ApplyDefaultActionButtonState(_saveFiltersButton, Store.HasActiveReference);

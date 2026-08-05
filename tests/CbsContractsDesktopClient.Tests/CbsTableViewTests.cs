@@ -258,7 +258,14 @@ public sealed class CbsTableViewTests
         Assert.Contains("private CbsTableCellPosition? _cellSelectionAnchor;", code);
         Assert.Contains("rowView.PointerMoved += OnRowPointerMoved;", code);
         Assert.Contains("TryMoveCellSelection", code);
-        Assert.Contains("CopyCellSelection(includeHeaders: false)", code);
+        Assert.Contains("public bool CopySelectedCellRangeToClipboard()", code);
+        Assert.Contains("return CopyCellSelection(includeHeaders: false);", code);
+        Assert.Contains("new KeyboardAccelerator", code);
+        Assert.Contains("Key = VirtualKey.C", code);
+        Assert.Contains("Modifiers = VirtualKeyModifiers.Control", code);
+        Assert.Contains("copySelectionAccelerator.Invoked += OnCopySelectionAcceleratorInvoked;", code);
+        Assert.Contains("args.Handled = CopySelectedCellRangeToClipboard();", code);
+        Assert.DoesNotContain("e.Key == VirtualKey.C", code);
         Assert.Contains("package.SetText(text.ToString());", code);
         Assert.Contains("text.AppendJoin('\\t'", code);
     }

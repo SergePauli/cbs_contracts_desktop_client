@@ -34,6 +34,18 @@ public sealed class DialogChromeTests
     }
 
     [Fact]
+    public void DialogChrome_BindsStaticTitleLayoutToEditDialogTitleState()
+    {
+        var code = File.ReadAllText(DialogChromePath);
+
+        Assert.Contains("editDialog.DialogTitle = title;", code);
+        Assert.Contains("titleBlock.SetBinding(", code);
+        Assert.Contains("Path = new PropertyPath(nameof(AppEditDialog.DialogTitle))", code);
+        Assert.Contains("Mode = BindingMode.OneWay", code);
+        Assert.Contains("Padding = new Thickness(12,4,4,4)", code);
+    }
+
+    [Fact]
     public void DialogChrome_RemovesWhiteContentBorderLayer()
     {
         var code = File.ReadAllText(DialogChromePath);

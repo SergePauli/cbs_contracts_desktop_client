@@ -97,6 +97,24 @@ public sealed class ContractWorkflowStoreTests
     }
 
     [Fact]
+    public void AddStageAfter_UsesFirstFreePriorityAfterOccupiedSequence()
+    {
+        var store = new ContractWorkflowStore();
+        var first = StageEditState.CreateNew(1, used: true);
+        store.SetContractStageEditStates(
+        [
+            first,
+            StageEditState.CreateNew(2),
+            StageEditState.CreateNew(3),
+            StageEditState.CreateNew(5)
+        ]);
+
+        store.AddStageAfter(first);
+
+        Assert.Equal([1, 2, 3, 4, 5], store.ContractStageEditStates.Select(static item => item.Priority));
+    }
+
+    [Fact]
     public void DeleteStage_WhenOnlyOneStageRemainsResetsItToZeroAndActive()
     {
         var store = new ContractWorkflowStore();

@@ -113,9 +113,13 @@ namespace CbsContractsDesktopClient.Services.Navigation
             AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/TaskKind", "Работы"), "\uE90F", $"{ReferencesRoute}/TaskKind", route);
             AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Position", "Должности"), "\uE821", $"{ReferencesRoute}/Position", route);
 
-            if (isOzi || isAdmin)
+            if (isOzi || isCommer || isAdmin)
             {
                 AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/IsecurityTool", "СЗИ"), "\uE72E", $"{ReferencesRoute}/IsecurityTool", route);
+            }
+
+            if (isOzi || isAdmin)
+            {
                 AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/OrderStatus", "Статусы доставки"), "\uE806", $"{ReferencesRoute}/OrderStatus", route);
             }
 

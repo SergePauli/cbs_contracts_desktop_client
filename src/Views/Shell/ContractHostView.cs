@@ -65,7 +65,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private Button? _createButton;
         private Button? _editButton;
         private Button? _infoButton;
-        private Button? _copyButton;
+        private Button? _copyContractDataButton;
+        private Button? _copyCellSelectionButton;
         private Button? _commentButton;
         private Button? _createEmployeeButton;
         private Button? _contragentMenuButton;
@@ -103,8 +104,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
             _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
-            _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать контракт");
-            _copyButton.Click += (_, _) => CopyContractInfo();
+            _copyContractDataButton = CreateHeaderIconButton("\uE8F3", "Скопировать данные выбранного контракта в буфер");
+            _copyContractDataButton.Click += (_, _) => CopyContractInfo();
+
+            _copyCellSelectionButton = CreateHeaderIconButton("\uE8C8", "Скопировать выделенный диапазон");
+            _copyCellSelectionButton.Click += (_, _) => TableView.CopySelectedCellRangeToClipboard();
 
             _commentButton = CreateHeaderIconButton("\uE90A", "Добавить комментарий к контракту");
             _commentButton.Click += CommentContractButton_Click;
@@ -129,7 +133,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _createButton,
                 _editButton,
                 _infoButton,
-                _copyButton,
+                _copyContractDataButton,
+                _copyCellSelectionButton,
                 _commentButton,
                 _createEmployeeButton,
                 _contragentMenuButton,
@@ -267,7 +272,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             ApplyCreateButtonState(_createButton, canCreateContract);
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
             ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
-            ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyContractDataButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);
             ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
             ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
             ApplyCreateButtonState(_contragentMenuButton, !_isContragentWorkflowInProgress);
@@ -716,9 +722,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(ContractModel);
             await RefreshTableRowAfterSaveAsync(isCreateMode: false, savedRow);
             await RefreshDetailAsync();
-            ShowSuccessNotification(
-                "Контракт сохранен",
-                "Изменения контракта сохранены.");
         }
 
         private async Task ShowEditDialogForCurrentUserAsync()
@@ -993,9 +996,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             _referenceLookupCacheService.Invalidate(ContractModel);
             await RefreshTableRowAfterSaveAsync(isCreateMode: true, savedRow);
-            ShowSuccessNotification(
-                "Контракт создан",
-                "Новый контракт сохранен.");
         }
 
         private void AttachContractCommerSaveHandler(
@@ -1003,22 +1003,39 @@ namespace CbsContractsDesktopClient.Views.Shell
             bool isCreateMode,
             Action<TableDataRow> setSavedRow)
         {
+            var createMode = isCreateMode;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
+                    var savedAsCreate = createMode;
                     var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
-                    if (!isCreateMode && !HasUpdatePayloadChanges(payload))
+                    if (!createMode && !HasUpdatePayloadChanges(payload))
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
                         return;
                     }
 
-                    var savedRow = isCreateMode
+                    var savedRow = createMode
                         ? await _modelMutationService.CreateAsync(ContractModel, payload)
                         : await _modelMutationService.UpdateAsync(ContractModel, payload);
+                    var savedId = TryGetSelectedRowId(savedRow)
+                        ?? throw new InvalidOperationException("Saved contract response must contain id.");
+                    if (createMode)
+                    {
+                        dialog.AcceptCreatedContractIdentity(
+                            savedId,
+                            savedRow.GetValue("list_key")?.ToString());
+                        createMode = false;
+                    }
+
                     setSavedRow(savedRow);
+                    ShowSuccessNotification(
+                        savedAsCreate ? "Контракт создан" : "Контракт сохранен",
+                        savedAsCreate ? "Новый контракт сохранен." : "Изменения контракта сохранены.");
+                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(savedId);
+                    dialog.ReloadAsEdit(editRow);
                 }
                 catch (Exception ex)
                 {

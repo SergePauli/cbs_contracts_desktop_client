@@ -86,9 +86,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 newPriority = 2;
             }
 
-            if (visibleStages.Any(existing => existing.Priority == newPriority))
+            var occupiedPriorities = visibleStages
+                .Select(static existing => existing.Priority)
+                .ToHashSet();
+            while (occupiedPriorities.Contains(newPriority))
             {
-                throw new InvalidOperationException($"Этап с номером {newPriority} уже существует.");
+                newPriority++;
             }
 
             stages.Add(StageEditState.CreateNew(newPriority));

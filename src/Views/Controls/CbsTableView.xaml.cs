@@ -214,6 +214,13 @@ namespace CbsContractsDesktopClient.Views.Controls
             InitializeComponent();
             IsTabStop = true;
             PreviewKeyDown += OnPreviewKeyDown;
+            var copySelectionAccelerator = new KeyboardAccelerator
+            {
+                Key = VirtualKey.C,
+                Modifiers = VirtualKeyModifiers.Control
+            };
+            copySelectionAccelerator.Invoked += OnCopySelectionAcceleratorInvoked;
+            KeyboardAccelerators.Add(copySelectionAccelerator);
             ContextFlyout = CreateCellSelectionContextMenu();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
@@ -598,13 +605,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
-            if (SupportsCellSelection && e.Key == VirtualKey.C && e.KeyStatus.IsMenuKeyDown == false
-                && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down))
-            {
-                e.Handled = CopyCellSelection(includeHeaders: false);
-                return;
-            }
-
             if (SupportsCellSelection
                 && e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down
                 && TryMoveCellSelection(e.Key,
@@ -620,6 +620,16 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             e.Handled = MoveSelectionOrScroll(e.Key == VirtualKey.Down ? 1 : -1);
+        }
+
+        private void OnCopySelectionAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (!SupportsCellSelection)
+            {
+                return;
+            }
+
+            args.Handled = CopySelectedCellRangeToClipboard();
         }
 
         private bool TryMoveCellSelection(VirtualKey key, bool extendSelection)
@@ -1819,7 +1829,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             var menu = new MenuFlyout();
             var copyItem = new MenuFlyoutItem { Text = "Копировать" };
-            copyItem.Click += (_, _) => CopyCellSelection(includeHeaders: false);
+            copyItem.Click += (_, _) => CopySelectedCellRangeToClipboard();
             menu.Items.Add(copyItem);
             var copyWithHeadersItem = new MenuFlyoutItem { Text = "Копировать с заголовками" };
             copyWithHeadersItem.Click += (_, _) => CopyCellSelection(includeHeaders: true);
@@ -1831,6 +1841,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                 copyWithHeadersItem.IsEnabled = hasSelection;
             };
             return menu;
+        }
+
+        public bool CopySelectedCellRangeToClipboard()
+        {
+            return CopyCellSelection(includeHeaders: false);
         }
 
         private bool CopyCellSelection(bool includeHeaders)

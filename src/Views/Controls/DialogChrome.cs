@@ -1,5 +1,7 @@
+using CbsContractsDesktopClient.Shared.Dialogs;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.Controls
@@ -19,6 +21,11 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (dialog.Title is string title)
             {
+                if (dialog is AppEditDialog editDialog)
+                {
+                    editDialog.DialogTitle = title;
+                }
+
                 dialog.Title = BuildTitle(dialog, title);
             }
         }
@@ -31,6 +38,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             dialog.BorderThickness = new Thickness(0);
             dialog.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent);
             EnsureContentMargin(dialog);
+            if (dialog is AppEditDialog editDialog)
+            {
+                editDialog.DialogTitle = title;
+            }
+
             dialog.Title = BuildTitle(dialog, title);
         }
 
@@ -114,7 +126,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             var titleBlock = new TextBlock
             {
-                Text = title,
                 TextWrapping = TextWrapping.WrapWholeWords,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -122,6 +133,22 @@ namespace CbsContractsDesktopClient.Views.Controls
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                 FontSize = 14
             };
+            if (dialog is AppEditDialog editDialog)
+            {
+                titleBlock.SetBinding(
+                    TextBlock.TextProperty,
+                    new Binding
+                    {
+                        Source = editDialog,
+                        Path = new PropertyPath(nameof(AppEditDialog.DialogTitle)),
+                        Mode = BindingMode.OneWay
+                    });
+            }
+            else
+            {
+                titleBlock.Text = title;
+            }
+
             grid.Children.Add(titleBlock);
 
             var closeButton = new Button
