@@ -382,6 +382,31 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void ContractDetailView_UsesWorkflowStoreAsItsOnlyRowSource()
+    {
+        var detailView = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "src",
+            "Views",
+            "Functional",
+            "ContractDetailView.xaml.cs"));
+        var contractHost = File.ReadAllText(ContractHostViewPath);
+        var stageHost = File.ReadAllText(StageHostViewPath);
+        var revisionHost = File.ReadAllText(RevisionHostViewPath);
+
+        Assert.Contains("_contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;", detailView);
+        Assert.DoesNotContain("ContractRowProperty", detailView);
+        Assert.DoesNotContain("ContragentRowProperty", detailView);
+        Assert.DoesNotContain("RevisionRowProperty", detailView);
+        Assert.DoesNotContain("_detailView.ContractRow =", contractHost);
+        Assert.DoesNotContain("_detailView.ContragentRow =", contractHost);
+        Assert.DoesNotContain("_detailView.ContractRow =", stageHost);
+        Assert.DoesNotContain("_detailView.ContragentRow =", stageHost);
+        Assert.DoesNotContain("_detailView.ContractRow =", revisionHost);
+        Assert.DoesNotContain("_detailView.ContragentRow =", revisionHost);
+    }
+
+    [Fact]
     public void SettingsButtons_UseNeutralActiveState()
     {
         var complexHost = File.ReadAllText(ComplexHostViewBasePath);

@@ -82,7 +82,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(ContractsRoute), "\uE762", ContractsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(StagesRoute), "\uE7C1", StagesRoute, route));
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(RevisionsRoute), "\uE8A7", RevisionsRoute, route));
-            if (isOzi || isAdmin)
+            if (isCommer || isAdmin)
             {
                 baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(NeedsRoute), "\uE8CB", NeedsRoute, route));
                 baseSection.Items.Add(CreateItem(ResolveMenuTitle(OrdersRoute, "Заказы"), "\uE7BF", OrdersRoute, route));

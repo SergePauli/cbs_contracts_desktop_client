@@ -146,7 +146,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
-            _detailView.RevisionRow = row;
         }
 
         private async Task RefreshDetailAsync()
@@ -159,8 +158,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
@@ -202,8 +199,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
-            _detailView.ContractRow = context.Contract;
-            _detailView.ContragentRow = context.Contragent;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;
@@ -234,9 +229,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ClearDetailView()
         {
             _detailCts?.Cancel();
-            _detailView.RevisionRow = null;
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();

@@ -298,7 +298,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             Store.AppendUiTrace($"CONTRACT DETAIL UPDATE row={DescribeDetailRow(row)}");
             SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
-            _detailView.ContractRow = row;
         }
 
         private async Task RefreshDetailAsync()
@@ -314,8 +313,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             var selectedRow = Store.SelectedRow;
             Store.AppendUiTrace($"CONTRACT DETAIL REFRESH start selected={DescribeDetailRow(selectedRow)}");
-            _detailView.ContractRow = selectedRow;
-            _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
@@ -365,8 +362,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
-            _detailView.ContractRow = context.Contract;
-            _detailView.ContragentRow = context.Contragent;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;
@@ -398,9 +393,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             Store.AppendUiTrace("CONTRACT DETAIL CLEAR");
             _detailCts?.Cancel();
-            _detailView.RevisionRow = null;
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();

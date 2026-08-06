@@ -76,19 +76,35 @@ public sealed class ContractWorkflowFactory
         TableDataRow selectedRow,
         CancellationToken cancellationToken)
     {
+        var stage = "load-contract-edit";
         try
         {
-            var contract = await ReloadContractEditRowAsync(key.ContractId, cancellationToken);
+            var contract = await LoadContractEditRowAsync(key.ContractId, cancellationToken)
+                ?? throw new InvalidOperationException("Contract edit row was not loaded.");
+            stage = "add-computed-stage-names";
+            AddComputedStageNames(contract);
+            stage = "resolve-contragent-id";
             var contragentId = key.ContragentId ?? TryGetLong(contract.GetValue("contragent.id"));
+            stage = "load-contragent-card";
             var contragent = contragentId is long id
                 ? await LoadContragentCardAsync(id, cancellationToken)
                 : null;
 
+            stage = "create-context";
             return new ContractWorkflowContext(key, selectedRow, contract, contragent);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            throw new InvalidOperationException($"ContractWorkflowFactory.CreateCoreAsync: {ex.Message}", ex);
+            DiagnosticsFileLogger.AppendBlock(
+                "CONTRACT CONTEXT LOAD FAILED",
+                $"stage={stage}{Environment.NewLine}"
+                + $"selectionKind={key.SelectionKind}{Environment.NewLine}"
+                + $"contractId={key.ContractId}{Environment.NewLine}"
+                + $"contragentId={key.ContragentId?.ToString() ?? "<null>"}{Environment.NewLine}"
+                + $"exception={ex}");
+            throw new InvalidOperationException(
+                $"ContractWorkflowFactory.CreateCoreAsync failed at '{stage}': {ex.Message}",
+                ex);
         }
     }
 

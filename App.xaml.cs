@@ -38,8 +38,41 @@ namespace CbsContractsDesktopClient
         public App()
         {
             DiagnosticsFileLogger.Clear();
+            UnhandledException += OnApplicationUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
             this.InitializeComponent();
             Services = ConfigureServices();
+        }
+
+        private static void OnApplicationUnhandledException(
+            object sender,
+            Microsoft.UI.Xaml.UnhandledExceptionEventArgs args)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                "GLOBAL XAML UNHANDLED EXCEPTION",
+                $"message={args.Message}{Environment.NewLine}"
+                + $"exception={args.Exception}");
+        }
+
+        private static void OnAppDomainUnhandledException(
+            object sender,
+            System.UnhandledExceptionEventArgs args)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                "GLOBAL APPDOMAIN UNHANDLED EXCEPTION",
+                $"isTerminating={args.IsTerminating}{Environment.NewLine}"
+                + $"exception={args.ExceptionObject}");
+        }
+
+        private static void OnUnobservedTaskException(
+            object? sender,
+            UnobservedTaskExceptionEventArgs args)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                "GLOBAL UNOBSERVED TASK EXCEPTION",
+                $"observed={args.Observed}{Environment.NewLine}"
+                + $"exception={args.Exception}");
         }
 
         private static IServiceProvider ConfigureServices()

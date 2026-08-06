@@ -19,6 +19,42 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class NavigationMenuServiceTests
 {
     [Fact]
+    public void BuildMenu_CommerUser_SeesNeedsAndOrders()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "user",
+            DepartmentId = 2
+        };
+
+        var baseItems = service.BuildMenu(user)
+            .Single(static section => section.Title == "База")
+            .Items;
+
+        Assert.Contains(baseItems, static item => item.Route == "/needs");
+        Assert.Contains(baseItems, static item => item.Route == "/orders");
+    }
+
+    [Fact]
+    public void BuildMenu_OziUser_DoesNotSeeNeedsOrOrders()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "user",
+            DepartmentId = 1
+        };
+
+        var baseItems = service.BuildMenu(user)
+            .Single(static section => section.Title == "База")
+            .Items;
+
+        Assert.DoesNotContain(baseItems, static item => item.Route == "/needs");
+        Assert.DoesNotContain(baseItems, static item => item.Route == "/orders");
+    }
+
+    [Fact]
     public void BuildMenu_AdminUser_SeesIsecurityToolReference()
     {
         var service = new NavigationMenuService();

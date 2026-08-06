@@ -9,6 +9,33 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContractWorkflowStoreTests
 {
     [Fact]
+    public void SetContractSelection_PublishesOnlyCompletedStoreState()
+    {
+        var store = new ContractWorkflowStore();
+        var contract = CreateRow(
+            ("id", 10L),
+            ("status", Status(1, "Подписан")),
+            ("task_kind", TaskKind("Договор")));
+        var propertyNotifications = 0;
+        var selectionNotifications = 0;
+
+        store.PropertyChanged += (_, _) =>
+        {
+            propertyNotifications++;
+            Assert.Same(contract, store.Contract);
+            Assert.Equal(10L, store.SelectedContractEditState?.Id);
+            Assert.NotEmpty(store.ContractStageEditStates);
+            Assert.NotEmpty(store.ContractRevisionEditStates);
+        };
+        store.SelectionApplied += (_, _) => selectionNotifications++;
+
+        store.SetContractSelection(contract, contract, contragent: null);
+
+        Assert.True(propertyNotifications > 0);
+        Assert.Equal(1, selectionNotifications);
+    }
+
+    [Fact]
     public void BeginContractEdit_ForNewContractCreatesZeroStageAndContractRevision()
     {
         var store = new ContractWorkflowStore();
