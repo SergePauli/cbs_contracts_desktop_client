@@ -55,6 +55,17 @@ public sealed class ContractCommerEditDialogTests
     }
 
     [Fact]
+    public void StageTreeExpansion_UsesSelectedStageOnlyForStageTableEntryPoint()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("var isExpanded = _openStagesTabOnLoad", code);
+        Assert.Contains("? ReferenceEquals(stage, _workflowStore.SelectedStageEditState)", code);
+        Assert.Contains(": stage.Used;", code);
+        Assert.Contains("isExpanded);", code);
+    }
+
+    [Fact]
     public void Save_KeepsDialogOpenAndReloadsCreatedContractAsEdit()
     {
         var code = File.ReadAllText(DialogPath);

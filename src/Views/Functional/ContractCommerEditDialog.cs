@@ -1232,6 +1232,9 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             ContractStageTreeItem? stageItem = null;
+            var isExpanded = _openStagesTabOnLoad
+                ? ReferenceEquals(stage, _workflowStore.SelectedStageEditState)
+                : stage.Used;
             stageItem = new ContractStageTreeItem(
                 () => BuildStageTreeHeader(GetStageTreeName(stage)),
                 [
@@ -1239,7 +1242,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                     BuildStageCommentsTreeItem(stage),
                     BuildStageSupplyTreeItem(stage)
                 ],
-                stage.Used);
+                isExpanded);
             return stageItem;
         }
 
