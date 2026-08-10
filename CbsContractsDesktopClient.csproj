@@ -7,13 +7,31 @@
     <AssemblyName>CbsContractsDesktopClient</AssemblyName>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
+    <SelfContained>false</SelfContained>
+    <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\favicon.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>preview</LangVersion>
     <Platforms>x86;x64;ARM64</Platforms>
+    <SatelliteResourceLanguages>ru-RU;en-US</SatelliteResourceLanguages>
   </PropertyGroup>
+
+  <Target Name="FilterWinUiMuiLanguages" AfterTargets="_UpdateMuiFilesAfterNugetRestore">
+    <ItemGroup>
+      <_UnsupportedWinUiMui Include="@(RuntimeTargetsCopyLocalItems)"
+                            Condition="'%(RuntimeTargetsCopyLocalItems.Extension)' == '.mui'
+                              and !$([System.String]::Copy('%(RuntimeTargetsCopyLocalItems.DestinationSubDirectory)').ToLowerInvariant().StartsWith('ru-ru\'))
+                              and !$([System.String]::Copy('%(RuntimeTargetsCopyLocalItems.DestinationSubDirectory)').ToLowerInvariant().StartsWith('en-us\'))" />
+      <RuntimeTargetsCopyLocalItems Remove="@(_UnsupportedWinUiMui)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="ValidateFrameworkDependentPublish" BeforeTargets="Publish">
+    <Error Condition="'$(SelfContained)' == 'true' or '$(WindowsAppSDKSelfContained)' == 'true'"
+           Text="ContractsDesktopClient must be published as framework-dependent." />
+  </Target>
 
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
@@ -65,6 +83,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.AI" Version="1.8.53" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.ML" Version="1.8.2141" ExcludeAssets="all" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Widgets" Version="1.8.251231004" ExcludeAssets="all" />
+    <PackageReference Include="System.Numerics.Tensors" Version="9.0.0" ExcludeAssets="all" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.5" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.5" />
