@@ -222,6 +222,20 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
+    public void CbsTableView_UpDownWithoutShiftClearsCellSelectionBeforeMovingRow()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+        var handlerStart = code.IndexOf("private void OnPreviewKeyDown", StringComparison.Ordinal);
+        var handlerEnd = code.IndexOf("private void OnCopySelectionAcceleratorInvoked", handlerStart, StringComparison.Ordinal);
+        var handler = code[handlerStart..handlerEnd];
+
+        Assert.True(handler.IndexOf("TryExtendCellSelectionVertically(e.Key)", StringComparison.Ordinal)
+            < handler.IndexOf("ClearCellSelection();", StringComparison.Ordinal));
+        Assert.True(handler.IndexOf("ClearCellSelection();", StringComparison.Ordinal)
+            < handler.IndexOf("MoveSelectionOrScroll", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void CbsTableView_ArrowKeysMoveSelectionBeforeScrolling()
     {
         var code = File.ReadAllText(CbsTableViewPath);
@@ -257,7 +271,7 @@ public sealed class CbsTableViewTests
         Assert.Contains("SupportsCellSelectionProperty", code);
         Assert.Contains("private CbsTableCellPosition? _cellSelectionAnchor;", code);
         Assert.Contains("rowView.PointerMoved += OnRowPointerMoved;", code);
-        Assert.Contains("TryMoveCellSelection", code);
+        Assert.Contains("TryExtendCellSelectionVertically", code);
         Assert.Contains("public bool CopySelectedCellRangeToClipboard()", code);
         Assert.Contains("return CopyCellSelection(includeHeaders: false);", code);
         Assert.Contains("new KeyboardAccelerator", code);

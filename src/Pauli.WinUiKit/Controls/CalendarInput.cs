@@ -49,6 +49,7 @@ public sealed class CalendarInput : Grid
         _calendarView = new CalendarView
         {
             SelectionMode = CalendarViewSelectionMode.Single,
+            FirstDayOfWeek = Windows.Globalization.DayOfWeek.Monday,
             MinWidth = 280,
             MinHeight = 300
         };

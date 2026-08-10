@@ -606,9 +606,9 @@ namespace CbsContractsDesktopClient.Views.Controls
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (SupportsCellSelection
-                && e.Key is VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down
-                && TryMoveCellSelection(e.Key,
-                    InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down)))
+                && e.Key is VirtualKey.Up or VirtualKey.Down
+                && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down)
+                && TryExtendCellSelectionVertically(e.Key))
             {
                 e.Handled = true;
                 return;
@@ -617,6 +617,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             if (e.Key is not VirtualKey.Up and not VirtualKey.Down)
             {
                 return;
+            }
+
+            if (SupportsCellSelection)
+            {
+                ClearCellSelection();
             }
 
             e.Handled = MoveSelectionOrScroll(e.Key == VirtualKey.Down ? 1 : -1);
@@ -632,7 +637,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             args.Handled = CopySelectedCellRangeToClipboard();
         }
 
-        private bool TryMoveCellSelection(VirtualKey key, bool extendSelection)
+        private bool TryExtendCellSelectionVertically(VirtualKey key)
         {
             if (_cellSelectionEnd is not { } end)
             {
@@ -640,29 +645,13 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             var rows = GetSourceRows();
-            var rowOffset = key switch
-            {
-                VirtualKey.Up => -1,
-                VirtualKey.Down => 1,
-                _ => 0
-            };
-            var columnOffset = key switch
-            {
-                VirtualKey.Left => -1,
-                VirtualKey.Right => 1,
-                _ => 0
-            };
-            var target = new CbsTableCellPosition(end.RowIndex + rowOffset, end.ColumnIndex + columnOffset);
+            var rowOffset = key == VirtualKey.Down ? 1 : -1;
+            var target = new CbsTableCellPosition(end.RowIndex + rowOffset, end.ColumnIndex);
             if (target.RowIndex < 0 || target.RowIndex >= rows.Count
                 || target.ColumnIndex < 0 || target.ColumnIndex >= Columns.Count
                 || rows[target.RowIndex].IsPlaceholder)
             {
                 return false;
-            }
-
-            if (!extendSelection)
-            {
-                _cellSelectionAnchor = target;
             }
 
             _cellSelectionEnd = target;
@@ -2277,6 +2266,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             var datePicker = new CalendarDatePicker
             {
                 Tag = column,
+                CalendarViewStyle = (Style)Application.Current.Resources["MondayCalendarViewStyle"],
                 Height = FilterDatePickerHeight,
                 MinHeight = FilterDatePickerHeight,
                 Margin = new Thickness(4, 1, 4, 1),
