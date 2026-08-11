@@ -62,6 +62,19 @@ public static class StageOziEditPayloadBuilder
         IReadOnlyList<StagePerformerEditState> originalPerformers,
         IReadOnlyList<StagePerformerEditState> selectedPerformers)
     {
+        var originalEmployeeIds = originalPerformers
+            .Where(static performer => performer.EmployeeId is not null)
+            .Select(static performer => performer.EmployeeId!.Value)
+            .ToHashSet();
+        var selectedEmployeeIds = selectedPerformers
+            .Where(static performer => performer.EmployeeId is not null)
+            .Select(static performer => performer.EmployeeId!.Value)
+            .ToHashSet();
+        if (originalEmployeeIds.SetEquals(selectedEmployeeIds))
+        {
+            return [];
+        }
+
         var originalByEmployeeId = originalPerformers
             .Where(static performer => performer.EmployeeId is not null)
             .ToDictionary(static performer => performer.EmployeeId!.Value);
@@ -69,10 +82,6 @@ public static class StageOziEditPayloadBuilder
             .Where(static performer => performer.EmployeeId is not null)
             .DistinctBy(static performer => performer.EmployeeId!.Value)
             .ToList();
-        var selectedEmployeeIds = selectedByEmployeeId
-            .Select(static performer => performer.EmployeeId!.Value)
-            .ToHashSet();
-
         var result = new List<Dictionary<string, object?>>();
         var priority = 0;
         foreach (var performer in selectedByEmployeeId)

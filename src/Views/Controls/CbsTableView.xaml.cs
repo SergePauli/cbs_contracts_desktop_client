@@ -178,7 +178,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTimeFilterUiState> _filterDateTimeStates = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, CheckBox> _filterBooleanCheckBoxes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Button> _filterBooleanButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterMultiSelectButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MultiSelectFilterUiState> _filterMultiSelectStates = new(StringComparer.OrdinalIgnoreCase);
@@ -372,13 +372,12 @@ namespace CbsContractsDesktopClient.Views.Controls
                 }
             }
 
-            foreach (var checkBox in _filterBooleanCheckBoxes.Values)
+            foreach (var button in _filterBooleanButtons.Values)
             {
-                checkBox.IsChecked = null;
-                if (checkBox.Tag is CbsTableColumnDefinition column)
+                if (button.Tag is CbsTableColumnDefinition column)
                 {
-                    checkBox.Foreground = GetFilterForegroundBrush(column);
-                    checkBox.Background = GetFilterBackgroundBrush(column);
+                    column.Filter.Value = null;
+                    UpdateBooleanFilterButton(button, column);
                 }
             }
         }
@@ -409,11 +408,9 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
             {
-                if (_filterBooleanCheckBoxes.TryGetValue(column.FieldKey, out var checkBox))
+                if (_filterBooleanButtons.TryGetValue(column.FieldKey, out var button))
                 {
-                    checkBox.IsChecked = TryGetBooleanFilterValue(value);
-                    checkBox.Foreground = GetFilterForegroundBrush(column);
-                    checkBox.Background = GetFilterBackgroundBrush(column);
+                    UpdateBooleanFilterButton(button, column);
                 }
 
                 return;
@@ -836,7 +833,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             HeaderGrid.ColumnDefinitions.Clear();
             HeaderGrid.RowDefinitions.Clear();
             _filterTextBoxes.Clear();
-            _filterBooleanCheckBoxes.Clear();
+            _filterBooleanButtons.Clear();
             _filterModeButtons.Clear();
             _filterMultiSelectButtons.Clear();
             _filterMultiSelectStates.Clear();
@@ -2160,9 +2157,9 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
             {
-                var checkBox = CreateBooleanFilterCheckBox(column);
-                border.Child = checkBox;
-                _filterBooleanCheckBoxes[column.FieldKey] = checkBox;
+                var button = CreateBooleanFilterButton(column);
+                border.Child = button;
+                _filterBooleanButtons[column.FieldKey] = button;
                 return border;
             }
 
@@ -2178,27 +2175,31 @@ namespace CbsContractsDesktopClient.Views.Controls
             return border;
         }
 
-        private CheckBox CreateBooleanFilterCheckBox(CbsTableColumnDefinition column)
+        private Button CreateBooleanFilterButton(CbsTableColumnDefinition column)
         {
-            var checkBox = new CheckBox
+            var button = new Button
             {
                 Tag = column,
-                IsThreeState = true,
-                IsChecked = TryGetBooleanFilterValue(column.Filter.Value),
-                MinWidth = 24,
-                MaxHeight = 24,     
+                Content = new FontIcon
+                {
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
+                    FontSize = 12
+                },
+                Width = 20,
+                Height = 20,
+                MinWidth = 20,
+                MinHeight = 20,
+                MaxWidth = 20,
+                MaxHeight = 20,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Margin = new Thickness(0),
-                Foreground = GetFilterForegroundBrush(column),
-                Background = GetFilterBackgroundBrush(column)
+                BorderThickness = new Thickness(0)
             };
-            ToolTipService.SetToolTip(checkBox, "Фильтр: все / да / нет");
-            checkBox.Checked += OnBooleanFilterCheckBoxChanged;
-            checkBox.Unchecked += OnBooleanFilterCheckBoxChanged;
-            checkBox.Indeterminate += OnBooleanFilterCheckBoxChanged;
-            return checkBox;
+            button.Click += OnBooleanFilterButtonClick;
+            UpdateBooleanFilterButton(button, column);
+            return button;
         }
 
         private TextBox CreateTextFilterTextBox(CbsTableColumnDefinition column)
@@ -2432,7 +2433,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             clearButton.Tag = state;
             closeButton.Tag = state;
             searchTextBox.TextChanged += OnMultiSelectSearchTextChanged;
-            flyout.Opened += OnMultiSelectFlyoutOpened;
 
             button.Flyout = flyout;
             _filterMultiSelectButtons[column.FieldKey] = button;
@@ -2697,16 +2697,38 @@ namespace CbsContractsDesktopClient.Views.Controls
             RefreshDateTimeFilterTextBox(column);
         }
 
-        private void OnBooleanFilterCheckBoxChanged(object sender, RoutedEventArgs e)
+        private void OnBooleanFilterButtonClick(object sender, RoutedEventArgs e)
         {
-            if (sender is not CheckBox { Tag: CbsTableColumnDefinition column } checkBox)
+            if (sender is not Button { Tag: CbsTableColumnDefinition column } button)
             {
                 return;
             }
 
-            column.Filter.Value = checkBox.IsChecked;
-            checkBox.Foreground = GetFilterForegroundBrush(column);
-            checkBox.Background = GetFilterBackgroundBrush(column);
+            var value = TryGetBooleanFilterValue(column.Filter.Value);
+            if (column.Filter.MatchMode == DataFilterMatchMode.IsNull && column.Filter.Value is not null)
+            {
+                column.Filter.MatchMode = DataFilterMatchMode.Equals;
+                column.Filter.Value = null;
+            }
+            else if (value is null)
+            {
+                column.Filter.MatchMode = DataFilterMatchMode.Equals;
+                column.Filter.Value = true;
+            }
+            else if (value == true)
+            {
+                column.Filter.Value = false;
+            }
+            else if (column.Filter.SupportsNullFilter)
+            {
+                column.Filter.MatchMode = DataFilterMatchMode.IsNull;
+                column.Filter.Value = true;
+            }
+            else
+            {
+                column.Filter.Value = null;
+            }
+            UpdateBooleanFilterButton(button, column);
 
             if (_suppressFilterNotifications)
             {
@@ -2717,20 +2739,44 @@ namespace CbsContractsDesktopClient.Views.Controls
                 this,
                 new CbsTableFilterRequestedEventArgs(
                     column.FieldKey,
-                    DataFilterMatchMode.Equals,
-                    checkBox.IsChecked));
+                    column.Filter.MatchMode,
+                    column.Filter.Value));
         }
 
-        private void OnMultiSelectFlyoutOpened(object? sender, object e)
+        private void UpdateBooleanFilterButton(Button button, CbsTableColumnDefinition column)
         {
-            if (sender is not Flyout { Content: FrameworkElement { Tag: MultiSelectFilterUiState state } })
+            var value = TryGetBooleanFilterValue(column.Filter.Value);
+            var filtersNull = column.Filter.MatchMode == DataFilterMatchMode.IsNull
+                && column.Filter.Value is not null;
+            ((FontIcon)button.Content).Glyph = filtersNull
+                ? "\uE897"
+                : value switch
             {
-                return;
-            }
-
-            state.SearchText = string.Empty;
-            state.SearchTextBox.Text = string.Empty;
-            RebuildMultiSelectOptionItems(state);
+                true => "\uE73E",
+                false => "\uE711",
+                null => string.Empty
+            };
+            var hasValue = filtersNull || value.HasValue;
+            button.Background = hasValue
+                ? (Brush)Application.Current.Resources["ShellAccentBrush"]
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            button.Foreground = hasValue
+                ? new SolidColorBrush(Microsoft.UI.Colors.White)
+                : GetFilterForegroundBrush(column);
+            button.BorderBrush = hasValue
+                ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                : (Brush)Application.Current.Resources["ShellTableGridLineBrush"];
+            button.BorderThickness = hasValue
+                ? new Thickness(0)
+                : new Thickness(1);
+            ToolTipService.SetToolTip(button, filtersNull
+                ? "Фильтр: только не определено"
+                : value switch
+            {
+                true => "Фильтр: только Да",
+                false => "Фильтр: только Нет",
+                null => "Фильтр не задан"
+            });
         }
 
         private void OnMultiSelectSearchTextChanged(object sender, TextChangedEventArgs e)

@@ -114,7 +114,12 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
             && column.FilterField == "contract.name"
             && column.SortField == "name");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "region"
-            && column.BodyTemplateKey == "StageRegion");
+            && column.BodyTemplateKey == "StageRegion"
+            && column.FilterField == "contract.contragent.real_addr.address.area_id"
+            && column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
+            && column.Filter.Mode == DataFilterMode.Numeric
+            && column.Filter.MatchMode == DataFilterMatchMode.In
+            && column.Filter.OptionsSourceKey == "Area");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "duration"
             && column.BodyTemplateKey == "StageDuration");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "cost"
@@ -176,6 +181,8 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
         Assert.Equal(CbsTableRowStyleKey.ContractDeadline, definition.RowStyleKey);
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "is_funded").Filter.SupportsNullFilter);
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "is_present").Filter.SupportsNullFilter);
     }
 
     [Fact]

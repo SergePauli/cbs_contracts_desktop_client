@@ -129,6 +129,48 @@ public sealed class StageOziEditPayloadBuilderTests
         Assert.Equal("stage-key", payload["list_key"]);
     }
 
+    [Fact]
+    public void BuildForUpdate_DoesNotChangePerformers_WhenEmployeeCompositionIsUnchanged()
+    {
+        var stage = StageEditState.FromRow(CreateRow(
+            ("id", 15L),
+            ("list_key", "stage-key"),
+            ("status_id", 2L),
+            ("status.name", "В работе"),
+            ("performers", new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 101L,
+                    ["list_key"] = "performer-101",
+                    ["employee_id"] = 10L,
+                    ["name"] = "Первый исполнитель",
+                    ["priority"] = 4
+                },
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 102L,
+                    ["list_key"] = "performer-102",
+                    ["employee_id"] = 11L,
+                    ["name"] = "Второй исполнитель",
+                    ["priority"] = 8
+                }
+            })));
+        stage.Status = new StatusEditState(5L, "Закрыт");
+
+        var payload = StageOziEditPayloadBuilder.BuildForUpdate(
+            stage,
+            [
+                new StagePerformerEditState(102L, "performer-102", 11L, "Обновлённое имя", 0),
+                new StagePerformerEditState(101L, "performer-101", 10L, "Первый исполнитель", 1)
+            ],
+            null,
+            7);
+
+        Assert.Equal(5L, payload["status_id"]);
+        Assert.DoesNotContain("performers_attributes", payload.Keys);
+    }
+
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
         return new TableDataRow

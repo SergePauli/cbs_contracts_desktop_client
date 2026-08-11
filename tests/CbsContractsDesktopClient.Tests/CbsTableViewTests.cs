@@ -104,18 +104,21 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
-    public void CbsTableView_BuildsTriStateBooleanFilterCheckBox()
+    public void CbsTableView_BuildsFourStateBooleanFilterButton()
     {
         var code = File.ReadAllText(CbsTableViewPath);
 
-        Assert.Contains("CreateBooleanFilterCheckBox", code);
-        Assert.Contains("IsThreeState = true", code);
-        Assert.Contains("OnBooleanFilterCheckBoxChanged", code);
-        Assert.Contains("checkBox.IsChecked", code);
+        Assert.Contains("CreateBooleanFilterButton", code);
+        Assert.Contains("OnBooleanFilterButtonClick", code);
+        Assert.Contains("column.Filter.SupportsNullFilter", code);
         Assert.Contains("DataFilterMatchMode.Equals", code);
+        Assert.Contains("DataFilterMatchMode.IsNull", code);
         Assert.Contains("CbsTableFilterEditorKind.Boolean", code);
-        Assert.Contains("MinWidth = 24", code);
-        Assert.Contains("ToolTipService.SetToolTip(checkBox, \"Фильтр: все / да / нет\")", code);
+        Assert.Contains("FontSize = 12", code);
+        Assert.Contains("MinWidth = 20", code);
+        Assert.Contains("? \"\\uE897\"", code);
+        Assert.Contains("false => \"\\uE711\"", code);
+        Assert.Contains("new Thickness(1)", code);
     }
 
     [Fact]
@@ -178,7 +181,7 @@ public sealed class CbsTableViewTests
         var code = File.ReadAllText(CbsTableViewPath);
 
         Assert.Contains("FormatFilterValue(column.Filter.Value)", code);
-        Assert.Contains("IsChecked = TryGetBooleanFilterValue(column.Filter.Value)", code);
+        Assert.Contains("UpdateBooleanFilterButton(button, column)", code);
         Assert.Contains("Date = TryGetDateFilterValue(column.Filter.Value)", code);
         Assert.Contains("SelectedValues = NormalizeFilterSelectedValues(column.Filter.Value)", code);
         Assert.Contains("private static IReadOnlyList<object?> NormalizeFilterSelectedValues(object? value)", code);

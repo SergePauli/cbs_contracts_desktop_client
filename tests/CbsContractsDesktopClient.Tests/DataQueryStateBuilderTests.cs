@@ -240,6 +240,28 @@ public class DataQueryStateBuilderTests
     }
 
     [Fact]
+    public void BuildFilters_MapsIsNullCriterionToApiPayload()
+    {
+        var filters = new[]
+        {
+            new DataFilterCriterion
+            {
+                FieldKey = "is_funded",
+                MatchMode = DataFilterMatchMode.IsNull
+            }
+        };
+
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            filters,
+            new Dictionary<string, string>
+            {
+                ["is_funded"] = "is_funded"
+            }));
+
+        Assert.Equal(true, payload["is_funded__null"]);
+    }
+
+    [Fact]
     public void BuildFilters_MapsNumericCriteriaToApiPayload()
     {
         var filters = new[]

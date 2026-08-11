@@ -41,10 +41,10 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                     CreateContractMultiSelectColumn("region", "Регион", "contragent.region.name", "contragent.real_addr.address.area_id", "contragent.real_addr.address.area.name", "10rem", "Area", DataFilterMode.Numeric, bodyTemplateKey: "ContractRegion"),
                     CreateContractNumberColumn("cost", "Сумма", "cost", "7rem", immutable: true, bodyTemplateKey: "ContractCost"),
                     CreateContractStatusColumn(),
-                    CreateContractBooleanColumn("is_funded", "БЗ", "is_funded", bodyTemplateKey: "ContractFunded"),
+                    CreateContractBooleanColumn("is_funded", "БЗ", "is_funded", bodyTemplateKey: "ContractFunded", supportsNullFilter: true),
                     CreateContractDateColumn("funded_at", "БЗакр", "funded_at", "funded_at", "6rem"),
                     CreateContractBooleanColumn("governmental", "ГК", "governmental"),
-                    CreateContractBooleanColumn("is_present", "ВНал", "is_present", "revision.is_present", "revision.is_present"),
+                    CreateContractBooleanColumn("is_present", "ВНал", "is_present", "revision.is_present", "revision.is_present", supportsNullFilter: true),
                     CreateContractTextColumn("external_number", "Внешний №", "external_number", "external_number", "external_number", "10rem"),
                     CreateContractDateColumn("closed_at", "ДЗав", "closed_at", "closed_at", "6rem"),
                     CreateContractMultiSelectColumn("code", "Тип", "code", "code", "code", "4rem", "TaskKind", DataFilterMode.Text)
@@ -152,7 +152,8 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
             string displayField,
             string? filterField = null,
             string? sortField = null,
-            string? bodyTemplateKey = null)
+            string? bodyTemplateKey = null,
+            bool supportsNullFilter = false)
         {
             return new CbsTableColumnDefinition
             {
@@ -171,7 +172,8 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                     IsEnabled = true,
                     EditorKind = CbsTableFilterEditorKind.Boolean,
                     Mode = DataFilterMode.Text,
-                    MatchMode = DataFilterMatchMode.Equals
+                    MatchMode = DataFilterMatchMode.Equals,
+                    SupportsNullFilter = supportsNullFilter
                 }
             };
         }
