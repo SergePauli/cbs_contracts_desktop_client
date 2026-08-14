@@ -22,6 +22,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private StageHostView? _stageHostView;
         private OrderHostView? _orderHostView;
         private StageOrderNeedsHostView? _stageOrderNeedsHostView;
+        private ActivityReportHostView? _activityReportHostView;
 
         public ContentHostRouterView()
         {
@@ -78,6 +79,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ContentHostRouteKind.Stage => GetStageHostView(route),
                 ContentHostRouteKind.Order => GetOrderHostView(route),
                 ContentHostRouteKind.Needs => GetStageOrderNeedsHostView(route),
+                ContentHostRouteKind.ActivityReport => GetActivityReportHostView(route),
                 _ => CreatePlaceholder()
             };
         }
@@ -151,6 +153,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     break;
+                case ContentHostRouteKind.ActivityReport:
+                    if (_activityReportHostView is not null)
+                    {
+                        _activityReportHostView.Route = route;
+                    }
+
+                    break;
             }
         }
 
@@ -204,6 +213,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (string.Equals(route, "/needs", StringComparison.OrdinalIgnoreCase))
             {
                 return ContentHostRouteKind.Needs;
+            }
+
+            if (string.Equals(route, "/report", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.ActivityReport;
             }
 
             if (IsSimpleReferenceRoute(route))
@@ -294,6 +308,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             return _stageOrderNeedsHostView;
         }
 
+        private ActivityReportHostView GetActivityReportHostView(string? route)
+        {
+            _activityReportHostView ??= new ActivityReportHostView();
+            _activityReportHostView.Route = route;
+            return _activityReportHostView;
+        }
+
         private static FrameworkElement CreatePlaceholder()
         {
             return new Border
@@ -328,7 +349,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             Revision,
             Stage,
             Order,
-            Needs
+            Needs,
+            ActivityReport
         }
     }
 }

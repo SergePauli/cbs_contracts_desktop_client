@@ -45,12 +45,8 @@
             </Style>
 
             <!-- Calendar localization -->
-            <Style x:Key="MondayCalendarViewStyle" TargetType="CalendarView">
-                <Setter Property="FirstDayOfWeek" Value="Monday" />
-            </Style>
             <Style TargetType="CalendarDatePicker">
-                <Setter Property="CalendarViewStyle"
-                        Value="{StaticResource MondayCalendarViewStyle}" />
+                <Setter Property="FirstDayOfWeek" Value="Monday" />
             </Style>
 
             <!-- Global compact desktop dialogs -->

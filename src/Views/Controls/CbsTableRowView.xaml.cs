@@ -398,7 +398,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                 if (formatted is not null)
                 {
                     textCell.Text = formatted;
-                    textCell.Foreground = ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
+                    textCell.Foreground = string.Equals(column.BodyTemplateKey, "ActivityReportDeletedAmount", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(formatted, "удален", StringComparison.Ordinal)
+                        ? new SolidColorBrush(Microsoft.UI.Colors.Red)
+                        : ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
                     return;
                 }
             }
@@ -470,6 +473,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                     value),
                 "ContractCost" => FormatStageCost(value, showStageCostFraction),
                 "ContractFunded" => FormatContractFunded(value),
+                "ActivityReportDeletedAmount" => value?.ToString() ?? string.Empty,
                 _ => null
             };
         }

@@ -66,6 +66,19 @@ public sealed class ContractCommerEditDialogTests
     }
 
     [Fact]
+    public void StageTreeRendering_DoesNotMutateWorkflowState()
+    {
+        var code = File.ReadAllText(DialogPath);
+        var refreshStart = code.IndexOf("private void RefreshStagesStack()", StringComparison.Ordinal);
+        var refreshEnd = code.IndexOf("private ContractStageTreeItem BuildStageTreeItem", refreshStart, StringComparison.Ordinal);
+        var buildEnd = code.IndexOf("private string GetStageTreeName", refreshEnd, StringComparison.Ordinal);
+        var renderCode = code[refreshStart..buildEnd];
+
+        Assert.DoesNotContain("_workflowStore.SetContractStageEditStates", renderCode);
+        Assert.DoesNotContain("SyncStageTaskKindFromContract", renderCode);
+    }
+
+    [Fact]
     public void Save_KeepsDialogOpenAndReloadsCreatedContractAsEdit()
     {
         var code = File.ReadAllText(DialogPath);

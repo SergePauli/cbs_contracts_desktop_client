@@ -20,6 +20,7 @@ using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Reports;
 
 namespace CbsContractsDesktopClient
 {
@@ -107,6 +108,8 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<StageSupplyEditWorkflow>();
             services.AddSingleton<ContractWorkflowFactory>();
             services.AddSingleton<ContractCommentWorkflow>();
+            services.AddSingleton<ActivityReportStore>();
+            services.AddSingleton<ActivityReportLoader>();
             services.AddSingleton<StatusTableViewModel>();
             services.AddHttpClient(nameof(AuthService), client =>
             {

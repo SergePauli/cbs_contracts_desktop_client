@@ -86,6 +86,44 @@ public sealed class ContractCommerEditPayloadBuilderTests
             JsonSerializer.Serialize(request));
     }
 
+    [Fact]
+    public void Build_DestroyedPersistedStage_EmitsNestedDestroyAttributes()
+    {
+        var stage = StageEditState.FromRow(CreateRow(
+            ("id", 6393L),
+            ("list_key", "stage-list-key")));
+        stage.IsDestroyed = true;
+
+        var payload = ContractCommerEditPayloadBuilder.Build(
+            CreateRow(),
+            new ContractCommerEditPayloadInput(
+                IsCreateMode: false,
+                Id: 6156L,
+                ListKey: null,
+                TaskKindId: null,
+                Code: null,
+                Year: null,
+                Order: null,
+                ContragentId: null,
+                StatusId: null,
+                SignedAt: null,
+                Comment: null,
+                Governmental: false,
+                ExternalNumber: null,
+                DeadlineAt: null,
+                ClosedAt: null,
+                ProfileId: null),
+            [stage],
+            []);
+
+        var stages = Assert.IsType<List<Dictionary<string, object?>>>(payload["stages_attributes"]);
+        var destroyedStage = Assert.Single(stages);
+        Assert.Equal(6393L, destroyedStage["id"]);
+        Assert.Equal("stage-list-key", destroyedStage["list_key"]);
+        Assert.Equal("1", destroyedStage["_destroy"]);
+        Assert.Equal(3, destroyedStage.Count);
+    }
+
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
         return new TableDataRow

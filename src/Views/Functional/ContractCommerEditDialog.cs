@@ -1016,20 +1016,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private void NormalizeStageNumbering()
-        {
-            _workflowStore.SetContractStageEditStates(StageEditors);
-        }
-
         private void SetActiveStage(StageEditState selectedStage)
         {
             _workflowStore.SetActiveStage(selectedStage);
             RefreshStagesStack();
-        }
-
-        private void EnsureSingleActiveStage()
-        {
-            _workflowStore.SetContractStageEditStates(StageEditors);
         }
 
         private void ResetTaskKindFromContract()
@@ -1212,7 +1202,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            NormalizeStageNumbering();
             _firstStageDeadlineKindBox = null;
             _stageCommentBoxes.Clear();
             _contractCommentsBox = null;
@@ -1226,11 +1215,6 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private ContractStageTreeItem BuildStageTreeItem(StageEditState stage)
         {
-            if (stage.Priority == 0)
-            {
-                SyncStageTaskKindFromContract(stage);
-            }
-
             ContractStageTreeItem? stageItem = null;
             var isExpanded = _openStagesTabOnLoad
                 ? ReferenceEquals(stage, _workflowStore.SelectedStageEditState)
@@ -1847,10 +1831,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 if (stage.Used)
                 {
                     checkBox.IsChecked = true;
-                    return;
                 }
-
-                EnsureSingleActiveStage();
             };
 
             return checkBox;

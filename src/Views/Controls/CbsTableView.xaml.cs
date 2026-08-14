@@ -560,6 +560,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             _selectedIndexes.Clear();
             SelectedItem = null;
+            ClearCellSelection();
             UpdateVisibleRowSelectionStates();
         }
 
@@ -2267,7 +2268,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             var datePicker = new CalendarDatePicker
             {
                 Tag = column,
-                CalendarViewStyle = (Style)Application.Current.Resources["MondayCalendarViewStyle"],
                 Height = FilterDatePickerHeight,
                 MinHeight = FilterDatePickerHeight,
                 Margin = new Thickness(4, 1, 4, 1),
