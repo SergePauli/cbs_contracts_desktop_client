@@ -1,6 +1,5 @@
 using CbsContractsDesktopClient.Models.Settings;
 using CbsContractsDesktopClient.Services.Settings;
-using CbsContractsDesktopClient.Views.Reports;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
@@ -8,6 +7,11 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ActivityReportSettingsTests : IDisposable
 {
     private readonly string _temporaryDirectory = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+    private static readonly string ActivityReportViewPath = TestProjectPaths.FromRepositoryRoot(
+        "src",
+        "Views",
+        "Shell",
+        "ActivityReportHostView.xaml");
 
     [Fact]
     public async Task LocalSettings_RoundTripsActivityReportSectionExpansion()
@@ -26,16 +30,29 @@ public sealed class ActivityReportSettingsTests : IDisposable
     }
 
     [Fact]
-    public void TreeItem_RaisesExpansionChangedOnlyWhenValueChanges()
+    public void ActivityReport_UsesStaticNodesWithSectionSpecificBindings()
     {
-        var item = new ActivityReportTreeItem(new object(), isExpanded: true);
-        var changes = 0;
-        item.ExpansionChanged += (_, _) => changes++;
+        var xaml = File.ReadAllText(ActivityReportViewPath);
+        var sections = new[]
+        {
+            "StatusChanges",
+            "PendingStages",
+            "AddedContracts",
+            "DeadlineChanges",
+            "Comments",
+            "Funding",
+            "Payments"
+        };
 
-        item.IsExpanded = true;
-        item.IsExpanded = false;
+        Assert.Contains("<TreeView.RootNodes>", xaml);
+        Assert.Contains("Content=\"{Binding Content}\"", xaml);
 
-        Assert.Equal(1, changes);
+        foreach (var section in sections)
+        {
+            Assert.Contains($"x:Name=\"ActivityReport_{section}\"", xaml);
+            Assert.Contains($"IsExpanded=\"{{x:Bind {section}IsExpanded, Mode=TwoWay}}\"", xaml);
+            Assert.Contains($"Content=\"{{x:Bind {section}Table, Mode=OneWay}}\"", xaml);
+        }
     }
 
     public void Dispose()

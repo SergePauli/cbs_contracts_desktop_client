@@ -8,15 +8,13 @@ using CbsContractsDesktopClient.ViewModels.Reports;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.Functional;
-using CbsContractsDesktopClient.Views.Reports;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Data;
 
 namespace CbsContractsDesktopClient.Views.Shell;
 
-public sealed class ActivityReportHostView : ContentHostViewBase
+public sealed partial class ActivityReportHostView : ContentHostViewBase
 {
     private readonly ActivityReportStore _store;
     private readonly ActivityReportLoader _loader;
@@ -25,20 +23,32 @@ public sealed class ActivityReportHostView : ContentHostViewBase
     private readonly IDataQueryService _dataQueryService;
     private readonly ILocalUserSettingsService _localUserSettingsService;
     private readonly LocalUserSettings _localUserSettings;
-    private readonly ContractDetailView _detailView = new();
-    private readonly TreeView _tree = new();
-    private readonly ProgressRing _progress = new() { Width = 16, Height = 16 };
-    private readonly InfoBar _message = new() { Severity = InfoBarSeverity.Error, IsClosable = true };
-    private readonly CalendarDatePicker _startDate = CreateDatePicker();
-    private readonly CalendarDatePicker _endDate = CreateDatePicker();
     private readonly Dictionary<TableDataRow, ActivityReportRow> _reportRows = [];
     private readonly List<CbsTableView> _sectionTables = [];
     private CancellationTokenSource? _loadCts;
     private CancellationTokenSource? _detailCts;
     private bool _initialLoadStarted;
+    private bool _isRenderingSections;
+
+    public CbsTableView? StatusChangesTable { get; private set; }
+    public CbsTableView? PendingStagesTable { get; private set; }
+    public CbsTableView? AddedContractsTable { get; private set; }
+    public CbsTableView? DeadlineChangesTable { get; private set; }
+    public CbsTableView? CommentsTable { get; private set; }
+    public CbsTableView? FundingTable { get; private set; }
+    public CbsTableView? PaymentsTable { get; private set; }
+
+    public bool StatusChangesIsExpanded { get; set; }
+    public bool PendingStagesIsExpanded { get; set; }
+    public bool AddedContractsIsExpanded { get; set; }
+    public bool DeadlineChangesIsExpanded { get; set; }
+    public bool CommentsIsExpanded { get; set; }
+    public bool FundingIsExpanded { get; set; }
+    public bool PaymentsIsExpanded { get; set; }
 
     public ActivityReportHostView()
     {
+        InitializeComponent();
         _store = App.Services.GetRequiredService<ActivityReportStore>();
         _loader = App.Services.GetRequiredService<ActivityReportLoader>();
         _workflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
@@ -47,60 +57,32 @@ public sealed class ActivityReportHostView : ContentHostViewBase
         _localUserSettingsService = App.Services.GetRequiredService<ILocalUserSettingsService>();
         _localUserSettings = _localUserSettingsService.Get();
 
-        _startDate.Date = _store.StartDate;
-        _endDate.Date = _store.EndDate;
-        _tree.HorizontalAlignment = HorizontalAlignment.Stretch;
-        _tree.VerticalAlignment = VerticalAlignment.Stretch;
-        _tree.ItemTemplate = BuildTreeTemplate();
-        _progress.Visibility = Visibility.Collapsed;
-        _detailView.Visibility = Visibility.Collapsed;
-        Content = BuildContent();
+        StartDatePicker.Date = _store.StartDate;
+        EndDatePicker.Date = _store.EndDate;
+        RegisterSectionExpansion(ActivityReport_StatusChanges);
+        RegisterSectionExpansion(ActivityReport_PendingStages);
+        RegisterSectionExpansion(ActivityReport_AddedContracts);
+        RegisterSectionExpansion(ActivityReport_DeadlineChanges);
+        RegisterSectionExpansion(ActivityReport_Comments);
+        RegisterSectionExpansion(ActivityReport_Funding);
+        RegisterSectionExpansion(ActivityReport_Payments);
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
     }
 
     public string? Route { get; set; }
 
-    private UIElement BuildContent()
+    private async void LoadButton_Click(object sender, RoutedEventArgs e)
     {
-        var root = new Grid { RowSpacing = 4 };
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var header = new Grid { Padding = new Thickness(8, 4, 8, 4), ColumnSpacing = 6 };
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        AddHeaderChild(header, new TextBlock { Text = "Период отчета", VerticalAlignment = VerticalAlignment.Center }, 0);
-        AddHeaderChild(header, _startDate, 1);
-        AddHeaderChild(header, new TextBlock { Text = "—", VerticalAlignment = VerticalAlignment.Center }, 2);
-        AddHeaderChild(header, _endDate, 3);
-        var loadButton = new Button { Content = "Сформировать", Height = 28, Padding = new Thickness(10, 2, 10, 2) };
-        loadButton.Click += async (_, _) => await LoadAsync();
-        AddHeaderChild(header, loadButton, 4);
-        AddHeaderChild(header, _progress, 5);
-        root.Children.Add(header);
-
-        Grid.SetRow(_message, 1);
-        root.Children.Add(_message);
-        Grid.SetRow(_tree, 2);
-        root.Children.Add(_tree);
-        Grid.SetRow(_detailView, 3);
-        root.Children.Add(_detailView);
-        return root;
+        await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
-        if (_startDate.Date is not DateTimeOffset start || _endDate.Date is not DateTimeOffset end)
+        if (StartDatePicker.Date is not DateTimeOffset start || EndDatePicker.Date is not DateTimeOffset end)
         {
-            _message.Message = "Укажите начало и окончание периода отчета.";
-            _message.IsOpen = true;
+            MessageBar.Message = "Укажите начало и окончание периода отчета.";
+            MessageBar.IsOpen = true;
             return;
         }
 
@@ -108,21 +90,21 @@ public sealed class ActivityReportHostView : ContentHostViewBase
         _loadCts = new CancellationTokenSource();
         _store.StartDate = start;
         _store.EndDate = end;
-        _progress.IsActive = true;
-        _progress.Visibility = Visibility.Visible;
-        _message.IsOpen = false;
+        LoadProgress.IsActive = true;
+        LoadProgress.Visibility = Visibility.Visible;
+        MessageBar.IsOpen = false;
         await _store.LoadAsync(_loader, _loadCts.Token);
         if (_loadCts.IsCancellationRequested)
         {
             return;
         }
 
-        _progress.IsActive = false;
-        _progress.Visibility = Visibility.Collapsed;
+        LoadProgress.IsActive = false;
+        LoadProgress.Visibility = Visibility.Collapsed;
         if (!string.IsNullOrWhiteSpace(_store.ErrorMessage))
         {
-            _message.Message = _store.ErrorMessage;
-            _message.IsOpen = true;
+            MessageBar.Message = _store.ErrorMessage;
+            MessageBar.IsOpen = true;
             return;
         }
 
@@ -133,30 +115,42 @@ public sealed class ActivityReportHostView : ContentHostViewBase
     {
         _reportRows.Clear();
         _sectionTables.Clear();
-        var items = new List<ActivityReportTreeItem>();
-        foreach (var section in _store.Sections)
+        _isRenderingSections = true;
+        try
         {
-            foreach (var row in section.Rows)
+            foreach (var section in _store.Sections)
             {
-                _reportRows[row.DisplayRow] = row;
+                foreach (var row in section.Rows)
+                {
+                    _reportRows[row.DisplayRow] = row;
+                }
+
+                var isExpanded = _localUserSettings.ActivityReportSectionExpansion.TryGetValue(section.Kind.ToString(), out var savedExpansion)
+                    ? savedExpansion
+                    : section.Rows.Count > 0;
+                SetSection(section, BuildTable(section, $"ActivityReport_{section.Kind}"), isExpanded);
             }
 
-            var table = BuildTable(section);
-            var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            header.Children.Add(new TextBlock { Text = section.Title, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold });
-            header.Children.Add(new TextBlock { Text = section.Rows.Count.ToString(), Opacity = 0.65 });
-            var expansionKey = section.Kind.ToString();
-            var isExpanded = _localUserSettings.ActivityReportSectionExpansion.TryGetValue(expansionKey, out var savedExpansion)
-                ? savedExpansion
-                : section.Rows.Count > 0;
-            var item = new ActivityReportTreeItem(
-                header,
-                [new ActivityReportTreeItem(table)],
-                isExpanded);
-            item.ExpansionChanged += async (_, _) => await SaveSectionExpansionAsync(expansionKey, item.IsExpanded);
-            items.Add(item);
+            Bindings.Update();
         }
-        _tree.ItemsSource = items;
+        finally
+        {
+            _isRenderingSections = false;
+        }
+    }
+
+    private void RegisterSectionExpansion(TreeViewNode branch) =>
+        branch.RegisterPropertyChangedCallback(TreeViewNode.IsExpandedProperty, OnSectionExpansionChanged);
+
+    private async void OnSectionExpansionChanged(DependencyObject sender, DependencyProperty property)
+    {
+        if (_isRenderingSections)
+        {
+            return;
+        }
+
+        var branch = (TreeViewNode)sender;
+        await SaveSectionExpansionAsync(GetSectionKey(branch), branch.IsExpanded);
     }
 
     private async Task SaveSectionExpansionAsync(string key, bool isExpanded)
@@ -165,10 +159,11 @@ public sealed class ActivityReportHostView : ContentHostViewBase
         await _localUserSettingsService.SaveAsync(_localUserSettings);
     }
 
-    private CbsTableView BuildTable(ActivityReportSection section)
+    private CbsTableView BuildTable(ActivityReportSection section, string name)
     {
         var table = new CbsTableView
         {
+            Name = name,
             Height = Math.Clamp(48 + section.Rows.Count * 22, 70, 280),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             Density = CbsTableDensity.Compact,
@@ -211,7 +206,7 @@ public sealed class ActivityReportHostView : ContentHostViewBase
         if (reportRow.TargetRow is null)
         {
             _workflowStore.ClearRowDetailSelection();
-            _detailView.Visibility = Visibility.Collapsed;
+            DetailView.Visibility = Visibility.Collapsed;
             return false;
         }
 
@@ -231,7 +226,7 @@ public sealed class ActivityReportHostView : ContentHostViewBase
                 ? new ContractTableRowDetailStrategy()
                 : new StageRowDetailStrategy();
             context.ApplyTo(_workflowStore, strategy);
-            _detailView.Visibility = Visibility.Visible;
+            DetailView.Visibility = Visibility.Visible;
             return true;
         }
         catch (OperationCanceledException)
@@ -356,33 +351,61 @@ public sealed class ActivityReportHostView : ContentHostViewBase
         IsFilterable = false
     };
 
-    private static DataTemplate BuildTreeTemplate()
+    private void SetSection(ActivityReportSection section, CbsTableView table, bool isExpanded)
     {
-        const string xaml = """
-            <DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-                <TreeViewItem IsExpanded="{Binding IsExpanded, Mode=TwoWay}" ItemsSource="{Binding Children}">
-                    <TreeViewItem.Content>
-                        <ContentControl HorizontalContentAlignment="Stretch" Content="{Binding Content}" />
-                    </TreeViewItem.Content>
-                </TreeViewItem>
-            </DataTemplate>
-            """;
-        return (DataTemplate)Microsoft.UI.Xaml.Markup.XamlReader.Load(xaml);
+        switch (section.Kind)
+        {
+            case ActivityReportSectionKind.StatusChanges:
+                StatusChangesTable = table;
+                StatusChangesIsExpanded = isExpanded;
+                StatusChangesCount.Text = section.Rows.Count.ToString();
+                break;
+            case ActivityReportSectionKind.PendingStages:
+                PendingStagesTable = table;
+                PendingStagesIsExpanded = isExpanded;
+                PendingStagesCount.Text = section.Rows.Count.ToString();
+                break;
+            case ActivityReportSectionKind.AddedContracts:
+                AddedContractsTable = table;
+                AddedContractsIsExpanded = isExpanded;
+                AddedContractsCount.Text = section.Rows.Count.ToString();
+                break;
+            case ActivityReportSectionKind.DeadlineChanges:
+                DeadlineChangesTable = table;
+                DeadlineChangesIsExpanded = isExpanded;
+                DeadlineChangesCount.Text = section.Rows.Count.ToString();
+                break;
+            case ActivityReportSectionKind.Comments:
+                CommentsTable = table;
+                CommentsIsExpanded = isExpanded;
+                CommentsCount.Text = section.Rows.Count.ToString();
+                break;
+            case ActivityReportSectionKind.Funding:
+                FundingTable = table;
+                FundingIsExpanded = isExpanded;
+                FundingCount.Text = section.Rows.Count.ToString();
+                break;
+            case ActivityReportSectionKind.Payments:
+                PaymentsTable = table;
+                PaymentsIsExpanded = isExpanded;
+                PaymentsCount.Text = section.Rows.Count.ToString();
+                break;
+            default:
+                throw new InvalidOperationException($"Неизвестный раздел отчета: {section.Kind}.");
+        }
     }
 
-    private static CalendarDatePicker CreateDatePicker() => new()
+    private string GetSectionKey(TreeViewNode branch) => branch switch
     {
-        DateFormat = "{day.integer(2)}.{month.integer(2)}.{year.full}",
-        Height = 28,
-        Padding = new Thickness(6, 0, 6, 0)
+        _ when ReferenceEquals(branch, ActivityReport_StatusChanges) => ActivityReportSectionKind.StatusChanges.ToString(),
+        _ when ReferenceEquals(branch, ActivityReport_PendingStages) => ActivityReportSectionKind.PendingStages.ToString(),
+        _ when ReferenceEquals(branch, ActivityReport_AddedContracts) => ActivityReportSectionKind.AddedContracts.ToString(),
+        _ when ReferenceEquals(branch, ActivityReport_DeadlineChanges) => ActivityReportSectionKind.DeadlineChanges.ToString(),
+        _ when ReferenceEquals(branch, ActivityReport_Comments) => ActivityReportSectionKind.Comments.ToString(),
+        _ when ReferenceEquals(branch, ActivityReport_Funding) => ActivityReportSectionKind.Funding.ToString(),
+        _ when ReferenceEquals(branch, ActivityReport_Payments) => ActivityReportSectionKind.Payments.ToString(),
+        _ => throw new InvalidOperationException("Неизвестная ветка отчета активности.")
     };
-
-    private static void AddHeaderChild(Grid grid, FrameworkElement child, int column)
-    {
-        Grid.SetColumn(child, column);
-        grid.Children.Add(child);
-    }
 
     private void ClearOtherTableSelections(CbsTableView selectedTable)
     {
@@ -419,4 +442,5 @@ public sealed class ActivityReportHostView : ContentHostViewBase
         _detailCts?.Cancel();
         _workflowStore.ClearRowDetailSelection();
     }
+
 }

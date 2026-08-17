@@ -1116,7 +1116,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void AppendTrace(string message)
         {
-            TraceGenerated?.Invoke(this, new CbsTableTraceEventArgs(message));
+            TraceGenerated?.Invoke(this, new CbsTableTraceEventArgs($"[{Name}] {message}"));
         }
 
         private void InvalidateWindowCache()
