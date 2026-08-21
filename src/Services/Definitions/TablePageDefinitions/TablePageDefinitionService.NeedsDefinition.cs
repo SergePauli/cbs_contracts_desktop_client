@@ -54,12 +54,12 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                     Column("amount", "Кол-во", "amount", "amount", "5rem", CbsTableColumnAlignment.Right, DataFilterMode.Numeric),
                     IsecurityToolKindColumn(),
                     OrderColumn("order_number", "Номер счета", "order.order_number", "10rem"),
-                    OrderColumn("supplier", "Поставщик", "order.supplier.name", "16rem"),
+                    SupplierColumn(),
                     OrderStatusColumn(),
                     Column("stage", "Этап", "stage.name", "stage.name", "12rem"),
                     StageStatusColumn(),
                     Column("stage_deadline_at", "Срок", "stage.deadline_at", "stage.deadline_at", "7rem", CbsTableColumnAlignment.Left, DataFilterMode.Date),
-                    Column("contragent", "Контрагент", "stage.contragent", "stage.contragent", "18rem"),
+                    ContragentColumn(),
                     SeverityColumn(),
                     Column("price_cost", "Цена", "price_cost", "price_cost", "9rem", CbsTableColumnAlignment.Right, DataFilterMode.Numeric),
                     Column("cost", "Сумма", "cost", "cost", "10rem", CbsTableColumnAlignment.Right, DataFilterMode.Numeric),
@@ -86,7 +86,9 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
             string width,
             CbsTableColumnAlignment alignment = CbsTableColumnAlignment.Left,
             DataFilterMode filterMode = DataFilterMode.Text,
-            string? bodyTemplateKey = null)
+            string? bodyTemplateKey = null,
+            string? filterField = null,
+            string? sortField = null)
         {
             return new CbsTableColumnDefinition
             {
@@ -94,8 +96,8 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                 Header = header,
                 ApiField = apiField,
                 DisplayField = displayField,
-                FilterField = apiField,
-                SortField = apiField,
+                FilterField = filterField ?? apiField,
+                SortField = sortField ?? apiField,
                 DefaultWidth = width,
                 Alignment = alignment,
                 BodyTemplateKey = bodyTemplateKey,
@@ -186,9 +188,19 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
             string header,
             string apiField,
             string width,
-            string? bodyTemplateKey = null)
+            string? bodyTemplateKey = null,
+            string? filterField = null,
+            string? sortField = null)
         {
-            var column = Column(fieldKey, header, apiField, apiField, width, bodyTemplateKey: bodyTemplateKey);
+            var column = Column(
+                fieldKey,
+                header,
+                apiField,
+                apiField,
+                width,
+                bodyTemplateKey: bodyTemplateKey,
+                filterField: filterField,
+                sortField: sortField);
             column.IsVisible = false;
             return column;
         }
@@ -204,6 +216,29 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                 "OrderDeliveryStatus");
             column.IsVisible = false;
             return column;
+        }
+
+        private static CbsTableColumnDefinition SupplierColumn()
+        {
+            return OrderColumn(
+                "supplier",
+                "Поставщик",
+                "order.supplier.name",
+                "16rem",
+                filterField: "order.supplier.org.name_or_order.supplier.org.full_name",
+                sortField: "order.supplier.org.name");
+        }
+
+        private static CbsTableColumnDefinition ContragentColumn()
+        {
+            return Column(
+                "contragent",
+                "Контрагент",
+                "stage.contragent",
+                "stage.contragent",
+                "18rem",
+                filterField: "stage.contract.contragent.org.name_or_stage.contract.contragent.org.full_name",
+                sortField: "stage.contract.contragent.org.name");
         }
 
         private static CbsTableColumnDefinition StageStatusColumn() =>

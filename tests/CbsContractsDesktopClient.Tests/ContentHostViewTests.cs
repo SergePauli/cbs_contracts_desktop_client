@@ -319,7 +319,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("internal static class FilterIconFactory", iconFactory);
         Assert.Contains("BuildFilterClearIcon()", iconFactory);
         Assert.Contains("Glyph = \"\\uE71C\"", iconFactory);
-        Assert.Contains("Glyph = \"\\uE733\"", iconFactory);
+        Assert.Contains("Glyph = \"\\uE8BB\"", iconFactory);
         Assert.Contains("button.Content = FilterIconFactory.BuildFilterClearIcon();", complexHost);
         Assert.Contains("x:Name=\"ResetFiltersButton\"", referenceXaml);
         Assert.Contains("ResetFiltersButton.Content = FilterIconFactory.BuildFilterClearIcon();", referenceCodeBehind);

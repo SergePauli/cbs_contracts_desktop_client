@@ -26,7 +26,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             iconHost.Children.Add(new FontIcon
             {
-                Glyph = "\uE733",
+                Glyph = "\uE8BB",
                 FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 16,
                 Foreground = (Brush)Application.Current.Resources["StageDeadlineTextBrush"]

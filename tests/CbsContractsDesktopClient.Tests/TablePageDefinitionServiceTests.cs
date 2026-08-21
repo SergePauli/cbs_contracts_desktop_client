@@ -149,6 +149,18 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal("StageOrder", definition.Model);
         Assert.Equal("card", definition.Preset);
 
+        var supplier = definition.Columns.Single(static column => column.FieldKey == "supplier");
+        Assert.Equal("order.supplier.name", supplier.DisplayField);
+        Assert.Equal("order.supplier.org.name_or_order.supplier.org.full_name", supplier.FilterField);
+        Assert.Equal("order.supplier.org.name", supplier.SortField);
+
+        var contragent = definition.Columns.Single(static column => column.FieldKey == "contragent");
+        Assert.Equal("stage.contragent", contragent.DisplayField);
+        Assert.Equal(
+            "stage.contract.contragent.org.name_or_stage.contract.contragent.org.full_name",
+            contragent.FilterField);
+        Assert.Equal("stage.contract.contragent.org.name", contragent.SortField);
+
         var stageStatus = definition.Columns.Single(static column => column.FieldKey == "stage_status");
         Assert.Equal("stage.status_id", stageStatus.FilterField);
         Assert.Equal(CbsTableFilterEditorKind.MultiSelect, stageStatus.Filter.EditorKind);

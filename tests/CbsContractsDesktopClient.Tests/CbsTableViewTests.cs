@@ -74,7 +74,7 @@ public sealed class CbsTableViewTests
         Assert.Contains("OnMultiSelectCloseButtonClick", code);
         Assert.Contains("flyout.Hide();", code);
         Assert.Contains("Glyph = \"\\uE71C\"", iconFactory);
-        Assert.Contains("Glyph = \"\\uE733\"", iconFactory);
+        Assert.Contains("Glyph = \"\\uE8BB\"", iconFactory);
     }
 
     [Fact]

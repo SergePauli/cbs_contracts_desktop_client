@@ -290,8 +290,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            ApplyOrderColumnVisibility(showOrders);
-            RefreshCurrentTableDefinitionView();
+            if (ApplyOrderColumnVisibility(showOrders))
+            {
+                RefreshCurrentTableDefinitionView();
+            }
         }
 
         private void SyncOrderModeFromFilters()
@@ -311,22 +313,33 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _isSyncingOrderMode = false;
             }
 
-            ApplyOrderColumnVisibility(showOrders);
-            RefreshCurrentTableDefinitionView();
+            if (ApplyOrderColumnVisibility(showOrders))
+            {
+                RefreshCurrentTableDefinitionView();
+            }
         }
 
-        private void ApplyOrderColumnVisibility(bool isVisible)
+        private bool ApplyOrderColumnVisibility(bool isVisible)
         {
             if (CurrentDefinition is null)
             {
-                return;
+                return false;
             }
 
+            var hasChanges = false;
             foreach (var column in CurrentDefinition.Columns.Where(column =>
                          OrderColumnKeys.Contains(column.FieldKey, StringComparer.OrdinalIgnoreCase)))
             {
+                if (column.IsVisible == isVisible)
+                {
+                    continue;
+                }
+
                 column.IsVisible = isVisible;
+                hasChanges = true;
             }
+
+            return hasChanges;
         }
 
         private static ToggleButton CreateShowOrdersButton()
