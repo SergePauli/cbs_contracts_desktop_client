@@ -10,6 +10,8 @@ namespace CbsContractsDesktopClient.Models.References
 
         public ReferenceFieldEditorType EditorType { get; init; } = ReferenceFieldEditorType.Text;
 
+        public IReadOnlyList<ReferenceEnumOption> EnumOptions { get; init; } = [];
+
         public bool IsRequired { get; init; }
 
         public bool IsReadOnlyOnCreate { get; init; }

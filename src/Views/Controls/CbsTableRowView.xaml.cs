@@ -4,8 +4,10 @@ using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Orders;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Dialogs;
+using Windows.Foundation;
 using Windows.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -22,7 +24,10 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly List<Border> _skeletonCells = [];
         private readonly List<Border> _badgeCells = [];
         private readonly List<TextBlock> _badgeTexts = [];
+        private readonly List<Border> _cellSelectionBackgrounds = [];
         private bool _isConfiguring;
+        private int _selectedColumnStart = -1;
+        private int _selectedColumnEnd = -1;
 
         public static readonly DependencyProperty RowProperty =
             DependencyProperty.Register(
@@ -171,6 +176,67 @@ namespace CbsContractsDesktopClient.Views.Controls
             RefreshRow();
         }
 
+        public void SetCellSelection(int columnStart, int columnEnd)
+        {
+            _selectedColumnStart = columnStart;
+            _selectedColumnEnd = columnEnd;
+            UpdateCellSelection();
+        }
+
+        public int GetColumnIndex(Point position)
+        {
+            var offset = 0d;
+            for (var index = 0; index < Columns.Count; index++)
+            {
+                offset += RowGrid.ColumnDefinitions[index].ActualWidth;
+                if (position.X < offset)
+                {
+                    return index;
+                }
+            }
+
+            return -1;
+        }
+
+        internal static string GetCellText(
+            CbsTableColumnDefinition column,
+            TableDataRow row,
+            bool showStageCostFraction)
+        {
+            var valueKey = column.DisplayField ?? column.ApiField ?? column.FieldKey;
+            var value = row.GetValue(valueKey);
+            if (string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase))
+            {
+                var severity = StageOrderSeverityText.Parse(checked((int)(TryGetLong(value)
+                    ?? throw new InvalidOperationException("StageOrderSeverity должен содержать целочисленное значение."))));
+                return StageOrderSeverityText.GetLabel(severity);
+            }
+
+            if (!string.IsNullOrWhiteSpace(column.BodyTemplateKey))
+            {
+                var formatted = FormatTemplateValue(column.BodyTemplateKey, row, value, showStageCostFraction);
+                if (formatted is not null)
+                {
+                    return formatted;
+                }
+            }
+
+            if (column.BodyMode == CbsTableBodyMode.BooleanIcon)
+            {
+                return value switch
+                {
+                    true => "\u2713",
+                    false => string.Empty,
+                    null => "?",
+                    string textValue when bool.TryParse(textValue, out var parsedBoolean)
+                        => parsedBoolean ? "\u2713" : string.Empty,
+                    _ => "?"
+                };
+            }
+
+            return FormatCellValue(column, value);
+        }
+
         private static void OnStateChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var rowView = (CbsTableRowView)d;
@@ -213,6 +279,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             _skeletonCells.Clear();
             _badgeCells.Clear();
             _badgeTexts.Clear();
+            _cellSelectionBackgrounds.Clear();
             RowGrid.Children.Clear();
             RowGrid.ColumnDefinitions.Clear();
 
@@ -221,6 +288,11 @@ namespace CbsContractsDesktopClient.Views.Controls
                 RowGrid.ColumnDefinitions.Add(CreateDataColumnDefinition(Columns[index]));
 
                 var cellHost = new Grid();
+                var selectionBackground = new Border
+                {
+                    Background = (Brush)Application.Current.Resources["ShellTableRowSelectedBackgroundBrush"],
+                    Visibility = Visibility.Collapsed
+                };
                 var textCell = CreateTextCell();
                 var skeletonCell = CreateSkeletonCell();
                 var badgeText = CreateBadgeText();
@@ -231,7 +303,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 _skeletonCells.Add(skeletonCell);
                 _badgeCells.Add(badgeCell);
                 _badgeTexts.Add(badgeText);
+                _cellSelectionBackgrounds.Add(selectionBackground);
 
+                cellHost.Children.Add(selectionBackground);
                 cellHost.Children.Add(textCell);
                 cellHost.Children.Add(skeletonCell);
                 cellHost.Children.Add(badgeCell);
@@ -263,6 +337,17 @@ namespace CbsContractsDesktopClient.Views.Controls
             RowGrid.Children.Add(fillerCell);
 
             ApplyDensity();
+            UpdateCellSelection();
+        }
+
+        private void UpdateCellSelection()
+        {
+            for (var index = 0; index < _cellSelectionBackgrounds.Count; index++)
+            {
+                _cellSelectionBackgrounds[index].Visibility = index >= _selectedColumnStart && index <= _selectedColumnEnd
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
         }
 
         private void UpdateCellContent()
@@ -283,9 +368,9 @@ namespace CbsContractsDesktopClient.Views.Controls
                 {
                     var valueKey = Columns[index].DisplayField ?? Columns[index].ApiField ?? Columns[index].FieldKey;
                     var value = Row?.GetValue(valueKey);
-                    if (IsStatusBadgeTemplate(Columns[index]))
+                    if (IsBadgeTemplate(Columns[index]))
                     {
-                        ApplyStatusBadgeContent(_badgeCells[index], _badgeTexts[index], Row, value);
+                        ApplyBadgeContent(Columns[index], _badgeCells[index], _badgeTexts[index], Row, value);
                         _textCells[index].Text = string.Empty;
                         _textCells[index].Visibility = Visibility.Collapsed;
                         _badgeCells[index].Visibility = string.IsNullOrWhiteSpace(_badgeTexts[index].Text)
@@ -313,7 +398,10 @@ namespace CbsContractsDesktopClient.Views.Controls
                 if (formatted is not null)
                 {
                     textCell.Text = formatted;
-                    textCell.Foreground = ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
+                    textCell.Foreground = string.Equals(column.BodyTemplateKey, "ActivityReportDeletedAmount", StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(formatted, "удален", StringComparison.Ordinal)
+                        ? new SolidColorBrush(Microsoft.UI.Colors.Red)
+                        : ResolveBrush("ShellPrimaryTextBrush", "ShellPrimaryTextBrush");
                     return;
                 }
             }
@@ -377,6 +465,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 "StageCost" => FormatStageCost(value, showStageCostFraction),
                 "StageDuration" => FormatStageDuration(row, value),
                 "StageSzi" => HasStageTaskKind(row, 10) ? "\u2713" : string.Empty,
+                "IsecurityToolKind" => FormatIsecurityToolKind(value),
                 "ContractDsp" => FormatContractDsp(row),
                 "ContractRegion" => FirstText(
                     row.GetValue("contragent.region.name"),
@@ -384,8 +473,21 @@ namespace CbsContractsDesktopClient.Views.Controls
                     value),
                 "ContractCost" => FormatStageCost(value, showStageCostFraction),
                 "ContractFunded" => FormatContractFunded(value),
+                "ActivityReportDeletedAmount" => value?.ToString() ?? string.Empty,
                 _ => null
             };
+        }
+
+        private static string FormatIsecurityToolKind(object? value)
+        {
+            var numericValue = value switch
+            {
+                long longValue => longValue,
+                decimal decimalValue when decimal.Truncate(decimalValue) == decimalValue => (long)decimalValue,
+                _ => throw new InvalidOperationException("IsecurityTool.kind должен содержать целочисленное значение.")
+            };
+
+            return IsecurityToolKindText.GetLabel(IsecurityToolKindText.Parse(numericValue));
         }
 
         private static string FormatContractDsp(TableDataRow row)
@@ -429,9 +531,90 @@ namespace CbsContractsDesktopClient.Views.Controls
                 : string.Empty;
         }
 
-        private static bool IsStatusBadgeTemplate(CbsTableColumnDefinition column)
+        private static bool IsBadgeTemplate(CbsTableColumnDefinition column)
         {
-            return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(column.BodyTemplateKey, "StatusBadge", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(column.BodyTemplateKey, "OrderDeliveryStatus", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(column.BodyTemplateKey, "OrderStatusBadge", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void ApplyBadgeContent(CbsTableColumnDefinition column, Border badgeCell, TextBlock badgeText, TableDataRow? row, object? value)
+        {
+            if (string.Equals(column.BodyTemplateKey, "StageOrderSeverity", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyStageOrderSeverityBadgeContent(badgeCell, badgeText, value);
+                return;
+            }
+
+            if (string.Equals(column.BodyTemplateKey, "OrderDeliveryStatus", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyOrderStatusBadgeContent(badgeCell, badgeText, row, value, "order.status.id");
+                return;
+            }
+
+            if (string.Equals(column.BodyTemplateKey, "OrderStatusBadge", StringComparison.OrdinalIgnoreCase))
+            {
+                ApplyOrderStatusBadgeContent(badgeCell, badgeText, row, value, "status.id");
+                return;
+            }
+
+            ApplyStatusBadgeContent(badgeCell, badgeText, row, value);
+        }
+
+        private static void ApplyStageOrderSeverityBadgeContent(Border badgeCell, TextBlock badgeText, object? value)
+        {
+            var rawSeverity = TryGetLong(value);
+            if (rawSeverity is null)
+            {
+                badgeText.Text = string.Empty;
+                return;
+            }
+
+            var severity = StageOrderSeverityText.Parse(checked((int)rawSeverity.Value));
+            var background = severity switch
+            {
+                StageOrderSeverity.Need => Windows.UI.Color.FromArgb(255, 255, 193, 7),
+                StageOrderSeverity.InStock => Windows.UI.Color.FromArgb(255, 0, 176, 80),
+                StageOrderSeverity.OnControl => Windows.UI.Color.FromArgb(255, 220, 53, 69),
+                StageOrderSeverity.NotApproved => Windows.UI.Color.FromArgb(255, 137, 207, 240),
+                StageOrderSeverity.Delivered => Windows.UI.Color.FromArgb(255, 224, 224, 224),
+                _ => throw new ArgumentOutOfRangeException(nameof(value))
+            };
+            badgeText.Text = StageOrderSeverityText.GetLabel(severity);
+            badgeText.Foreground = new SolidColorBrush(
+                severity is StageOrderSeverity.Need or StageOrderSeverity.NotApproved or StageOrderSeverity.Delivered
+                    ? Microsoft.UI.Colors.Black
+                    : Microsoft.UI.Colors.White);
+            badgeCell.Background = new SolidColorBrush(background);
+        }
+
+        private static void ApplyOrderStatusBadgeContent(
+            Border badgeCell,
+            TextBlock badgeText,
+            TableDataRow? row,
+            object? value,
+            string statusIdField)
+        {
+            var statusName = value?.ToString();
+            if (string.IsNullOrWhiteSpace(statusName))
+            {
+                badgeText.Text = string.Empty;
+                return;
+            }
+
+            var statusId = TryGetLong(row?.GetValue(statusIdField));
+            var background = statusId switch
+            {
+                2 => Windows.UI.Color.FromArgb(255, 194, 237, 246),
+                3 => Windows.UI.Color.FromArgb(255, 201, 233, 212),
+                4 => Windows.UI.Color.FromArgb(255, 255, 235, 156),
+                _ => Windows.UI.Color.FromArgb(255, 224, 224, 224)
+            };
+
+            badgeText.Text = statusName;
+            badgeText.Foreground = new SolidColorBrush(Windows.UI.Color.FromArgb(255, 64, 64, 64));
+            badgeCell.Background = new SolidColorBrush(background);
         }
 
         private static void ApplyStatusBadgeContent(Border badgeCell, TextBlock badgeText, TableDataRow? row, object? value)

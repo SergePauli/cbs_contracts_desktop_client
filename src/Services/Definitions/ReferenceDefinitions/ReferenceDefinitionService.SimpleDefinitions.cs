@@ -118,9 +118,10 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                     model: "OrderStatus",
                     title: "Статусы доставки",
                     preset: "card",
+                    includeIdOnCreate: true,
                     fields:
                     [
-                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
+                        CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnEdit: true),
                         CreateTextField("name", "Наименование", isRequired: true),
                         CreateNumberField("order", "Порядок", isRequired: true),
                         CreateTextField("description", "Описание")
@@ -142,16 +143,22 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                         CreateNumberField("id", "ID", isRequired: true, isReadOnlyOnCreate: true, isReadOnlyOnEdit: true),
                         CreateTextField("name", "Наименование", isRequired: true),
                         CreateTextField("unit", "Ед."),
-                        CreateNumberField("priority", "Приоритет"),
-                        CreateBooleanField("used", "Исп.")
+                        CreateNumberField("default_cost", "Стоимость по умолчанию"),
+                        CreateEnumField(
+                            "kind",
+                            "Тип товара",
+                            Enum.GetValues<IsecurityToolKind>()
+                                .Select(static kind => new ReferenceEnumOption((long)kind, IsecurityToolKindText.GetLabel(kind)))
+                                .ToList(),
+                            isRequired: true)
                     ],
                     columns:
                     [
                         CreateNumberColumn("id", "ID", width: "5rem"),
                         CreateTextColumn("name", "Наименование"),
                         CreateTextColumn("unit", "Ед."),
-                        CreateNumberColumn("priority", "Приоритет"),
-                        CreateBooleanColumn("used", "Исп.")
+                        CreateNumberColumn("default_cost", "Стоимость по умолчанию"),
+                        CreateNumberColumn("kind", "Тип товара", width: "9rem", bodyTemplateKey: "IsecurityToolKind")
                     ])
             ];
         }

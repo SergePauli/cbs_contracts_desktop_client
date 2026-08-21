@@ -40,6 +40,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                 BuildHolidayReferenceDefinition(),
                 BuildEmployeeReferenceDefinition(),
                 BuildContragentReferenceDefinition(),
+                BuildOrderReferenceDefinition(),
                 BuildProfileReferenceDefinition()
             ];
         }
@@ -55,7 +56,8 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
             string? initialSortField = null,
             DataSortDirection? initialSortDirection = null,
             ReferenceEditorKind editorKind = ReferenceEditorKind.Generic,
-            bool isAuditEnabled = false)
+            bool isAuditEnabled = false,
+            bool includeIdOnCreate = false)
         {
             return new ReferenceDefinition
             {
@@ -68,6 +70,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                 InitialSortDirection = initialSortDirection,
                 EditorKind = editorKind,
                 IsAuditEnabled = isAuditEnabled,
+                IncludeIdOnCreate = includeIdOnCreate,
                 Fields = fields,
                 Columns = columns
             };
@@ -113,7 +116,11 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
             };
         }
 
-        private static CbsTableColumnDefinition CreateNumberColumn(string key, string header, string? width = null)
+        private static CbsTableColumnDefinition CreateNumberColumn(
+            string key,
+            string header,
+            string? width = null,
+            string? bodyTemplateKey = null)
         {
             return new CbsTableColumnDefinition
             {
@@ -122,6 +129,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                 ApiField = key,
                 DefaultWidth = width ?? GetDefaultNumberWidth(key),
                 Alignment = CbsTableColumnAlignment.Right,
+                BodyTemplateKey = bodyTemplateKey,
                 IsFilterable = true,
                 Filter = new CbsTableColumnFilterDefinition
                 {
@@ -232,6 +240,23 @@ namespace CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions
                 IsRequired = isRequired,
                 IsReadOnlyOnCreate = isReadOnlyOnCreate,
                 IsReadOnlyOnEdit = isReadOnlyOnEdit
+            };
+        }
+
+        private static ReferenceFieldDefinition CreateEnumField(
+            string key,
+            string label,
+            IReadOnlyList<ReferenceEnumOption> options,
+            bool isRequired = false)
+        {
+            return new ReferenceFieldDefinition
+            {
+                FieldKey = key,
+                Label = label,
+                ApiField = key,
+                EditorType = ReferenceFieldEditorType.Enum,
+                EnumOptions = options,
+                IsRequired = isRequired
             };
         }
 

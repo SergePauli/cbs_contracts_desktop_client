@@ -19,6 +19,7 @@ namespace CbsContractsDesktopClient.Collections
         private readonly Func<TItem> _placeholderFactory;
         private readonly HashSet<int> _residentIndexes = [];
         private readonly SemaphoreSlim _commitGate = new(1, 1);
+        private readonly SemaphoreSlim _refreshGate = new(1, 1);
         private LazyDataQuery _query;
         private CancellationTokenSource? _viewportLoadCts;
         private bool _isInitialized;
@@ -354,13 +355,36 @@ namespace CbsContractsDesktopClient.Collections
 
         public async Task RefreshAsync(CancellationToken cancellationToken = default)
         {
-            if (IsLoading)
+            await _refreshGate.WaitAsync(cancellationToken);
+
+            try
             {
-                return;
+                await RefreshCoreAsync(cancellationToken);
             }
+            finally
+            {
+                _refreshGate.Release();
+            }
+        }
 
+        public async Task ReplaceQueryAsync(LazyDataQuery query, CancellationToken cancellationToken = default)
+        {
+            await _refreshGate.WaitAsync(cancellationToken);
+            try
+            {
+                _query = query;
+                _isInitialized = false;
+                await RefreshCoreAsync(cancellationToken);
+            }
+            finally
+            {
+                _refreshGate.Release();
+            }
+        }
+
+        private async Task RefreshCoreAsync(CancellationToken cancellationToken)
+        {
             CancelViewportLoads();
-
             IsLoading = true;
             ErrorMessage = string.Empty;
 
@@ -407,14 +431,6 @@ namespace CbsContractsDesktopClient.Collections
             {
                 IsLoading = false;
             }
-        }
-
-        public async Task ReplaceQueryAsync(LazyDataQuery query, CancellationToken cancellationToken = default)
-        {
-            CancelViewportLoads();
-            _query = query;
-            _isInitialized = false;
-            await RefreshAsync(cancellationToken);
         }
 
         public IAsyncOperation<LoadMoreItemsResult> LoadMoreItemsAsync(uint count)

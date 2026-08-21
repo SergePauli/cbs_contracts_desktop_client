@@ -62,7 +62,7 @@
                             BorderBrush="{x:Null}"
                             Click="RefreshButton_Click"
                             Content="&#xE72C;"
-                            FontFamily="Segoe Fluent Icons"
+                            FontFamily="{StaticResource SymbolThemeFontFamily}"
                             FontSize="14"
                             Foreground="{StaticResource ShellSecondaryTextBrush}"
                             ToolTipService.ToolTip="Обновить диагностику" />
@@ -98,7 +98,7 @@
                                         Spacing="6"
                                         VerticalAlignment="Center">
                                         <FontIcon
-                                            FontFamily="Segoe Fluent Icons"
+                                            FontFamily="{StaticResource SymbolThemeFontFamily}"
                                             FontSize="10"
                                             Foreground="{Binding StatusBrush}"
                                             Glyph="&#xEA3A;" />

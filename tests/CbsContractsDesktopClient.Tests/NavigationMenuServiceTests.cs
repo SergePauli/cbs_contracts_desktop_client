@@ -7,6 +7,7 @@ using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Workspace;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
@@ -18,6 +19,42 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class NavigationMenuServiceTests
 {
+    [Fact]
+    public void BuildMenu_CommerUser_SeesNeedsAndOrders()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "user",
+            DepartmentId = 2
+        };
+
+        var baseItems = service.BuildMenu(user)
+            .Single(static section => section.Title == "База")
+            .Items;
+
+        Assert.Contains(baseItems, static item => item.Route == "/needs");
+        Assert.Contains(baseItems, static item => item.Route == "/orders");
+    }
+
+    [Fact]
+    public void BuildMenu_OziUser_DoesNotSeeNeedsOrOrders()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "user",
+            DepartmentId = 1
+        };
+
+        var baseItems = service.BuildMenu(user)
+            .Single(static section => section.Title == "База")
+            .Items;
+
+        Assert.DoesNotContain(baseItems, static item => item.Route == "/needs");
+        Assert.DoesNotContain(baseItems, static item => item.Route == "/orders");
+    }
+
     [Fact]
     public void BuildMenu_AdminUser_SeesIsecurityToolReference()
     {
@@ -53,13 +90,30 @@ public sealed class NavigationMenuServiceTests
     }
 
     [Fact]
-    public void BuildMenu_RegularUser_DoesNotSeeIsecurityToolReference()
+    public void BuildMenu_CommerUser_SeesIsecurityToolReference()
     {
         var service = new NavigationMenuService();
         var user = new User
         {
             Role = "user",
             DepartmentId = 2
+        };
+
+        var menu = service.BuildMenu(user);
+
+        Assert.Contains(
+            menu.SelectMany(static section => section.Items),
+            static item => item.Route == "/references/IsecurityTool");
+    }
+
+    [Fact]
+    public void BuildMenu_RegularUser_DoesNotSeeIsecurityToolReference()
+    {
+        var service = new NavigationMenuService();
+        var user = new User
+        {
+            Role = "user",
+            DepartmentId = 99
         };
 
         var menu = service.BuildMenu(user);
@@ -160,7 +214,12 @@ public sealed class NavigationMenuServiceTests
         var sessionSection = menu.Single(static section => section.IsSessionSection);
 
         Assert.DoesNotContain(baseSection.Items, static item => item.Route == "/diagnostics");
-        Assert.Equal(["/diagnostics", "/logout"], sessionSection.Items.Select(static item => item.Route));
+        Assert.Equal(
+            ["/diagnostics", "/diagnostics/log", "/logout"],
+            sessionSection.Items.Select(static item => item.Route));
+        var diagnosticsLogItem = sessionSection.Items.Single(static item => item.Route == "/diagnostics/log");
+        Assert.True(diagnosticsLogItem.IsAction);
+        Assert.Equal(DiagnosticsFileLogger.LogFilePath, diagnosticsLogItem.FilePath);
     }
 
     [Fact]
@@ -195,7 +254,9 @@ public sealed class NavigationMenuServiceTests
         var sessionSection = menu.Single(static section => section.IsSessionSection);
 
         Assert.DoesNotContain(baseSection.Items, static item => item.Route == "/diagnostics");
-        Assert.Equal(["/diagnostics", "/logout"], sessionSection.Items.Select(static item => item.Route));
+        Assert.Equal(
+            ["/diagnostics", "/diagnostics/log", "/logout"],
+            sessionSection.Items.Select(static item => item.Route));
     }
 
     private sealed class FakeReferenceDefinitionService : IReferenceDefinitionService

@@ -8,6 +8,24 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContractCommerEditPayloadBuilderTests
 {
     [Fact]
+    public void BuildCommentUpdate_ContainsOnlyCommentMutationFields()
+    {
+        var payload = ContractCommerEditPayloadBuilder.BuildCommentUpdate(
+            15L,
+            "contract-list-key",
+            "  новый комментарий  ",
+            7);
+
+        Assert.Equal(3, payload.Count);
+        Assert.Equal(15L, payload["id"]);
+        Assert.Equal("contract-list-key", payload["list_key"]);
+        var comments = Assert.IsType<Dictionary<string, object?>[]>(payload["comments_attributes"]);
+        var comment = Assert.Single(comments);
+        Assert.Equal("новый комментарий", comment["content"]);
+        Assert.Equal(7, comment["profile_id"]);
+    }
+
+    [Fact]
     public void Build_CreatePayload_MatchesAddContractJsonContract()
     {
         var stage = StageEditState.FromRow(CreateRow(
@@ -66,6 +84,44 @@ public sealed class ContractCommerEditPayloadBuilderTests
         Assert.Equal(
             """{"data_set":"item","Contract":{"task_kind_id":1,"code":"02","year":2026,"order":null,"contragent_id":1007,"status_id":0,"governmental":true,"external_number":"1234567","stages_attributes":[{"list_key":"757c3799-6a01-4187-bb30-7b6c17ad1e18","priority":0,"used":true,"cost":124324,"task_kind_id":1,"deadline_kind":"calendar_days","duration":13,"payment_deadline_kind":"c_plan","payment_deadline_at":"Sat Jun 27 2026","tasks_attributes":[{"list_key":"319fa49a-2a0b-44e3-8589-f9e897313e8d","task_kind_id":10},{"list_key":"671e37c1-bb1d-4097-a516-b9e5ab49c3c7","task_kind_id":12}],"comments_attributes":[{"content":"\u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 \u044D\u0442\u0430\u043F\u0430","profile_id":1}]}],"revisions_attributes":[{"list_key":"dbc8292c-5f9e-44f0-ba40-d29daab84493","priority":0,"is_signed":false,"is_present":true,"used":true,"description":"\u0414\u043E\u0433\u043E\u0432\u043E\u0440","doc_link":"C:\\Projects\\cbs_contracts_webclient\\README.md"}],"comments_attributes":[{"content":"\u043A\u043E\u043C\u043C\u0435\u043D\u0442\u0430\u0440\u0438\u0439 \u043A\u043E\u043D\u0442\u0440\u0430\u043A\u0442\u0430","profile_id":1}]}}""",
             JsonSerializer.Serialize(request));
+    }
+
+    [Fact]
+    public void Build_DestroyedPersistedStage_EmitsNestedDestroyAttributes()
+    {
+        var stage = StageEditState.FromRow(CreateRow(
+            ("id", 6393L),
+            ("list_key", "stage-list-key")));
+        stage.IsDestroyed = true;
+
+        var payload = ContractCommerEditPayloadBuilder.Build(
+            CreateRow(),
+            new ContractCommerEditPayloadInput(
+                IsCreateMode: false,
+                Id: 6156L,
+                ListKey: null,
+                TaskKindId: null,
+                Code: null,
+                Year: null,
+                Order: null,
+                ContragentId: null,
+                StatusId: null,
+                SignedAt: null,
+                Comment: null,
+                Governmental: false,
+                ExternalNumber: null,
+                DeadlineAt: null,
+                ClosedAt: null,
+                ProfileId: null),
+            [stage],
+            []);
+
+        var stages = Assert.IsType<List<Dictionary<string, object?>>>(payload["stages_attributes"]);
+        var destroyedStage = Assert.Single(stages);
+        Assert.Equal(6393L, destroyedStage["id"]);
+        Assert.Equal("stage-list-key", destroyedStage["list_key"]);
+        Assert.Equal("1", destroyedStage["_destroy"]);
+        Assert.Equal(3, destroyedStage.Count);
     }
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)

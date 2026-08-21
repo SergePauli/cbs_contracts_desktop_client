@@ -57,6 +57,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
+        private readonly ContractCommentWorkflow _contractCommentWorkflow;
         private readonly ContractTableRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private CancellationTokenSource? _detailCts;
@@ -64,7 +65,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private Button? _createButton;
         private Button? _editButton;
         private Button? _infoButton;
-        private Button? _copyButton;
+        private Button? _copyContractDataButton;
+        private Button? _copyCellSelectionButton;
         private Button? _commentButton;
         private Button? _createEmployeeButton;
         private Button? _contragentMenuButton;
@@ -85,6 +87,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
+            _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
             _showContractCostFraction = _localUserSettingsService.Get().ShowContractCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -101,8 +104,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
             _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
-            _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать контракт");
-            _copyButton.Click += (_, _) => CopyContractInfo();
+            _copyContractDataButton = CreateHeaderIconButton("\uE8F3", "Скопировать данные выбранного контракта в буфер");
+            _copyContractDataButton.Click += (_, _) => CopyContractInfo();
+
+            _copyCellSelectionButton = CreateHeaderIconButton("\uE8C8", "Скопировать выделенный диапазон");
+            _copyCellSelectionButton.Click += (_, _) => TableView.CopySelectedCellRangeToClipboard();
 
             _commentButton = CreateHeaderIconButton("\uE90A", "Добавить комментарий к контракту");
             _commentButton.Click += CommentContractButton_Click;
@@ -127,7 +133,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                 _createButton,
                 _editButton,
                 _infoButton,
-                _copyButton,
+                _copyContractDataButton,
+                _copyCellSelectionButton,
                 _commentButton,
                 _createEmployeeButton,
                 _contragentMenuButton,
@@ -265,7 +272,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             ApplyCreateButtonState(_createButton, canCreateContract);
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
             ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
-            ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyContractDataButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);
             ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
             ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
             ApplyCreateButtonState(_contragentMenuButton, !_isContragentWorkflowInProgress);
@@ -290,7 +298,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             Store.AppendUiTrace($"CONTRACT DETAIL UPDATE row={DescribeDetailRow(row)}");
             SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
-            _detailView.ContractRow = row;
         }
 
         private async Task RefreshDetailAsync()
@@ -306,8 +313,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             var selectedRow = Store.SelectedRow;
             Store.AppendUiTrace($"CONTRACT DETAIL REFRESH start selected={DescribeDetailRow(selectedRow)}");
-            _detailView.ContractRow = selectedRow;
-            _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
@@ -357,8 +362,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
-            _detailView.ContractRow = context.Contract;
-            _detailView.ContragentRow = context.Contragent;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;
@@ -390,9 +393,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             Store.AppendUiTrace("CONTRACT DETAIL CLEAR");
             _detailCts?.Cancel();
-            _detailView.RevisionRow = null;
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
@@ -476,41 +476,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (_userService.CurrentUser?.ProfileId is not int profileId)
-            {
-                await ShowErrorDialogAsync(
-                    "Комментарий к контракту",
-                    "Не удалось определить profile_id пользователя.");
-                return;
-            }
-
-            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = contractId,
-                ["comments_attributes"] = new[]
-                {
-                    new Dictionary<string, object?>
-                    {
-                        ["content"] = normalizedComment,
-                        ["profile_id"] = profileId
-                    }
-                }
-            };
             var listKey = Store.SelectedRow.GetValue("list_key")?.ToString();
-            if (!string.IsNullOrWhiteSpace(listKey))
-            {
-                payload["list_key"] = listKey;
-            }
 
             try
             {
-                var savedRow = await _modelMutationService.UpdateAsync(ContractModel, payload);
+                await _contractCommentWorkflow.SaveContractCommentAsync(
+                    contractId,
+                    listKey,
+                    normalizedComment);
                 flyout.Hide();
                 ShowSuccessNotification(
                     "Комментарий сохранен",
                     "Комментарий к контракту добавлен.");
-                await RefreshTableRowAfterSaveAsync(isCreateMode: false, savedRow);
-                await RefreshDetailAsync();
             }
             catch (Exception ex)
             {
@@ -737,9 +714,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceLookupCacheService.Invalidate(ContractModel);
             await RefreshTableRowAfterSaveAsync(isCreateMode: false, savedRow);
             await RefreshDetailAsync();
-            ShowSuccessNotification(
-                "Контракт сохранен",
-                "Изменения контракта сохранены.");
         }
 
         private async Task ShowEditDialogForCurrentUserAsync()
@@ -1014,9 +988,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             _referenceLookupCacheService.Invalidate(ContractModel);
             await RefreshTableRowAfterSaveAsync(isCreateMode: true, savedRow);
-            ShowSuccessNotification(
-                "Контракт создан",
-                "Новый контракт сохранен.");
         }
 
         private void AttachContractCommerSaveHandler(
@@ -1024,22 +995,39 @@ namespace CbsContractsDesktopClient.Views.Shell
             bool isCreateMode,
             Action<TableDataRow> setSavedRow)
         {
+            var createMode = isCreateMode;
             dialog.SaveRequestedAsync += async args =>
             {
                 try
                 {
+                    var savedAsCreate = createMode;
                     var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
-                    if (!isCreateMode && !HasUpdatePayloadChanges(payload))
+                    if (!createMode && !HasUpdatePayloadChanges(payload))
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
                         return;
                     }
 
-                    var savedRow = isCreateMode
+                    var savedRow = createMode
                         ? await _modelMutationService.CreateAsync(ContractModel, payload)
                         : await _modelMutationService.UpdateAsync(ContractModel, payload);
+                    var savedId = TryGetSelectedRowId(savedRow)
+                        ?? throw new InvalidOperationException("Saved contract response must contain id.");
+                    if (createMode)
+                    {
+                        dialog.AcceptCreatedContractIdentity(
+                            savedId,
+                            savedRow.GetValue("list_key")?.ToString());
+                        createMode = false;
+                    }
+
                     setSavedRow(savedRow);
+                    ShowSuccessNotification(
+                        savedAsCreate ? "Контракт создан" : "Контракт сохранен",
+                        savedAsCreate ? "Новый контракт сохранен." : "Изменения контракта сохранены.");
+                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(savedId);
+                    dialog.ReloadAsEdit(editRow);
                 }
                 catch (Exception ex)
                 {

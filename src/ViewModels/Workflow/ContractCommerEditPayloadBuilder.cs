@@ -26,6 +26,25 @@ public sealed record ContractCommerEditPayloadInput(
 
 public static class ContractCommerEditPayloadBuilder
 {
+    public static IReadOnlyDictionary<string, object?> BuildCommentUpdate(
+        long contractId,
+        string? listKey,
+        string comment,
+        int profileId)
+    {
+        var request = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["id"] = contractId
+        };
+        if (!string.IsNullOrWhiteSpace(listKey))
+        {
+            request["list_key"] = listKey;
+        }
+
+        AppendCommentAttributes(request, comment, profileId);
+        return request;
+    }
+
     public static IReadOnlyDictionary<string, object?> Build(
         TableDataRow sourceRow,
         ContractCommerEditPayloadInput input,

@@ -77,7 +77,7 @@ namespace CbsContractsDesktopClient.ViewModels.Data
             await Items.ReplaceQueryAsync(BuildQuery(), cancellationToken);
         }
 
-        public async Task SetFilterAsync(
+        public async Task<bool> SetFilterAsync(
             string fieldKey,
             DataFilterMode filterMode,
             DataFilterMatchMode matchMode,
@@ -105,6 +105,7 @@ namespace CbsContractsDesktopClient.ViewModels.Data
             }
 
             await RefreshAsync(cancellationToken);
+            return string.IsNullOrWhiteSpace(Items.ErrorMessage);
         }
 
         public async Task ClearFiltersAsync(CancellationToken cancellationToken = default)

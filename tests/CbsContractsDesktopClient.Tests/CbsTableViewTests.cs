@@ -74,7 +74,7 @@ public sealed class CbsTableViewTests
         Assert.Contains("OnMultiSelectCloseButtonClick", code);
         Assert.Contains("flyout.Hide();", code);
         Assert.Contains("Glyph = \"\\uE71C\"", iconFactory);
-        Assert.Contains("Glyph = \"\\uE733\"", iconFactory);
+        Assert.Contains("Glyph = \"\\uE8BB\"", iconFactory);
     }
 
     [Fact]
@@ -104,18 +104,21 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
-    public void CbsTableView_BuildsTriStateBooleanFilterCheckBox()
+    public void CbsTableView_BuildsFourStateBooleanFilterButton()
     {
         var code = File.ReadAllText(CbsTableViewPath);
 
-        Assert.Contains("CreateBooleanFilterCheckBox", code);
-        Assert.Contains("IsThreeState = true", code);
-        Assert.Contains("OnBooleanFilterCheckBoxChanged", code);
-        Assert.Contains("checkBox.IsChecked", code);
+        Assert.Contains("CreateBooleanFilterButton", code);
+        Assert.Contains("OnBooleanFilterButtonClick", code);
+        Assert.Contains("column.Filter.SupportsNullFilter", code);
         Assert.Contains("DataFilterMatchMode.Equals", code);
+        Assert.Contains("DataFilterMatchMode.IsNull", code);
         Assert.Contains("CbsTableFilterEditorKind.Boolean", code);
-        Assert.Contains("MinWidth = 24", code);
-        Assert.Contains("ToolTipService.SetToolTip(checkBox, \"Фильтр: все / да / нет\")", code);
+        Assert.Contains("FontSize = 12", code);
+        Assert.Contains("MinWidth = 20", code);
+        Assert.Contains("? \"\\uE897\"", code);
+        Assert.Contains("false => \"\\uE711\"", code);
+        Assert.Contains("new Thickness(1)", code);
     }
 
     [Fact]
@@ -178,7 +181,7 @@ public sealed class CbsTableViewTests
         var code = File.ReadAllText(CbsTableViewPath);
 
         Assert.Contains("FormatFilterValue(column.Filter.Value)", code);
-        Assert.Contains("IsChecked = TryGetBooleanFilterValue(column.Filter.Value)", code);
+        Assert.Contains("UpdateBooleanFilterButton(button, column)", code);
         Assert.Contains("Date = TryGetDateFilterValue(column.Filter.Value)", code);
         Assert.Contains("SelectedValues = NormalizeFilterSelectedValues(column.Filter.Value)", code);
         Assert.Contains("private static IReadOnlyList<object?> NormalizeFilterSelectedValues(object? value)", code);
@@ -222,6 +225,20 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
+    public void CbsTableView_UpDownWithoutShiftClearsCellSelectionBeforeMovingRow()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+        var handlerStart = code.IndexOf("private void OnPreviewKeyDown", StringComparison.Ordinal);
+        var handlerEnd = code.IndexOf("private void OnCopySelectionAcceleratorInvoked", handlerStart, StringComparison.Ordinal);
+        var handler = code[handlerStart..handlerEnd];
+
+        Assert.True(handler.IndexOf("TryExtendCellSelectionVertically(e.Key)", StringComparison.Ordinal)
+            < handler.IndexOf("ClearCellSelection();", StringComparison.Ordinal));
+        Assert.True(handler.IndexOf("ClearCellSelection();", StringComparison.Ordinal)
+            < handler.IndexOf("MoveSelectionOrScroll", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void CbsTableView_ArrowKeysMoveSelectionBeforeScrolling()
     {
         var code = File.ReadAllText(CbsTableViewPath);
@@ -247,6 +264,38 @@ public sealed class CbsTableViewTests
         Assert.Contains("new CbsTableRowSelectionChangedEventArgs(row, rowIndex, isSelected: true)", code);
         Assert.Contains("Focus(FocusState.Programmatic);", code);
         Assert.Contains("SelectSingleRow(rowView.Row!, rowIndex);", code);
+    }
+
+    [Fact]
+    public void CbsTableView_SelectsCellRangesAndCopiesSpreadsheetText()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("SupportsCellSelectionProperty", code);
+        Assert.Contains("private CbsTableCellPosition? _cellSelectionAnchor;", code);
+        Assert.Contains("rowView.PointerMoved += OnRowPointerMoved;", code);
+        Assert.Contains("TryExtendCellSelectionVertically", code);
+        Assert.Contains("public bool CopySelectedCellRangeToClipboard()", code);
+        Assert.Contains("return CopyCellSelection(includeHeaders: false);", code);
+        Assert.Contains("new KeyboardAccelerator", code);
+        Assert.Contains("Key = VirtualKey.C", code);
+        Assert.Contains("Modifiers = VirtualKeyModifiers.Control", code);
+        Assert.Contains("copySelectionAccelerator.Invoked += OnCopySelectionAcceleratorInvoked;", code);
+        Assert.Contains("args.Handled = CopySelectedCellRangeToClipboard();", code);
+        Assert.DoesNotContain("e.Key == VirtualKey.C", code);
+        Assert.Contains("package.SetText(text.ToString());", code);
+        Assert.Contains("text.AppendJoin('\\t'", code);
+    }
+
+    [Fact]
+    public void CbsTableView_ContextMenuCanCopySelectionWithHeaders()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("CreateCellSelectionContextMenu", code);
+        Assert.Contains("Text = \"Копировать с заголовками\"", code);
+        Assert.Contains("CopyCellSelection(includeHeaders: true)", code);
+        Assert.Contains("Columns[index].Header", code);
     }
 
     [Fact]

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
@@ -16,7 +17,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
+using Windows.UI.Core;
 
 namespace CbsContractsDesktopClient.Views.Controls
 {
@@ -136,6 +139,13 @@ namespace CbsContractsDesktopClient.Views.Controls
                 typeof(CbsTableView),
                 new PropertyMetadata(false));
 
+        public static readonly DependencyProperty SupportsCellSelectionProperty =
+            DependencyProperty.Register(
+                nameof(SupportsCellSelection),
+                typeof(bool),
+                typeof(CbsTableView),
+                new PropertyMetadata(true));
+
         public static readonly DependencyProperty SelectedItemProperty =
             DependencyProperty.Register(
                 nameof(SelectedItem),
@@ -161,11 +171,14 @@ namespace CbsContractsDesktopClient.Views.Controls
         private IEnumerable? _lastItemsSourceReference;
         private readonly List<CbsTableRowView> _rowPool = [];
         private readonly HashSet<int> _selectedIndexes = [];
+        private CbsTableCellPosition? _cellSelectionAnchor;
+        private CbsTableCellPosition? _cellSelectionEnd;
+        private bool _isDraggingCellSelection;
         private readonly Dictionary<string, string> _filterTexts = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DataFilterMatchMode> _filterModes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, TextBox> _filterTextBoxes = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, DateTimeFilterUiState> _filterDateTimeStates = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<string, CheckBox> _filterBooleanCheckBoxes = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Button> _filterBooleanButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterMultiSelectButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MultiSelectFilterUiState> _filterMultiSelectStates = new(StringComparer.OrdinalIgnoreCase);
@@ -201,6 +214,14 @@ namespace CbsContractsDesktopClient.Views.Controls
             InitializeComponent();
             IsTabStop = true;
             PreviewKeyDown += OnPreviewKeyDown;
+            var copySelectionAccelerator = new KeyboardAccelerator
+            {
+                Key = VirtualKey.C,
+                Modifiers = VirtualKeyModifiers.Control
+            };
+            copySelectionAccelerator.Invoked += OnCopySelectionAcceleratorInvoked;
+            KeyboardAccelerators.Add(copySelectionAccelerator);
+            ContextFlyout = CreateCellSelectionContextMenu();
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
         }
@@ -351,13 +372,12 @@ namespace CbsContractsDesktopClient.Views.Controls
                 }
             }
 
-            foreach (var checkBox in _filterBooleanCheckBoxes.Values)
+            foreach (var button in _filterBooleanButtons.Values)
             {
-                checkBox.IsChecked = null;
-                if (checkBox.Tag is CbsTableColumnDefinition column)
+                if (button.Tag is CbsTableColumnDefinition column)
                 {
-                    checkBox.Foreground = GetFilterForegroundBrush(column);
-                    checkBox.Background = GetFilterBackgroundBrush(column);
+                    column.Filter.Value = null;
+                    UpdateBooleanFilterButton(button, column);
                 }
             }
         }
@@ -388,11 +408,9 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
             {
-                if (_filterBooleanCheckBoxes.TryGetValue(column.FieldKey, out var checkBox))
+                if (_filterBooleanButtons.TryGetValue(column.FieldKey, out var button))
                 {
-                    checkBox.IsChecked = TryGetBooleanFilterValue(value);
-                    checkBox.Foreground = GetFilterForegroundBrush(column);
-                    checkBox.Background = GetFilterBackgroundBrush(column);
+                    UpdateBooleanFilterButton(button, column);
                 }
 
                 return;
@@ -524,6 +542,14 @@ namespace CbsContractsDesktopClient.Views.Controls
             set => SetValue(SupportsMultipleRowSelectionProperty, value);
         }
 
+        public bool SupportsCellSelection
+        {
+            get => (bool)GetValue(SupportsCellSelectionProperty);
+            set => SetValue(SupportsCellSelectionProperty, value);
+        }
+
+        public Func<TableDataRow, bool>? CanSelectRow { get; set; }
+
         public TableDataRow? SelectedItem
         {
             get => (TableDataRow?)GetValue(SelectedItemProperty);
@@ -534,6 +560,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         {
             _selectedIndexes.Clear();
             SelectedItem = null;
+            ClearCellSelection();
             UpdateVisibleRowSelectionStates();
         }
 
@@ -576,12 +603,59 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnPreviewKeyDown(object sender, KeyRoutedEventArgs e)
         {
+            if (SupportsCellSelection
+                && e.Key is VirtualKey.Up or VirtualKey.Down
+                && InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down)
+                && TryExtendCellSelectionVertically(e.Key))
+            {
+                e.Handled = true;
+                return;
+            }
+
             if (e.Key is not VirtualKey.Up and not VirtualKey.Down)
             {
                 return;
             }
 
+            if (SupportsCellSelection)
+            {
+                ClearCellSelection();
+            }
+
             e.Handled = MoveSelectionOrScroll(e.Key == VirtualKey.Down ? 1 : -1);
+        }
+
+        private void OnCopySelectionAcceleratorInvoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+        {
+            if (!SupportsCellSelection)
+            {
+                return;
+            }
+
+            args.Handled = CopySelectedCellRangeToClipboard();
+        }
+
+        private bool TryExtendCellSelectionVertically(VirtualKey key)
+        {
+            if (_cellSelectionEnd is not { } end)
+            {
+                return false;
+            }
+
+            var rows = GetSourceRows();
+            var rowOffset = key == VirtualKey.Down ? 1 : -1;
+            var target = new CbsTableCellPosition(end.RowIndex + rowOffset, end.ColumnIndex);
+            if (target.RowIndex < 0 || target.RowIndex >= rows.Count
+                || target.ColumnIndex < 0 || target.ColumnIndex >= Columns.Count
+                || rows[target.RowIndex].IsPlaceholder)
+            {
+                return false;
+            }
+
+            _cellSelectionEnd = target;
+            UpdateVisibleCellSelectionStates();
+            ScrollRowIntoView(target.RowIndex);
+            return true;
         }
 
         private bool MoveSelectionOrScroll(int direction)
@@ -614,7 +688,10 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             var targetIndex = selectedIndex + direction;
-            if (targetIndex < 0 || targetIndex >= sourceRows.Count || sourceRows[targetIndex].IsPlaceholder)
+            if (targetIndex < 0
+                || targetIndex >= sourceRows.Count
+                || sourceRows[targetIndex].IsPlaceholder
+                || !IsRowSelectable(sourceRows[targetIndex]))
             {
                 return false;
             }
@@ -757,7 +834,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             HeaderGrid.ColumnDefinitions.Clear();
             HeaderGrid.RowDefinitions.Clear();
             _filterTextBoxes.Clear();
-            _filterBooleanCheckBoxes.Clear();
+            _filterBooleanButtons.Clear();
             _filterModeButtons.Clear();
             _filterMultiSelectButtons.Clear();
             _filterMultiSelectStates.Clear();
@@ -907,6 +984,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnColumnsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var control = (CbsTableView)d;
+            control.ClearCellSelection();
             control.InvalidateWindowCache();
             control.RebuildHeader();
             control.RebuildRows();
@@ -915,6 +993,7 @@ namespace CbsContractsDesktopClient.Views.Controls
         private static void OnItemsSourceChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             var control = (CbsTableView)d;
+            control.ClearCellSelection();
             control.InvalidateWindowCache();
             control.RebuildRows();
             if (control._lastSourceCount == 0 && control._rowPool.Count == 0)
@@ -1037,7 +1116,7 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void AppendTrace(string message)
         {
-            TraceGenerated?.Invoke(this, new CbsTableTraceEventArgs(message));
+            TraceGenerated?.Invoke(this, new CbsTableTraceEventArgs($"[{Name}] {message}"));
         }
 
         private void InvalidateWindowCache()
@@ -1476,6 +1555,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 rowView.PointerEntered += OnRowPointerEntered;
                 rowView.PointerExited += OnRowPointerExited;
                 rowView.PointerPressed += OnRowPointerPressed;
+                rowView.PointerMoved += OnRowPointerMoved;
                 rowView.PointerReleased += OnRowPointerReleased;
                 rowView.Tapped += OnRowTapped;
                 rowView.DoubleTapped += OnRowDoubleTapped;
@@ -1507,12 +1587,69 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnRowPointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            if (!SupportsRowSelection || sender is not CbsTableRowView rowView)
+            if (sender is not CbsTableRowView rowView)
             {
                 return;
             }
 
-            rowView.IsPressed = true;
+            if (SupportsRowSelection)
+            {
+                rowView.IsPressed = true;
+            }
+
+            if (!SupportsCellSelection || rowView.Tag is not int rowIndex || rowView.Row?.IsPlaceholder == true)
+            {
+                return;
+            }
+
+            var point = e.GetCurrentPoint(rowView);
+            if (!point.Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            var columnIndex = rowView.GetColumnIndex(point.Position);
+            if (columnIndex < 0)
+            {
+                return;
+            }
+
+            var position = new CbsTableCellPosition(rowIndex, columnIndex);
+            if (!e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) || _cellSelectionAnchor is null)
+            {
+                _cellSelectionAnchor = position;
+            }
+
+            _cellSelectionEnd = position;
+            _isDraggingCellSelection = true;
+            rowView.CapturePointer(e.Pointer);
+            Focus(FocusState.Programmatic);
+            UpdateVisibleCellSelectionStates();
+        }
+
+        private void OnRowPointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            if (!_isDraggingCellSelection || sender is not CbsTableRowView rowView)
+            {
+                return;
+            }
+
+            var sourceRows = GetSourceRows();
+            if (sourceRows.Count == 0 || rowView.Tag is not int originRowIndex)
+            {
+                return;
+            }
+
+            var point = e.GetCurrentPoint(rowView);
+            var columnIndex = rowView.GetColumnIndex(point.Position);
+            var rowIndex = Math.Clamp(originRowIndex + (int)Math.Floor(point.Position.Y / RowHeight), 0, sourceRows.Count - 1);
+            if (columnIndex < 0 || sourceRows[rowIndex].IsPlaceholder)
+            {
+                return;
+            }
+
+            _cellSelectionEnd = new CbsTableCellPosition(rowIndex, columnIndex);
+            UpdateVisibleCellSelectionStates();
         }
 
         private void OnRowPointerReleased(object sender, PointerRoutedEventArgs e)
@@ -1523,6 +1660,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             rowView.IsPressed = false;
+            if (_isDraggingCellSelection)
+            {
+                _isDraggingCellSelection = false;
+                rowView.ReleasePointerCapture(e.Pointer);
+            }
         }
 
         private void OnRowTapped(object sender, TappedRoutedEventArgs e)
@@ -1533,6 +1675,11 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
 
             if (rowView.Row?.IsPlaceholder == true)
+            {
+                return;
+            }
+
+            if (!IsRowSelectable(rowView.Row!))
             {
                 return;
             }
@@ -1552,6 +1699,12 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 if (_selectedIndexes.Contains(rowIndex))
                 {
+                    if (SupportsCellSelection)
+                    {
+                        UpdateVisibleRowSelectionStates();
+                        return;
+                    }
+
                     _selectedIndexes.Clear();
                     SelectedItem = null;
                     RowSelectionChanged?.Invoke(
@@ -1580,10 +1733,20 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            if (!IsRowSelectable(rowView.Row!))
+            {
+                return;
+            }
+
             Focus(FocusState.Programmatic);
             SelectSingleRow(rowView.Row!, rowIndex);
 
             RowDoubleTapped?.Invoke(this, new CbsTableRowDoubleTappedEventArgs(rowView.Row!, rowIndex));
+        }
+
+        private bool IsRowSelectable(TableDataRow row)
+        {
+            return CanSelectRow?.Invoke(row) ?? true;
         }
 
         private void UpdateVisibleRowSelectionStates()
@@ -1600,6 +1763,113 @@ namespace CbsContractsDesktopClient.Views.Controls
         private void ApplyRowSelectionState(CbsTableRowView rowView, int rowIndex)
         {
             rowView.IsSelected = _selectedIndexes.Contains(rowIndex);
+            ApplyCellSelectionState(rowView, rowIndex);
+        }
+
+        private void UpdateVisibleCellSelectionStates()
+        {
+            foreach (var rowView in _rowPool)
+            {
+                if (rowView.Tag is int rowIndex)
+                {
+                    ApplyCellSelectionState(rowView, rowIndex);
+                }
+            }
+        }
+
+        private void ClearCellSelection()
+        {
+            _cellSelectionAnchor = null;
+            _cellSelectionEnd = null;
+            _isDraggingCellSelection = false;
+            UpdateVisibleCellSelectionStates();
+        }
+
+        private void ApplyCellSelectionState(CbsTableRowView rowView, int rowIndex)
+        {
+            if (!TryGetCellSelectionBounds(out var rowStart, out var rowEnd, out var columnStart, out var columnEnd)
+                || rowIndex < rowStart || rowIndex > rowEnd)
+            {
+                rowView.SetCellSelection(-1, -1);
+                return;
+            }
+
+            rowView.SetCellSelection(columnStart, columnEnd);
+        }
+
+        private bool TryGetCellSelectionBounds(out int rowStart, out int rowEnd, out int columnStart, out int columnEnd)
+        {
+            rowStart = rowEnd = columnStart = columnEnd = -1;
+            if (_cellSelectionAnchor is not { } anchor || _cellSelectionEnd is not { } end)
+            {
+                return false;
+            }
+
+            rowStart = Math.Min(anchor.RowIndex, end.RowIndex);
+            rowEnd = Math.Max(anchor.RowIndex, end.RowIndex);
+            columnStart = Math.Min(anchor.ColumnIndex, end.ColumnIndex);
+            columnEnd = Math.Max(anchor.ColumnIndex, end.ColumnIndex);
+            return true;
+        }
+
+        private MenuFlyout CreateCellSelectionContextMenu()
+        {
+            var menu = new MenuFlyout();
+            var copyItem = new MenuFlyoutItem { Text = "Копировать" };
+            copyItem.Click += (_, _) => CopySelectedCellRangeToClipboard();
+            menu.Items.Add(copyItem);
+            var copyWithHeadersItem = new MenuFlyoutItem { Text = "Копировать с заголовками" };
+            copyWithHeadersItem.Click += (_, _) => CopyCellSelection(includeHeaders: true);
+            menu.Items.Add(copyWithHeadersItem);
+            menu.Opening += (_, _) =>
+            {
+                var hasSelection = _cellSelectionAnchor is not null && _cellSelectionEnd is not null;
+                copyItem.IsEnabled = hasSelection;
+                copyWithHeadersItem.IsEnabled = hasSelection;
+            };
+            return menu;
+        }
+
+        public bool CopySelectedCellRangeToClipboard()
+        {
+            return CopyCellSelection(includeHeaders: false);
+        }
+
+        private bool CopyCellSelection(bool includeHeaders)
+        {
+            if (!TryGetCellSelectionBounds(out var rowStart, out var rowEnd, out var columnStart, out var columnEnd))
+            {
+                return false;
+            }
+
+            var rows = GetSourceRows();
+            var text = new StringBuilder();
+            if (includeHeaders)
+            {
+                AppendClipboardLine(text, Enumerable.Range(columnStart, columnEnd - columnStart + 1)
+                    .Select(index => Columns[index].Header));
+            }
+
+            for (var rowIndex = rowStart; rowIndex <= rowEnd; rowIndex++)
+            {
+                AppendClipboardLine(text, Enumerable.Range(columnStart, columnEnd - columnStart + 1)
+                    .Select(columnIndex => CbsTableRowView.GetCellText(Columns[columnIndex], rows[rowIndex], ShowStageCostFraction)));
+            }
+
+            var package = new DataPackage();
+            package.SetText(text.ToString());
+            Clipboard.SetContent(package);
+            return true;
+        }
+
+        private static void AppendClipboardLine(StringBuilder text, IEnumerable<string> values)
+        {
+            if (text.Length > 0)
+            {
+                text.AppendLine();
+            }
+
+            text.AppendJoin('\t', values.Select(static value => value.Replace("\t", " ").Replace("\r", " ").Replace("\n", " ")));
         }
 
         private int GetEffectiveRetainedBufferRows(int currentWindowRows)
@@ -1888,9 +2158,9 @@ namespace CbsContractsDesktopClient.Views.Controls
 
             if (column.Filter.EditorKind == CbsTableFilterEditorKind.Boolean)
             {
-                var checkBox = CreateBooleanFilterCheckBox(column);
-                border.Child = checkBox;
-                _filterBooleanCheckBoxes[column.FieldKey] = checkBox;
+                var button = CreateBooleanFilterButton(column);
+                border.Child = button;
+                _filterBooleanButtons[column.FieldKey] = button;
                 return border;
             }
 
@@ -1906,27 +2176,31 @@ namespace CbsContractsDesktopClient.Views.Controls
             return border;
         }
 
-        private CheckBox CreateBooleanFilterCheckBox(CbsTableColumnDefinition column)
+        private Button CreateBooleanFilterButton(CbsTableColumnDefinition column)
         {
-            var checkBox = new CheckBox
+            var button = new Button
             {
                 Tag = column,
-                IsThreeState = true,
-                IsChecked = TryGetBooleanFilterValue(column.Filter.Value),
-                MinWidth = 24,
-                MaxHeight = 24,     
+                Content = new FontIcon
+                {
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
+                    FontSize = 12
+                },
+                Width = 20,
+                Height = 20,
+                MinWidth = 20,
+                MinHeight = 20,
+                MaxWidth = 20,
+                MaxHeight = 20,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 Padding = new Thickness(0),
                 Margin = new Thickness(0),
-                Foreground = GetFilterForegroundBrush(column),
-                Background = GetFilterBackgroundBrush(column)
+                BorderThickness = new Thickness(0)
             };
-            ToolTipService.SetToolTip(checkBox, "Фильтр: все / да / нет");
-            checkBox.Checked += OnBooleanFilterCheckBoxChanged;
-            checkBox.Unchecked += OnBooleanFilterCheckBoxChanged;
-            checkBox.Indeterminate += OnBooleanFilterCheckBoxChanged;
-            return checkBox;
+            button.Click += OnBooleanFilterButtonClick;
+            UpdateBooleanFilterButton(button, column);
+            return button;
         }
 
         private TextBox CreateTextFilterTextBox(CbsTableColumnDefinition column)
@@ -2074,7 +2348,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 new FontIcon
                 {
                     Glyph = "\uE711",
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     FontSize = 10
                 },
                 "закрыть");
@@ -2159,7 +2433,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             clearButton.Tag = state;
             closeButton.Tag = state;
             searchTextBox.TextChanged += OnMultiSelectSearchTextChanged;
-            flyout.Opened += OnMultiSelectFlyoutOpened;
 
             button.Flyout = flyout;
             _filterMultiSelectButtons[column.FieldKey] = button;
@@ -2250,7 +2523,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                 adornmentHost.Children.Add(new FontIcon
                 {
                     Glyph = CurrentSortDirection == DataSortDirection.Descending ? "\uE70D" : "\uE70E",
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                     FontSize = 10,
                     Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
                     HorizontalAlignment = HorizontalAlignment.Center,
@@ -2424,16 +2697,38 @@ namespace CbsContractsDesktopClient.Views.Controls
             RefreshDateTimeFilterTextBox(column);
         }
 
-        private void OnBooleanFilterCheckBoxChanged(object sender, RoutedEventArgs e)
+        private void OnBooleanFilterButtonClick(object sender, RoutedEventArgs e)
         {
-            if (sender is not CheckBox { Tag: CbsTableColumnDefinition column } checkBox)
+            if (sender is not Button { Tag: CbsTableColumnDefinition column } button)
             {
                 return;
             }
 
-            column.Filter.Value = checkBox.IsChecked;
-            checkBox.Foreground = GetFilterForegroundBrush(column);
-            checkBox.Background = GetFilterBackgroundBrush(column);
+            var value = TryGetBooleanFilterValue(column.Filter.Value);
+            if (column.Filter.MatchMode == DataFilterMatchMode.IsNull && column.Filter.Value is not null)
+            {
+                column.Filter.MatchMode = DataFilterMatchMode.Equals;
+                column.Filter.Value = null;
+            }
+            else if (value is null)
+            {
+                column.Filter.MatchMode = DataFilterMatchMode.Equals;
+                column.Filter.Value = true;
+            }
+            else if (value == true)
+            {
+                column.Filter.Value = false;
+            }
+            else if (column.Filter.SupportsNullFilter)
+            {
+                column.Filter.MatchMode = DataFilterMatchMode.IsNull;
+                column.Filter.Value = true;
+            }
+            else
+            {
+                column.Filter.Value = null;
+            }
+            UpdateBooleanFilterButton(button, column);
 
             if (_suppressFilterNotifications)
             {
@@ -2444,20 +2739,44 @@ namespace CbsContractsDesktopClient.Views.Controls
                 this,
                 new CbsTableFilterRequestedEventArgs(
                     column.FieldKey,
-                    DataFilterMatchMode.Equals,
-                    checkBox.IsChecked));
+                    column.Filter.MatchMode,
+                    column.Filter.Value));
         }
 
-        private void OnMultiSelectFlyoutOpened(object? sender, object e)
+        private void UpdateBooleanFilterButton(Button button, CbsTableColumnDefinition column)
         {
-            if (sender is not Flyout { Content: FrameworkElement { Tag: MultiSelectFilterUiState state } })
+            var value = TryGetBooleanFilterValue(column.Filter.Value);
+            var filtersNull = column.Filter.MatchMode == DataFilterMatchMode.IsNull
+                && column.Filter.Value is not null;
+            ((FontIcon)button.Content).Glyph = filtersNull
+                ? "\uE897"
+                : value switch
             {
-                return;
-            }
-
-            state.SearchText = string.Empty;
-            state.SearchTextBox.Text = string.Empty;
-            RebuildMultiSelectOptionItems(state);
+                true => "\uE73E",
+                false => "\uE711",
+                null => string.Empty
+            };
+            var hasValue = filtersNull || value.HasValue;
+            button.Background = hasValue
+                ? (Brush)Application.Current.Resources["ShellAccentBrush"]
+                : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            button.Foreground = hasValue
+                ? new SolidColorBrush(Microsoft.UI.Colors.White)
+                : GetFilterForegroundBrush(column);
+            button.BorderBrush = hasValue
+                ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                : (Brush)Application.Current.Resources["ShellTableGridLineBrush"];
+            button.BorderThickness = hasValue
+                ? new Thickness(0)
+                : new Thickness(1);
+            ToolTipService.SetToolTip(button, filtersNull
+                ? "Фильтр: только не определено"
+                : value switch
+            {
+                true => "Фильтр: только Да",
+                false => "Фильтр: только Нет",
+                null => "Фильтр не задан"
+            });
         }
 
         private void OnMultiSelectSearchTextChanged(object sender, TextChangedEventArgs e)
@@ -2909,7 +3228,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             var icon = new FontIcon
             {
                 Glyph = "\uE70D",
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Margin = new Thickness(6, 0, 0, 0),
                 Foreground = (Brush)Application.Current.Resources["ShellSecondaryTextBrush"],
@@ -3294,4 +3613,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         public bool IsSelected { get; }
     }
+
+    internal readonly record struct CbsTableCellPosition(int RowIndex, int ColumnIndex);
 }

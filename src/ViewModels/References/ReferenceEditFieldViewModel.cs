@@ -18,7 +18,11 @@ namespace CbsContractsDesktopClient.ViewModels.References
             IsCreateMode = isCreateMode;
             _originalValue = NormalizeValue(initialValue);
 
-            if (IsBooleanEditor)
+            if (IsEnumEditor)
+            {
+                SelectedEnumOption = ResolveEnumOption(_originalValue);
+            }
+            else if (IsBooleanEditor)
             {
                 BoolValue = _originalValue as bool? ?? false;
             }
@@ -56,7 +60,11 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         public bool IsDateEditor => EditorType == ReferenceFieldEditorType.Date;
 
-        public bool IsTextEditor => !IsBooleanEditor && !IsDateEditor;
+        public bool IsEnumEditor => EditorType == ReferenceFieldEditorType.Enum;
+
+        public bool IsTextEditor => !IsBooleanEditor && !IsDateEditor && !IsEnumEditor;
+
+        public IReadOnlyList<ReferenceEnumOption> EnumOptions => Definition.EnumOptions;
 
         public bool IsReadOnly => IsCreateMode
             ? Definition.IsReadOnlyOnCreate
@@ -82,6 +90,9 @@ namespace CbsContractsDesktopClient.ViewModels.References
         public partial DateTimeOffset? DateValue { get; set; }
 
         [ObservableProperty]
+        public partial ReferenceEnumOption? SelectedEnumOption { get; set; }
+
+        [ObservableProperty]
         public partial string ValidationMessage { get; set; } = string.Empty;
 
         partial void OnTextValueChanged(string value)
@@ -95,6 +106,11 @@ namespace CbsContractsDesktopClient.ViewModels.References
         }
 
         partial void OnDateValueChanged(DateTimeOffset? value)
+        {
+            RefreshState();
+        }
+
+        partial void OnSelectedEnumOptionChanged(ReferenceEnumOption? value)
         {
             RefreshState();
         }
@@ -152,6 +168,11 @@ namespace CbsContractsDesktopClient.ViewModels.References
 
         private object? GetCurrentValue()
         {
+            if (IsEnumEditor)
+            {
+                return SelectedEnumOption?.Value;
+            }
+
             if (IsBooleanEditor)
             {
                 return BoolValue;
@@ -177,6 +198,24 @@ namespace CbsContractsDesktopClient.ViewModels.References
             }
 
             return TextValue.Trim();
+        }
+
+        private ReferenceEnumOption? ResolveEnumOption(object? value)
+        {
+            if (value is null)
+            {
+                return null;
+            }
+
+            var numericValue = value switch
+            {
+                long longValue => longValue,
+                decimal decimalValue when decimal.Truncate(decimalValue) == decimalValue => (long)decimalValue,
+                _ => throw new InvalidOperationException($"{FieldKey} должен содержать целочисленное значение enum.")
+            };
+
+            return EnumOptions.SingleOrDefault(option => option.Value == numericValue)
+                ?? throw new InvalidOperationException($"{FieldKey} содержит недопустимое значение {numericValue}.");
         }
 
         private static object? NormalizeValue(object? value)

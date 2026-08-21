@@ -9,6 +9,7 @@ using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.ViewModels.Shell;
+using CbsContractsDesktopClient.ViewModels.Workflow;
 
 namespace CbsContractsDesktopClient.Stores.Table
 {
@@ -17,6 +18,7 @@ namespace CbsContractsDesktopClient.Stores.Table
         private const int AuditPageSize = 20;
         private readonly AppShellViewModel _shellViewModel;
         private readonly IDataQueryService _dataQueryService;
+        private readonly ContractWorkflowStore _contractWorkflowStore;
         private CancellationTokenSource? _auditCts;
         private string _lastAuditPanelKey = string.Empty;
         private List<AuditRecord> _auditRecords = [];
@@ -32,10 +34,24 @@ namespace CbsContractsDesktopClient.Stores.Table
         private ReferenceDefinition? _reference;
         private TableDataRow? _selectedRow;
 
-        public AuditStore(AppShellViewModel shellViewModel, IDataQueryService dataQueryService)
+        public AuditStore(
+            AppShellViewModel shellViewModel,
+            IDataQueryService dataQueryService,
+            ContractWorkflowStore contractWorkflowStore)
         {
             _shellViewModel = shellViewModel;
             _dataQueryService = dataQueryService;
+            _contractWorkflowStore = contractWorkflowStore;
+            _contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;
+        }
+
+        private void OnContractWorkflowSelectionApplied(object? sender, EventArgs e)
+        {
+            if (_selectedRow is not null
+                && _tablePage?.AuditModel is "Contract" or "Stage")
+            {
+                _ = RefreshAsync(force: true);
+            }
         }
 
         public void UpdateContext(
@@ -306,10 +322,7 @@ namespace CbsContractsDesktopClient.Stores.Table
             }
 
             var model = _tablePage.AuditModel;
-            var filters = new Dictionary<string, object?>
-            {
-                ["auditable_type__eq"] = model
-            };
+            var filters = new Dictionary<string, object?>();
             ApplyDateRangeFilters(filters);
             ApplyActionFilters(filters);
             var filterKey = BuildAuditFilterKey();
@@ -322,7 +335,7 @@ namespace CbsContractsDesktopClient.Stores.Table
                     return null;
                 }
 
-                filters["auditable_id__eq"] = selectedId.Value;
+                ApplySelectedRecordFilters(filters, model, selectedId.Value);
                 return new AuditScope(
                     $"record:{model}:{selectedId.Value}:{filterKey}",
                     "Аудит изменений",
@@ -330,11 +343,61 @@ namespace CbsContractsDesktopClient.Stores.Table
                     filters);
             }
 
+            filters["auditable_type__eq"] = model;
+
             return new AuditScope(
                 $"table:{model}:{filterKey}",
                 "Последние события аудита",
                 $"Активная таблица: {_tablePage.EffectiveNavigationDescription}",
                 filters);
+        }
+
+        private void ApplySelectedRecordFilters(
+            Dictionary<string, object?> filters,
+            string model,
+            long selectedId)
+        {
+            if (model is not "Contract" and not "Stage")
+            {
+                filters["auditable_type__eq"] = model;
+                filters["auditable_id__eq"] = selectedId;
+                return;
+            }
+
+            if (!_contractWorkflowStore.MatchesSelectedAuditRecord(model, selectedId))
+            {
+                filters["auditable_type__eq"] = model;
+                filters["auditable_id__eq"] = selectedId;
+                return;
+            }
+
+            var stageOrderIds = _contractWorkflowStore.GetSelectedStageOrderIds();
+            if (stageOrderIds.Count == 0)
+            {
+                filters["auditable_type__eq"] = model;
+                filters["auditable_id__eq"] = selectedId;
+                return;
+            }
+
+            filters["or"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["and"] = new Dictionary<string, object?>
+                    {
+                        ["auditable_type__eq"] = model,
+                        ["auditable_id__eq"] = selectedId
+                    }
+                },
+                new Dictionary<string, object?>
+                {
+                    ["and"] = new Dictionary<string, object?>
+                    {
+                        ["auditable_type__eq"] = "StageOrder",
+                        ["auditable_id__in"] = stageOrderIds
+                    }
+                }
+            };
         }
 
         private void ApplyDateRangeFilters(Dictionary<string, object?> filters)

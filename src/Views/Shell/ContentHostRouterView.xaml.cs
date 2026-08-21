@@ -20,6 +20,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         private ContractHostView? _contractHostView;
         private RevisionHostView? _revisionHostView;
         private StageHostView? _stageHostView;
+        private OrderHostView? _orderHostView;
+        private StageOrderNeedsHostView? _stageOrderNeedsHostView;
+        private ActivityReportHostView? _activityReportHostView;
 
         public ContentHostRouterView()
         {
@@ -74,6 +77,9 @@ namespace CbsContractsDesktopClient.Views.Shell
                 ContentHostRouteKind.Contract => GetContractHostView(route),
                 ContentHostRouteKind.Revision => GetRevisionHostView(route),
                 ContentHostRouteKind.Stage => GetStageHostView(route),
+                ContentHostRouteKind.Order => GetOrderHostView(route),
+                ContentHostRouteKind.Needs => GetStageOrderNeedsHostView(route),
+                ContentHostRouteKind.ActivityReport => GetActivityReportHostView(route),
                 _ => CreatePlaceholder()
             };
         }
@@ -133,6 +139,27 @@ namespace CbsContractsDesktopClient.Views.Shell
                     }
 
                     break;
+                case ContentHostRouteKind.Order:
+                    if (_orderHostView is not null)
+                    {
+                        _orderHostView.Route = route;
+                    }
+
+                    break;
+                case ContentHostRouteKind.Needs:
+                    if (_stageOrderNeedsHostView is not null)
+                    {
+                        _stageOrderNeedsHostView.Route = route;
+                    }
+
+                    break;
+                case ContentHostRouteKind.ActivityReport:
+                    if (_activityReportHostView is not null)
+                    {
+                        _activityReportHostView.Route = route;
+                    }
+
+                    break;
             }
         }
 
@@ -176,6 +203,21 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (string.Equals(route, "/stages", StringComparison.OrdinalIgnoreCase))
             {
                 return ContentHostRouteKind.Stage;
+            }
+
+            if (string.Equals(route, "/orders", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Order;
+            }
+
+            if (string.Equals(route, "/needs", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.Needs;
+            }
+
+            if (string.Equals(route, "/report", StringComparison.OrdinalIgnoreCase))
+            {
+                return ContentHostRouteKind.ActivityReport;
             }
 
             if (IsSimpleReferenceRoute(route))
@@ -252,6 +294,27 @@ namespace CbsContractsDesktopClient.Views.Shell
             return _stageHostView;
         }
 
+        private OrderHostView GetOrderHostView(string? route)
+        {
+            _orderHostView ??= new OrderHostView();
+            _orderHostView.Route = route;
+            return _orderHostView;
+        }
+
+        private StageOrderNeedsHostView GetStageOrderNeedsHostView(string? route)
+        {
+            _stageOrderNeedsHostView ??= new StageOrderNeedsHostView();
+            _stageOrderNeedsHostView.Route = route;
+            return _stageOrderNeedsHostView;
+        }
+
+        private ActivityReportHostView GetActivityReportHostView(string? route)
+        {
+            _activityReportHostView ??= new ActivityReportHostView();
+            _activityReportHostView.Route = route;
+            return _activityReportHostView;
+        }
+
         private static FrameworkElement CreatePlaceholder()
         {
             return new Border
@@ -284,7 +347,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             Contragent,
             Contract,
             Revision,
-            Stage
+            Stage,
+            Order,
+            Needs,
+            ActivityReport
         }
     }
 }

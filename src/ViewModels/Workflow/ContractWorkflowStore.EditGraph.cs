@@ -22,6 +22,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             ArgumentNullException.ThrowIfNull(contract);
 
+            _selectionKind = ContractRowDetailSelectionKind.Contract;
             Contract = contract;
             SelectedContractEditState = ContractEditState.FromRow(contract);
             Contragent = contragent;
@@ -36,6 +37,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             ArgumentNullException.ThrowIfNull(contract);
             ArgumentNullException.ThrowIfNull(selectedStage);
 
+            _selectionKind = ContractRowDetailSelectionKind.Stage;
             Contract = contract;
             SelectedContractEditState = ContractEditState.FromRow(contract);
             Contragent = contragent;
@@ -84,9 +86,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 newPriority = 2;
             }
 
-            if (visibleStages.Any(existing => existing.Priority == newPriority))
+            var occupiedPriorities = visibleStages
+                .Select(static existing => existing.Priority)
+                .ToHashSet();
+            while (occupiedPriorities.Contains(newPriority))
             {
-                throw new InvalidOperationException($"Этап с номером {newPriority} уже существует.");
+                newPriority++;
             }
 
             stages.Add(StageEditState.CreateNew(newPriority));

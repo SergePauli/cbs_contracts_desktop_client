@@ -20,9 +20,12 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private const int LeadDepartmentId = 4;
 
         private const string DiagnosticsRoute = "/diagnostics";
+        private const string DiagnosticsLogActionRoute = "/diagnostics/log";
         private const string ContractsRoute = "/contracts";
         private const string StagesRoute = "/stages";
         private const string RevisionsRoute = "/revisions";
+        private const string OrdersRoute = "/orders";
+        private const string NeedsRoute = "/needs";
         private const string EmployeesRoute = "/employees";
         private const string ContragentsRoute = "/contragents";
         private const string ReferencesRoute = "/references";
@@ -80,6 +83,11 @@ namespace CbsContractsDesktopClient.Services.Navigation
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(ContractsRoute), "\uE762", ContractsRoute, route));
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(StagesRoute), "\uE7C1", StagesRoute, route));
             baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(RevisionsRoute), "\uE8A7", RevisionsRoute, route));
+            if (isCommer || isAdmin)
+            {
+                baseSection.Items.Add(CreateItem(ResolveFunctionalTableTitle(NeedsRoute), "\uE8CB", NeedsRoute, route));
+                baseSection.Items.Add(CreateItem(ResolveMenuTitle(OrdersRoute, "Заказы"), "\uE7BF", OrdersRoute, route));
+            }
 
             var referencesSection = new NavigationMenuSection
             {
@@ -106,9 +114,13 @@ namespace CbsContractsDesktopClient.Services.Navigation
             AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/TaskKind", "Работы"), "\uE90F", $"{ReferencesRoute}/TaskKind", route);
             AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/Position", "Должности"), "\uE821", $"{ReferencesRoute}/Position", route);
 
-            if (isOzi || isAdmin)
+            if (isOzi || isCommer || isAdmin)
             {
                 AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/IsecurityTool", "СЗИ"), "\uE72E", $"{ReferencesRoute}/IsecurityTool", route);
+            }
+
+            if (isOzi || isAdmin)
+            {
                 AddDistinct(referencesSection.Items, ResolveMenuTitle($"{ReferencesRoute}/OrderStatus", "Статусы доставки"), "\uE806", $"{ReferencesRoute}/OrderStatus", route);
             }
 
@@ -142,12 +154,25 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Items =
                 [
                     CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, currentRoute),
+                    CreateItem(
+                        "Открыть журнал",
+                        "\uE8A5",
+                        DiagnosticsLogActionRoute,
+                        currentRoute,
+                        isAction: true,
+                        filePath: DiagnosticsFileLogger.LogFilePath),
                     CreateItem("Выход", "\uEC19", "/logout", currentRoute, isAction: true)
                 ]
             };
         }
 
-        private static NavigationMenuItem CreateItem(string title, string glyph, string route, string currentRoute, bool isAction = false)
+        private static NavigationMenuItem CreateItem(
+            string title,
+            string glyph,
+            string route,
+            string currentRoute,
+            bool isAction = false,
+            string filePath = "")
         {
             var isSelected = string.Equals(route, currentRoute, StringComparison.OrdinalIgnoreCase);
             return new NavigationMenuItem
@@ -155,6 +180,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Title = title,
                 Glyph = glyph,
                 Route = route,
+                FilePath = filePath,
                 IsSelected = isSelected,
                 IsAction = isAction,
                 Background = isSelected ? "#FFD9ECFF" : "Transparent",

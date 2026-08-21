@@ -13,11 +13,14 @@ using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Settings;
 using CbsContractsDesktopClient.Services.Workspace;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.ViewModels;
 using CbsContractsDesktopClient.Stores.Contragents;
 using CbsContractsDesktopClient.Stores.Table;
+using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.ViewModels.Shell;
 using CbsContractsDesktopClient.ViewModels.Workflow;
+using CbsContractsDesktopClient.ViewModels.Reports;
 
 namespace CbsContractsDesktopClient
 {
@@ -36,8 +39,41 @@ namespace CbsContractsDesktopClient
         public App()
         {
             DiagnosticsFileLogger.Clear();
+            UnhandledException += OnApplicationUnhandledException;
+            AppDomain.CurrentDomain.UnhandledException += OnAppDomainUnhandledException;
+            TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
             this.InitializeComponent();
             Services = ConfigureServices();
+        }
+
+        private static void OnApplicationUnhandledException(
+            object sender,
+            Microsoft.UI.Xaml.UnhandledExceptionEventArgs args)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                "GLOBAL XAML UNHANDLED EXCEPTION",
+                $"message={args.Message}{Environment.NewLine}"
+                + $"exception={args.Exception}");
+        }
+
+        private static void OnAppDomainUnhandledException(
+            object sender,
+            System.UnhandledExceptionEventArgs args)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                "GLOBAL APPDOMAIN UNHANDLED EXCEPTION",
+                $"isTerminating={args.IsTerminating}{Environment.NewLine}"
+                + $"exception={args.ExceptionObject}");
+        }
+
+        private static void OnUnobservedTaskException(
+            object? sender,
+            UnobservedTaskExceptionEventArgs args)
+        {
+            DiagnosticsFileLogger.AppendBlock(
+                "GLOBAL UNOBSERVED TASK EXCEPTION",
+                $"observed={args.Observed}{Environment.NewLine}"
+                + $"exception={args.Exception}");
         }
 
         private static IServiceProvider ConfigureServices()
@@ -52,6 +88,9 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<IReferenceDefinitionService, ReferenceDefinitionService>();
             services.AddSingleton<ITablePageDefinitionService, TablePageDefinitionService>();
             services.AddSingleton<IReferenceLookupCacheService, ReferenceLookupCacheService>();
+            services.AddSingleton<StageStatusFilterOptionsProvider>();
+            services.AddSingleton<IsecurityToolCatalogService>();
+            services.AddSingleton<IsecurityToolEditWorkflow>();
             services.AddSingleton<IContragentLookupService, ContragentLookupService>();
             services.AddSingleton<IEmployeeEditWorkflow, EmployeeEditWorkflow>();
             services.AddSingleton<IContragentFnsWorkflow, ContragentFnsWorkflow>();
@@ -60,7 +99,17 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<ContragentDetailStore>();
             services.AddSingleton<TablePageStore>();
             services.AddSingleton<ContractWorkflowStore>();
+            services.AddSingleton<OrderWorkflowStore>();
+            services.AddSingleton<OrderPositionsStore>();
+            services.AddSingleton<StageOrderNeedsStore>();
+            services.AddSingleton<OrderWorkflowFactory>();
+            services.AddSingleton<OrderEditWorkflow>();
+            services.AddSingleton<StageOrderEditWorkflow>();
+            services.AddSingleton<StageSupplyEditWorkflow>();
             services.AddSingleton<ContractWorkflowFactory>();
+            services.AddSingleton<ContractCommentWorkflow>();
+            services.AddSingleton<ActivityReportStore>();
+            services.AddSingleton<ActivityReportLoader>();
             services.AddSingleton<StatusTableViewModel>();
             services.AddHttpClient(nameof(AuthService), client =>
             {

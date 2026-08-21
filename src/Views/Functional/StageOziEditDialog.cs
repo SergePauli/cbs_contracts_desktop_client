@@ -1,10 +1,15 @@
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services;
+using CbsContractsDesktopClient.Services.Orders;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dialogs;
+using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Controls;
+using CbsContractsDesktopClient.Views.Orders;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Documents;
@@ -35,6 +40,9 @@ public sealed class StageOziEditDialog : AppEditDialog
     private StageEditDialogNavigationState? _navigationState;
     private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly Func<bool> _shouldCloseContractAfterSelectedStageClosed;
+    private readonly ContractCommentWorkflow _commentWorkflow;
+    private readonly StageSupplyEditWorkflow _stageSupplyEditWorkflow;
+    private readonly IDataQueryService _dataQueryService;
     private readonly int _profileId;
     private readonly CalendarInput _rideOutAtEditor = new();
     private readonly CalendarInput _sendedAtEditor = new();
@@ -48,7 +56,9 @@ public sealed class StageOziEditDialog : AppEditDialog
     private readonly TextBox _registryYearBox = BuildNumberTextBox();
     private readonly MultiSelect _performersMultiSelect = new();
     private readonly TextBox _commentBox = new();
+    private readonly CommentBox _commentsBox = BuildCommentsBox();
     private readonly StageOziEditView _view = new();
+    private readonly TreeView _branchesTree = new();
     private bool _isApplyingBusinessLogic;
     private bool _businessLogicHandlersAttached;
     private bool _contractCloseCommentApplied;
@@ -77,12 +87,15 @@ public sealed class StageOziEditDialog : AppEditDialog
         _navigationState = navigationState;
         _navigateAsync = navigateAsync;
         _shouldCloseContractAfterSelectedStageClosed = shouldCloseContractAfterSelectedStageClosed;
+        _commentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
+        _stageSupplyEditWorkflow = App.Services.GetRequiredService<StageSupplyEditWorkflow>();
+        _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
         _performerOptions = CreatePerformerOptions(employeeItems, stage.Performers);
         _view.PreviousButton.Click += StageNavigationButton_Click;
         _view.NextButton.Click += StageNavigationButton_Click;
 
-        Resources["ContentDialogMinWidth"] = 760d;
-        Resources["ContentDialogMaxWidth"] = 860d;
+        Resources["ContentDialogMinWidth"] = 1120d;
+        Resources["ContentDialogMaxWidth"] = 1120d;
         Content = BuildContent();
         DialogChrome.Apply(this, _stage.GetEditDialogTitle());
         Loaded += StageOziEditDialog_Loaded;
@@ -145,16 +158,9 @@ public sealed class StageOziEditDialog : AppEditDialog
 
     private UIElement BuildContent()
     {
-        var scrollViewer = new ScrollViewer
-        {
-            MaxHeight = 640,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto
-        };
-
-        scrollViewer.Content = _view;
         InitializeStaticView();
         RenderStageContent();
-        return BuildEditContent(scrollViewer);
+        return BuildEditContent(_view);
     }
 
     private void InitializeStaticView()
@@ -199,8 +205,13 @@ public sealed class StageOziEditDialog : AppEditDialog
         _view.StatusSlot.Content = _statusBox;
         _view.CompletedAtSlot.Content = _completedAtEditor;
         _view.ClosedAtSlot.Content = _closedAtEditor;
-        _view.CommentSlot.Content = _commentBox;
+        _branchesTree.HorizontalAlignment = HorizontalAlignment.Stretch;
+        _branchesTree.VerticalAlignment = VerticalAlignment.Stretch;
+        _branchesTree.MinHeight = 260;
+        _branchesTree.ItemTemplate = (DataTemplate?)_view.Resources["StageTreeItemTemplate"];
+        _view.BranchesSlot.Content = _branchesTree;
         _commentBox.PlaceholderText = "Комментарий";
+        _commentBox.KeyDown += CommentBox_KeyDown;
         AttachBusinessLogicHandlers();
         ConfigureTabChain();
     }
@@ -318,6 +329,161 @@ public sealed class StageOziEditDialog : AppEditDialog
     {
         UpdateStageSummaryPanel();
         UpdateStageEditors();
+        RefreshStageBranches();
+    }
+
+    private void RefreshStageBranches()
+    {
+        _commentsBox.Comments = _stage.Id > 0
+            ? _commentWorkflow.ReadStageComments(_stage.Id)
+            : [];
+        _branchesTree.ItemsSource = null;
+        _branchesTree.ItemsSource = new List<ContractStageTreeItem>
+        {
+            new ContractStageTreeItem(
+                BuildBranchHeader("Комментарии"),
+                [new ContractStageTreeItem(BuildCommentsBranchContent())],
+                isExpanded: true),
+            new ContractStageTreeItem(
+                BuildBranchHeader("Поставка"),
+                [
+                    new ContractStageTreeItem(
+                        BuildSupplyBranchContent(),
+                        contentMargin: new Thickness(-56, 0, 0, 0))
+                ])
+        };
+    }
+
+    private FrameworkElement BuildCommentsBranchContent()
+    {
+        var layout = new Grid
+        {
+            RowSpacing = 4,
+            Margin = new Thickness(4, 2, 4, 4)
+        };
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        layout.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        Grid.SetRow(_commentBox, 0);
+        Grid.SetRow(_commentsBox, 1);
+        layout.Children.Add(_commentBox);
+        layout.Children.Add(_commentsBox);
+        return layout;
+    }
+
+    private FrameworkElement BuildSupplyBranchContent()
+    {
+        if (_stage.Id <= 0)
+        {
+            return new TextBlock
+            {
+                Text = "Поставка станет доступна после сохранения этапа.",
+                FontSize = 11,
+                Margin = new Thickness(4)
+            };
+        }
+
+        var view = new StageSupplyView(new StageSupplyStore(_dataQueryService, _stage.Id));
+        view.CreateRequested += async (_, args) =>
+            await ShowStageSupplyFlyoutAsync(view, null, args.Anchor);
+        view.EditRequested += async (_, args) =>
+            await ShowStageSupplyFlyoutAsync(view, args.Row, args.Anchor);
+        view.DeleteRequested += async (_, args) =>
+            await DeleteStageSupplyAsync(view, args.Row);
+        view.LoadFailed += (_, args) =>
+            ShowErrorInfo($"Не удалось загрузить поставку этапа: {args.Exception.Message}");
+        return view;
+    }
+
+    private async Task ShowStageSupplyFlyoutAsync(
+        StageSupplyView supplyView,
+        TableDataRow? sourceRow,
+        FrameworkElement anchor)
+    {
+        try
+        {
+            var viewModel = await _stageSupplyEditWorkflow.CreateViewModelAsync(_stage.Id, sourceRow);
+            var flyout = new StageSupplyEditFlyout(_stageSupplyEditWorkflow, viewModel);
+            if (await flyout.ShowAsync(anchor))
+            {
+                await supplyView.ReloadAsync(flyout.SavedRowId);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo($"Не удалось открыть позицию поставки: {ex.Message}");
+        }
+    }
+
+    private async Task DeleteStageSupplyAsync(StageSupplyView supplyView, TableDataRow sourceRow)
+    {
+        try
+        {
+            await _stageSupplyEditWorkflow.DeleteAsync(sourceRow);
+            await supplyView.ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo($"Не удалось удалить позицию поставки: {ex.Message}");
+        }
+    }
+
+    private static TextBlock BuildBranchHeader(string text) => new()
+    {
+        Text = text,
+        FontSize = 12,
+        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+        Foreground = Application.Current.Resources["ShellTableHeaderTextBrush"] as Brush
+    };
+
+    private async void CommentBox_KeyDown(object sender, KeyRoutedEventArgs args)
+    {
+        if (args.Key != VirtualKey.Enter || _stage.Id <= 0)
+        {
+            return;
+        }
+
+        args.Handled = true;
+        if (string.IsNullOrWhiteSpace(_commentBox.Text))
+        {
+            return;
+        }
+
+        _commentBox.IsEnabled = false;
+        try
+        {
+            var contractId = RequireContract().Id;
+            if (contractId <= 0)
+            {
+                throw new InvalidOperationException("Persisted stage comment requires contract id.");
+            }
+
+            var result = await _commentWorkflow.SaveStageCommentAsync(
+                contractId,
+                _stage.Id,
+                _stage.ListKey,
+                _commentBox.Text);
+            _commentBox.Text = string.Empty;
+            _commentsBox.Comments = result.Comments;
+            ShowErrorInfo(string.Empty);
+        }
+        catch (Exception ex)
+        {
+            ShowErrorInfo(ex.Message);
+        }
+        finally
+        {
+            _commentBox.IsEnabled = true;
+        }
+    }
+
+    private static CommentBox BuildCommentsBox()
+    {
+        return new CommentBox
+        {
+            Height = 220,
+            MaxHeight = 220,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
     }
 
     private void UpdateStageSummaryPanel()

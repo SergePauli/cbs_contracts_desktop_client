@@ -44,6 +44,11 @@
                         Value="{StaticResource CompactComboBoxItemStyle}" />
             </Style>
 
+            <!-- Calendar localization -->
+            <Style TargetType="CalendarDatePicker">
+                <Setter Property="FirstDayOfWeek" Value="Monday" />
+            </Style>
+
             <!-- Global compact desktop dialogs -->
             <Thickness x:Key="ContentDialogPadding">0</Thickness>
             <Thickness x:Key="ContentDialogTitleMargin">0</Thickness>

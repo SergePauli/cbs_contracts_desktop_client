@@ -43,7 +43,8 @@ namespace CbsContractsDesktopClient.Views.Shell
         private CancellationTokenSource? _detailCts;
         private Button? _editButton;
         private Button? _infoButton;
-        private Button? _copyButton;
+        private Button? _copyContractDataButton;
+        private Button? _copyCellSelectionButton;
 
         public RevisionHostView()
         {
@@ -67,11 +68,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
             _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
-            _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать карточку контракта");
-            _copyButton.Click += (_, _) => CopyContractDetails();
+            _copyContractDataButton = CreateHeaderIconButton("\uE8F3", "Скопировать данные выбранного контракта в буфер");
+            _copyContractDataButton.Click += (_, _) => CopyContractDetails();
+
+            _copyCellSelectionButton = CreateHeaderIconButton("\uE8C8", "Скопировать выделенный диапазон");
+            _copyCellSelectionButton.Click += (_, _) => TableView.CopySelectedCellRangeToClipboard();
 
             UpdateActionButtonState();
-            return [_editButton, _infoButton, _copyButton];
+            return [_editButton, _infoButton, _copyContractDataButton, _copyCellSelectionButton];
         }
 
         protected override int PrimaryHeaderActionCount => 2;
@@ -121,8 +125,9 @@ namespace CbsContractsDesktopClient.Views.Shell
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
             ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
             ApplyDefaultActionButtonState(
-                _copyButton,
+                _copyContractDataButton,
                 hasSelectedRow && _contractWorkflowStore.Contract is { IsPlaceholder: false });
+            ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);
         }
 
         private bool HasContractInfoSelection()
@@ -141,7 +146,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
-            _detailView.RevisionRow = row;
         }
 
         private async Task RefreshDetailAsync()
@@ -154,8 +158,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
@@ -197,8 +199,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
-            _detailView.ContractRow = context.Contract;
-            _detailView.ContragentRow = context.Contragent;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;
@@ -229,9 +229,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ClearDetailView()
         {
             _detailCts?.Cancel();
-            _detailView.RevisionRow = null;
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();

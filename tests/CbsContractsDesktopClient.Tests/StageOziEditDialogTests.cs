@@ -88,10 +88,39 @@ public sealed class StageOziEditDialogTests
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("private readonly StageOziEditView _view = new();", code);
-        Assert.Contains("scrollViewer.Content = _view;", code);
         Assert.Contains("private readonly Dropdown _statusBox = new();", code);
         Assert.Contains("ConfigureStatusDropdown(_statusBox", code);
         Assert.DoesNotContain("private readonly ComboBox _statusBox", code);
+    }
+
+    [Fact]
+    public void StageOziEditDialog_CentersFixedFormAndUsesFullWidthBranches()
+    {
+        var code = File.ReadAllText(DialogPath);
+        var xaml = File.ReadAllText(ViewPath);
+
+        Assert.Contains("Width=\"1100\"", xaml);
+        Assert.Equal(2, CountOccurrences(xaml, "MaxWidth=\"820\""));
+        Assert.Contains("x:Name=\"BranchesHost\"", xaml);
+        Assert.DoesNotContain("x:Name=\"CommentHost\"", xaml);
+        Assert.DoesNotContain("x:Name=\"CommentListHost\"", xaml);
+        Assert.Contains("BuildBranchHeader(\"Комментарии\")", code);
+        Assert.Contains("BuildBranchHeader(\"Поставка\")", code);
+        Assert.Contains("new StageSupplyView(new StageSupplyStore(_dataQueryService, _stage.Id))", code);
+        Assert.Contains("RefreshStageBranches();", code);
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        var count = 0;
+        var startIndex = 0;
+        while ((startIndex = text.IndexOf(value, startIndex, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            startIndex += value.Length;
+        }
+
+        return count;
     }
 
     private static string ExtractSummaryXaml(string xaml)

@@ -8,6 +8,8 @@ namespace CbsContractsDesktopClient.Models.References
 
         public bool IsAuditEnabled { get; init; }
 
+        public bool IncludeIdOnCreate { get; init; }
+
         public IReadOnlyList<ReferenceFieldDefinition> Fields { get; init; } = [];
 
         public TablePageDefinition TablePage => ToTablePageDefinition();
@@ -51,6 +53,7 @@ namespace CbsContractsDesktopClient.Models.References
                 Summary = Summary,
                 EditorKind = EditorKind,
                 IsAuditEnabled = IsAuditEnabled,
+                IncludeIdOnCreate = IncludeIdOnCreate,
                 InitialSortField = InitialSortField,
                 InitialSortDirection = InitialSortDirection,
                 Fields = Fields.Select(static field => new ReferenceFieldDefinition
@@ -59,6 +62,7 @@ namespace CbsContractsDesktopClient.Models.References
                     Label = field.Label,
                     ApiField = field.ApiField,
                     EditorType = field.EditorType,
+                    EnumOptions = field.EnumOptions.ToList(),
                     IsRequired = field.IsRequired,
                     IsReadOnlyOnCreate = field.IsReadOnlyOnCreate,
                     IsReadOnlyOnEdit = field.IsReadOnlyOnEdit

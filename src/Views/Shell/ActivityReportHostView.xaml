@@ -1,0 +1,177 @@
+<shell:ContentHostViewBase
+    x:Class="CbsContractsDesktopClient.Views.Shell.ActivityReportHostView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:shell="using:CbsContractsDesktopClient.Views.Shell"
+    xmlns:functional="using:CbsContractsDesktopClient.Views.Functional">
+
+    <Grid RowSpacing="4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Grid Padding="8,4" ColumnSpacing="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="112" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="112" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock VerticalAlignment="Center" Text="Период отчета" />
+            <CalendarDatePicker
+                x:Name="StartDatePicker"
+                Grid.Column="1"
+                Height="28"
+                Padding="6,0"
+                DateFormat="{}{day.integer(2)}.{month.integer(2)}.{year.full}" />
+            <TextBlock Grid.Column="2" VerticalAlignment="Center" Text="—" />
+            <CalendarDatePicker
+                x:Name="EndDatePicker"
+                Grid.Column="3"
+                Height="28"
+                Padding="6,0"
+                DateFormat="{}{day.integer(2)}.{month.integer(2)}.{year.full}" />
+            <Button
+                Grid.Column="4"
+                Height="28"
+                Padding="10,2"
+                Click="LoadButton_Click"
+                Content="Сформировать" />
+            <ProgressRing
+                x:Name="LoadProgress"
+                Grid.Column="5"
+                Width="16"
+                Height="16"
+                Visibility="Collapsed" />
+        </Grid>
+
+        <InfoBar
+            x:Name="MessageBar"
+            Grid.Row="1"
+            IsClosable="True"
+            Severity="Error" />
+
+        <TreeView
+            x:Name="ReportTree"
+            Grid.Row="2"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+            <TreeView.ItemTemplate>
+                <DataTemplate>
+                    <ContentControl
+                        HorizontalContentAlignment="Stretch"
+                        Content="{Binding Content}" />
+                </DataTemplate>
+            </TreeView.ItemTemplate>
+            <TreeView.RootNodes>
+                <TreeViewNode
+                    x:Name="ActivityReport_StatusChanges"
+                    IsExpanded="{x:Bind StatusChangesIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Сменили статус" />
+                            <TextBlock x:Name="StatusChangesCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind StatusChangesTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+
+                <TreeViewNode
+                    x:Name="ActivityReport_PendingStages"
+                    IsExpanded="{x:Bind PendingStagesIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Переданы в ОИ" />
+                            <TextBlock x:Name="PendingStagesCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind PendingStagesTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+
+                <TreeViewNode
+                    x:Name="ActivityReport_AddedContracts"
+                    IsExpanded="{x:Bind AddedContractsIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Новые контракты" />
+                            <TextBlock x:Name="AddedContractsCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind AddedContractsTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+
+                <TreeViewNode
+                    x:Name="ActivityReport_DeadlineChanges"
+                    IsExpanded="{x:Bind DeadlineChangesIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Изменение сроков" />
+                            <TextBlock x:Name="DeadlineChangesCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind DeadlineChangesTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+
+                <TreeViewNode
+                    x:Name="ActivityReport_Comments"
+                    IsExpanded="{x:Bind CommentsIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Добавлены комментарии" />
+                            <TextBlock x:Name="CommentsCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind CommentsTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+
+                <TreeViewNode
+                    x:Name="ActivityReport_Funding"
+                    IsExpanded="{x:Bind FundingIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Бухгалтерское закрытие" />
+                            <TextBlock x:Name="FundingCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind FundingTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+
+                <TreeViewNode
+                    x:Name="ActivityReport_Payments"
+                    IsExpanded="{x:Bind PaymentsIsExpanded, Mode=TwoWay}">
+                    <TreeViewNode.Content>
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock FontWeight="SemiBold" Text="Внесение оплаты" />
+                            <TextBlock x:Name="PaymentsCount" Opacity="0.65" />
+                        </StackPanel>
+                    </TreeViewNode.Content>
+                    <TreeViewNode.Children>
+                        <TreeViewNode Content="{x:Bind PaymentsTable, Mode=OneWay}" />
+                    </TreeViewNode.Children>
+                </TreeViewNode>
+            </TreeView.RootNodes>
+        </TreeView>
+
+        <functional:ContractDetailView
+            x:Name="DetailView"
+            Grid.Row="3"
+            Visibility="Collapsed" />
+    </Grid>
+</shell:ContentHostViewBase>

@@ -12,6 +12,7 @@ namespace CbsContractsDesktopClient.Models.Data
         Contains,
         EndsWith,
         NotContains,
-        In
+        In,
+        IsNull
     }
 }

@@ -389,10 +389,11 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.Equal(CbsTableColumnAlignment.Right, definition.Columns.Single(static column => column.FieldKey == "order").Alignment);
         Assert.Equal("⌕", definition.Columns.Single(static column => column.FieldKey == "order").Filter.PlaceholderText);
 
-        var boolFound = service.TryGetByRoute("/references/IsecurityTool", out var boolDefinition);
+        var toolFound = service.TryGetByRoute("/references/IsecurityTool", out var toolDefinition);
 
-        Assert.True(boolFound);
-        Assert.Equal(CbsTableColumnAlignment.Center, boolDefinition.Columns.Single(static column => column.FieldKey == "used").Alignment);
+        Assert.True(toolFound);
+        Assert.Equal(CbsTableColumnAlignment.Right, toolDefinition.Columns.Single(static column => column.FieldKey == "default_cost").Alignment);
+        Assert.Equal(CbsTableColumnAlignment.Right, toolDefinition.Columns.Single(static column => column.FieldKey == "kind").Alignment);
         Assert.Equal(DataFilterMode.Text, definition.Columns.Single(static column => column.FieldKey == "name").Filter.Mode);
         Assert.Equal(DataFilterMode.Numeric, definition.Columns.Single(static column => column.FieldKey == "order").Filter.Mode);
     }
@@ -418,11 +419,14 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
         Assert.False(nameField.IsReadOnlyOnCreate);
         Assert.False(nameField.IsReadOnlyOnEdit);
 
-        var usedField = definition.Fields.Single(static field => field.FieldKey == "used");
-        Assert.Equal(ReferenceFieldEditorType.Boolean, usedField.EditorType);
-        Assert.False(usedField.IsRequired);
-        Assert.False(usedField.IsReadOnlyOnCreate);
-        Assert.False(usedField.IsReadOnlyOnEdit);
+        var defaultCostField = definition.Fields.Single(static field => field.FieldKey == "default_cost");
+        Assert.Equal(ReferenceFieldEditorType.Number, defaultCostField.EditorType);
+        Assert.False(defaultCostField.IsRequired);
+
+        var kindField = definition.Fields.Single(static field => field.FieldKey == "kind");
+        Assert.Equal(ReferenceFieldEditorType.Enum, kindField.EditorType);
+        Assert.True(kindField.IsRequired);
+        Assert.Equal(3, kindField.EnumOptions.Count);
     }
 
     [Fact]

@@ -82,7 +82,7 @@ namespace CbsContractsDesktopClient.Services
                 ? "<none>"
                 : string.Join(", ", request.Sorts);
             var filters = request.Filters is null ? "<none>" : "set";
-            return $"{title} model={request.Model} preset={request.Preset ?? "<null>"} offset={request.Offset?.ToString() ?? "<null>"} limit={request.Limit?.ToString() ?? "<null>"} filters={filters} sorts={sorts}";
+            return $"{title} model={request.Model} preset={request.Preset ?? "<null>"} unique_by={request.UniqueBy ?? "<null>"} offset={request.Offset?.ToString() ?? "<null>"} limit={request.Limit?.ToString() ?? "<null>"} filters={filters} sorts={sorts}";
         }
     }
 }

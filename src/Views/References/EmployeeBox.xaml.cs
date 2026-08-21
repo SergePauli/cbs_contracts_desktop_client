@@ -230,7 +230,7 @@ namespace CbsContractsDesktopClient.Views.References
                 Width = 20,
                 Height = 20,
                 Padding = new Thickness(0),
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 10,
                 Foreground = foreground,
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
@@ -348,7 +348,7 @@ namespace CbsContractsDesktopClient.Views.References
             var icon = new FontIcon
             {
                 Glyph = match.Glyph,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = textMetrics.ContactIconFontSize,
                 Width = 13,
                 Foreground = EmployeeContactBrush,

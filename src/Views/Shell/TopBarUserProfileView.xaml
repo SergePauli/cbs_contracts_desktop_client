@@ -23,7 +23,7 @@
             VerticalAlignment="Center">
             <FontIcon
                 Glyph="&#xE77B;"
-                FontFamily="Segoe Fluent Icons"
+                FontFamily="{StaticResource SymbolThemeFontFamily}"
                 FontSize="11"
                 Foreground="{StaticResource ShellAccentBrush}" />
             <TextBlock

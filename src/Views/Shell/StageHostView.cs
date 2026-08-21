@@ -45,6 +45,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IDataQueryService _dataQueryService;
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
+        private readonly StageStatusFilterOptionsProvider _stageStatusFilterOptionsProvider;
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IEmployeeEditWorkflow _employeeEditWorkflow;
         private readonly IContragentLookupService _contragentLookupService;
@@ -52,13 +53,15 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IUserService _userService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
+        private readonly ContractCommentWorkflow _contractCommentWorkflow;
         private readonly StageRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private CancellationTokenSource? _detailCts;
         private bool _showStageCostFraction;
         private Button? _editButton;
         private Button? _infoButton;
-        private Button? _copyButton;
+        private Button? _copyStageDataButton;
+        private Button? _copyCellSelectionButton;
         private Button? _commentButton;
         private Button? _createEmployeeButton;
         private Button? _saveFiltersButton;
@@ -69,6 +72,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
+            _stageStatusFilterOptionsProvider = App.Services.GetRequiredService<StageStatusFilterOptionsProvider>();
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _employeeEditWorkflow = App.Services.GetRequiredService<IEmployeeEditWorkflow>();
             _contragentLookupService = App.Services.GetRequiredService<IContragentLookupService>();
@@ -76,6 +80,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _userService = App.Services.GetRequiredService<IUserService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
+            _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -89,8 +94,11 @@ namespace CbsContractsDesktopClient.Views.Shell
             _infoButton = CreateHeaderIconButton("\uE946", "Информация о контракте");
             _infoButton.Click += async (_, _) => await ShowContractInfoDialogAsync();
 
-            _copyButton = CreateHeaderIconButton("\uE8C8", "Скопировать этап");
-            _copyButton.Click += (_, _) => CopyStageInfo();
+            _copyStageDataButton = CreateHeaderIconButton("\uE8F3", "Скопировать данные выбранного этапа в буфер");
+            _copyStageDataButton.Click += (_, _) => CopyStageInfo();
+
+            _copyCellSelectionButton = CreateHeaderIconButton("\uE8C8", "Скопировать выделенный диапазон");
+            _copyCellSelectionButton.Click += (_, _) => TableView.CopySelectedCellRangeToClipboard();
 
             _commentButton = CreateHeaderIconButton("\uE90A", "Добавить комментарий к этапу");
             _commentButton.Click += CommentStageButton_Click;
@@ -110,7 +118,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             [
                 _editButton,
                 _infoButton,
-                _copyButton,
+                _copyStageDataButton,
+                _copyCellSelectionButton,
                 _commentButton,
                 _createEmployeeButton,
                 _showCostFractionButton,
@@ -134,37 +143,9 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task LoadStageOptionsSourcesAsync()
         {
-            OptionsRegistry.Set("StageStatus", await LoadStageStatusOptionsAsync());
+            OptionsRegistry.Set("StageStatus", await _stageStatusFilterOptionsProvider.LoadAsync());
             OptionsRegistry.Set("TaskKind", await LoadStageTaskKindOptionsAsync());
             TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot());
-        }
-
-        private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageStatusOptionsAsync()
-        {
-            var statusOptions = await _contractWorkflowStore.GetAllStatusOptionsAsync(_referenceLookupCacheService);
-            var optionsById = statusOptions
-                .Where(static option => JsonDataReader.TryGetLong(option.Value) is not null)
-                .GroupBy(static option => JsonDataReader.TryGetLong(option.Value)!.Value)
-                .ToDictionary(static group => group.Key, static group => group.First());
-
-            var result = new List<CbsTableFilterOptionDefinition>
-            {
-                new()
-                {
-                    Value = null,
-                    Label = "Не определен"
-                }
-            };
-
-            foreach (var statusId in StageContractStatusDialogControls.StageStatusIds.Order())
-            {
-                if (optionsById.TryGetValue(statusId, out var option))
-                {
-                    result.Add(option);
-                }
-            }
-
-            return result;
         }
 
         private async Task<IReadOnlyList<CbsTableFilterOptionDefinition>> LoadStageTaskKindOptionsAsync()
@@ -239,7 +220,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             ApplyEditButtonState(_editButton, hasSelectedRow && Store.CanEditRows);
             ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());
-            ApplyDefaultActionButtonState(_copyButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyStageDataButton, hasSelectedRow);
+            ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);
             ApplyDefaultActionButtonState(_commentButton, hasSelectedRow && _userService.CurrentUser?.ProfileId is not null);
             ApplyCreateButtonState(_createEmployeeButton, hasSelectedRow);
             ApplyDefaultActionButtonState(_saveFiltersButton, Store.HasActiveReference);
@@ -261,7 +243,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             SetDetailContentVisible(true);
             _detailView.Visibility = Visibility.Visible;
-            _detailView.RevisionRow = row;
         }
 
         private async Task RefreshDetailAsync()
@@ -274,8 +255,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _contractWorkflowStore.ClearRowDetailSelection();
             RefreshSelectedFooterText();
 
@@ -324,9 +303,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ClearDetailView()
         {
             _detailCts?.Cancel();
-            _detailView.RevisionRow = null;
-            _detailView.ContractRow = null;
-            _detailView.ContragentRow = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
@@ -646,34 +622,21 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (_userService.CurrentUser?.ProfileId is not int profileId)
-            {
-                await ShowErrorDialogAsync(
-                    "Комментарий к этапу",
-                    "Не удалось определить profile_id пользователя.");
-                return;
-            }
-
-            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-            {
-                ["id"] = stageId
-            };
             var listKey = Store.SelectedRow.GetValue("list_key")?.ToString();
-            if (!string.IsNullOrWhiteSpace(listKey))
-            {
-                payload["list_key"] = listKey;
-            }
-
-            StageEditPayloadBuilderHelpers.AppendCommentAttributes(payload, normalizedComment, profileId);
 
             try
             {
-                await SaveStagePayloadAsync(payload);
+                var contractId = TryGetLongValue(Store.SelectedRow, "contract.id")
+                    ?? throw new InvalidOperationException("Selected stage must contain contract.id for comment save.");
+                await _contractCommentWorkflow.SaveStageCommentAsync(
+                    contractId,
+                    stageId,
+                    listKey,
+                    normalizedComment);
                 flyout.Hide();
                 ShowSuccessNotification(
                     "Комментарий сохранен",
                     "Комментарий к этапу добавлен.");
-                await RefreshDetailAsync();
             }
             catch (Exception ex)
             {
@@ -860,8 +823,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
-            _detailView.ContractRow = context.Contract;
-            _detailView.ContragentRow = context.Contragent;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;

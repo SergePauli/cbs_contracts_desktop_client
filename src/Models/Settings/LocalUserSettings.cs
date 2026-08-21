@@ -9,6 +9,8 @@ namespace CbsContractsDesktopClient.Models.Settings
         public bool ShowStageCostFraction { get; set; }
 
         public bool ShowContractCostFraction { get; set; }
+
+        public Dictionary<string, bool> ActivityReportSectionExpansion { get; init; } = [];
     }
 
     public sealed class LocalTableSettings

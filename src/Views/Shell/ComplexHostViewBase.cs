@@ -167,6 +167,18 @@ namespace CbsContractsDesktopClient.Views.Shell
             return Task.CompletedTask;
         }
 
+        protected virtual void OnRowSelectionChanged(TableDataRow? row, bool isSelected)
+        {
+        }
+
+        protected virtual void OnTableQueryChanged()
+        {
+        }
+
+        protected virtual void OnTableQueryApplied()
+        {
+        }
+
         protected virtual Task OnRowDoubleTapped(TableDataRow row)
         {
             return Task.CompletedTask;
@@ -298,28 +310,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             long id,
             CancellationToken cancellationToken = default)
         {
-            var definition = CurrentDefinition ?? Store.CurrentTablePage;
-            if (definition is null)
-            {
-                return false;
-            }
-
-            var rows = await _dataQueryService.GetDataAsync<TableDataRow>(
-                new DataQueryRequest
-                {
-                    Model = definition.Model,
-                    Preset = definition.Preset,
-                    Filters = new Dictionary<string, object?>
-                    {
-                        ["id__eq"] = id
-                    },
-                    Limit = 1
-                },
-                cancellationToken);
-
-            var freshRow = rows.FirstOrDefault(static row => !row.IsPlaceholder);
-            if (freshRow is null
-                || !Store.ApplySavedRowUpdate(freshRow))
+            var freshRow = await Store.RefreshLoadedRowByIdAsync(id, cancellationToken);
+            if (freshRow is null)
             {
                 return false;
             }
@@ -540,6 +532,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot());
             }
 
+            if (e.PropertyName == nameof(TablePageStore.Rows)
+                && CurrentDefinition is not null)
+            {
+                AttachCurrentStoreRowsToTableView(CurrentDefinition);
+                TableView.ApplyFilterInputs(Store.CurrentFilters);
+            }
+
             if (e.PropertyName == nameof(TablePageStore.CurrentSortField)
                 || e.PropertyName == nameof(TablePageStore.CurrentSortDirection))
             {
@@ -579,6 +578,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void TableView_SortRequested(object? sender, CbsTableSortRequestedEventArgs e)
         {
+            OnTableQueryChanged();
             if (e.Direction.HasValue)
             {
                 await Store.ApplySortAsync(e.FieldKey, e.Direction.Value);
@@ -600,14 +600,23 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void TableView_RowSelectionChanged(object? sender, CbsTableRowSelectionChangedEventArgs e)
         {
-            Store.SelectedRow = e.IsSelected ? e.Row : null;
+            if (!TableView.SupportsMultipleRowSelection)
+            {
+                Store.SelectedRow = e.IsSelected ? e.Row : null;
+            }
+
+            OnRowSelectionChanged(e.Row, e.IsSelected);
             QueueSelectedFooterTextUpdate();
             await Task.CompletedTask;
         }
 
         private async void TableView_RowDoubleTapped(object? sender, CbsTableRowDoubleTappedEventArgs e)
         {
-            Store.SelectedRow = e.Row;
+            if (!TableView.SupportsMultipleRowSelection)
+            {
+                Store.SelectedRow = e.Row;
+            }
+
             QueueSelectedFooterTextUpdate();
             await OnRowDoubleTapped(e.Row);
             await OpenEditDialogAsync(e.Row);
@@ -615,6 +624,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async void TableView_FilterRequested(object? sender, CbsTableFilterRequestedEventArgs e)
         {
+            OnTableQueryChanged();
             Store.AppendUiTrace(
                 $"FILTER UI REQUEST field={e.FieldKey} mode={e.MatchMode} value={DescribeFilterValue(e.Value)}");
             _filterDebounceCts?.Cancel();
@@ -624,11 +634,17 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 await Task.Delay(250, cancellationTokenSource.Token);
-                await Store.ApplyFilterAsync(
+                var isApplied = await Store.ApplyFilterAsync(
                     e.FieldKey,
                     e.MatchMode,
                     e.Value,
                     cancellationTokenSource.Token);
+                if (!isApplied)
+                {
+                    return;
+                }
+
+                OnTableQueryApplied();
                 TableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.FilterChanged,
                     ResetScroll: true));
@@ -661,6 +677,17 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Store.Rows,
                 BuildCurrentSorts(),
                 OptionsRegistry.Snapshot());
+        }
+
+        protected void RefreshCurrentTableDefinitionView()
+        {
+            if (CurrentDefinition is null)
+            {
+                return;
+            }
+
+            AttachCurrentStoreRowsToTableView(CurrentDefinition);
+            TableView.ApplyFilterInputs(Store.CurrentFilters);
         }
 
         private IReadOnlyList<DataSortCriterion> BuildCurrentSorts()
@@ -698,8 +725,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             try
             {
+                OnTableQueryChanged();
                 var filters = await Store.ResetFiltersAsync();
                 TableView.ApplyFilterInputs(filters);
+                OnTableQueryApplied();
                 TableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.FilterChanged,
                     ResetScroll: true));
@@ -722,8 +751,10 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             try
             {
+                OnTableQueryChanged();
                 var filters = await Store.ClearFiltersAsync();
                 TableView.ApplyFilterInputs(filters);
+                OnTableQueryApplied();
                 TableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.FilterChanged,
                     ResetScroll: true));
@@ -786,6 +817,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             try
             {
+                OnTableQueryChanged();
                 await Store.ClearSortsAsync();
                 TableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.SortChanged,
@@ -846,7 +878,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
                 BorderBrush = null,
                 Content = iconGlyph,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 FontSize = 14,
                 Foreground = GetBrush("ShellSecondaryTextBrush")
             };

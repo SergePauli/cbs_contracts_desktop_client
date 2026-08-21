@@ -9,6 +9,33 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContractWorkflowStoreTests
 {
     [Fact]
+    public void SetContractSelection_PublishesOnlyCompletedStoreState()
+    {
+        var store = new ContractWorkflowStore();
+        var contract = CreateRow(
+            ("id", 10L),
+            ("status", Status(1, "Подписан")),
+            ("task_kind", TaskKind("Договор")));
+        var propertyNotifications = 0;
+        var selectionNotifications = 0;
+
+        store.PropertyChanged += (_, _) =>
+        {
+            propertyNotifications++;
+            Assert.Same(contract, store.Contract);
+            Assert.Equal(10L, store.SelectedContractEditState?.Id);
+            Assert.NotEmpty(store.ContractStageEditStates);
+            Assert.NotEmpty(store.ContractRevisionEditStates);
+        };
+        store.SelectionApplied += (_, _) => selectionNotifications++;
+
+        store.SetContractSelection(contract, contract, contragent: null);
+
+        Assert.True(propertyNotifications > 0);
+        Assert.Equal(1, selectionNotifications);
+    }
+
+    [Fact]
     public void BeginContractEdit_ForNewContractCreatesZeroStageAndContractRevision()
     {
         var store = new ContractWorkflowStore();
@@ -94,6 +121,24 @@ public sealed class ContractWorkflowStoreTests
         Assert.Equal([1, 2], store.ContractStageEditStates.Select(static item => item.Priority));
         Assert.True(store.ContractStageEditStates.Single(static item => item.Priority == 1).Used);
         Assert.False(store.ContractStageEditStates.Single(static item => item.Priority == 2).Used);
+    }
+
+    [Fact]
+    public void AddStageAfter_UsesFirstFreePriorityAfterOccupiedSequence()
+    {
+        var store = new ContractWorkflowStore();
+        var first = StageEditState.CreateNew(1, used: true);
+        store.SetContractStageEditStates(
+        [
+            first,
+            StageEditState.CreateNew(2),
+            StageEditState.CreateNew(3),
+            StageEditState.CreateNew(5)
+        ]);
+
+        store.AddStageAfter(first);
+
+        Assert.Equal([1, 2, 3, 4, 5], store.ContractStageEditStates.Select(static item => item.Priority));
     }
 
     [Fact]
@@ -296,6 +341,57 @@ public sealed class ContractWorkflowStoreTests
 
         Assert.Equal([5L, 30L], store.Comments.Select(GetCommentId));
         Assert.Equal(["list selected stage", "contract"], store.Comments.Select(GetCommentText));
+    }
+
+    [Fact]
+    public void ApplyCommentReadModel_RefreshesCommentsWithoutResettingStageEditState()
+    {
+        var store = new ContractWorkflowStore();
+        var selectedStage = CreateRow(("id", 100));
+        var contract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("comments", Array.Empty<object>()),
+            ("stages", new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 100,
+                    ["priority"] = 1,
+                    ["comments"] = Array.Empty<object>()
+                }
+            }));
+        store.SetStageSelection(selectedStage, contract, contragent: null);
+        var editState = Assert.IsType<StageEditState>(store.SelectedStageEditState);
+        editState.Duration = 42;
+
+        var refreshedContract = CreateRow(
+            ("id", 10),
+            ("status", Status(1, "Подписан")),
+            ("comments", new object[]
+            {
+                new Dictionary<string, object?> { ["id"] = 30, ["content"] = "contract comment" }
+            }),
+            ("stages", new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = 100,
+                    ["priority"] = 1,
+                    ["comments"] = new object[]
+                    {
+                        new Dictionary<string, object?> { ["id"] = 20, ["content"] = "stage comment" }
+                    }
+                }
+            }));
+
+        store.ApplyCommentReadModel(refreshedContract, commentedStageId: 100);
+
+        Assert.Same(refreshedContract, store.Contract);
+        Assert.Same(editState, store.SelectedStageEditState);
+        Assert.Equal(42, store.SelectedStageEditState.Duration);
+        Assert.Equal([20L, 30L], store.Comments.Select(GetCommentId));
+        Assert.Equal(["stage comment", "contract comment"], store.Comments.Select(GetCommentText));
     }
 
     [Fact]

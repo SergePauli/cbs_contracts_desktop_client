@@ -23,8 +23,6 @@ public sealed class StageFinEditDialogTests
         var xaml = File.ReadAllText(ViewPath);
 
         Assert.Contains("public sealed class StageFinEditDialog : AppEditDialog", code);
-        Assert.Contains("scrollViewer.Content = _view;", code);
-        Assert.Contains("return BuildEditContent(scrollViewer);", code);
         Assert.Contains("BuildDialogSectionTitle(RequireContract().GetSectionTitle())", code);
         Assert.Contains("x:Name=\"ContractTitleHost\"", xaml);
         Assert.Contains("x:Name=\"StageTitleText\"", xaml);

@@ -144,7 +144,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 Height = 28,
                 Padding = new Thickness(0),
                 Content = glyph,
-                FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+                FontFamily = (Microsoft.UI.Xaml.Media.FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                 IsEnabled = isEnabled
             };
             ToolTipService.SetToolTip(button, tooltip);
@@ -178,7 +178,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                         new FontIcon
                         {
                             Glyph = glyph,
-                            FontFamily = new FontFamily("Segoe Fluent Icons"),
+                            FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
                             FontSize = 12,
                             Foreground = foreground
                         },

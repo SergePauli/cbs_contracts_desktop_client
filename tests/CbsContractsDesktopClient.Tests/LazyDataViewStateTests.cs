@@ -127,6 +127,35 @@ public class LazyDataViewStateTests
         Assert.Equal(new object?[] { 2, 5, 7 }, filters["department_id__in"]);
     }
 
+    [Fact]
+    public async Task SetFilterAsync_ReturnsFalseAndKeepsError_WhenCountRequestFails()
+    {
+        var service = new RecordingDataQueryService
+        {
+            CountException = new HttpRequestException("HTTP 500 (InternalServerError).")
+        };
+        var state = new LazyDataViewState<TestItem>(
+            service,
+            model: "StageOrder",
+            preset: "card",
+            pageSize: 5,
+            filterFieldMap: new Dictionary<string, string>
+            {
+                ["supplier"] = "order.supplier.name"
+            },
+            sortFieldMap: null,
+            placeholderFactory: static () => new TestItem());
+
+        var isApplied = await state.SetFilterAsync(
+            "supplier",
+            DataFilterMode.Text,
+            DataFilterMatchMode.Contains,
+            "F");
+
+        Assert.False(isApplied);
+        Assert.Equal("HTTP 500 (InternalServerError).", state.Items.ErrorMessage);
+    }
+
     private sealed class RecordingDataQueryService : IDataQueryService
     {
         private readonly int _totalCount;
@@ -140,6 +169,8 @@ public class LazyDataViewStateTests
 
         public DataQueryRequest? LastCountRequest { get; private set; }
 
+        public Exception? CountException { get; set; }
+
         public Task<IReadOnlyList<TItem>> GetDataAsync<TItem>(DataQueryRequest request, CancellationToken cancellationToken = default)
         {
             LastDataRequest = request;
@@ -149,6 +180,11 @@ public class LazyDataViewStateTests
         public Task<int> GetCountAsync(DataQueryRequest request, CancellationToken cancellationToken = default)
         {
             LastCountRequest = request;
+            if (CountException is not null)
+            {
+                throw CountException;
+            }
+
             return Task.FromResult(_totalCount);
         }
 

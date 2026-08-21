@@ -6,6 +6,56 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 {
     public partial class ContractWorkflowStore
     {
+        public void ApplyCommentReadModel(TableDataRow contract, long? commentedStageId = null)
+        {
+            ArgumentNullException.ThrowIfNull(contract);
+
+            var selectedRow = contract;
+            TableDataRow? selectedStage = null;
+            if (_selectionKind == ContractRowDetailSelectionKind.Stage)
+            {
+                var stageId = commentedStageId
+                    ?? SelectedStageEditState?.Id
+                    ?? TryGetLong(SelectedStage?.GetValue("id"))
+                    ?? throw new InvalidOperationException("Stage selection must contain stage id after comment save.");
+                selectedStage = ReadRequiredStage(contract, stageId);
+                selectedRow = selectedStage;
+            }
+            else if (_selectionKind == ContractRowDetailSelectionKind.Revision)
+            {
+                selectedRow = SelectedRevision
+                    ?? throw new InvalidOperationException("Revision selection must contain selected revision after comment save.");
+            }
+            else
+            {
+                selectedStage = ResolveSelectedStage(ContractRowDetailSelectionKind.Contract, contract, contract);
+            }
+
+            var comments = ReadSelectionComments(_selectionKind, selectedRow, contract);
+            Contract = contract;
+            if (_selectionKind != ContractRowDetailSelectionKind.Revision)
+            {
+                SelectedStage = selectedStage;
+            }
+
+            Comments = comments;
+        }
+
+        private static TableDataRow ReadRequiredStage(TableDataRow contract, long stageId)
+        {
+            var stages = TryGetArray(contract, "stages")
+                ?? throw new InvalidOperationException("Contract edit row must contain stages after comment save.");
+            foreach (var stage in stages.EnumerateArray())
+            {
+                if (stage.ValueKind == JsonValueKind.Object && TryGetLong(stage, "id") == stageId)
+                {
+                    return ToTableDataRow(stage);
+                }
+            }
+
+            throw new InvalidOperationException($"Contract edit row does not contain stage {stageId} after comment save.");
+        }
+
         private static IReadOnlyList<TableDataRow> ReadSelectionComments(
             ContractRowDetailSelectionKind selectionKind,
             TableDataRow selectedRow,

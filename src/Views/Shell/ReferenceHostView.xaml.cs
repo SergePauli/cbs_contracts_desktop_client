@@ -33,6 +33,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IReferenceDefinitionService _referenceDefinitionService;
         private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
+        private readonly IsecurityToolEditWorkflow _isecurityToolEditWorkflow;
         private readonly AppShellViewModel _shellViewModel;
         private readonly OptionsSourceRegistry _optionsRegistry = new();
         private CancellationTokenSource? _routeCts;
@@ -48,6 +49,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _referenceDefinitionService = App.Services.GetRequiredService<IReferenceDefinitionService>();
             _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
+            _isecurityToolEditWorkflow = App.Services.GetRequiredService<IsecurityToolEditWorkflow>();
             _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
 
             InitializeComponent();
@@ -250,11 +252,16 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 await Task.Delay(250, cancellationTokenSource.Token);
-                await _viewModel.ApplyFilterAsync(
+                var isApplied = await _viewModel.ApplyFilterAsync(
                     e.FieldKey,
                     e.MatchMode,
                     e.Value,
                     cancellationTokenSource.Token);
+                if (!isApplied)
+                {
+                    return;
+                }
+
                 ReferenceTableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.FilterChanged,
                     ResetScroll: true));
@@ -348,6 +355,27 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             if (!isCreateMode && _viewModel.SelectedRow is null)
             {
+                return;
+            }
+
+            if (string.Equals(reference.Model, "IsecurityTool", StringComparison.OrdinalIgnoreCase))
+            {
+                var savedIsecurityTool = await _isecurityToolEditWorkflow.ShowAsync(
+                    reference,
+                    isCreateMode,
+                    _viewModel.SelectedRow,
+                    XamlRoot,
+                    _routeCts?.Token ?? CancellationToken.None);
+                if (savedIsecurityTool is null)
+                {
+                    return;
+                }
+
+                _referenceLookupCacheService.Invalidate(reference.Model);
+                await RefreshReferenceAfterSaveAsync(isCreateMode, savedIsecurityTool);
+                ShowSuccessNotification(
+                    isCreateMode ? "Запись создана" : "Изменения сохранены",
+                    BuildReferenceNotificationMessage(reference.Title, TryGetSelectedRowId(savedIsecurityTool)));
                 return;
             }
 
@@ -456,10 +484,15 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            if (!_viewModel.ApplySavedRowUpdate(savedRow))
+            var id = TryGetSelectedRowId(savedRow);
+            if (id is null
+                || await _viewModel.RefreshLoadedRowByIdAsync(id.Value, _routeCts?.Token ?? CancellationToken.None) is null)
             {
                 await _viewModel.ReloadCurrentReferenceAsync();
+                return;
             }
+
+            ReferenceTableView.InvalidateRows(new TableRenderRequest(TableRenderReason.PageLoaded));
         }
 
         private void UpdateSelectionActionButtons()

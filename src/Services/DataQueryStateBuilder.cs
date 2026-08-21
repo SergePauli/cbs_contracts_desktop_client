@@ -58,6 +58,11 @@ namespace CbsContractsDesktopClient.Services
 
         private static Dictionary<string, object?> BuildFilterFragment(string apiField, DataFilterCriterion filter)
         {
+            if (filter.MatchMode == DataFilterMatchMode.IsNull)
+            {
+                return BuildSingle($"{apiField}__null", true);
+            }
+
             var value = filter.Value;
             if (value is null)
             {

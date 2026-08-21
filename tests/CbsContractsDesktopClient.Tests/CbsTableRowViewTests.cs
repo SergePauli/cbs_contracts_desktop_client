@@ -54,9 +54,11 @@ public sealed class CbsTableRowViewTests
     {
         var code = File.ReadAllText(CbsTableRowViewPath);
 
-        Assert.Contains("IsStatusBadgeTemplate", code);
+        Assert.Contains("IsBadgeTemplate", code);
+        Assert.Contains("ApplyBadgeContent", code);
         Assert.Contains("ApplyStatusBadgeContent", code);
         Assert.Contains("StageContractStatusDialogControls.ResolveStatusBadgeColors(statusId)", code);
+        Assert.Contains("ApplyStageOrderSeverityBadgeContent", code);
     }
 
     [Fact]

@@ -114,7 +114,12 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
             && column.FilterField == "contract.name"
             && column.SortField == "name");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "region"
-            && column.BodyTemplateKey == "StageRegion");
+            && column.BodyTemplateKey == "StageRegion"
+            && column.FilterField == "contract.contragent.real_addr.address.area_id"
+            && column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
+            && column.Filter.Mode == DataFilterMode.Numeric
+            && column.Filter.MatchMode == DataFilterMatchMode.In
+            && column.Filter.OptionsSourceKey == "Area");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "duration"
             && column.BodyTemplateKey == "StageDuration");
         Assert.Contains(definition.Columns, static column => column.FieldKey == "cost"
@@ -131,6 +136,43 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
             && column.Filter.EditorKind == CbsTableFilterEditorKind.MultiSelect
             && column.Filter.OptionsSourceKey == "StageStatus"
             && column.BodyTemplateKey == "StatusBadge");
+    }
+
+    [Fact]
+    public void TryGetByRoute_ReturnsNeedsStatusMultiSelectContracts()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/needs", out var definition);
+
+        Assert.True(found);
+        Assert.Equal("StageOrder", definition.Model);
+        Assert.Equal("card", definition.Preset);
+
+        var supplier = definition.Columns.Single(static column => column.FieldKey == "supplier");
+        Assert.Equal("order.supplier.name", supplier.DisplayField);
+        Assert.Equal("order.supplier.org.name_or_order.supplier.org.full_name", supplier.FilterField);
+        Assert.Equal("order.supplier.org.name", supplier.SortField);
+
+        var contragent = definition.Columns.Single(static column => column.FieldKey == "contragent");
+        Assert.Equal("stage.contragent", contragent.DisplayField);
+        Assert.Equal(
+            "stage.contract.contragent.org.name_or_stage.contract.contragent.org.full_name",
+            contragent.FilterField);
+        Assert.Equal("stage.contract.contragent.org.name", contragent.SortField);
+
+        var stageStatus = definition.Columns.Single(static column => column.FieldKey == "stage_status");
+        Assert.Equal("stage.status_id", stageStatus.FilterField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, stageStatus.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, stageStatus.Filter.MatchMode);
+        Assert.Equal("StageStatus", stageStatus.Filter.OptionsSourceKey);
+
+        var orderStatus = definition.Columns.Single(static column => column.FieldKey == "order_status");
+        Assert.Equal("order.order_status_id", orderStatus.FilterField);
+        Assert.Equal(CbsTableFilterEditorKind.MultiSelect, orderStatus.Filter.EditorKind);
+        Assert.Equal(DataFilterMatchMode.In, orderStatus.Filter.MatchMode);
+        Assert.Equal("OrderStatus", orderStatus.Filter.OptionsSourceKey);
+        Assert.Equal("OrderDeliveryStatus", orderStatus.BodyTemplateKey);
     }
 
     [Fact]
@@ -151,6 +193,8 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
         Assert.Equal(CbsTableRowStyleKey.ContractDeadline, definition.RowStyleKey);
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "is_funded").Filter.SupportsNullFilter);
+        Assert.True(definition.Columns.Single(static column => column.FieldKey == "is_present").Filter.SupportsNullFilter);
     }
 
     [Fact]

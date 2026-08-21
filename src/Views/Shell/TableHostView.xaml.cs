@@ -147,6 +147,12 @@ namespace CbsContractsDesktopClient.Views.Shell
             set => TableView.SupportsMultipleRowSelection = value;
         }
 
+        public Func<TableDataRow, bool>? CanSelectRow
+        {
+            get => TableView.CanSelectRow;
+            set => TableView.CanSelectRow = value;
+        }
+
         public void AttachTableState(
             TablePageDefinition definition,
             LazyDataViewState<TableDataRow> state,
@@ -293,6 +299,11 @@ namespace CbsContractsDesktopClient.Views.Shell
         public void InvalidateRows(TableRenderRequest request)
         {
             TableView.InvalidateRows(request);
+        }
+
+        public bool CopySelectedCellRangeToClipboard()
+        {
+            return TableView.CopySelectedCellRangeToClipboard();
         }
 
         private void OnRowsPropertyChanged(object? sender, PropertyChangedEventArgs e)

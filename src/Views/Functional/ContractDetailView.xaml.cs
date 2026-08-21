@@ -1,4 +1,3 @@
-using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
@@ -20,27 +19,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly ContragentDetailStore _contragentDetailStore;
         private bool _isStoreSubscribed;
 
-        public static readonly DependencyProperty RevisionRowProperty =
-            DependencyProperty.Register(
-                nameof(RevisionRow),
-                typeof(TableDataRow),
-                typeof(ContractDetailView),
-                new PropertyMetadata(null, OnDetailChanged));
-
-        public static readonly DependencyProperty ContractRowProperty =
-            DependencyProperty.Register(
-                nameof(ContractRow),
-                typeof(TableDataRow),
-                typeof(ContractDetailView),
-                new PropertyMetadata(null, OnDetailChanged));
-
-        public static readonly DependencyProperty ContragentRowProperty =
-            DependencyProperty.Register(
-                nameof(ContragentRow),
-                typeof(TableDataRow),
-                typeof(ContractDetailView),
-                new PropertyMetadata(null, OnDetailChanged));
-
         public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EmployeeEditRequested;
 
         public ContractDetailView()
@@ -54,28 +32,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             Refresh();
         }
 
-        public TableDataRow? RevisionRow
-        {
-            get => (TableDataRow?)GetValue(RevisionRowProperty);
-            set => SetValue(RevisionRowProperty, value);
-        }
-
-        public TableDataRow? ContractRow
-        {
-            get => (TableDataRow?)GetValue(ContractRowProperty);
-            set => SetValue(ContractRowProperty, value);
-        }
-
-        public TableDataRow? ContragentRow
-        {
-            get => (TableDataRow?)GetValue(ContragentRowProperty);
-            set => SetValue(ContragentRowProperty, value);
-        }
-
         public string BuildClipboardText()
         {
-            var contract = ContractRow ?? _contractWorkflowStore.Contract;
-            var contragent = ContragentRow ?? _contractWorkflowStore.Contragent;
+            var contract = _contractWorkflowStore.Contract;
+            var contragent = _contractWorkflowStore.Contragent;
             if (contract is null || contract.IsPlaceholder)
             {
                 return string.Empty;
@@ -90,11 +50,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             return $"{FormatClipboardDate(startAt)}-{FormatClipboardDate(deadlineAt)} | {contragentName} | {contractTitle}";
         }
 
-        private static void OnDetailChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
-        {
-            ((ContractDetailView)d).Refresh();
-        }
-
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
             if (_isStoreSubscribed)
@@ -102,7 +57,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            _contractWorkflowStore.PropertyChanged += OnContractWorkflowStorePropertyChanged;
+            _contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;
             _isStoreSubscribed = true;
         }
 
@@ -113,56 +68,75 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            _contractWorkflowStore.PropertyChanged -= OnContractWorkflowStorePropertyChanged;
+            _contractWorkflowStore.SelectionApplied -= OnContractWorkflowSelectionApplied;
             _isStoreSubscribed = false;
         }
 
-        private void OnContractWorkflowStorePropertyChanged(object? sender, PropertyChangedEventArgs e)
+        private void OnContractWorkflowSelectionApplied(object? sender, EventArgs e)
         {
-            if (e.PropertyName == nameof(ContractWorkflowStore.Contract)
-                || e.PropertyName == nameof(ContractWorkflowStore.Contragent)
-                || e.PropertyName == nameof(ContractWorkflowStore.SelectedRevision)
-                || e.PropertyName == nameof(ContractWorkflowStore.SelectedStage)
-                || e.PropertyName == nameof(ContractWorkflowStore.SelectedRowHeader)
-                || e.PropertyName == nameof(ContractWorkflowStore.Comments))
-            {
-                Refresh();
-            }
+            Refresh();
         }
 
         private void Refresh()
         {
-            var revision = RevisionRow ?? _contractWorkflowStore.SelectedRevision ?? _contractWorkflowStore.SelectedStage;
-            var contract = ContractRow ?? _contractWorkflowStore.Contract;
-            var contragent = ContragentRow ?? _contractWorkflowStore.Contragent;
-            var selectedRow = revision ?? contract;
-
-            if (selectedRow is null || selectedRow.IsPlaceholder)
+            var stage = "read-store";
+            TableDataRow? contract = null;
+            TableDataRow? contragent = null;
+            try
             {
-                ContractNameTextBlock.Text = "Контракт не выбран";
-                ContragentNameTextBlock.Text = string.Empty;
-                ContactsPanel.Children.Clear();
-                _contragentDetailStore.SetContragent(null);
-                EmployeesBox.Employees = [];
-                CommentsBox.Comments = [];
-                return;
+                var revision = _contractWorkflowStore.SelectedRevision ?? _contractWorkflowStore.SelectedStage;
+                contract = _contractWorkflowStore.Contract;
+                contragent = _contractWorkflowStore.Contragent;
+                var selectedRow = revision ?? contract;
+
+                if (selectedRow is null || selectedRow.IsPlaceholder)
+                {
+                    stage = "render-empty-state";
+                    ContractNameTextBlock.Text = "Контракт не выбран";
+                    ContragentNameTextBlock.Text = string.Empty;
+                    ContactsPanel.Children.Clear();
+                    _contragentDetailStore.SetContragent(null);
+                    EmployeesBox.Employees = [];
+                    CommentsBox.Comments = [];
+                    return;
+                }
+
+                stage = "render-contract-heading";
+                ContractNameTextBlock.Text = TryGetText(contract, "name")
+                    ?? TryGetText(selectedRow, "contract.name")
+                    ?? TryGetText(selectedRow, "name")
+                    ?? "Контракт не выбран";
+
+                stage = "set-contragent";
+                _contragentDetailStore.SetContragent(contragent);
+                ContragentNameTextBlock.Text = !string.IsNullOrWhiteSpace(_contragentDetailStore.Name)
+                    ? _contragentDetailStore.Name
+                    : TryGetText(contragent, "name", "requisites.organization.name")
+                    ?? TryGetText(selectedRow, "contract.contragent.name")
+                    ?? TryGetText(selectedRow, "contragent.name")
+                    ?? string.Empty;
+
+                stage = "render-contacts";
+                RenderContacts(_contragentDetailStore.Contacts);
+
+                stage = "render-employees";
+                EmployeesBox.Employees = _contragentDetailStore.Employees;
+
+                stage = "render-comments";
+                CommentsBox.Comments = _contractWorkflowStore.Comments;
             }
-
-            ContractNameTextBlock.Text = TryGetText(contract, "name")
-                ?? TryGetText(selectedRow, "contract.name")
-                ?? TryGetText(selectedRow, "name")
-                ?? "Контракт не выбран";
-            _contragentDetailStore.SetContragent(contragent);
-            ContragentNameTextBlock.Text = !string.IsNullOrWhiteSpace(_contragentDetailStore.Name)
-                ? _contragentDetailStore.Name
-                : TryGetText(contragent, "name", "requisites.organization.name")
-                ?? TryGetText(selectedRow, "contract.contragent.name")
-                ?? TryGetText(selectedRow, "contragent.name")
-                ?? string.Empty;
-
-            RenderContacts(_contragentDetailStore.Contacts);
-            EmployeesBox.Employees = _contragentDetailStore.Employees;
-            CommentsBox.Comments = _contractWorkflowStore.Comments;
+            catch (Exception ex)
+            {
+                DiagnosticsFileLogger.AppendBlock(
+                    "CONTRACT DETAIL RENDER FAILED",
+                    $"stage={stage}{Environment.NewLine}"
+                    + $"contractId={TryGetLong(contract?.GetValue("id"))?.ToString() ?? "<null>"}{Environment.NewLine}"
+                    + $"contragentId={TryGetLong(contragent?.GetValue("id"))?.ToString() ?? "<null>"}{Environment.NewLine}"
+                    + $"exception={ex}");
+                throw new InvalidOperationException(
+                    $"ContractDetailView.Refresh failed at '{stage}': {ex.Message}",
+                    ex);
+            }
         }
 
         private void RenderContacts(IReadOnlyList<string> contacts)

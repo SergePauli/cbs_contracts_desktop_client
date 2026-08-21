@@ -319,7 +319,7 @@ public sealed class ContentHostViewTests
         Assert.Contains("internal static class FilterIconFactory", iconFactory);
         Assert.Contains("BuildFilterClearIcon()", iconFactory);
         Assert.Contains("Glyph = \"\\uE71C\"", iconFactory);
-        Assert.Contains("Glyph = \"\\uE733\"", iconFactory);
+        Assert.Contains("Glyph = \"\\uE8BB\"", iconFactory);
         Assert.Contains("button.Content = FilterIconFactory.BuildFilterClearIcon();", complexHost);
         Assert.Contains("x:Name=\"ResetFiltersButton\"", referenceXaml);
         Assert.Contains("ResetFiltersButton.Content = FilterIconFactory.BuildFilterClearIcon();", referenceCodeBehind);
@@ -337,6 +337,11 @@ public sealed class ContentHostViewTests
         Assert.Contains("ApplyEditButtonState(_editButton", contractHost);
         Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", contractHost);
         Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", contractHost);
+        Assert.Contains("_copyContractDataButton = CreateHeaderIconButton(\"\\uE8F3\", \"Скопировать данные выбранного контракта в буфер\")", contractHost);
+        Assert.Contains("_copyCellSelectionButton = CreateHeaderIconButton(\"\\uE8C8\", \"Скопировать выделенный диапазон\")", contractHost);
+        Assert.Contains("TableView.CopySelectedCellRangeToClipboard()", contractHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_copyContractDataButton, hasSelectedRow);", contractHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);", contractHost);
         Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", contractHost);
         Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", contractHost);
         Assert.Contains("protected override int PrimaryHeaderActionCount => 3;", contractHost);
@@ -345,12 +350,21 @@ public sealed class ContentHostViewTests
         Assert.Contains("ApplyEditButtonState(_editButton", stageHost);
         Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", stageHost);
         Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", stageHost);
+        Assert.Contains("_copyStageDataButton = CreateHeaderIconButton(\"\\uE8F3\", \"Скопировать данные выбранного этапа в буфер\")", stageHost);
+        Assert.Contains("_copyCellSelectionButton = CreateHeaderIconButton(\"\\uE8C8\", \"Скопировать выделенный диапазон\")", stageHost);
+        Assert.Contains("TableView.CopySelectedCellRangeToClipboard()", stageHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_copyStageDataButton, hasSelectedRow);", stageHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);", stageHost);
         Assert.Contains("ApplyCreateButtonState(_createEmployeeButton", stageHost);
         Assert.Contains("ApplyDefaultActionButtonState(_saveFiltersButton", stageHost);
         Assert.Contains("protected override int PrimaryHeaderActionCount => 2;", stageHost);
         Assert.Contains("ApplyEditButtonState(_editButton", revisionHost);
         Assert.Contains("_infoButton = CreateHeaderIconButton(\"\\uE946\", \"Информация о контракте\")", revisionHost);
         Assert.Contains("ApplyDefaultActionButtonState(_infoButton, HasContractInfoSelection());", revisionHost);
+        Assert.Contains("_copyContractDataButton = CreateHeaderIconButton(\"\\uE8F3\", \"Скопировать данные выбранного контракта в буфер\")", revisionHost);
+        Assert.Contains("_copyCellSelectionButton = CreateHeaderIconButton(\"\\uE8C8\", \"Скопировать выделенный диапазон\")", revisionHost);
+        Assert.Contains("TableView.CopySelectedCellRangeToClipboard()", revisionHost);
+        Assert.Contains("ApplyDefaultActionButtonState(_copyCellSelectionButton, Store.HasActiveReference);", revisionHost);
         Assert.Contains("ApplyDefaultActionButtonState(", revisionHost);
         Assert.Contains("protected override int PrimaryHeaderActionCount => 2;", revisionHost);
         Assert.Contains("ApplyEditButtonState(_editButton", employeeHost);
@@ -365,6 +379,31 @@ public sealed class ContentHostViewTests
         Assert.Contains("ApplyDefaultActionButtonState(_copyButton", contragentHost);
         Assert.Contains("protected override int PrimaryHeaderActionCount => 3;", contragentHost);
         Assert.Contains("return [_createButton, _editButton, _deleteButton,", contragentHost);
+    }
+
+    [Fact]
+    public void ContractDetailView_UsesWorkflowStoreAsItsOnlyRowSource()
+    {
+        var detailView = File.ReadAllText(Path.Combine(
+            ProjectRoot,
+            "src",
+            "Views",
+            "Functional",
+            "ContractDetailView.xaml.cs"));
+        var contractHost = File.ReadAllText(ContractHostViewPath);
+        var stageHost = File.ReadAllText(StageHostViewPath);
+        var revisionHost = File.ReadAllText(RevisionHostViewPath);
+
+        Assert.Contains("_contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;", detailView);
+        Assert.DoesNotContain("ContractRowProperty", detailView);
+        Assert.DoesNotContain("ContragentRowProperty", detailView);
+        Assert.DoesNotContain("RevisionRowProperty", detailView);
+        Assert.DoesNotContain("_detailView.ContractRow =", contractHost);
+        Assert.DoesNotContain("_detailView.ContragentRow =", contractHost);
+        Assert.DoesNotContain("_detailView.ContractRow =", stageHost);
+        Assert.DoesNotContain("_detailView.ContragentRow =", stageHost);
+        Assert.DoesNotContain("_detailView.ContractRow =", revisionHost);
+        Assert.DoesNotContain("_detailView.ContragentRow =", revisionHost);
     }
 
     [Fact]
@@ -422,11 +461,14 @@ public sealed class ContentHostViewTests
 
         Assert.Contains("OptionsRegistry.Set(\"StageStatus\"", stageHost);
         Assert.Contains("OptionsRegistry.Set(\"TaskKind\"", stageHost);
-        Assert.Contains("LoadStageStatusOptionsAsync", stageHost);
+        Assert.Contains("StageStatusFilterOptionsProvider _stageStatusFilterOptionsProvider", stageHost);
+        Assert.Contains("_stageStatusFilterOptionsProvider.LoadAsync()", stageHost);
         Assert.Contains("LoadStageTaskKindOptionsAsync", stageHost);
         Assert.Contains("FormatTaskKindOptionLabel", stageHost);
         Assert.Contains("OptionsRegistry.Get(\"StageStatus\")", stageHost);
         Assert.DoesNotContain("NormalizeStageStatusOptions", tablePageStore);
+        Assert.DoesNotContain("\"StageStatus\"", tablePageStore);
+        Assert.DoesNotContain("\"OrderStatus\"", tablePageStore);
         Assert.DoesNotContain("LoadTaskKindOptionsAsync", tablePageStore);
         Assert.DoesNotContain("FormatTaskKindOptionLabel", tablePageStore);
     }

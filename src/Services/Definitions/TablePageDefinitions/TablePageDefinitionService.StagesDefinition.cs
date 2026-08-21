@@ -37,7 +37,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                     CreateStageDateColumn("start_at", "Старт", "start_at", "start_at", "6rem", immutable: true),
                     CreateStageDateColumn("deadline_at", "Срок", "deadline_at", "deadline_at", "6rem", immutable: true),
                     CreateStageTextColumn("contragent", "Контрагент", "contract.contragent.name", "contract.contragent.org.name_or_contract.contragent.org.full_name", "contract.contragent.org.name", "19rem", immutable: true),
-                    CreateStageTextColumn("region", "Регион", "contract.contragent.region.name", "contract.contragent.real_addr.address.area_id", "contract.contragent.real_addr.address.area.name", "10rem", bodyTemplateKey: "StageRegion"),
+                    CreateStageRegionColumn(),
                     CreateStageNumberColumn("cost", "Сумма", "cost", "7rem", immutable: true, bodyTemplateKey: "StageCost"),
                     CreateStageStatusColumn(),
                     CreateStageBooleanColumn("is_funded", "БЗ", "is_funded"),
@@ -88,6 +88,30 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                     Mode = DataFilterMode.Text,
                     MatchMode = DataFilterMatchMode.Contains,
                     PlaceholderText = "\u2315"
+                }
+            };
+        }
+
+        private static CbsTableColumnDefinition CreateStageRegionColumn()
+        {
+            return new CbsTableColumnDefinition
+            {
+                FieldKey = "region",
+                Header = "Регион",
+                DisplayField = "contract.contragent.region.name",
+                FilterField = "contract.contragent.real_addr.address.area_id",
+                SortField = "contract.contragent.real_addr.address.area.name",
+                DefaultWidth = "10rem",
+                Alignment = CbsTableColumnAlignment.Left,
+                BodyTemplateKey = "StageRegion",
+                IsFilterable = true,
+                Filter = new CbsTableColumnFilterDefinition
+                {
+                    IsEnabled = true,
+                    EditorKind = CbsTableFilterEditorKind.MultiSelect,
+                    Mode = DataFilterMode.Numeric,
+                    MatchMode = DataFilterMatchMode.In,
+                    OptionsSourceKey = "Area"
                 }
             };
         }
