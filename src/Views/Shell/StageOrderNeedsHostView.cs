@@ -281,10 +281,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             TableView.SetSelectedRow(null);
             _needsStore.ClearSelection();
             var showOrders = _showOrdersButton.IsChecked == true;
-            await Store.ApplyFilterAsync(
+            var isApplied = await Store.ApplyFilterAsync(
                 "order_id",
                 DataFilterMatchMode.In,
                 showOrders ? null : new object?[] { null });
+            if (!isApplied)
+            {
+                return;
+            }
+
             ApplyOrderColumnVisibility(showOrders);
             RefreshCurrentTableDefinitionView();
         }

@@ -252,11 +252,16 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 await Task.Delay(250, cancellationTokenSource.Token);
-                await _viewModel.ApplyFilterAsync(
+                var isApplied = await _viewModel.ApplyFilterAsync(
                     e.FieldKey,
                     e.MatchMode,
                     e.Value,
                     cancellationTokenSource.Token);
+                if (!isApplied)
+                {
+                    return;
+                }
+
                 ReferenceTableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.FilterChanged,
                     ResetScroll: true));

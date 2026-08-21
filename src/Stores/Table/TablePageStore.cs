@@ -372,7 +372,7 @@ namespace CbsContractsDesktopClient.Stores.Table
             return replaced;
         }
 
-        public async Task ApplyFilterAsync(
+        public async Task<bool> ApplyFilterAsync(
             string fieldKey,
             DataFilterMatchMode matchMode,
             object? value,
@@ -383,7 +383,7 @@ namespace CbsContractsDesktopClient.Stores.Table
             if (_state is null)
             {
                 AppendUiTrace("FILTER VM STATE NULL");
-                return;
+                return false;
             }
 
             var column = CurrentTablePage?.Columns.FirstOrDefault(
@@ -397,17 +397,25 @@ namespace CbsContractsDesktopClient.Stores.Table
                 ? (object?)multiSelectValue.SelectedValues
                 : value;
 
-            await _state.SetFilterAsync(
+            var isApplied = await _state.SetFilterAsync(
                 fieldKey,
                 column?.Filter.Mode ?? DataFilterMode.Text,
                 matchMode,
                 normalizedValue,
                 cancellationToken);
+            if (!isApplied)
+            {
+                AppendUiTrace(
+                    $"FILTER VM FAILED field={fieldKey} mode={matchMode} value={DescribeFilterValue(normalizedValue)}");
+                return false;
+            }
+
             await SaveCurrentFiltersAsync(cancellationToken);
             _lastViewportEnsureStart = -1;
             _lastViewportEnsureEnd = -1;
             AppendUiTrace(
                 $"FILTER VM APPLIED field={fieldKey} mode={matchMode} value={DescribeFilterValue(normalizedValue)}");
+            return true;
         }
 
         public async Task<IReadOnlyList<DataFilterCriterion>> ResetFiltersAsync(CancellationToken cancellationToken = default)

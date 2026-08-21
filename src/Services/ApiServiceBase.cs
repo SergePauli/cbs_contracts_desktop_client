@@ -359,10 +359,19 @@ namespace CbsContractsDesktopClient.Services
                 timeoutToken,
                 cancellationToken,
                 "STEP API ERROR");
-            throw new HttpRequestException(
+            var exception = new HttpRequestException(
                 $"HTTP {(int)response.StatusCode} ({response.StatusCode}). {body}".Trim(),
                 inner: null,
                 response.StatusCode);
+            EmitTrace($"HTTP ERROR uri={requestUri} status={(int)response.StatusCode} ({response.StatusCode})");
+            LogApiBodyFailure(
+                "API HTTP ERROR",
+                requestUri,
+                requestPayload,
+                response,
+                body,
+                exception);
+            throw exception;
         }
 
         private static async Task<string> ReadResponseBodyAsync(

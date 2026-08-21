@@ -20,6 +20,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
         private const int LeadDepartmentId = 4;
 
         private const string DiagnosticsRoute = "/diagnostics";
+        private const string DiagnosticsLogActionRoute = "/diagnostics/log";
         private const string ContractsRoute = "/contracts";
         private const string StagesRoute = "/stages";
         private const string RevisionsRoute = "/revisions";
@@ -153,12 +154,25 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Items =
                 [
                     CreateItem("Диагностика", "\uE9D9", DiagnosticsRoute, currentRoute),
+                    CreateItem(
+                        "Открыть журнал",
+                        "\uE8A5",
+                        DiagnosticsLogActionRoute,
+                        currentRoute,
+                        isAction: true,
+                        filePath: DiagnosticsFileLogger.LogFilePath),
                     CreateItem("Выход", "\uEC19", "/logout", currentRoute, isAction: true)
                 ]
             };
         }
 
-        private static NavigationMenuItem CreateItem(string title, string glyph, string route, string currentRoute, bool isAction = false)
+        private static NavigationMenuItem CreateItem(
+            string title,
+            string glyph,
+            string route,
+            string currentRoute,
+            bool isAction = false,
+            string filePath = "")
         {
             var isSelected = string.Equals(route, currentRoute, StringComparison.OrdinalIgnoreCase);
             return new NavigationMenuItem
@@ -166,6 +180,7 @@ namespace CbsContractsDesktopClient.Services.Navigation
                 Title = title,
                 Glyph = glyph,
                 Route = route,
+                FilePath = filePath,
                 IsSelected = isSelected,
                 IsAction = isAction,
                 Background = isSelected ? "#FFD9ECFF" : "Transparent",

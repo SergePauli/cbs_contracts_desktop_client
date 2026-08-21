@@ -7,6 +7,7 @@ using CbsContractsDesktopClient.Models;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Workspace;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
 using CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions;
@@ -213,7 +214,12 @@ public sealed class NavigationMenuServiceTests
         var sessionSection = menu.Single(static section => section.IsSessionSection);
 
         Assert.DoesNotContain(baseSection.Items, static item => item.Route == "/diagnostics");
-        Assert.Equal(["/diagnostics", "/logout"], sessionSection.Items.Select(static item => item.Route));
+        Assert.Equal(
+            ["/diagnostics", "/diagnostics/log", "/logout"],
+            sessionSection.Items.Select(static item => item.Route));
+        var diagnosticsLogItem = sessionSection.Items.Single(static item => item.Route == "/diagnostics/log");
+        Assert.True(diagnosticsLogItem.IsAction);
+        Assert.Equal(DiagnosticsFileLogger.LogFilePath, diagnosticsLogItem.FilePath);
     }
 
     [Fact]
@@ -248,7 +254,9 @@ public sealed class NavigationMenuServiceTests
         var sessionSection = menu.Single(static section => section.IsSessionSection);
 
         Assert.DoesNotContain(baseSection.Items, static item => item.Route == "/diagnostics");
-        Assert.Equal(["/diagnostics", "/logout"], sessionSection.Items.Select(static item => item.Route));
+        Assert.Equal(
+            ["/diagnostics", "/diagnostics/log", "/logout"],
+            sessionSection.Items.Select(static item => item.Route));
     }
 
     private sealed class FakeReferenceDefinitionService : IReferenceDefinitionService

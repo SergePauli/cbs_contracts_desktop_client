@@ -634,11 +634,16 @@ namespace CbsContractsDesktopClient.Views.Shell
             try
             {
                 await Task.Delay(250, cancellationTokenSource.Token);
-                await Store.ApplyFilterAsync(
+                var isApplied = await Store.ApplyFilterAsync(
                     e.FieldKey,
                     e.MatchMode,
                     e.Value,
                     cancellationTokenSource.Token);
+                if (!isApplied)
+                {
+                    return;
+                }
+
                 OnTableQueryApplied();
                 TableView.InvalidateRows(new TableRenderRequest(
                     TableRenderReason.FilterChanged,
