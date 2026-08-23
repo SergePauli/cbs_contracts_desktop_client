@@ -47,7 +47,7 @@ namespace CbsContractsDesktopClient.Services.References
                         "reason=missing-api-key",
                         "keySource=<none>",
                         "keyLength=0"));
-                throw new InvalidOperationException("FNS API key is not configured. Set CBS_FNS_KEY or pass apiKey explicitly.");
+                throw new InvalidOperationException("FNS API key is not configured in the distribution or environment.");
             }
 
             var requestUri = $"egr?req={Uri.EscapeDataString(req.Trim())}&key={Uri.EscapeDataString(keyResolution.Value)}";
@@ -419,6 +419,11 @@ namespace CbsContractsDesktopClient.Services.References
             if (!string.IsNullOrWhiteSpace(apiKey))
             {
                 return new FnsApiKeyResolution(apiKey.Trim(), "argument");
+            }
+
+            if (!string.IsNullOrWhiteSpace(FnsDistributionConfiguration.ApiKey))
+            {
+                return new FnsApiKeyResolution(FnsDistributionConfiguration.ApiKey, "distribution");
             }
 
             return ReadApiKey("CBS_FNS_KEY")

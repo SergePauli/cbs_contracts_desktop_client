@@ -34,6 +34,14 @@
   </Target>
 
   <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute"
+                       Condition="'$(FnsDistributionApiKeyBase64)' != ''">
+      <_Parameter1>FnsDistributionApiKeyBase64</_Parameter1>
+      <_Parameter2>$(FnsDistributionApiKeyBase64)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="tests\**\*.cs" />
     <Compile Remove="tempobj\**\*.cs" />
     <Compile Remove="tmpbuild_*\**\*.cs" />

@@ -2,7 +2,7 @@
 #define AppPublisher "ООО ЦБС"
 #define AppVersion GetEnv("CBS_INSTALLER_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.0.1-beta"
+  #define AppVersion "1.0.7-beta"
 #endif
 #define AppExeName "CbsContractsDesktopClient.exe"
 #define PublishDir GetEnv("CBS_INSTALLER_PUBLISH_DIR")

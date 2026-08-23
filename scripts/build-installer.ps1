@@ -1,7 +1,8 @@
 param(
     [string]$Configuration = "Release",
     [string]$RuntimeIdentifier = "win-x64",
-    [string]$Version = "1.0.1-beta",
+    [string]$Version = "1.0.7-beta",
+    [string]$FnsApiKey = $env:CBS_FNS_KEY,
     [string]$InnoSetupCompiler = ""
 )
 
@@ -13,6 +14,12 @@ $installerDir = Join-Path $repoRoot "artifacts\installer"
 $buildOutputDir = Join-Path $repoRoot "bin\$Configuration\net8.0-windows10.0.19041.0\$RuntimeIdentifier"
 $projectPath = Join-Path $repoRoot "CbsContractsDesktopClient.csproj"
 $innoScriptPath = Join-Path $repoRoot "installer\CbsContractsDesktopClient.iss"
+
+if ([string]::IsNullOrWhiteSpace($FnsApiKey)) {
+    throw "FNS API key is required. Pass -FnsApiKey or set CBS_FNS_KEY for the build process."
+}
+
+$fnsApiKeyBase64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($FnsApiKey.Trim()))
 
 function Resolve-InnoSetupCompiler {
     param(
@@ -72,20 +79,36 @@ $buildArguments = @(
     "--runtime",
     $RuntimeIdentifier,
     "--self-contained",
-    "true",
-    "-p:WindowsAppSDKSelfContained=true",
+    "false",
+    "-p:WindowsAppSDKSelfContained=false",
     "-p:PublishSingleFile=false"
 )
 
-Invoke-NativeCommand dotnet $buildArguments
-
-if (-not (Test-Path -LiteralPath (Join-Path $buildOutputDir "CbsContractsDesktopClient.exe"))) {
-    throw "Build output does not contain CbsContractsDesktopClient.exe: $buildOutputDir"
+$env:FnsDistributionApiKeyBase64 = $fnsApiKeyBase64
+try {
+    Invoke-NativeCommand dotnet $buildArguments
+}
+finally {
+    Remove-Item Env:\FnsDistributionApiKeyBase64 -ErrorAction SilentlyContinue
 }
 
 Get-ChildItem -LiteralPath $buildOutputDir -Force |
     Where-Object { $_.Name -ne "artifacts" } |
     Copy-Item -Destination $publishDir -Recurse -Force
+
+$requiredDeploymentFiles = @(
+    "CbsContractsDesktopClient.exe",
+    "CbsContractsDesktopClient.pri",
+    "MainWindow.xbf",
+    "App.xbf"
+)
+
+foreach ($requiredDeploymentFile in $requiredDeploymentFiles) {
+    $requiredDeploymentPath = Join-Path $publishDir $requiredDeploymentFile
+    if (-not (Test-Path -LiteralPath $requiredDeploymentPath)) {
+        throw "Deployment output does not contain required WinUI resource: $requiredDeploymentPath"
+    }
+}
 
 $env:CBS_INSTALLER_VERSION = $Version
 $env:CBS_INSTALLER_PUBLISH_DIR = $publishDir
