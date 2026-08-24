@@ -17,8 +17,15 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContragentDetailStore _contragentDetailStore;
         private bool _isStoreSubscribed;
+        private bool _showContractComments = true;
 
         public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EmployeeEditRequested;
+
+        public bool AllowContractCommentsToggle
+        {
+            get => ContractCommentsToggleButton.Visibility == Visibility.Visible;
+            set => ContractCommentsToggleButton.Visibility = value ? Visibility.Visible : Visibility.Collapsed;
+        }
 
         public ContractDetailView()
         {
@@ -28,6 +35,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             EmployeesBox.EditRequested += (_, args) => EmployeeEditRequested?.Invoke(this, args);
             Loaded += OnLoaded;
             Unloaded += OnUnloaded;
+            UpdateContractCommentsToggleToolTip();
             Refresh();
         }
 
@@ -78,6 +86,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             var stage = "read-store";
             TableDataRow? contract = null;
             TableDataRow? contragent = null;
+            ContractCommentsToggleButton.IsEnabled = false;
             try
             {
                 var revision = _contractWorkflowStore.SelectedRevision ?? _contractWorkflowStore.SelectedStage;
@@ -125,7 +134,8 @@ namespace CbsContractsDesktopClient.Views.Functional
                 EmployeesBox.Employees = _contragentDetailStore.Employees;
 
                 stage = "render-comments";
-                CommentsBox.Comments = _contractWorkflowStore.Comments;
+                RenderComments();
+                ContractCommentsToggleButton.IsEnabled = true;
             }
             catch (Exception ex)
             {
@@ -139,6 +149,34 @@ namespace CbsContractsDesktopClient.Views.Functional
                     $"ContractDetailView.Refresh failed at '{stage}': {ex.Message}",
                     ex);
             }
+        }
+
+        private void ContractCommentsToggleButton_Click(object sender, RoutedEventArgs e)
+        {
+            _showContractComments = ContractCommentsToggleButton.IsChecked == true;
+            UpdateContractCommentsToggleToolTip();
+            RenderComments();
+        }
+
+        private void RenderComments()
+        {
+            CommentsBox.Comments = _showContractComments
+                ? _contractWorkflowStore.Comments
+                : _contractWorkflowStore.Comments
+                    .Where(static comment => !string.Equals(
+                        comment.GetValue("commentable_type")?.ToString(),
+                        "Contract",
+                        StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+        }
+
+        private void UpdateContractCommentsToggleToolTip()
+        {
+            ToolTipService.SetToolTip(
+                ContractCommentsToggleButton,
+                _showContractComments
+                    ? "Скрыть комментарии контракта"
+                    : "Показать комментарии контракта");
         }
 
         private void RenderContacts(IReadOnlyList<string> contacts)

@@ -71,13 +71,34 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <TextBlock
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            FontSize="10"
-                            FontWeight="Normal"
-                            Margin="6,0,0,0"
-                            Foreground="{StaticResource ShellTertiaryTextBrush}"
-                            Text="Комментарии" />
+                        <Grid>
+                            <TextBlock
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                FontSize="10"
+                                FontWeight="Normal"
+                                Margin="6,0,0,0"
+                                VerticalAlignment="Center"
+                                Foreground="{StaticResource ShellTertiaryTextBrush}"
+                                Text="Комментарии" />
+
+                            <ToggleButton
+                                x:Name="ContractCommentsToggleButton"
+                                Width="{StaticResource ShellActionButtonSize}"
+                                Height="{StaticResource ShellActionButtonSize}"
+                                Padding="0"
+                                Margin="0,0,2,0"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Background="Transparent"
+                                BorderBrush="{x:Null}"
+                                Click="ContractCommentsToggleButton_Click"
+                                Content="&#xE89B;"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="16"
+                                IsEnabled="False"
+                                IsChecked="True"
+                                Visibility="Collapsed" />
+                        </Grid>
 
                         <local:CommentBox
                             x:Name="CommentsBox"

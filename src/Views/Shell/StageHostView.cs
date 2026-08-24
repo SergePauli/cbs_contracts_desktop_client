@@ -55,7 +55,10 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly ContractCommentWorkflow _contractCommentWorkflow;
         private readonly StageRowDetailStrategy _rowDetailStrategy = new();
-        private readonly ContractDetailView _detailView = new();
+        private readonly ContractDetailView _detailView = new()
+        {
+            AllowContractCommentsToggle = true
+        };
         private CancellationTokenSource? _detailCts;
         private bool _showStageCostFraction;
         private Button? _editButton;
