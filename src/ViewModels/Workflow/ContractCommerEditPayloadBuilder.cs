@@ -47,11 +47,13 @@ public static class ContractCommerEditPayloadBuilder
 
     public static IReadOnlyDictionary<string, object?> Build(
         TableDataRow sourceRow,
+        ContractEditState contractState,
         ContractCommerEditPayloadInput input,
         IReadOnlyList<StageEditState> stages,
         IReadOnlyList<RevisionEditState> revisions)
     {
         ArgumentNullException.ThrowIfNull(sourceRow);
+        ArgumentNullException.ThrowIfNull(contractState);
         ArgumentNullException.ThrowIfNull(input);
         ArgumentNullException.ThrowIfNull(stages);
         ArgumentNullException.ThrowIfNull(revisions);
@@ -69,9 +71,64 @@ public static class ContractCommerEditPayloadBuilder
         AppendScalarFields(request, sourceRow, input);
         AppendStageAttributes(request, stages, input.IsCreateMode, input.ProfileId);
         AppendRevisionAttributes(request, revisions, input.IsCreateMode);
+        AppendContractResponsibleAttributes(request, contractState);
         AppendCommentAttributes(request, input.Comment, input.ProfileId);
 
         return request;
+    }
+
+    private static void AppendContractResponsibleAttributes(
+        IDictionary<string, object?> request,
+        ContractEditState contractState)
+    {
+        var originalEmployeeIds = contractState.Original.ContractResponsibles
+            .Select(static responsible => responsible.EmployeeId)
+            .ToHashSet();
+        var selectedEmployeeIds = contractState.ContractResponsibles
+            .Select(static responsible => responsible.EmployeeId)
+            .ToHashSet();
+        if (originalEmployeeIds.SetEquals(selectedEmployeeIds))
+        {
+            return;
+        }
+
+        var originalByEmployeeId = contractState.Original.ContractResponsibles
+            .ToDictionary(static responsible => responsible.EmployeeId);
+        var attributes = new List<Dictionary<string, object?>>();
+        foreach (var responsible in contractState.ContractResponsibles.DistinctBy(static item => item.EmployeeId))
+        {
+            if (originalByEmployeeId.ContainsKey(responsible.EmployeeId))
+            {
+                continue;
+            }
+
+            attributes.Add(new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["list_key"] = string.IsNullOrWhiteSpace(responsible.ListKey)
+                    ? Guid.NewGuid().ToString()
+                    : responsible.ListKey,
+                ["employee_id"] = responsible.EmployeeId
+            });
+        }
+
+        attributes.AddRange(contractState.Original.ContractResponsibles
+            .Where(responsible => !selectedEmployeeIds.Contains(responsible.EmployeeId))
+            .Select(static responsible =>
+            {
+                var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["id"] = responsible.Id,
+                    ["_destroy"] = "1"
+                };
+                if (!string.IsNullOrWhiteSpace(responsible.ListKey))
+                {
+                    payload["list_key"] = responsible.ListKey;
+                }
+
+                return payload;
+            }));
+
+        request["contract_responsibles_attributes"] = attributes;
     }
 
     private static void AppendScalarFields(

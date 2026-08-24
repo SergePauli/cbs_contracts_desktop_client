@@ -30,6 +30,9 @@
 
 - Update payloads must contain only the entity `id`, changed scalar fields, `list_key` when the source entity has it, and Rails nested attributes intentionally built by a payload builder.
 - For nested writes use `*_attributes`, for example `comments_attributes` and `tasks_attributes`.
+- Contract responsible employees are changed only through `contract_responsibles_attributes`.
+  New entries contain `list_key` and `employee_id`; removed persisted entries contain `id`, optional source `list_key`, and `_destroy: "1"`.
+  Changing `contragent_id` clears the existing contract responsible composition in the same Contract mutation.
 - Do not send expanded read-model fields such as `comments`, `contract`, `status`, `task_kind`, `tasks`, `revision`, `revisions`, `stages`.
 
 ## Stage update guard

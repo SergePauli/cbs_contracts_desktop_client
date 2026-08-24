@@ -554,7 +554,17 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void CopyStageInfo()
         {
-            var text = StageClipboardFormatter.BuildClipboardText(Store.SelectedRow);
+            var contract = _contractWorkflowStore.SelectedContractEditState;
+            var stage = _contractWorkflowStore.SelectedStageEditState;
+            if (contract is null || stage is null)
+            {
+                return;
+            }
+
+            var text = ContractClipboardFormatter.BuildForStage(
+                contract,
+                _contractWorkflowStore.GetContractDocumentRevisionEditState(),
+                stage);
             if (string.IsNullOrWhiteSpace(text))
             {
                 return;
@@ -864,6 +874,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     allStatusOptions,
                     allStatusOptions,
                     _contragentLookupService.LoadOptionsAsync,
+                    _contractWorkflowFactory.LoadContragentCardRowAsync,
                     openStagesTabOnLoad: true)
                 {
                     XamlRoot = XamlRoot

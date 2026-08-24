@@ -280,6 +280,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     allStatusOptions,
                     allStatusOptions,
                     _contragentLookupService.LoadOptionsAsync,
+                    _contractWorkflowFactory.LoadContragentCardRowAsync,
                     openRevisionsTabOnLoad: true)
                 {
                     XamlRoot = XamlRoot

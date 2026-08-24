@@ -40,6 +40,8 @@ public sealed class ContractEditState : IEditState
 
     public IReadOnlyList<StageSnapshotEditState> Stages { get; private set; } = [];
 
+    public IReadOnlyList<ContractResponsibleEditState> ContractResponsibles { get; private set; } = [];
+
     public string DisplayName =>
         string.IsNullOrWhiteSpace(Name)
             ? Id.ToString(System.Globalization.CultureInfo.CurrentCulture)
@@ -92,6 +94,23 @@ public sealed class ContractEditState : IEditState
         Governmental = Original.Governmental;
         IsMultiStage = Original.IsMultiStage;
         Stages = Original.Stages;
+        ContractResponsibles = Original.ContractResponsibles;
+    }
+
+    public void SetContractResponsibles(IReadOnlyList<ContractResponsibleEditState> contractResponsibles)
+    {
+        ArgumentNullException.ThrowIfNull(contractResponsibles);
+        ContractResponsibles = contractResponsibles;
+    }
+
+    public void ClearContractResponsibles()
+    {
+        ContractResponsibles = [];
+    }
+
+    public void RestoreContractResponsibles()
+    {
+        ContractResponsibles = Original.ContractResponsibles;
     }
 
     public IReadOnlyDictionary<string, object?> BuildExternalNumberPayload()
@@ -173,7 +192,55 @@ public sealed class ContractEditState : IEditState
             ContragentName: row.GetValue("contragent.name")?.ToString(),
             Governmental: TryGetBool(row.GetValue("governmental")),
             IsMultiStage: isMultiStage,
-            Stages: stages));
+            Stages: stages,
+            ContractResponsibles: ReadContractResponsibles(row)));
+    }
+
+    public static ContractEditState CreateNew()
+    {
+        return new ContractEditState(new ContractEditStateSnapshot(
+            Id: 0,
+            ListKey: null,
+            Name: null,
+            Cost: null,
+            ExternalNumber: null,
+            Status: new StatusEditState(null, null),
+            SignedAt: null,
+            ClosedAt: null,
+            TaskKind: new TaskKindEditState(null, null, null),
+            ContragentName: null,
+            Governmental: null,
+            IsMultiStage: false,
+            Stages: [],
+            ContractResponsibles: []));
+    }
+
+    private static IReadOnlyList<ContractResponsibleEditState> ReadContractResponsibles(TableDataRow row)
+    {
+        var contractResponsibles = TryGetArray(row, "contract_responsibles")
+            ?? throw new InvalidOperationException("Contract edit row must contain contract_responsibles array.");
+        return EnumerateObjectArray(contractResponsibles)
+            .Select(static responsible =>
+            {
+                var id = TryGetLong(responsible, "id")
+                    ?? throw new InvalidOperationException("Contract responsible edit row must contain id.");
+                var employeeId = TryGetLong(responsible, "employee_id")
+                    ?? throw new InvalidOperationException("Contract responsible edit row must contain employee_id.");
+                var employee = TryGetObject(responsible, "employee")
+                    ?? throw new InvalidOperationException("Contract responsible edit row must contain employee.");
+                var fullName = TryGetString(employee, "full_name");
+                if (string.IsNullOrWhiteSpace(fullName))
+                {
+                    throw new InvalidOperationException("Contract responsible edit row must contain employee.full_name.");
+                }
+
+                return new ContractResponsibleEditState(
+                    id,
+                    TryGetString(responsible, "list_key"),
+                    employeeId,
+                    fullName);
+            })
+            .ToList();
     }
 
     private static IReadOnlyList<StageSnapshotEditState> ReadStages(TableDataRow row)
@@ -224,4 +291,5 @@ public sealed record ContractEditStateSnapshot(
     string? ContragentName,
     bool? Governmental,
     bool IsMultiStage,
-    IReadOnlyList<StageSnapshotEditState> Stages);
+    IReadOnlyList<StageSnapshotEditState> Stages,
+    IReadOnlyList<ContractResponsibleEditState> ContractResponsibles);

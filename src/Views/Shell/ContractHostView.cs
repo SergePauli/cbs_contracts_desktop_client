@@ -691,7 +691,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                     taskKindItems,
                     OptionsRegistry.Get("ContractStatus"),
                     allStatusOptions,
-                    _contragentLookupService.LoadOptionsAsync)
+                    _contragentLookupService.LoadOptionsAsync,
+                    _contractWorkflowFactory.LoadContragentCardRowAsync)
                 {
                     XamlRoot = XamlRoot
                 };
@@ -974,6 +975,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 OptionsRegistry.Get("ContractStatus"),
                 allStatusOptions,
                 _contragentLookupService.LoadOptionsAsync,
+                _contractWorkflowFactory.LoadContragentCardRowAsync,
                 isCreateMode: true)
             {
                 XamlRoot = XamlRoot
@@ -1054,7 +1056,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 Values = new Dictionary<string, JsonElement>
                 {
-                    ["year"] = JsonSerializer.SerializeToElement(DateTime.Now.Year)
+                    ["year"] = JsonSerializer.SerializeToElement(DateTime.Now.Year),
+                    ["contract_responsibles"] = JsonSerializer.SerializeToElement(Array.Empty<object>())
                 }
             };
         }

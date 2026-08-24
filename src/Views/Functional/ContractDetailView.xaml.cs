@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Services;
@@ -35,19 +34,16 @@ namespace CbsContractsDesktopClient.Views.Functional
         public string BuildClipboardText()
         {
             var contract = _contractWorkflowStore.Contract;
-            var contragent = _contractWorkflowStore.Contragent;
             if (contract is null || contract.IsPlaceholder)
             {
                 return string.Empty;
             }
 
-            var stage = ReadUsedStage(contract);
-            var startAt = stage is null ? null : ReadStringProperty(stage.Value, "start_at");
-            var deadlineAt = stage is null ? null : ReadStringProperty(stage.Value, "deadline_at");
-            var contragentName = TryGetText(contragent, "name", "requisites.organization.name") ?? string.Empty;
-            var contractTitle = TryGetText(contract, "external_number") ?? TryGetText(contract, "name") ?? string.Empty;
-
-            return $"{FormatClipboardDate(startAt)}-{FormatClipboardDate(deadlineAt)} | {contragentName} | {contractTitle}";
+            var contractState = _contractWorkflowStore.SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractDetailView.BuildClipboardText: SelectedContractEditState is not set.");
+            return ContractClipboardFormatter.BuildForContract(
+                contractState,
+                _contractWorkflowStore.GetContractDocumentRevisionEditState());
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -96,6 +92,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                     ContragentNameTextBlock.Text = string.Empty;
                     ContactsPanel.Children.Clear();
                     _contragentDetailStore.SetContragent(null);
+                    EmployeesBox.ResponsibleEmployeeIds = [];
                     EmployeesBox.Employees = [];
                     CommentsBox.Comments = [];
                     return;
@@ -120,6 +117,11 @@ namespace CbsContractsDesktopClient.Views.Functional
                 RenderContacts(_contragentDetailStore.Contacts);
 
                 stage = "render-employees";
+                var contractState = _contractWorkflowStore.SelectedContractEditState
+                    ?? throw new InvalidOperationException("ContractDetailView.Refresh: SelectedContractEditState is not set.");
+                EmployeesBox.ResponsibleEmployeeIds = contractState.ContractResponsibles
+                    .Select(static responsible => responsible.EmployeeId)
+                    .ToList();
                 EmployeesBox.Employees = _contragentDetailStore.Employees;
 
                 stage = "render-comments";
@@ -244,27 +246,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 && value.ValueKind == JsonValueKind.String
                 ? value.GetString()
                 : null;
-        }
-
-        private static string FormatClipboardDate(string? value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                return " ";
-            }
-
-            return DateTime.TryParse(
-                value,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
-                out var invariantDate)
-                || DateTime.TryParse(
-                    value,
-                    CultureInfo.CurrentCulture,
-                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeLocal,
-                    out invariantDate)
-                ? invariantDate.ToString("d", CultureInfo.GetCultureInfo("ru-RU"))
-                : " ";
         }
 
         private static string? ReadNestedStringProperty(JsonElement item, string propertyName, string nestedPropertyName)

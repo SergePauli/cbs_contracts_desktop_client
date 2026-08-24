@@ -31,6 +31,7 @@ public sealed partial class ContractCommerEditView : UserControl
     public ContentControl ExternalNumberSlot => ExternalNumberHost;
     public ContentControl DeadlineAtSlot => DeadlineAtHost;
     public ContentControl ClosedAtSlot => ClosedAtHost;
+    public ContentControl ContractResponsiblesSlot => ContractResponsiblesHost;
     public ContentControl DocLinkRowSlot => DocLinkRowHost;
     public ContentControl ScanLinkRowSlot => ScanLinkRowHost;
     public ContentControl ProtocolLinkRowSlot => ProtocolLinkRowHost;

@@ -146,6 +146,14 @@ public sealed class ContractWorkflowFactory
         return contract;
     }
 
+    public async Task<TableDataRow> LoadContragentCardRowAsync(
+        long contragentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await LoadContragentCardAsync(contragentId, cancellationToken)
+            ?? throw new InvalidOperationException($"Contragent card row {contragentId} was not loaded.");
+    }
+
     private static void AddComputedStageNames(TableDataRow contract)
     {
         var stages = TryGetArray(contract, "stages");

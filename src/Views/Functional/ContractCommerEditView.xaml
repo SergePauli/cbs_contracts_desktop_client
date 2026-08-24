@@ -181,6 +181,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <ContentControl x:Name="GovernmentalHost" />
@@ -216,8 +217,16 @@
                                     <ContentControl x:Name="ClosedAtHost" HorizontalContentAlignment="Stretch" />
                                 </StackPanel>
 
-                                <Grid
+                                <StackPanel
                                     Grid.Row="2"
+                                    Grid.ColumnSpan="4"
+                                    Spacing="3">
+                                    <TextBlock FontSize="12" Text="Ответственные от контрагента" />
+                                    <ContentControl x:Name="ContractResponsiblesHost" HorizontalContentAlignment="Stretch" />
+                                </StackPanel>
+
+                                <Grid
+                                    Grid.Row="3"
                                     Grid.ColumnSpan="5">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -243,15 +252,15 @@
 
                                 <ContentControl
                                     x:Name="DocLinkRowHost"
-                                    Grid.Row="3"
-                                    Grid.ColumnSpan="4" />
-                                <ContentControl
-                                    x:Name="ScanLinkRowHost"
                                     Grid.Row="4"
                                     Grid.ColumnSpan="4" />
                                 <ContentControl
-                                    x:Name="ProtocolLinkRowHost"
+                                    x:Name="ScanLinkRowHost"
                                     Grid.Row="5"
+                                    Grid.ColumnSpan="4" />
+                                <ContentControl
+                                    x:Name="ProtocolLinkRowHost"
+                                    Grid.Row="6"
                                     Grid.ColumnSpan="4" />
                             </Grid>
                         </ScrollViewer>

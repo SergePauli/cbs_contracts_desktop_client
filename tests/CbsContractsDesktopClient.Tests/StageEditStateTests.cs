@@ -55,7 +55,7 @@ public sealed class StageEditStateTests
 
     private static TableDataRow CreateContractRow(params (string Key, object? Value)[] values)
     {
-        return CreateRow(values);
+        return CreateRow([.. values, ("contract_responsibles", Array.Empty<object>())]);
     }
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
