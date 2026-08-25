@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Shared.Dates;
 using CbsContractsDesktopClient.Shared.Dialogs;
@@ -28,17 +29,11 @@ public sealed class StageFinEditDialog : AppEditDialog
     private StageEditDialogNavigationState? _navigationState;
     private readonly Func<StageEditDialogNavigationDirection, Task<StageEditDialogNavigationResult?>>? _navigateAsync;
     private readonly int? _profileId;
-    private readonly CalendarInput _invoiceAtEditor = new();
-    private readonly CalendarInput _prepaymentAtEditor = new();
-    private readonly CalendarInput _paymentAtEditor = new();
-    private readonly CalendarInput _fundedAtEditor = new();
     private DateTimeOffset? _startAt;
     private DateTimeOffset? _deadlineAt;
     private DateTimeOffset? _paymentDeadlineAt;
-    private readonly TextBox _externalNumberBox = new();
-    private readonly TextBox _commentBox = new();
-    private readonly CommentBox _commentsBox = BuildCommentsBox();
     private readonly StageFinEditView _view = new();
+    private readonly CancellationTokenSource _lifetimeCts = new();
     private IReadOnlyList<HolidayCalendarDay> _holidays = [];
     private bool _isApplyingBusinessLogic;
     private bool _businessLogicHandlersAttached;
@@ -70,13 +65,15 @@ public sealed class StageFinEditDialog : AppEditDialog
         Content = BuildContent();
         DialogChrome.Apply(this, _stage.GetEditDialogTitle());
         Loaded += StageFinEditDialog_Loaded;
+        Opened += StageFinEditDialog_Opened;
+        Closed += StageFinEditDialog_Closed;
     }
 
     public long Id => _stage.Id;
 
     public bool HasContractExternalNumberChanges()
     {
-        return _contract?.IsExternalNumberChanged(_externalNumberBox.Text) == true;
+        return _contract?.IsExternalNumberChanged(_view.ExternalNumberInput.Text) == true;
     }
 
     public IReadOnlyDictionary<string, object?> BuildContractExternalNumberPayload()
@@ -86,13 +83,13 @@ public sealed class StageFinEditDialog : AppEditDialog
             throw new InvalidOperationException("Не удалось определить контракт для сохранения внешнего номера.");
         }
 
-        return _contract.BuildExternalNumberPayload(_externalNumberBox.Text);
+        return _contract.BuildExternalNumberPayload(_view.ExternalNumberInput.Text);
     }
 
     public IReadOnlyDictionary<string, object?> BuildPayload()
     {
         SyncStageStateFromEditors();
-        return StageFinEditPayloadBuilder.BuildForUpdate(_stage, _commentBox.Text, _profileId);
+        return StageFinEditPayloadBuilder.BuildForUpdate(_stage, _view.CommentInput.Text, _profileId);
     }
 
     public override bool Validate()
@@ -107,18 +104,32 @@ public sealed class StageFinEditDialog : AppEditDialog
 
         try
         {
-            _holidays = await _holidayRecalculationService.GetHolidayCalendarDaysAsync();
+            _holidays = await _holidayRecalculationService.GetHolidayCalendarDaysAsync(_lifetimeCts.Token);
+            _lifetimeCts.Token.ThrowIfCancellationRequested();
             ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: false);
             ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: false);
             UpdateCalculatedSummary();
-            FocusExternalNumberBox();
         }
-        catch
+        catch (OperationCanceledException) when (_lifetimeCts.IsCancellationRequested)
+        {
+        }
+        catch (Exception)
         {
             _holidays = [];
             UpdateCalculatedSummary();
-            FocusExternalNumberBox();
         }
+    }
+
+    private void StageFinEditDialog_Opened(ContentDialog sender, ContentDialogOpenedEventArgs args)
+    {
+        Opened -= StageFinEditDialog_Opened;
+        FocusExternalNumberBox();
+    }
+
+    private void StageFinEditDialog_Closed(ContentDialog sender, ContentDialogClosedEventArgs args)
+    {
+        Closed -= StageFinEditDialog_Closed;
+        _ = _lifetimeCts.CancelAsync();
     }
 
     private UIElement BuildContent()
@@ -140,7 +151,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_contract?.SignedAt));
         InitializeNavigationButton(_view.PreviousButton, "Предыдущий этап", StageEditDialogNavigationDirection.Previous);
         InitializeNavigationButton(_view.NextButton, "Следующий этап", StageEditDialogNavigationDirection.Next);
-        InitializeEditorSlots();
+        InitializeEditors();
     }
 
     private static void InitializeNavigationButton(
@@ -159,46 +170,44 @@ public sealed class StageFinEditDialog : AppEditDialog
         button.Tag = direction;
     }
 
-    private void InitializeEditorSlots()
+    private void InitializeEditors()
     {
-        _view.ExternalNumberSlot.Content = _externalNumberBox;
-        _view.InvoiceAtSlot.Content = _invoiceAtEditor;
-        _view.PaymentAtSlot.Content = _paymentAtEditor;
-        _view.PrepaymentAtSlot.Content = _prepaymentAtEditor;
-        _view.FundedAtSlot.Content = _fundedAtEditor;
-        _view.CommentSlot.Content = _commentBox;
-        _view.CommentListSlot.Content = _commentsBox;
-        _commentBox.PlaceholderText = _profileId is null
+        _view.CommentInput.PlaceholderText = _profileId is null
             ? "Комментарий недоступен: не получен profile_id пользователя"
             : "Комментарий";
-        _commentBox.IsEnabled = _profileId is not null;
-        _commentBox.KeyDown += CommentBox_KeyDown;
+        _view.CommentInput.IsEnabled = _profileId is not null;
+        _view.CommentInput.KeyDown += CommentBox_KeyDown;
         AttachBusinessLogicHandlers();
         ConfigureTabChain();
     }
 
     private void ConfigureTabChain()
     {
-        _externalNumberBox.TabIndex = 0;
-        _invoiceAtEditor.TabIndex = 1;
-        _paymentAtEditor.TabIndex = 2;
-        _prepaymentAtEditor.TabIndex = 3;
-        _fundedAtEditor.TabIndex = 4;
-        _commentBox.TabIndex = 5;
+        _view.ExternalNumberInput.TabIndex = 0;
+        _view.InvoiceAtInput.TabIndex = 1;
+        _view.PaymentAtInput.TabIndex = 2;
+        _view.PrepaymentAtInput.TabIndex = 3;
+        _view.FundedAtInput.TabIndex = 4;
+        _view.CommentInput.TabIndex = 5;
 
-        _externalNumberBox.PreviewKeyDown += ExternalNumberBox_PreviewKeyDown;
-        _invoiceAtEditor.OnTab = (_, args) => FocusDateEditor(_paymentAtEditor, args);
-        _paymentAtEditor.OnTab = (_, args) => FocusDateEditor(_prepaymentAtEditor, args);
-        _prepaymentAtEditor.OnTab = (_, args) => FocusDateEditor(_fundedAtEditor, args);
-        _fundedAtEditor.OnTab = (_, args) => FocusTextBox(_commentBox, args);
+        _view.ExternalNumberInput.PreviewKeyDown += ExternalNumberBox_PreviewKeyDown;
+        _view.InvoiceAtInput.OnTab = (_, args) => FocusDateEditor(_view.PaymentAtInput, args);
+        _view.PaymentAtInput.OnTab = (_, args) => FocusDateEditor(_view.PrepaymentAtInput, args);
+        _view.PrepaymentAtInput.OnTab = (_, args) => FocusDateEditor(_view.FundedAtInput, args);
+        _view.FundedAtInput.OnTab = (_, args) => FocusTextBox(_view.CommentInput, args);
     }
 
     private void FocusExternalNumberBox()
     {
         DispatcherQueue.TryEnqueue(() =>
         {
-            _externalNumberBox.Focus(FocusState.Programmatic);
-            _externalNumberBox.Select(0, _externalNumberBox.Text.Length);
+            if (_lifetimeCts.IsCancellationRequested)
+            {
+                return;
+            }
+
+            _view.ExternalNumberInput.Focus(FocusState.Programmatic);
+            _view.ExternalNumberInput.Select(0, _view.ExternalNumberInput.Text.Length);
         });
     }
 
@@ -209,7 +218,7 @@ public sealed class StageFinEditDialog : AppEditDialog
             return;
         }
 
-        FocusDateEditor(_invoiceAtEditor, args);
+        FocusDateEditor(_view.InvoiceAtInput, args);
     }
 
     private void FocusDateEditor(CalendarInput editor, KeyRoutedEventArgs args)
@@ -232,7 +241,7 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         UpdateStageSummaryPanel();
         UpdateStageEditors();
-        _commentsBox.Comments = _stage.Id > 0
+        _view.CommentsBox.Comments = _stage.Id > 0
             ? _commentWorkflow.ReadStageComments(_stage.Id)
             : [];
     }
@@ -245,12 +254,12 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         args.Handled = true;
-        if (string.IsNullOrWhiteSpace(_commentBox.Text))
+        if (string.IsNullOrWhiteSpace(_view.CommentInput.Text))
         {
             return;
         }
 
-        _commentBox.IsEnabled = false;
+        _view.CommentInput.IsEnabled = false;
         try
         {
             var contractId = RequireContract().Id;
@@ -263,9 +272,9 @@ public sealed class StageFinEditDialog : AppEditDialog
                 contractId,
                 _stage.Id,
                 _stage.ListKey,
-                _commentBox.Text);
-            _commentBox.Text = string.Empty;
-            _commentsBox.Comments = result.Comments;
+                _view.CommentInput.Text);
+            _view.CommentInput.Text = string.Empty;
+            _view.CommentsBox.Comments = result.Comments;
             ShowErrorInfo(string.Empty);
         }
         catch (Exception ex)
@@ -274,18 +283,8 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
         finally
         {
-            _commentBox.IsEnabled = true;
+            _view.CommentInput.IsEnabled = true;
         }
-    }
-
-    private static CommentBox BuildCommentsBox()
-    {
-        return new CommentBox
-        {
-            Height = 220,
-            MaxHeight = 220,
-            VerticalAlignment = VerticalAlignment.Stretch
-        };
     }
 
     private void UpdateStageSummaryPanel()
@@ -338,11 +337,11 @@ public sealed class StageFinEditDialog : AppEditDialog
         _isApplyingBusinessLogic = true;
         try
         {
-            _externalNumberBox.Text = _contract?.ExternalNumber ?? string.Empty;
-            _invoiceAtEditor.Date = _stage.InvoiceAt;
-            _prepaymentAtEditor.Date = _stage.PrepaymentAt;
-            _paymentAtEditor.Date = _stage.PaymentAt;
-            _fundedAtEditor.Date = _stage.FundedAt;
+            _view.ExternalNumberInput.Text = _contract?.ExternalNumber ?? string.Empty;
+            _view.InvoiceAtInput.Date = _stage.InvoiceAt;
+            _view.PrepaymentAtInput.Date = _stage.PrepaymentAt;
+            _view.PaymentAtInput.Date = _stage.PaymentAt;
+            _view.FundedAtInput.Date = _stage.FundedAt;
             _startAt = _stage.StartAt;
             _deadlineAt = _stage.DeadlineAt;
             _paymentDeadlineAt = _stage.PaymentDeadlineAt;
@@ -433,9 +432,9 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         _businessLogicHandlersAttached = true;
-        _prepaymentAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
-        _paymentAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
-        _fundedAtEditor.DateChanged += (_, _) => ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: true);
+        _view.PrepaymentAtInput.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
+        _view.PaymentAtInput.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
+        _view.FundedAtInput.DateChanged += (_, _) => ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: true);
     }
 
     private void ApplyBusinessLogicAfterPaymentChange(bool appendAutomaticComment)
@@ -467,7 +466,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         _isApplyingBusinessLogic = true;
         try
         {
-            _isFunded = _fundedAtEditor.Date is not null;
+            _isFunded = _view.FundedAtInput.Date is not null;
             ApplyPaymentDeadlineBusinessLogic(appendAutomaticComment);
             UpdateCalculatedSummary();
         }
@@ -481,8 +480,8 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         var calculation = StageDeadlineBusinessRules.CalculatePaymentBasedStageDeadline(
             _stage.DeadlineKind,
-            _paymentAtEditor.Date,
-            _prepaymentAtEditor.Date,
+            _view.PaymentAtInput.Date,
+            _view.PrepaymentAtInput.Date,
             _stage.Duration,
             _holidays);
         if (calculation is null)
@@ -521,7 +520,7 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         var paymentDeadline = StageDeadlineBusinessRules.CalculatePaymentDeadline(
             _stage.PaymentDeadlineKind,
-            _fundedAtEditor.Date,
+            _view.FundedAtInput.Date,
             _stage.PaymentDuration,
             _holidays);
         if (paymentDeadline is null)
@@ -539,15 +538,15 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     private void AppendAutomaticComment(string text)
     {
-        if (!_commentBox.IsEnabled)
+        if (!_view.CommentInput.IsEnabled)
         {
             return;
         }
 
-        _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
+        _view.CommentInput.Text = string.IsNullOrWhiteSpace(_view.CommentInput.Text)
             ? text
-            : $"{_commentBox.Text.TrimEnd()}; {text}";
-        _commentBox.Select(_commentBox.Text.Length, 0);
+            : $"{_view.CommentInput.Text.TrimEnd()}; {text}";
+        _view.CommentInput.Select(_view.CommentInput.Text.Length, 0);
     }
 
     private void UpdateCalculatedSummary()
@@ -559,10 +558,10 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     private void SyncStageStateFromEditors()
     {
-        _stage.PaymentAt = _paymentAtEditor.Date;
-        _stage.PrepaymentAt = _prepaymentAtEditor.Date;
-        _stage.InvoiceAt = _invoiceAtEditor.Date;
-        _stage.FundedAt = _fundedAtEditor.Date;
+        _stage.PaymentAt = _view.PaymentAtInput.Date;
+        _stage.PrepaymentAt = _view.PrepaymentAtInput.Date;
+        _stage.InvoiceAt = _view.InvoiceAtInput.Date;
+        _stage.FundedAt = _view.FundedAtInput.Date;
         _stage.IsFunded = _isFunded;
         _stage.StartAt = _startAt;
         _stage.DeadlineAt = _deadlineAt;

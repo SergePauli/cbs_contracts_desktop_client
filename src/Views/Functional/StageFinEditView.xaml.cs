@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml.Controls;
+using Pauli.WinUiKit.Controls;
 
 namespace CbsContractsDesktopClient.Views.Functional;
 
@@ -27,11 +28,11 @@ public sealed partial class StageFinEditView : UserControl
     public TextBlock RideOutValue => RideOutText;
     public TextBlock SendedValue => SendedText;
 
-    public ContentControl ExternalNumberSlot => ExternalNumberHost;
-    public ContentControl InvoiceAtSlot => InvoiceAtHost;
-    public ContentControl PaymentAtSlot => PaymentAtHost;
-    public ContentControl PrepaymentAtSlot => PrepaymentAtHost;
-    public ContentControl FundedAtSlot => FundedAtHost;
-    public ContentControl CommentSlot => CommentHost;
-    public ContentControl CommentListSlot => CommentListHost;
+    public TextBox ExternalNumberInput => ExternalNumberEditor;
+    public CalendarInput InvoiceAtInput => InvoiceAtEditor;
+    public CalendarInput PaymentAtInput => PaymentAtEditor;
+    public CalendarInput PrepaymentAtInput => PrepaymentAtEditor;
+    public CalendarInput FundedAtInput => FundedAtEditor;
+    public TextBox CommentInput => CommentEditor;
+    public CommentBox CommentsBox => CommentsList;
 }

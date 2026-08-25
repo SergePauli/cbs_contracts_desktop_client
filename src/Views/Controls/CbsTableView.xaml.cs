@@ -1940,8 +1940,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnRowsScrollViewerSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            AppendTrace(
-                $"TABLE VIEWPORT SIZE old={e.PreviousSize.Width:F1}x{e.PreviousSize.Height:F1} new={e.NewSize.Width:F1}x{e.NewSize.Height:F1}");
             UpdateHeaderViewportCompensation();
         }
 

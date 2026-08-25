@@ -6,23 +6,92 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid
-        Padding="4,4,4,4">
-        <ScrollViewer
-            x:Name="CommentsScrollViewer"
-            HorizontalScrollBarVisibility="Disabled"
-            VerticalAlignment="Stretch"
-            VerticalScrollBarVisibility="Visible">
-            <StackPanel
-                x:Name="CommentsPanel"
-                Spacing="2"
-                Padding="0,0,2,0" />
-        </ScrollViewer>
+    <UserControl.Resources>
+        <DataTemplate x:Key="CommentItemTemplate">
+            <Grid
+                MaxWidth="760"
+                Margin="0,0,0,2"
+                HorizontalAlignment="{Binding RowAlignment}">
+                <Border
+                    Padding="3,0,3,0"
+                    Background="{Binding Background}"
+                    BorderBrush="{Binding BorderBrush}"
+                    BorderThickness="{Binding BorderThickness}"
+                    CornerRadius="7">
+                    <StackPanel Spacing="0">
+                        <TextBlock
+                            Margin="0"
+                            FontSize="13"
+                            Foreground="{StaticResource ShellPrimaryTextBrush}"
+                            IsTextSelectionEnabled="True"
+                            Style="{StaticResource BodyTextBlockStyle}"
+                            Text="{Binding Text}"
+                            TextWrapping="WrapWholeWords" />
+
+                        <StackPanel
+                            HorizontalAlignment="Right"
+                            Orientation="Horizontal"
+                            Spacing="4"
+                            Visibility="{Binding MetaVisibility}">
+                            <TextBlock
+                                FontSize="10"
+                                Foreground="{StaticResource ShellPrimaryTextBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{Binding Author}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap"
+                                Visibility="{Binding AuthorVisibility}" />
+                            <TextBlock
+                                FontSize="10"
+                                Foreground="{StaticResource ShellCaptionTextBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="|"
+                                Visibility="{Binding SeparatorVisibility}" />
+                            <TextBlock
+                                FontSize="10"
+                                Foreground="{StaticResource ShellCaptionTextBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{Binding When}"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap"
+                                Visibility="{Binding WhenVisibility}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </DataTemplate>
+
+        <Style x:Key="CommentListViewItemStyle" TargetType="ListViewItem">
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Margin" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="IsTabStop" Value="False" />
+        </Style>
+    </UserControl.Resources>
+
+    <Grid Padding="4">
+        <ListView
+            x:Name="CommentsListView"
+            HorizontalContentAlignment="Stretch"
+            IsItemClickEnabled="False"
+            ItemContainerStyle="{StaticResource CommentListViewItemStyle}"
+            ItemTemplate="{StaticResource CommentItemTemplate}"
+            ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+            ScrollViewer.VerticalScrollBarVisibility="Visible"
+            SelectionMode="None">
+            <ListView.Resources>
+                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent" />
+                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="Transparent" />
+            </ListView.Resources>
+        </ListView>
 
         <TextBlock
             x:Name="EmptyTextBlock"
-            Style="{StaticResource CaptionTextBlockStyle}"
             Foreground="{StaticResource ShellCaptionTextBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
             Text="КОММЕНТАРИЕВ НЕТ"
             Visibility="Collapsed" />
     </Grid>

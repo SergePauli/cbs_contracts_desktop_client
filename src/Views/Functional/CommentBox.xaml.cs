@@ -41,18 +41,16 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void Render()
         {
-            CommentsPanel.Children.Clear();
-            var comments = Comments?.Where(static comment => comment is not null && !comment.IsPlaceholder).ToList() ?? [];
-            EmptyTextBlock.Visibility = comments.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-            CommentsScrollViewer.Visibility = comments.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-
-            foreach (var comment in comments)
-            {
-                CommentsPanel.Children.Add(BuildCommentRow(comment));
-            }
+            var items = (Comments ?? [])
+                .Where(static comment => comment is not null && !comment.IsPlaceholder)
+                .Select(BuildCommentItem)
+                .ToList();
+            CommentsListView.ItemsSource = items;
+            EmptyTextBlock.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+            CommentsListView.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         }
 
-        private FrameworkElement BuildCommentRow(TableDataRow comment)
+        private CommentBoxItem BuildCommentItem(TableDataRow comment)
         {
             var departmentId = TryGetInt(comment.GetValue("profile.department.id"));
             var profileId = TryGetInt(comment.GetValue("profile.id"));
@@ -61,96 +59,15 @@ namespace CbsContractsDesktopClient.Views.Functional
                 comment.GetValue("commentable_type")?.ToString(),
                 "Contract",
                 StringComparison.OrdinalIgnoreCase);
-
-            var row = new Grid
-            {
-                HorizontalAlignment = ResolveRowAlignment(departmentId),
-                MaxWidth = 760
-            };
-
-            var bubble = new Border
-            {
-                Padding = new Thickness(3, 0, 3, 0),
-                CornerRadius = new CornerRadius(7),
-                Background = ResolveBubbleBrush(isOut, isContract),
-                BorderBrush = ResolveBubbleBorderBrush(isContract),
-                BorderThickness = isContract ? new Thickness(1) : new Thickness(0)
-            };
-
-            var content = new StackPanel
-            {
-                Spacing = 0
-            };
-
-            content.Children.Add(new TextBlock
-            {
-                Text = comment.GetValue("content")?.ToString() ?? string.Empty,
-                Style = (Style)Application.Current.Resources["BodyTextBlockStyle"],
-                FontSize = 13,
-                Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
-                TextWrapping = TextWrapping.WrapWholeWords,
-                Margin = new Thickness(0),
-                IsTextSelectionEnabled = true
-            });
-
             var meta = BuildMeta(comment, isOut);
-            if (!string.IsNullOrWhiteSpace(meta.Author) || !string.IsNullOrWhiteSpace(meta.When))
-            {
-                content.Children.Add(BuildMetaPanel(meta));
-            }
-
-            bubble.Child = content;
-            row.Children.Add(bubble);
-            return row;
-        }
-
-        private static FrameworkElement BuildMetaPanel(CommentMeta meta)
-        {
-            var panel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
-                Spacing = 4
-            };
-
-            if (!string.IsNullOrWhiteSpace(meta.Author))
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = meta.Author,
-                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                    FontSize = 10,
-                    Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
-                    TextWrapping = TextWrapping.NoWrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                });
-            }
-
-            if (!string.IsNullOrWhiteSpace(meta.Author) && !string.IsNullOrWhiteSpace(meta.When))
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = "|",
-                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                    FontSize = 10,
-                    Foreground = (Brush)Application.Current.Resources["ShellCaptionTextBrush"]
-                });
-            }
-
-            if (!string.IsNullOrWhiteSpace(meta.When))
-            {
-                panel.Children.Add(new TextBlock
-                {
-                    Text = meta.When,
-                    Style = (Style)Application.Current.Resources["CaptionTextBlockStyle"],
-                    FontSize = 10,
-                    Foreground = (Brush)Application.Current.Resources["ShellCaptionTextBrush"],
-                    TextWrapping = TextWrapping.NoWrap,
-                    TextTrimming = TextTrimming.CharacterEllipsis
-                });
-            }
-
-            return panel;
+            return new CommentBoxItem(
+                comment.GetValue("content")?.ToString() ?? string.Empty,
+                meta.Author,
+                meta.When,
+                ResolveRowAlignment(departmentId),
+                ResolveBubbleBrush(isOut, isContract),
+                ResolveBubbleBorderBrush(isContract),
+                isContract ? new Thickness(1) : new Thickness(0));
         }
 
         private static HorizontalAlignment ResolveRowAlignment(int? departmentId)
@@ -196,15 +113,35 @@ namespace CbsContractsDesktopClient.Views.Functional
             var author = string.Join(
                 ", ",
                 new[] { department, person }.Where(static value => !string.IsNullOrWhiteSpace(value)));
-
-            if (string.IsNullOrWhiteSpace(author))
-            {
-                return new CommentMeta(string.Empty, when);
-            }
-
             return new CommentMeta(author, when);
         }
 
         private sealed record CommentMeta(string Author, string When);
+    }
+
+    public sealed record CommentBoxItem(
+        string Text,
+        string Author,
+        string When,
+        HorizontalAlignment RowAlignment,
+        Brush Background,
+        Brush BorderBrush,
+        Thickness BorderThickness)
+    {
+        public Visibility MetaVisibility =>
+            string.IsNullOrWhiteSpace(Author) && string.IsNullOrWhiteSpace(When)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+
+        public Visibility AuthorVisibility =>
+            string.IsNullOrWhiteSpace(Author) ? Visibility.Collapsed : Visibility.Visible;
+
+        public Visibility SeparatorVisibility =>
+            !string.IsNullOrWhiteSpace(Author) && !string.IsNullOrWhiteSpace(When)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+        public Visibility WhenVisibility =>
+            string.IsNullOrWhiteSpace(When) ? Visibility.Collapsed : Visibility.Visible;
     }
 }
