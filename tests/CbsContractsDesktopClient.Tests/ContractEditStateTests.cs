@@ -70,13 +70,64 @@ public sealed class ContractEditStateTests
         Assert.Contains("Task", title);
     }
 
+    [Fact]
+    public void FromRow_ReadsContractResponsibleEmployeeFullName()
+    {
+        var row = CreateRow(
+            ("id", 20L),
+            ("status_id", 1L),
+            ("status.name", "Подписан"),
+            ("contract_responsibles", new object[]
+            {
+                new
+                {
+                    id = 41L,
+                    list_key = "responsible-41",
+                    employee_id = 101L,
+                    employee = new { full_name = "Иванов Иван Иванович" }
+                }
+            }));
+
+        var state = ContractEditState.FromRow(row)!;
+
+        var responsible = Assert.Single(state.ContractResponsibles);
+        Assert.Equal(41L, responsible.Id);
+        Assert.Equal("responsible-41", responsible.ListKey);
+        Assert.Equal(101L, responsible.EmployeeId);
+        Assert.Equal("Иванов Иван Иванович", responsible.FullName);
+    }
+
+    [Fact]
+    public void FromRow_RejectsContractResponsibleWithoutEmployeeFullName()
+    {
+        var row = CreateRow(
+            ("id", 20L),
+            ("status_id", 1L),
+            ("status.name", "Подписан"),
+            ("contract_responsibles", new object[]
+            {
+                new
+                {
+                    id = 41L,
+                    employee_id = 101L,
+                    employee = new { name = "Иванов И.И." }
+                }
+            }));
+
+        var exception = Assert.Throws<InvalidOperationException>(() => ContractEditState.FromRow(row));
+
+        Assert.Equal("Contract responsible edit row must contain employee.full_name.", exception.Message);
+    }
+
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
+        var rowValues = values.ToDictionary(
+            static value => value.Key,
+            static value => JsonSerializer.SerializeToElement(value.Value));
+        rowValues.TryAdd("contract_responsibles", JsonSerializer.SerializeToElement(Array.Empty<object>()));
         return new TableDataRow
         {
-            Values = values.ToDictionary(
-                static value => value.Key,
-                static value => JsonSerializer.SerializeToElement(value.Value))
+            Values = rowValues
         };
     }
 }

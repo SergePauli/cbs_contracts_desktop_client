@@ -53,8 +53,9 @@ public sealed class ContractCommerEditPayloadBuilderTests
         revision.Description = "Договор";
         revision.DocLink = @"C:\Projects\cbs_contracts_webclient\README.md";
 
-        var contract = ContractCommerEditPayloadBuilder.Build(
+        var contract = ContractCommerEditPayloadBuilder.BuildContractPayload(
             CreateRow(),
+            ContractEditState.CreateNew(),
             new ContractCommerEditPayloadInput(
                 IsCreateMode: true,
                 Id: null,
@@ -94,8 +95,9 @@ public sealed class ContractCommerEditPayloadBuilderTests
             ("list_key", "stage-list-key")));
         stage.IsDestroyed = true;
 
-        var payload = ContractCommerEditPayloadBuilder.Build(
+        var payload = ContractCommerEditPayloadBuilder.BuildContractPayload(
             CreateRow(),
+            CreateContractState(),
             new ContractCommerEditPayloadInput(
                 IsCreateMode: false,
                 Id: 6156L,
@@ -122,6 +124,161 @@ public sealed class ContractCommerEditPayloadBuilderTests
         Assert.Equal("stage-list-key", destroyedStage["list_key"]);
         Assert.Equal("1", destroyedStage["_destroy"]);
         Assert.Equal(3, destroyedStage.Count);
+    }
+
+    [Fact]
+    public void BuildSavePlan_UpdatesPersistedStageAndRevisionOutsideContractPayload()
+    {
+        var sourceRow = CreateRow(
+            ("id", 6156L),
+            ("status_id", 1L),
+            ("status.name", "Подписан"),
+            ("governmental", false),
+            ("contract_responsibles", Array.Empty<object>()));
+        var stage = StageEditState.FromRow(CreateRow(
+            ("id", 6393L),
+            ("list_key", "stage-list-key"),
+            ("start_at", null)));
+        stage.StartAt = new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero);
+        var revision = RevisionEditState.FromRow(CreateRow(
+            ("id", 701L),
+            ("list_key", "revision-list-key"),
+            ("priority", 1L),
+            ("description", "Старая редакция")));
+        revision.Description = "Новая редакция";
+
+        var plan = ContractCommerEditPayloadBuilder.BuildSavePlan(
+            sourceRow,
+            ContractEditState.FromRow(sourceRow)!,
+            new ContractCommerEditPayloadInput(
+                false, 6156L, null, null, null, null, null, null, 1L, null, null,
+                false, null, null, null, null),
+            [stage],
+            [revision]);
+
+        Assert.DoesNotContain("stages_attributes", plan.ContractPayload.Keys);
+        Assert.DoesNotContain("revisions_attributes", plan.ContractPayload.Keys);
+        var stagePayload = Assert.Single(plan.StageUpdatePayloads);
+        Assert.Equal(6393L, stagePayload["id"]);
+        Assert.Equal("Mon Aug 24 2026", stagePayload["start_at"]);
+        var revisionPayload = Assert.Single(plan.RevisionUpdatePayloads);
+        Assert.Equal(701L, revisionPayload["id"]);
+        Assert.Equal("Новая редакция", revisionPayload["description"]);
+        Assert.True(plan.HasChanges);
+        Assert.False(plan.HasContractChanges);
+    }
+
+    [Fact]
+    public void Build_ChangedContractResponsibles_EmitsOnlyNestedDelta()
+    {
+        var sourceRow = CreateRow(
+            ("id", 6156L),
+            ("status_id", 1L),
+            ("status.name", "Подписан"),
+            ("governmental", false),
+            ("contract_responsibles", new object[]
+            {
+                new
+                {
+                    id = 41L,
+                    list_key = "responsible-41",
+                    employee_id = 101L,
+                    employee = new { full_name = "Иванов Иван Иванович" }
+                },
+                new
+                {
+                    id = 42L,
+                    list_key = "responsible-42",
+                    employee_id = 102L,
+                    employee = new { full_name = "Петров Пётр Петрович" }
+                }
+            }));
+        var contractState = ContractEditState.FromRow(sourceRow)!;
+        contractState.SetContractResponsibles(
+        [
+            contractState.ContractResponsibles[0],
+            new ContractResponsibleEditState(null, null, 103L, "Сидоров Сидор Сидорович")
+        ]);
+
+        var payload = ContractCommerEditPayloadBuilder.BuildContractPayload(
+            sourceRow,
+            contractState,
+            new ContractCommerEditPayloadInput(
+                IsCreateMode: false,
+                Id: 6156L,
+                ListKey: null,
+                TaskKindId: null,
+                Code: null,
+                Year: null,
+                Order: null,
+                ContragentId: null,
+                StatusId: 1L,
+                SignedAt: null,
+                Comment: null,
+                Governmental: false,
+                ExternalNumber: null,
+                DeadlineAt: null,
+                ClosedAt: null,
+                ProfileId: null),
+            [],
+            []);
+
+        var attributes = Assert.IsType<List<Dictionary<string, object?>>>(
+            payload["contract_responsibles_attributes"]);
+        Assert.Equal(2, attributes.Count);
+
+        var added = Assert.Single(
+            attributes,
+            static item => item.TryGetValue("employee_id", out var employeeId) && Equals(employeeId, 103L));
+        Assert.False(string.IsNullOrWhiteSpace(Assert.IsType<string>(added["list_key"])));
+        Assert.Equal(2, added.Count);
+
+        var destroyed = Assert.Single(
+            attributes,
+            static item => item.TryGetValue("id", out var id) && Equals(id, 42L));
+        Assert.Equal("responsible-42", destroyed["list_key"]);
+        Assert.Equal("1", destroyed["_destroy"]);
+        Assert.Equal(3, destroyed.Count);
+    }
+
+    [Fact]
+    public void Build_UnchangedContractResponsibles_DoesNotEmitNestedAttributes()
+    {
+        var sourceRow = CreateRow(
+            ("id", 6156L),
+            ("status_id", 1L),
+            ("status.name", "Подписан"),
+            ("governmental", false),
+            ("contract_responsibles", new object[]
+            {
+                new
+                {
+                    id = 41L,
+                    employee_id = 101L,
+                    employee = new { full_name = "Иванов Иван Иванович" }
+                }
+            }));
+        var contractState = ContractEditState.FromRow(sourceRow)!;
+
+        var payload = ContractCommerEditPayloadBuilder.BuildContractPayload(
+            sourceRow,
+            contractState,
+            new ContractCommerEditPayloadInput(
+                false, 6156L, null, null, null, null, null, null, 1L, null, null,
+                false, null, null, null, null),
+            [],
+            []);
+
+        Assert.DoesNotContain("contract_responsibles_attributes", payload.Keys);
+    }
+
+    private static ContractEditState CreateContractState()
+    {
+        return ContractEditState.FromRow(CreateRow(
+            ("id", 6156L),
+            ("status_id", 1L),
+            ("status.name", "Подписан"),
+            ("contract_responsibles", Array.Empty<object>())))!;
     }
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)

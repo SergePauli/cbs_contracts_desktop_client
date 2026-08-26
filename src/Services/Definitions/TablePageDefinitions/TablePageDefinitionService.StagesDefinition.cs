@@ -31,7 +31,7 @@ namespace CbsContractsDesktopClient.Services.Definitions.TablePageDefinitions
                 RowStyleKey = CbsTableRowStyleKey.StageDeadline,
                 Columns =
                 [
-                    CreateStageNumberColumn("id", "ID", "id", "4rem", immutable: true),
+                    CreateStageNumberColumn("id", "ID", "id", "4rem"),
                     CreateStageTaskColumn(),
                     CreateStageTextColumn("name", "Номер", "name", "contract.name", "name", "5rem", immutable: true),
                     CreateStageDateColumn("start_at", "Старт", "start_at", "start_at", "6rem", immutable: true),

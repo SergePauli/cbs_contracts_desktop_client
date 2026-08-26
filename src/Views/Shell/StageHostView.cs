@@ -54,9 +54,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly ContractCommentWorkflow _contractCommentWorkflow;
+        private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly StageRowDetailStrategy _rowDetailStrategy = new();
-        private readonly ContractDetailView _detailView = new();
-        private CancellationTokenSource? _detailCts;
+        private readonly ContractDetailView _detailView = new()
+        {
+            AllowContractCommentsToggle = true
+        };
+        private bool _isStageEditDialogOpen;
         private bool _showStageCostFraction;
         private Button? _editButton;
         private Button? _infoButton;
@@ -81,6 +85,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
+            _contractCommerSaveWorkflow = App.Services.GetRequiredService<ContractCommerSaveWorkflow>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -247,29 +252,17 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task RefreshDetailAsync()
         {
-            _detailCts?.Cancel();
-
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
                 UpdateActionButtonState();
                 return;
             }
 
-            _contractWorkflowStore.ClearRowDetailSelection();
-            RefreshSelectedFooterText();
-
-            var cancellationTokenSource = new CancellationTokenSource();
-            _detailCts = cancellationTokenSource;
+            var selectedRow = Store.SelectedRow;
 
             try
             {
-                var context = await _contractWorkflowFactory.CreateFromStageRowAsync(
-                    Store.SelectedRow,
-                    cancellationTokenSource.Token);
-                if (cancellationTokenSource.IsCancellationRequested)
-                {
-                    return;
-                }
+                var context = await _contractWorkflowFactory.CreateFromStageRowAsync(selectedRow);
 
                 if (!ApplyStageWorkflowContextIfCurrent(context))
                 {
@@ -281,10 +274,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch
             {
-                if (!cancellationTokenSource.IsCancellationRequested)
-                {
-                    UpdateActionButtonState();
-                }
+                UpdateActionButtonState();
             }
         }
 
@@ -302,7 +292,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void ClearDetailView()
         {
-            _detailCts?.Cancel();
+            _contractWorkflowFactory.CancelCurrentLoad();
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
@@ -311,30 +301,39 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task ShowStageEditDialogAsync()
         {
-            if (Store.SelectedRow is null)
+            var departmentId = _userService.CurrentUser?.DepartmentId;
+            if (_isStageEditDialogOpen || Store.SelectedRow is null)
             {
                 return;
             }
 
-            if (_userService.CurrentUser?.DepartmentId == OziDepartmentId)
+            _isStageEditDialogOpen = true;
+            try
             {
-                await ShowStageOziEditDialogAsync();
-                return;
-            }
+                if (departmentId == OziDepartmentId)
+                {
+                    await ShowStageOziEditDialogAsync();
+                    return;
+                }
 
-            if (_userService.CurrentUser?.DepartmentId == CommersDepartmentId)
+                if (departmentId == CommersDepartmentId)
+                {
+                    await ShowStageContractCommerEditDialogAsync();
+                    return;
+                }
+
+                if (departmentId == FinDepartmentId)
+                {
+                    await ShowStageFinEditDialogAsync();
+                    return;
+                }
+
+                await ShowContractInfoDialogAsync();
+            }
+            finally
             {
-                await ShowStageContractCommerEditDialogAsync();
-                return;
+                _isStageEditDialogOpen = false;
             }
-
-            if (_userService.CurrentUser?.DepartmentId == FinDepartmentId)
-            {
-                await ShowStageFinEditDialogAsync();
-                return;
-            }
-
-            await ShowContractInfoDialogAsync();
         }
 
         private async Task ShowStageOziEditDialogAsync(TableDataRow? sourceRowOverride = null)
@@ -554,7 +553,17 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void CopyStageInfo()
         {
-            var text = StageClipboardFormatter.BuildClipboardText(Store.SelectedRow);
+            var contract = _contractWorkflowStore.SelectedContractEditState;
+            var stage = _contractWorkflowStore.SelectedStageEditState;
+            if (contract is null || stage is null)
+            {
+                return;
+            }
+
+            var text = ContractClipboardFormatter.BuildForStage(
+                contract,
+                _contractWorkflowStore.GetContractDocumentRevisionEditState(),
+                stage);
             if (string.IsNullOrWhiteSpace(text))
             {
                 return;
@@ -817,7 +826,8 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private bool ApplyStageWorkflowContextIfCurrent(ContractWorkflowContext context)
         {
-            if (!context.Matches(Store.SelectedRow))
+            if (!_contractWorkflowFactory.IsLatest(context)
+                || !context.Matches(Store.SelectedRow))
             {
                 return false;
             }
@@ -864,6 +874,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     allStatusOptions,
                     allStatusOptions,
                     _contragentLookupService.LoadOptionsAsync,
+                    _contractWorkflowFactory.LoadContragentCardRowAsync,
                     openStagesTabOnLoad: true)
                 {
                     XamlRoot = XamlRoot
@@ -881,15 +892,18 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 try
                 {
-                    var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
-                    if (!HasUpdatePayloadChanges(payload))
+                    var savePlan = dialog.BuildSavePlan(_userService.CurrentUser?.ProfileId);
+                    if (!savePlan.HasChanges)
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
                         return;
                     }
 
-                    savedContractRow = await _modelMutationService.UpdateAsync(ContractModel, payload);
+                    var saveResult = await _contractCommerSaveWorkflow.SaveAsync(savePlan);
+                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(saveResult.ContractId);
+                    dialog.ReloadAsEdit(editRow);
+                    savedContractRow = editRow;
                 }
                 catch (Exception ex)
                 {
@@ -918,6 +932,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             try
             {
+                if (HasAppliedStageWorkflowContext(sourceRow))
+                {
+                    Store.AppendUiTrace(
+                        $"STAGE EDIT CONTEXT reuse stage={TryGetSelectedRowId(sourceRow)?.ToString() ?? "<null>"}");
+                    return true;
+                }
+
                 var context = await _contractWorkflowFactory.CreateFromStageRowAsync(sourceRow);
                 if (!ApplyStageWorkflowContextIfCurrent(context))
                 {
@@ -933,6 +954,18 @@ namespace CbsContractsDesktopClient.Views.Shell
                     FormatStageEditNavigationError("StageHostView.PrepareStageEditContextAsync", ex));
                 return false;
             }
+        }
+
+        private bool HasAppliedStageWorkflowContext(TableDataRow sourceRow)
+        {
+            var stageId = TryGetSelectedRowId(sourceRow);
+            var contractId =
+                TryGetLongValue(sourceRow, "contract.id")
+                ?? TryGetLongValue(sourceRow, "contract_id");
+            return stageId is not null
+                && contractId is not null
+                && _contractWorkflowStore.SelectedStageEditState?.Id == stageId
+                && _contractWorkflowStore.SelectedContractEditState?.Id == contractId;
         }
 
         private StageEditDialogNavigationState BuildStageNavigationState(StageEditState stage)

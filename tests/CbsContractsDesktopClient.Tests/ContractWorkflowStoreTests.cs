@@ -459,11 +459,13 @@ public sealed class ContractWorkflowStoreTests
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
     {
+        var rowValues = values.ToDictionary(
+            static value => value.Key,
+            static value => JsonSerializer.SerializeToElement(value.Value));
+        rowValues.TryAdd("contract_responsibles", JsonSerializer.SerializeToElement(Array.Empty<object>()));
         return new TableDataRow
         {
-            Values = values.ToDictionary(
-                static value => value.Key,
-                static value => JsonSerializer.SerializeToElement(value.Value))
+            Values = rowValues
         };
     }
 

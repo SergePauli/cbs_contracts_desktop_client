@@ -182,6 +182,8 @@ namespace CbsContractsDesktopClient.Views.Controls
         private readonly Dictionary<string, Button> _filterModeButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, Button> _filterMultiSelectButtons = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, MultiSelectFilterUiState> _filterMultiSelectStates = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<TextBox, string> _programmaticFilterTexts = [];
+        private readonly Dictionary<CalendarDatePicker, DateTimeOffset?> _programmaticFilterDates = [];
         private const int WindowBufferRows = 8;
         private const int WindowStepRows = 8;
         private const double HeaderSideBorderCompensation = 1d;
@@ -207,7 +209,6 @@ namespace CbsContractsDesktopClient.Views.Controls
         private int _activeResizeColumnIndex = -1;
         private double _activeResizeStartWidth;
         private bool _suppressNextHeaderClick;
-        private bool _suppressFilterNotifications;
 
         public CbsTableView()
         {
@@ -268,49 +269,31 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         public void ClearFilterInputs()
         {
-            _suppressFilterNotifications = true;
-
-            try
-            {
-                ClearFilterInputsCore();
-            }
-            finally
-            {
-                _suppressFilterNotifications = false;
-            }
+            ClearFilterInputsCore();
         }
 
         public void ApplyFilterInputs(IReadOnlyList<DataFilterCriterion> filters)
         {
             ArgumentNullException.ThrowIfNull(filters);
 
-            _suppressFilterNotifications = true;
+            ClearFilterInputsCore();
 
-            try
+            var filtersByField = filters.ToDictionary(
+                static filter => filter.FieldKey,
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var column in Columns.Where(static column => column.IsFilterable))
             {
-                ClearFilterInputsCore();
-
-                var filtersByField = filters.ToDictionary(
-                    static filter => filter.FieldKey,
-                    StringComparer.OrdinalIgnoreCase);
-
-                foreach (var column in Columns.Where(static column => column.IsFilterable))
+                if (!filtersByField.TryGetValue(column.FieldKey, out var filter))
                 {
-                    if (!filtersByField.TryGetValue(column.FieldKey, out var filter))
-                    {
-                        column.Filter.Value = null;
-                        continue;
-                    }
-
-                    column.Filter.MatchMode = filter.MatchMode;
-                    column.Filter.Value = filter.Value;
-                    _filterModes[GetFilterStateKey(column)] = filter.MatchMode;
-                    ApplyFilterInput(column, filter.Value);
+                    column.Filter.Value = null;
+                    continue;
                 }
-            }
-            finally
-            {
-                _suppressFilterNotifications = false;
+
+                column.Filter.MatchMode = filter.MatchMode;
+                column.Filter.Value = filter.Value;
+                _filterModes[GetFilterStateKey(column)] = filter.MatchMode;
+                ApplyFilterInput(column, filter.Value);
             }
         }
 
@@ -341,7 +324,7 @@ namespace CbsContractsDesktopClient.Views.Controls
                     _filterTexts[GetFilterStateKey(column)] = string.Empty;
                     if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
                     {
-                        dateTimeState.DatePicker.Date = null;
+                        SetProgrammaticFilterDate(dateTimeState.DatePicker, null);
                         RefreshDateTimeFilterTextBox(column);
                     }
                 }
@@ -355,14 +338,14 @@ namespace CbsContractsDesktopClient.Views.Controls
             {
                 if (textBox.Tag is CbsTableColumnDefinition column && IsDateFilterMode(column.Filter.Mode))
                 {
-                    textBox.Text = string.Empty;
+                    SetProgrammaticFilterText(textBox, string.Empty);
                     textBox.BorderBrush = GetFilterBorderBrush(column);
                     textBox.Background = GetFilterBackgroundBrush(column);
                     textBox.Foreground = GetFilterForegroundBrush(column);
                 }
                 else if (!string.IsNullOrEmpty(textBox.Text))
                 {
-                    textBox.Text = string.Empty;
+                    SetProgrammaticFilterText(textBox, string.Empty);
                     if (textBox.Tag is CbsTableColumnDefinition textColumn)
                     {
                         textBox.BorderBrush = GetFilterBorderBrush(textColumn);
@@ -421,8 +404,8 @@ namespace CbsContractsDesktopClient.Views.Controls
                 _filterTexts[GetFilterStateKey(column)] = FormatFilterValue(value);
                 if (_filterDateTimeStates.TryGetValue(column.FieldKey, out var dateTimeState))
                 {
-                    dateTimeState.DatePicker.Date = TryGetDateFilterValue(value);
-                    dateTimeState.TextBox.Text = FormatFilterValue(value);
+                    SetProgrammaticFilterDate(dateTimeState.DatePicker, TryGetDateFilterValue(value));
+                    SetProgrammaticFilterText(dateTimeState.TextBox, FormatFilterValue(value));
                     RefreshDateTimeFilterTextBox(column);
                 }
 
@@ -433,10 +416,48 @@ namespace CbsContractsDesktopClient.Views.Controls
             _filterTexts[GetFilterStateKey(column)] = text;
             if (_filterTextBoxes.TryGetValue(column.FieldKey, out var textBox))
             {
-                textBox.Text = text;
+                SetProgrammaticFilterText(textBox, text);
                 textBox.BorderBrush = GetFilterBorderBrush(column);
                 textBox.Background = GetFilterBackgroundBrush(column);
                 textBox.Foreground = GetFilterForegroundBrush(column);
+            }
+        }
+
+        private void SetProgrammaticFilterText(TextBox textBox, string text)
+        {
+            if (string.Equals(textBox.Text, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _programmaticFilterTexts[textBox] = text;
+            try
+            {
+                textBox.Text = text;
+            }
+            catch
+            {
+                _programmaticFilterTexts.Remove(textBox);
+                throw;
+            }
+        }
+
+        private void SetProgrammaticFilterDate(CalendarDatePicker datePicker, DateTimeOffset? date)
+        {
+            if (Nullable.Equals(datePicker.Date, date))
+            {
+                return;
+            }
+
+            _programmaticFilterDates[datePicker] = date;
+            try
+            {
+                datePicker.Date = date;
+            }
+            catch
+            {
+                _programmaticFilterDates.Remove(datePicker);
+                throw;
             }
         }
 
@@ -838,6 +859,8 @@ namespace CbsContractsDesktopClient.Views.Controls
             _filterModeButtons.Clear();
             _filterMultiSelectButtons.Clear();
             _filterMultiSelectStates.Clear();
+            _programmaticFilterTexts.Clear();
+            _programmaticFilterDates.Clear();
 
             if (Columns.Count == 0)
             {
@@ -1940,8 +1963,6 @@ namespace CbsContractsDesktopClient.Views.Controls
 
         private void OnRowsScrollViewerSizeChanged(object sender, SizeChangedEventArgs e)
         {
-            AppendTrace(
-                $"TABLE VIEWPORT SIZE old={e.PreviousSize.Width:F1}x{e.PreviousSize.Height:F1} new={e.NewSize.Width:F1}x{e.NewSize.Height:F1}");
             UpdateHeaderViewportCompensation();
         }
 
@@ -2602,16 +2623,17 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
+            if (_programmaticFilterTexts.Remove(textBox, out var programmaticText)
+                && string.Equals(programmaticText, textBox.Text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             _filterTexts[GetFilterStateKey(column)] = textBox.Text;
             column.Filter.Value = GetFilterValue(column);
             textBox.BorderBrush = GetFilterBorderBrush(column);
             textBox.Background = GetFilterBackgroundBrush(column);
             textBox.Foreground = GetFilterForegroundBrush(column);
-
-            if (_suppressFilterNotifications)
-            {
-                return;
-            }
 
             FilterRequested?.Invoke(
                 this,
@@ -2668,13 +2690,14 @@ namespace CbsContractsDesktopClient.Views.Controls
                 return;
             }
 
-            column.Filter.Value = GetFilterValue(column);
-            RefreshDateTimeFilterTextBox(column);
-
-            if (_suppressFilterNotifications)
+            if (_programmaticFilterDates.Remove(sender, out var programmaticDate)
+                && Nullable.Equals(programmaticDate, sender.Date))
             {
                 return;
             }
+
+            column.Filter.Value = GetFilterValue(column);
+            RefreshDateTimeFilterTextBox(column);
 
             FilterRequested?.Invoke(
                 this,
@@ -2729,11 +2752,6 @@ namespace CbsContractsDesktopClient.Views.Controls
                 column.Filter.Value = null;
             }
             UpdateBooleanFilterButton(button, column);
-
-            if (_suppressFilterNotifications)
-            {
-                return;
-            }
 
             FilterRequested?.Invoke(
                 this,
@@ -2805,11 +2823,6 @@ namespace CbsContractsDesktopClient.Views.Controls
             UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
             RebuildMultiSelectOptionItems(state);
 
-            if (_suppressFilterNotifications)
-            {
-                return;
-            }
-
             FilterRequested?.Invoke(
                 this,
                 new CbsTableFilterRequestedEventArgs(
@@ -2859,11 +2872,6 @@ namespace CbsContractsDesktopClient.Views.Controls
                 .ToList();
             state.Column.Filter.Value = state.SelectedValues;
             UpdateMultiSelectFilterButtonContent(state.Button, state.Column);
-
-            if (_suppressFilterNotifications)
-            {
-                return;
-            }
 
             FilterRequested?.Invoke(
                 this,

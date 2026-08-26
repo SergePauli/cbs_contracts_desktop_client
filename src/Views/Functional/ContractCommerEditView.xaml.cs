@@ -17,8 +17,6 @@ public sealed partial class ContractCommerEditView : UserControl
     public ContentControl SignedAtSlot => SignedAtHost;
     public ContentControl CostSlot => CostHost;
     public ContentControl CommentSlot => CommentHost;
-    public ContentControl ExtAgreementSlot => ExtAgreementHost;
-    public ContentControl MultiStageSlot => MultiStageHost;
     public ContentControl ResetChangesSlot => ResetChangesHost;
 
     public TabView Tabs => ContractTabs;
@@ -31,6 +29,7 @@ public sealed partial class ContractCommerEditView : UserControl
     public ContentControl ExternalNumberSlot => ExternalNumberHost;
     public ContentControl DeadlineAtSlot => DeadlineAtHost;
     public ContentControl ClosedAtSlot => ClosedAtHost;
+    public ContentControl ContractResponsiblesSlot => ContractResponsiblesHost;
     public ContentControl DocLinkRowSlot => DocLinkRowHost;
     public ContentControl ScanLinkRowSlot => ScanLinkRowHost;
     public ContentControl ProtocolLinkRowSlot => ProtocolLinkRowHost;

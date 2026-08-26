@@ -183,7 +183,8 @@ public sealed class ModelMutationServiceTests
             ("status_id", 5L),
             ("status.name", "Подписан"),
             ("task_kind.name", "Контрольная проверка"),
-            ("external_number", "аварп")));
+            ("external_number", "аварп"),
+            ("contract_responsibles", Array.Empty<object>())));
 
         stage.PaymentAt = new DateTimeOffset(2026, 6, 20, 0, 0, 0, TimeSpan.Zero);
         stage.InvoiceAt = new DateTimeOffset(2026, 6, 18, 0, 0, 0, TimeSpan.Zero);

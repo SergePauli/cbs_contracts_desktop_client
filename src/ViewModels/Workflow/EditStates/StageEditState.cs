@@ -176,6 +176,20 @@ public sealed class StageEditState : IEditState
         return Status.Id == statusId && Original.Status.Id != statusId;
     }
 
+    public void ApplyInProgressAfterContractSigned()
+    {
+        if (Status.Id is not null || StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(DeadlineKind))
+        {
+            return;
+        }
+
+        Status = new StatusEditState(WorkflowStatusIds.InProgress, "В работе");
+        const string comment = "Статус этапа был изменен автоматически на \"В работе\"";
+        Comment = string.IsNullOrWhiteSpace(Comment)
+            ? comment
+            : $"{Comment.TrimEnd()}; {comment}";
+    }
+
     public bool ShouldCloseContract(ContractEditState? contract, long closedStatusId)
     {
         return contract is not null

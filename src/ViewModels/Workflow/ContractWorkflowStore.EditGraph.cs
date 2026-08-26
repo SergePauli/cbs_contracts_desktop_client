@@ -24,7 +24,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
             _selectionKind = ContractRowDetailSelectionKind.Contract;
             Contract = contract;
-            SelectedContractEditState = ContractEditState.FromRow(contract);
+            SelectedContractEditState = TryGetLong(contract.GetValue("id")) is null
+                ? ContractEditState.CreateNew()
+                : ContractEditState.FromRow(contract);
             Contragent = contragent;
             SelectedStage = ResolveSelectedStage(ContractRowDetailSelectionKind.Contract, contract, contract);
             SelectedRevision = null;
@@ -71,6 +73,27 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             ArgumentNullException.ThrowIfNull(revisions);
             ContractRevisionEditStates = revisions.OrderBy(static revision => revision.Priority).ToList();
+        }
+
+        public void SetContractResponsibles(IReadOnlyList<ContractResponsibleEditState> contractResponsibles)
+        {
+            var contract = SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.SetContractResponsibles: SelectedContractEditState is not set.");
+            contract.SetContractResponsibles(contractResponsibles);
+        }
+
+        public void ClearContractResponsibles()
+        {
+            var contract = SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.ClearContractResponsibles: SelectedContractEditState is not set.");
+            contract.ClearContractResponsibles();
+        }
+
+        public void RestoreContractResponsibles()
+        {
+            var contract = SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractWorkflowStore.RestoreContractResponsibles: SelectedContractEditState is not set.");
+            contract.RestoreContractResponsibles();
         }
 
         public void AddStageAfter(StageEditState stage)
@@ -299,15 +322,19 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             SetContractRevisionEditStates(revisions);
         }
 
-        public IReadOnlyDictionary<string, object?> BuildContractCommerPayload(ContractCommerEditPayloadInput input)
+        public ContractCommerEditSavePlan BuildContractCommerSavePlan(ContractCommerEditPayloadInput input)
         {
             if (Contract is null)
             {
                 throw new InvalidOperationException("Contract edit graph must contain contract source row.");
             }
 
-            return ContractCommerEditPayloadBuilder.Build(
+            var contractState = SelectedContractEditState
+                ?? throw new InvalidOperationException("Contract edit graph must contain selected contract edit state.");
+
+            return ContractCommerEditPayloadBuilder.BuildSavePlan(
                 Contract,
+                contractState,
                 input,
                 ContractStageEditStates,
                 ContractRevisionEditStates);

@@ -25,6 +25,7 @@ namespace CbsContractsDesktopClient.Views.References
         private static readonly Brush EmployeeContactBrush = (Brush)Application.Current.Resources["ShellAccentBrush"];
         private EmployeeBoxTextMetrics _textMetrics = HighScaleTextMetrics;
         private XamlRoot? _subscribedXamlRoot;
+        private bool _isApplyingPresentation;
 
         public static readonly DependencyProperty EmployeesProperty =
             DependencyProperty.Register(
@@ -39,6 +40,13 @@ namespace CbsContractsDesktopClient.Views.References
                 typeof(bool),
                 typeof(EmployeeBox),
                 new PropertyMetadata(false, OnCanEditChanged));
+
+        public static readonly DependencyProperty ResponsibleEmployeeIdsProperty =
+            DependencyProperty.Register(
+                nameof(ResponsibleEmployeeIds),
+                typeof(IReadOnlyList<long>),
+                typeof(EmployeeBox),
+                new PropertyMetadata(Array.Empty<long>(), OnResponsibleEmployeeIdsChanged));
 
         public event EventHandler<EmployeeBoxEditRequestedEventArgs>? EditRequested;
 
@@ -63,14 +71,54 @@ namespace CbsContractsDesktopClient.Views.References
             set => SetValue(CanEditProperty, value);
         }
 
+        public IReadOnlyList<long> ResponsibleEmployeeIds
+        {
+            get => (IReadOnlyList<long>)GetValue(ResponsibleEmployeeIdsProperty);
+            set => SetValue(ResponsibleEmployeeIdsProperty, value);
+        }
+
+        public void SetPresentation(
+            IReadOnlyList<EmployeeBoxItem> employees,
+            IReadOnlyList<long> responsibleEmployeeIds)
+        {
+            ArgumentNullException.ThrowIfNull(employees);
+            ArgumentNullException.ThrowIfNull(responsibleEmployeeIds);
+
+            _isApplyingPresentation = true;
+            try
+            {
+                Employees = employees;
+                ResponsibleEmployeeIds = responsibleEmployeeIds;
+            }
+            finally
+            {
+                _isApplyingPresentation = false;
+            }
+
+            Render();
+        }
+
         private static void OnEmployeesChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((EmployeeBox)d).Render();
+            ((EmployeeBox)d).RequestRender();
         }
 
         private static void OnCanEditChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
             ((EmployeeBox)d).Render();
+        }
+
+        private static void OnResponsibleEmployeeIdsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+        {
+            ((EmployeeBox)d).RequestRender();
+        }
+
+        private void RequestRender()
+        {
+            if (!_isApplyingPresentation)
+            {
+                Render();
+            }
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -136,40 +184,68 @@ namespace CbsContractsDesktopClient.Views.References
         {
             EmployeesListView.Items.Clear();
 
-            var employees = Employees ?? [];
+            var employees = BuildDisplayEmployees();
             EmptyTextBlock.Visibility = employees.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
             EmployeesListView.Visibility = employees.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
 
-            foreach (var employee in employees)
+            foreach (var displayEmployee in employees)
             {
                 var itemIndex = EmployeesListView.Items.Count;
                 var listViewItem = new ListViewItem
                 {
-                    Content = BuildEmployeeRow(employee, itemIndex, _textMetrics),
+                    Content = BuildEmployeeRow(
+                        displayEmployee.Employee,
+                        itemIndex,
+                        displayEmployee.IsResponsible,
+                        _textMetrics),
                     HorizontalContentAlignment = HorizontalAlignment.Stretch,
                     Padding = new Thickness(0),
                     MinHeight = 32
                 };
                 DisableContainerHover(listViewItem);
-                if (!string.IsNullOrWhiteSpace(employee.Description))
+                if (!string.IsNullOrWhiteSpace(displayEmployee.Employee.Description))
                 {
-                    ToolTipService.SetToolTip(listViewItem, employee.Description);
+                    ToolTipService.SetToolTip(listViewItem, displayEmployee.Employee.Description);
                 }
 
                 EmployeesListView.Items.Add(listViewItem);
             }
         }
 
-        private Grid BuildEmployeeRow(EmployeeBoxItem employee, int itemIndex, EmployeeBoxTextMetrics textMetrics)
+        private IReadOnlyList<EmployeeBoxDisplayItem> BuildDisplayEmployees()
+        {
+            var responsibleOrder = (ResponsibleEmployeeIds ?? [])
+                .Select(static (employeeId, index) => new { employeeId, index })
+                .ToDictionary(static item => item.employeeId, static item => item.index);
+
+            return (Employees ?? [])
+                .Select((employee, sourceIndex) => new EmployeeBoxDisplayItem(
+                    employee,
+                    sourceIndex,
+                    employee.Id is long employeeId && responsibleOrder.TryGetValue(employeeId, out var order)
+                        ? order
+                        : null))
+                .OrderBy(static item => item.ResponsibleOrder ?? int.MaxValue)
+                .ThenBy(static item => item.SourceIndex)
+                .ToList();
+        }
+
+        private Grid BuildEmployeeRow(
+            EmployeeBoxItem employee,
+            int itemIndex,
+            bool isResponsible,
+            EmployeeBoxTextMetrics textMetrics)
         {
             var row = new Grid
             {
                 ColumnSpacing = 6,
                 MinWidth = 300,
                 Padding = new Thickness(2, 2, 4, 2),
-                Background = itemIndex % 2 == 1
-                    ? (Brush)Application.Current.Resources["ShellTableRowPressedBackgroundBrush"]
-                    : new SolidColorBrush(Microsoft.UI.Colors.Transparent)
+                Background = isResponsible
+                    ? (Brush)Application.Current.Resources["ShellAccentPanelBackgroundBrush"]
+                    : itemIndex % 2 == 1
+                        ? (Brush)Application.Current.Resources["ShellTableRowPressedBackgroundBrush"]
+                        : new SolidColorBrush(Microsoft.UI.Colors.Transparent)
             };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(5, GridUnitType.Star), MinWidth = 120 });
@@ -436,4 +512,12 @@ namespace CbsContractsDesktopClient.Views.References
         double ContactFontSize,
         double ContactIconFontSize,
         double ContactRowHeight);
+
+    internal sealed record EmployeeBoxDisplayItem(
+        EmployeeBoxItem Employee,
+        int SourceIndex,
+        int? ResponsibleOrder)
+    {
+        public bool IsResponsible => ResponsibleOrder is not null;
+    }
 }

@@ -188,6 +188,18 @@ public sealed class CbsTableViewTests
     }
 
     [Fact]
+    public void CbsTableView_ProgrammaticFilterChangesDoNotEmitUserRequests()
+    {
+        var code = File.ReadAllText(CbsTableViewPath);
+
+        Assert.Contains("SetProgrammaticFilterText(textBox, string.Empty)", code);
+        Assert.Contains("SetProgrammaticFilterDate(dateTimeState.DatePicker, null)", code);
+        Assert.Contains("_programmaticFilterTexts.Remove(textBox, out var programmaticText)", code);
+        Assert.Contains("_programmaticFilterDates.Remove(sender, out var programmaticDate)", code);
+        Assert.DoesNotContain("_suppressFilterNotifications", code);
+    }
+
+    [Fact]
     public void CbsTableView_EmitsRowDoubleTappedEventAndKeepsSelectionInSync()
     {
         var code = File.ReadAllText(CbsTableViewPath);

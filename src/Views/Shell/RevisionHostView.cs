@@ -9,7 +9,6 @@ using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services;
-using CbsContractsDesktopClient.Services.Mutations;
 using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Shared.Data;
@@ -28,19 +27,17 @@ namespace CbsContractsDesktopClient.Views.Shell
     public sealed class RevisionHostView : ComplexHostViewBase
     {
         private const int CommersDepartmentId = 2;
-        private const string ContractModel = "Contract";
         private const string RevisionTitle = "Дополнительное соглашение";
         private readonly IDataQueryService _dataQueryService;
-        private readonly IModelMutationService _modelMutationService;
         private readonly IReferenceLookupCacheService _referenceLookupCacheService;
         private readonly IEmployeeEditWorkflow _employeeEditWorkflow;
         private readonly IUserService _userService;
         private readonly IContragentLookupService _contragentLookupService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
+        private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly RevisionRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
-        private CancellationTokenSource? _detailCts;
         private Button? _editButton;
         private Button? _infoButton;
         private Button? _copyContractDataButton;
@@ -49,13 +46,13 @@ namespace CbsContractsDesktopClient.Views.Shell
         public RevisionHostView()
         {
             _dataQueryService = App.Services.GetRequiredService<IDataQueryService>();
-            _modelMutationService = App.Services.GetRequiredService<IModelMutationService>();
             _referenceLookupCacheService = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _employeeEditWorkflow = App.Services.GetRequiredService<IEmployeeEditWorkflow>();
             _userService = App.Services.GetRequiredService<IUserService>();
             _contragentLookupService = App.Services.GetRequiredService<IContragentLookupService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
+            _contractCommerSaveWorkflow = App.Services.GetRequiredService<ContractCommerSaveWorkflow>();
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
         }
@@ -150,29 +147,17 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task RefreshDetailAsync()
         {
-            _detailCts?.Cancel();
-
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
                 UpdateActionButtonState();
                 return;
             }
 
-            _contractWorkflowStore.ClearRowDetailSelection();
-            RefreshSelectedFooterText();
-
-            var cancellationTokenSource = new CancellationTokenSource();
-            _detailCts = cancellationTokenSource;
+            var selectedRow = Store.SelectedRow;
 
             try
             {
-                var context = await _contractWorkflowFactory.CreateFromRevisionRowAsync(
-                    Store.SelectedRow,
-                    cancellationTokenSource.Token);
-                if (cancellationTokenSource.IsCancellationRequested)
-                {
-                    return;
-                }
+                var context = await _contractWorkflowFactory.CreateFromRevisionRowAsync(selectedRow);
 
                 if (!ApplyRevisionWorkflowContextIfCurrent(context))
                 {
@@ -184,16 +169,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch
             {
-                if (!cancellationTokenSource.IsCancellationRequested)
-                {
-                    UpdateActionButtonState();
-                }
+                UpdateActionButtonState();
             }
         }
 
         private bool ApplyRevisionWorkflowContextIfCurrent(ContractWorkflowContext context)
         {
-            if (!context.Matches(Store.SelectedRow))
+            if (!_contractWorkflowFactory.IsLatest(context)
+                || !context.Matches(Store.SelectedRow))
             {
                 return false;
             }
@@ -228,7 +211,7 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private void ClearDetailView()
         {
-            _detailCts?.Cancel();
+            _contractWorkflowFactory.CancelCurrentLoad();
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
@@ -280,6 +263,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     allStatusOptions,
                     allStatusOptions,
                     _contragentLookupService.LoadOptionsAsync,
+                    _contractWorkflowFactory.LoadContragentCardRowAsync,
                     openRevisionsTabOnLoad: true)
                 {
                     XamlRoot = XamlRoot
@@ -297,15 +281,18 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 try
                 {
-                    var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
-                    if (!HasUpdatePayloadChanges(payload))
+                    var savePlan = dialog.BuildSavePlan(_userService.CurrentUser?.ProfileId);
+                    if (!savePlan.HasChanges)
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
                         return;
                     }
 
-                    savedContractRow = await _modelMutationService.UpdateAsync(ContractModel, payload);
+                    var saveResult = await _contractCommerSaveWorkflow.SaveAsync(savePlan);
+                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(saveResult.ContractId);
+                    dialog.ReloadAsEdit(editRow);
+                    savedContractRow = editRow;
                 }
                 catch (Exception ex)
                 {

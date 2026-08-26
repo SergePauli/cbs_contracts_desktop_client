@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using Xunit;
 
@@ -48,6 +49,53 @@ public sealed class StageEditStateTests
         Assert.Contains("руб", stage.GetSectionTitleAmount(contract));
     }
 
+    [Fact]
+    public void ApplyInProgressAfterContractSigned_FillsEmptyStatusAndAppendsComment()
+    {
+        var stage = StageEditState.FromRow(CreateStageRow(
+            ("id", 101L),
+            ("status_id", null),
+            ("deadline_kind", StageDeadlineBusinessRules.DeadlineWorkingDays)));
+
+        stage.ApplyInProgressAfterContractSigned();
+
+        Assert.Equal(WorkflowStatusIds.InProgress, stage.Status.Id);
+        Assert.Equal("В работе", stage.Status.Name);
+        Assert.Equal("Статус этапа был изменен автоматически на \"В работе\"", stage.Comment);
+    }
+
+    [Fact]
+    public void ApplyInProgressAfterContractSigned_PreservesExistingStatus()
+    {
+        var stage = StageEditState.FromRow(CreateStageRow(
+            ("id", 102L),
+            ("status_id", WorkflowStatusIds.Frozen),
+            ("status.name", "Заморожен"),
+            ("deadline_kind", StageDeadlineBusinessRules.DeadlineWorkingDays)));
+
+        stage.ApplyInProgressAfterContractSigned();
+
+        Assert.Equal(WorkflowStatusIds.Frozen, stage.Status.Id);
+        Assert.Equal("Заморожен", stage.Status.Name);
+        Assert.Empty(stage.Comment);
+    }
+
+    [Theory]
+    [InlineData(StageDeadlineBusinessRules.DeadlineCalendarPrepayment)]
+    [InlineData(StageDeadlineBusinessRules.DeadlineWorkingPrepayment)]
+    public void ApplyInProgressAfterContractSigned_PreservesEmptyStatusForPrepaymentMode(string deadlineKind)
+    {
+        var stage = StageEditState.FromRow(CreateStageRow(
+            ("id", 103L),
+            ("status_id", null),
+            ("deadline_kind", deadlineKind)));
+
+        stage.ApplyInProgressAfterContractSigned();
+
+        Assert.Null(stage.Status.Id);
+        Assert.Empty(stage.Comment);
+    }
+
     private static TableDataRow CreateStageRow(params (string Key, object? Value)[] values)
     {
         return CreateRow(values);
@@ -55,7 +103,7 @@ public sealed class StageEditStateTests
 
     private static TableDataRow CreateContractRow(params (string Key, object? Value)[] values)
     {
-        return CreateRow(values);
+        return CreateRow([.. values, ("contract_responsibles", Array.Empty<object>())]);
     }
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)

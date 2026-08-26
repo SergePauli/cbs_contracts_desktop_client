@@ -5,6 +5,9 @@ using System;
 using System.Runtime.InteropServices;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Collections;
+using System.Text;
+using System.Threading;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Navigation;
 using CbsContractsDesktopClient.Services.Definitions.ReferenceDefinitions;
@@ -52,8 +55,67 @@ namespace CbsContractsDesktopClient
         {
             DiagnosticsFileLogger.AppendBlock(
                 "GLOBAL XAML UNHANDLED EXCEPTION",
-                $"message={args.Message}{Environment.NewLine}"
-                + $"exception={args.Exception}");
+                BuildXamlUnhandledExceptionDiagnostic(sender, args));
+        }
+
+        private static string BuildXamlUnhandledExceptionDiagnostic(
+            object sender,
+            Microsoft.UI.Xaml.UnhandledExceptionEventArgs args)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine($"eventArgsType={args.GetType().AssemblyQualifiedName}");
+            builder.AppendLine($"senderType={sender.GetType().AssemblyQualifiedName}");
+            builder.AppendLine($"handled={args.Handled}");
+            builder.AppendLine($"message={args.Message}");
+            builder.AppendLine($"threadId={Environment.CurrentManagedThreadId}");
+            builder.AppendLine($"threadName={Thread.CurrentThread.Name ?? "<null>"}");
+            builder.AppendLine($"threadState={Thread.CurrentThread.ThreadState}");
+            builder.AppendLine($"apartmentState={Thread.CurrentThread.GetApartmentState()}");
+            builder.AppendLine(
+                $"synchronizationContext={SynchronizationContext.Current?.GetType().AssemblyQualifiedName ?? "<null>"}");
+            builder.AppendLine($"debuggerAttached={System.Diagnostics.Debugger.IsAttached}");
+
+            AppendExceptionDiagnostic(builder, args.Exception, depth: 0);
+
+            builder.AppendLine("handlerStackTrace:");
+            builder.AppendLine(Environment.StackTrace);
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void AppendExceptionDiagnostic(
+            StringBuilder builder,
+            Exception? exception,
+            int depth)
+        {
+            var prefix = depth == 0 ? "exception" : $"innerException[{depth}]";
+            if (exception is null)
+            {
+                builder.AppendLine($"{prefix}=<null>");
+                return;
+            }
+
+            builder.AppendLine($"{prefix}.type={exception.GetType().AssemblyQualifiedName}");
+            builder.AppendLine($"{prefix}.message={exception.Message}");
+            builder.AppendLine($"{prefix}.hResult=0x{exception.HResult:X8}");
+            builder.AppendLine($"{prefix}.source={exception.Source ?? "<null>"}");
+            builder.AppendLine($"{prefix}.targetSite={exception.TargetSite?.ToString() ?? "<null>"}");
+            builder.AppendLine($"{prefix}.helpLink={exception.HelpLink ?? "<null>"}");
+            builder.AppendLine($"{prefix}.stackTrace:");
+            builder.AppendLine(exception.StackTrace ?? "<null>");
+            builder.AppendLine($"{prefix}.data.count={exception.Data.Count}");
+            foreach (DictionaryEntry entry in exception.Data)
+            {
+                builder.AppendLine(
+                    $"{prefix}.data[{entry.Key?.ToString() ?? "<null>"}]={entry.Value?.ToString() ?? "<null>"}");
+            }
+
+            builder.AppendLine($"{prefix}.toString:");
+            builder.AppendLine(exception.ToString());
+
+            if (exception.InnerException is not null)
+            {
+                AppendExceptionDiagnostic(builder, exception.InnerException, depth + 1);
+            }
         }
 
         private static void OnAppDomainUnhandledException(
@@ -108,6 +170,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<StageSupplyEditWorkflow>();
             services.AddSingleton<ContractWorkflowFactory>();
             services.AddSingleton<ContractCommentWorkflow>();
+            services.AddSingleton<ContractCommerSaveWorkflow>();
             services.AddSingleton<ActivityReportStore>();
             services.AddSingleton<ActivityReportLoader>();
             services.AddSingleton<StatusTableViewModel>();

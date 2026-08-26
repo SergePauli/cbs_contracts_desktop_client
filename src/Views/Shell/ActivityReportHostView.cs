@@ -225,6 +225,11 @@ public sealed partial class ActivityReportHostView : ContentHostViewBase
             ContractRowDetailStrategy strategy = reportRow.TargetKind == ActivityReportTargetKind.Contract
                 ? new ContractTableRowDetailStrategy()
                 : new StageRowDetailStrategy();
+            if (!_workflowFactory.IsLatest(context))
+            {
+                return false;
+            }
+
             context.ApplyTo(_workflowStore, strategy);
             DetailView.Visibility = Visibility.Visible;
             return true;

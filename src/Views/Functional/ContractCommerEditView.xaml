@@ -112,8 +112,6 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="640" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
@@ -123,17 +121,9 @@
                         Grid.Row="1"
                         HorizontalContentAlignment="Stretch" />
                     <ContentControl
-                        x:Name="ExtAgreementHost"
-                        Grid.Row="1"
-                        Grid.Column="1" />
-                    <ContentControl
-                        x:Name="MultiStageHost"
-                        Grid.Row="1"
-                        Grid.Column="2" />
-                    <ContentControl
                         x:Name="ResetChangesHost"
                         Grid.Row="1"
-                        Grid.Column="3" />
+                        Grid.Column="1" />
                 </Grid>
             </StackPanel>
         </Border>
@@ -181,6 +171,7 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
 
                                 <ContentControl x:Name="GovernmentalHost" />
@@ -216,8 +207,16 @@
                                     <ContentControl x:Name="ClosedAtHost" HorizontalContentAlignment="Stretch" />
                                 </StackPanel>
 
-                                <Grid
+                                <StackPanel
                                     Grid.Row="2"
+                                    Grid.ColumnSpan="4"
+                                    Spacing="3">
+                                    <TextBlock FontSize="12" Text="Ответственные от контрагента" />
+                                    <ContentControl x:Name="ContractResponsiblesHost" HorizontalContentAlignment="Stretch" />
+                                </StackPanel>
+
+                                <Grid
+                                    Grid.Row="3"
                                     Grid.ColumnSpan="5">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -243,15 +242,15 @@
 
                                 <ContentControl
                                     x:Name="DocLinkRowHost"
-                                    Grid.Row="3"
-                                    Grid.ColumnSpan="4" />
-                                <ContentControl
-                                    x:Name="ScanLinkRowHost"
                                     Grid.Row="4"
                                     Grid.ColumnSpan="4" />
                                 <ContentControl
-                                    x:Name="ProtocolLinkRowHost"
+                                    x:Name="ScanLinkRowHost"
                                     Grid.Row="5"
+                                    Grid.ColumnSpan="4" />
+                                <ContentControl
+                                    x:Name="ProtocolLinkRowHost"
+                                    Grid.Row="6"
                                     Grid.ColumnSpan="4" />
                             </Grid>
                         </ScrollViewer>

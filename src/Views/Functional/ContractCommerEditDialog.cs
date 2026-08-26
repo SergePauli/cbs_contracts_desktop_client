@@ -40,6 +40,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _contractStatusOptions;
         private readonly IReadOnlyList<CbsTableFilterOptionDefinition> _stageStatusOptions;
         private readonly Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> _loadContragentOptionsAsync;
+        private readonly Func<long, CancellationToken, Task<TableDataRow>> _loadContragentCardAsync;
         private readonly IHolidayRecalculationService _holidayRecalculationService;
         private bool _isCreateMode;
         private readonly Dropdown _taskKindBox = new();
@@ -63,11 +64,12 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _revisionScanLinkBox = new();
         private readonly TextBox _revisionProtocolLinkBox = new();
         private readonly TextBox _revisionZipLinkBox = new();
-        private readonly CheckBox _extAgreementBox = new();
-        private readonly CheckBox _multiStageBox = new();
+        private readonly MultiSelect _contractResponsiblesMultiSelect = new();
         private readonly Button _resetChangesButton = new();
         private AutoSuggestBox? _contragentBox;
         private IReadOnlyList<CbsTableFilterOptionDefinition> _contragentOptions = [];
+        private IReadOnlyList<ContractResponsibleOption> _contractResponsibleOptions = [];
+        private readonly Dictionary<long, TableDataRow> _contragentCards = [];
         private IReadOnlyList<HolidayCalendarDay> _holidays = [];
         private CbsTableFilterOptionDefinition? _selectedContragentOption;
         private string _contragentInput = string.Empty;
@@ -94,7 +96,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private FrameworkElement? _initialRevisionFocusTarget;
         private readonly bool _openStagesTabOnLoad;
         private readonly bool _openRevisionsTabOnLoad;
-        private bool _isUpdatingExtAgreementBox;
         private bool _isSyncingTaskKindSelection;
         private bool _contractClosePreviewApplied;
         private bool _contractCloseCommentApplied;
@@ -107,6 +108,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             IReadOnlyList<CbsTableFilterOptionDefinition> contractStatusOptions,
             IReadOnlyList<CbsTableFilterOptionDefinition> stageStatusOptions,
             Func<string, CancellationToken, Task<IReadOnlyList<CbsTableFilterOptionDefinition>>> loadContragentOptionsAsync,
+            Func<long, CancellationToken, Task<TableDataRow>> loadContragentCardAsync,
             bool isCreateMode = false,
             bool openStagesTabOnLoad = false,
             bool openRevisionsTabOnLoad = false)
@@ -118,6 +120,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             ArgumentNullException.ThrowIfNull(contractStatusOptions);
             ArgumentNullException.ThrowIfNull(stageStatusOptions);
             ArgumentNullException.ThrowIfNull(loadContragentOptionsAsync);
+            ArgumentNullException.ThrowIfNull(loadContragentCardAsync);
 
             _workflowStore = workflowStore;
             _contract = contract;
@@ -129,8 +132,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             _contractStatusOptions = contractStatusOptions;
             _stageStatusOptions = stageStatusOptions;
             _loadContragentOptionsAsync = loadContragentOptionsAsync;
+            _loadContragentCardAsync = loadContragentCardAsync;
             _holidayRecalculationService = App.Services.GetRequiredService<IHolidayRecalculationService>();
             _isCreateMode = isCreateMode;
+            CacheInitialContragentCard();
             ConfigureSaveWithoutClose("Закрыть");
             _openStagesTabOnLoad = openStagesTabOnLoad;
             _openRevisionsTabOnLoad = openRevisionsTabOnLoad;
@@ -193,10 +198,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             return true;
         }
 
-        public IReadOnlyDictionary<string, object?> BuildPayload(int? profileId)
+        public ContractCommerEditSavePlan BuildSavePlan(int? profileId)
         {
             SyncEditorsToWorkflowStore();
-            return _workflowStore.BuildContractCommerPayload(new ContractCommerEditPayloadInput(
+            return _workflowStore.BuildContractCommerSavePlan(new ContractCommerEditPayloadInput(
                 IsCreateMode: _isCreateMode,
                 Id: TryGetLong(_contract.GetValue("id")),
                 ListKey: _contract.GetValue("list_key")?.ToString(),
@@ -263,11 +268,11 @@ namespace CbsContractsDesktopClient.Views.Functional
             ConfigureYearBox();
             ConfigureOrderBox();
             ConfigureContragentState();
+            ConfigureContractResponsibles();
             ConfigureCostBox();
             ConfigureStatusCombo();
             ConfigureSignedAtEditor();
             ConfigureCommentBox();
-            ConfigureFlagBoxes();
             ConfigureResetChangesButton();
 
             var view = new ContractCommerEditView();
@@ -285,8 +290,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.SignedAtSlot.Content = _signedAtEditor;
             view.CostSlot.Content = _costBox;
             view.CommentSlot.Content = _commentBox;
-            view.ExtAgreementSlot.Content = BuildFlagHost(_extAgreementBox, "ДС");
-            view.MultiStageSlot.Content = BuildFlagHost(_multiStageBox, "МЭ");
             view.ResetChangesSlot.Content = _isCreateMode ? null : _resetChangesButton;
             PopulateContractTab(view);
             view.StagesTabSlot.Content = BuildStagesTabContent();
@@ -306,6 +309,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.ExternalNumberSlot.Content = _externalNumberBox;
             view.DeadlineAtSlot.Content = _deadlineAtEditor;
             view.ClosedAtSlot.Content = _closedAtEditor;
+            view.ContractResponsiblesSlot.Content = _contractResponsiblesMultiSelect;
             view.DocLinkRowSlot.Content = BuildFileRow("Исходник", "\uf000", _revisionDocLinkBox, button => _contractDocAttachButton = button);
             view.ScanLinkRowSlot.Content = BuildFileRow("Скан", "\uea90", _revisionScanLinkBox, button => _contractScanAttachButton = button);
             view.ProtocolLinkRowSlot.Content = BuildFileRow("Протокол", "\ue9a4", _revisionProtocolLinkBox, button => _contractProtocolAttachButton = button);
@@ -448,6 +452,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void SyncEditorsToWorkflowStore()
         {
+            _workflowStore.SetContractResponsibles(BuildSelectedContractResponsibles());
             SyncSingleStageTaskKindFromContract();
             GetContractRevisionEditState().IsPresent = _revisionPresentBox.IsChecked == true;
             GetContractRevisionEditState().Description = NormalizeEditorText(_revisionDescriptionBox.Text);
@@ -589,7 +594,9 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void SignedAtEditor_DateChanged(object? sender, EventArgs e)
         {
-            ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: true);
+            ApplyContractSignedDateToEmptyStageStarts();
+            ApplyContractSignedStatusToEmptyStageStatuses();
+            ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: false);
         }
 
         private void SignedAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
@@ -649,23 +656,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             {
                 _commentBox.IsEnabled = true;
             }
-        }
-
-        private void ConfigureFlagBoxes()
-        {
-            SetExtAgreementChecked(RevisionEditors.Count > 0);
-            _extAgreementBox.Checked -= ExtAgreementBox_Checked;
-            _extAgreementBox.Unchecked -= ExtAgreementBox_Unchecked;
-            _extAgreementBox.PreviewKeyDown -= ExtAgreementBox_PreviewKeyDown;
-            _extAgreementBox.Checked += ExtAgreementBox_Checked;
-            _extAgreementBox.Unchecked += ExtAgreementBox_Unchecked;
-            _extAgreementBox.PreviewKeyDown += ExtAgreementBox_PreviewKeyDown;
-            ToolTipService.SetToolTip(_extAgreementBox, "Дополнительные соглашения");
-
-            SetMultiStageChecked(IsMultiStageContract());
-            _multiStageBox.IsHitTestVisible = false;
-            _multiStageBox.IsTabStop = false;
-            ToolTipService.SetToolTip(_multiStageBox, "Многоэтапный контракт");
         }
 
         private void ConfigureResetChangesButton()
@@ -760,6 +750,138 @@ namespace CbsContractsDesktopClient.Views.Functional
             RefreshContragentSuggestionLabels();
         }
 
+        private void CacheInitialContragentCard()
+        {
+            if (_workflowStore.Contragent is not { } contragent)
+            {
+                return;
+            }
+
+            var contragentId = TryGetLong(contragent.GetValue("id"))
+                ?? throw new InvalidOperationException("Contract contragent card row must contain id.");
+            var contractContragentId = TryGetLong(_contract.GetValue("contragent.id"))
+                ?? TryGetLong(_contract.GetValue("contragent_id"))
+                ?? throw new InvalidOperationException("Contract edit row must contain contragent.id or contragent_id.");
+            if (contragentId != contractContragentId)
+            {
+                throw new InvalidOperationException("Contract contragent card id does not match contract contragent id.");
+            }
+
+            _contragentCards[contragentId] = contragent;
+        }
+
+        private void ConfigureContractResponsibles()
+        {
+            var selectedContragentId = _selectedContragentOption is null
+                ? null
+                : TryGetLong(_selectedContragentOption.Value);
+            if (selectedContragentId is null)
+            {
+                _contractResponsibleOptions = [];
+                ConfigureContractResponsiblesMultiSelect();
+                return;
+            }
+
+            var contragent = _contragentCards.TryGetValue(selectedContragentId.Value, out var cachedContragent)
+                ? cachedContragent
+                : throw new InvalidOperationException($"Contragent card row {selectedContragentId.Value} is not loaded.");
+            var contract = _workflowStore.SelectedContractEditState
+                ?? throw new InvalidOperationException("ContractCommerEditDialog.ConfigureContractResponsibles: SelectedContractEditState is not set.");
+            _contractResponsibleOptions = CreateContractResponsibleOptions(contragent, contract.ContractResponsibles);
+            ConfigureContractResponsiblesMultiSelect();
+        }
+
+        private void ConfigureContractResponsiblesMultiSelect()
+        {
+            _contractResponsiblesMultiSelect.Options = _contractResponsibleOptions;
+            _contractResponsiblesMultiSelect.Value = _contractResponsibleOptions
+                .Where(static option => option.IsSelected)
+                .ToList();
+            _contractResponsiblesMultiSelect.OptionLabel = nameof(ContractResponsibleOption.FullName);
+            _contractResponsiblesMultiSelect.Display = "chip";
+            _contractResponsiblesMultiSelect.MaxSelectedLabels = 4;
+            _contractResponsiblesMultiSelect.Placeholder = "Ответственные от контрагента";
+            _contractResponsiblesMultiSelect.Tooltip = "Ответственные от контрагента";
+            _contractResponsiblesMultiSelect.IsHitTestVisible = _selectedContragentOption is not null;
+        }
+
+        private async Task LoadContractResponsibleOptionsAsync(long contragentId)
+        {
+            try
+            {
+                var contragent = await _loadContragentCardAsync(contragentId, CancellationToken.None);
+                _contragentCards[contragentId] = contragent;
+                if (_selectedContragentOption is null
+                    || TryGetLong(_selectedContragentOption.Value) != contragentId)
+                {
+                    return;
+                }
+
+                ConfigureContractResponsibles();
+            }
+            catch (Exception ex)
+            {
+                if (_selectedContragentOption is not null
+                    && TryGetLong(_selectedContragentOption.Value) == contragentId)
+                {
+                    ShowErrorInfo(ex.Message);
+                }
+            }
+        }
+
+        private IReadOnlyList<ContractResponsibleEditState> BuildSelectedContractResponsibles()
+        {
+            return (_contractResponsiblesMultiSelect.Value ?? Array.Empty<object>())
+                .OfType<ContractResponsibleOption>()
+                .Select(static option => new ContractResponsibleEditState(
+                    option.ExistingId,
+                    option.ExistingListKey,
+                    option.EmployeeId,
+                    option.FullName))
+                .ToList();
+        }
+
+        private static IReadOnlyList<ContractResponsibleOption> CreateContractResponsibleOptions(
+            TableDataRow contragent,
+            IReadOnlyList<ContractResponsibleEditState> selectedResponsibles)
+        {
+            var selectedByEmployeeId = selectedResponsibles.ToDictionary(static responsible => responsible.EmployeeId);
+            var employees = TryGetArray(contragent, "employees")
+                ?? throw new InvalidOperationException("Contract contragent card row must contain employees array.");
+            var options = EnumerateObjectArray(employees)
+                .Select(employee =>
+                {
+                    var employeeId = TryGetLong(employee, "id")
+                        ?? throw new InvalidOperationException("Contract contragent employee row must contain id.");
+                    var fullName = TryGetString(employee, "full_name");
+                    if (string.IsNullOrWhiteSpace(fullName))
+                    {
+                        throw new InvalidOperationException("Contract contragent employee row must contain full_name.");
+                    }
+
+                    selectedByEmployeeId.TryGetValue(employeeId, out var selected);
+                    return new ContractResponsibleOption(
+                        employeeId,
+                        fullName,
+                        selected?.Id,
+                        selected?.ListKey,
+                        selected is not null);
+                })
+                .OrderByDescending(static option => option.IsSelected)
+                .ThenBy(static option => option.FullName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
+
+            var optionEmployeeIds = options.Select(static option => option.EmployeeId).ToHashSet();
+            var missingEmployeeIds = selectedByEmployeeId.Keys.Where(id => !optionEmployeeIds.Contains(id)).ToList();
+            if (missingEmployeeIds.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Contract responsibles contain employees absent from contract contragent: {string.Join(", ", missingEmployeeIds)}.");
+            }
+
+            return options;
+        }
+
         private async Task UpdateContragentOptionsAsync(string rawInput)
         {
             var searchText = rawInput?.Trim() ?? string.Empty;
@@ -807,10 +929,25 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void SelectContragentOption(CbsTableFilterOptionDefinition option)
         {
+            var previousContragentId = _selectedContragentOption is null
+                ? null
+                : TryGetLong(_selectedContragentOption.Value);
             _selectedContragentOption = option;
             _contragentInput = option.Label;
             _contragentOptions = MergeSelectedContragentOption(_contragentOptions);
             RefreshContragentSuggestionLabels();
+
+            var selectedContragentId = TryGetLong(option.Value)
+                ?? throw new InvalidOperationException("Selected contragent option must contain id.");
+            if (previousContragentId == selectedContragentId)
+            {
+                return;
+            }
+
+            _workflowStore.ClearContractResponsibles();
+            _contractResponsibleOptions = [];
+            ConfigureContractResponsiblesMultiSelect();
+            _ = LoadContractResponsibleOptionsAsync(selectedContragentId);
         }
 
         private CbsTableFilterOptionDefinition? FindContragentOption(string? label)
@@ -916,6 +1053,8 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ? order.ToString("000")
                 : string.Empty;
             ConfigureContragentState();
+            _workflowStore.RestoreContractResponsibles();
+            ConfigureContractResponsibles();
             if (_contragentBox is not null)
             {
                 _contragentBox.Text = _contragentInput;
@@ -929,9 +1068,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             RefreshContractCostBox();
             RefreshStagesStack();
             ResetRevisionEditorsFromContract();
-            SetExtAgreementChecked(RevisionEditors.Count > 0);
             RefreshRevisionsStack();
-            SetMultiStageChecked(IsMultiStageContract());
         }
 
         private void ResetMainTabEditorsFromContract()
@@ -976,7 +1113,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 throw new InvalidOperationException("Contract edit graph must contain at least one stage.");
             }
 
-            SetMultiStageChecked(IsMultiStageContract());
         }
 
         private void AddStage(long priority)
@@ -991,7 +1127,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.AddStageAfter(sourceStage);
-                SetMultiStageChecked(true);
+                ApplyContractSignedDateToEmptyStageStarts();
+                ApplyContractSignedStatusToEmptyStageStatuses();
                 RefreshStagesStack();
                 RefreshContractCostBox();
             }
@@ -1006,7 +1143,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.DeleteStage(stage);
-                SetMultiStageChecked(StageEditors.Count > 1);
                 RefreshStagesStack();
                 RefreshContractCostBox();
             }
@@ -1046,47 +1182,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ExtAgreementBox_Checked(object sender, RoutedEventArgs e)
         {
-            if (_isUpdatingExtAgreementBox || RevisionEditors.Count > 0)
+            if (RevisionEditors.Count > 0)
             {
                 return;
             }
 
             AddRevision(1);
             SelectRevisionsTab();
-        }
-
-        private void ExtAgreementBox_Unchecked(object sender, RoutedEventArgs e)
-        {
-            if (_isUpdatingExtAgreementBox)
-            {
-                return;
-            }
-
-            if (RevisionEditors.Count > 0)
-            {
-                SetExtAgreementChecked(true);
-            }
-        }
-
-        private void ExtAgreementBox_PreviewKeyDown(object sender, KeyRoutedEventArgs args)
-        {
-            if (args.Key != VirtualKey.Tab)
-            {
-                return;
-            }
-
-            FocusGovernmentalBox();
-            args.Handled = true;
-        }
-
-        private void FocusGovernmentalBox()
-        {
-            if (_tabs is not null && _contractTab is not null)
-            {
-                _tabs.SelectedItem = _contractTab;
-            }
-
-            DispatcherQueue.TryEnqueue(() => _governmentalBox.Focus(FocusState.Programmatic));
         }
 
         private void AddRevision(long number)
@@ -1101,7 +1203,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.AddRevisionAfter(sourceRevision);
-                SetExtAgreementChecked(true);
                 RefreshRevisionsStack();
             }
             catch (InvalidOperationException ex)
@@ -1115,29 +1216,12 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.DeleteRevision(revision);
-                if (RevisionEditors.Count == 0)
-                {
-                    SetExtAgreementChecked(false);
-                }
-
                 RefreshRevisionsStack();
             }
             catch (InvalidOperationException ex)
             {
                 ShowErrorInfo(ex.Message);
             }
-        }
-
-        private void SetExtAgreementChecked(bool isChecked)
-        {
-            _isUpdatingExtAgreementBox = true;
-            _extAgreementBox.IsChecked = isChecked;
-            _isUpdatingExtAgreementBox = false;
-        }
-
-        private void SetMultiStageChecked(bool isChecked)
-        {
-            _multiStageBox.IsChecked = isChecked;
         }
 
         private void SelectRevisionsTab()
@@ -1152,34 +1236,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         {
             return StageEditors.Count > 1
                 || StageEditors.Any(static stage => stage.Priority > 0);
-        }
-
-        private static FrameworkElement BuildFlagHost(CheckBox checkBox, string label)
-        {
-            checkBox.VerticalAlignment = VerticalAlignment.Center;
-            checkBox.HorizontalAlignment = HorizontalAlignment.Left;
-            checkBox.HorizontalContentAlignment = HorizontalAlignment.Left;
-            checkBox.MinHeight = 0;
-            checkBox.MinWidth = 0;
-            checkBox.Width = 48;
-            checkBox.Padding = new Thickness(0);
-            checkBox.Margin = new Thickness(0);
-            checkBox.Content = new TextBlock
-            {
-                Text = label,
-                Margin = new Thickness(3, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            return new Grid
-            {
-                Width = 48,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    checkBox
-                }
-            };
         }
 
         private UIElement BuildStagesTabContent()
@@ -1558,7 +1614,14 @@ namespace CbsContractsDesktopClient.Views.Functional
             _revisionsStack.Children.Clear();
             if (RevisionEditors.Count == 0)
             {
-                _revisionsStack.Children.Add(BuildPlaceholder("Дополнительные соглашения отсутствуют."));
+                _revisionsStack.Children.Add(BuildPlaceholder("Нет ревизий контракта"));
+                var addRevisionButton = new Button
+                {
+                    Content = "Добавить ревизию",
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                addRevisionButton.Click += ExtAgreementBox_Checked;
+                _revisionsStack.Children.Add(addRevisionButton);
                 return;
             }
 
@@ -2177,6 +2240,30 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             RefreshStagesStack();
+        }
+
+        private void ApplyContractSignedDateToEmptyStageStarts()
+        {
+            foreach (var stage in StageEditors)
+            {
+                stage.StartAt = StageDeadlineBusinessRules.ResolveStartAfterContractSigned(
+                    stage.StartAt,
+                    stage.DeadlineKind,
+                    _signedAtEditor.Date);
+            }
+        }
+
+        private void ApplyContractSignedStatusToEmptyStageStatuses()
+        {
+            if (_signedAtEditor.Date is null)
+            {
+                return;
+            }
+
+            foreach (var stage in StageEditors)
+            {
+                stage.ApplyInProgressAfterContractSigned();
+            }
         }
 
         private void SyncStageDeadlineEditorsFromBusinessRules(
@@ -2871,6 +2958,13 @@ namespace CbsContractsDesktopClient.Views.Functional
         }
 
         private sealed record TaskKindSelectOption(long? Id, string Code, string Label);
+
+        private sealed record ContractResponsibleOption(
+            long EmployeeId,
+            string FullName,
+            long? ExistingId,
+            string? ExistingListKey,
+            bool IsSelected);
 
     }
 }

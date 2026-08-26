@@ -104,6 +104,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.Equal("Bыборка в разрезе этапов", definition.EffectiveNavigationDescription);
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
+        Assert.False(definition.Columns.Single(static column => column.FieldKey == "id").IsImmutable);
         Assert.Equal(CbsTableRowStyleKey.StageDeadline, definition.RowStyleKey);
         Assert.Equal("id", definition.InitialSortField);
         Assert.Equal(DataSortDirection.Descending, definition.InitialSortDirection);
@@ -148,6 +149,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.True(found);
         Assert.Equal("StageOrder", definition.Model);
         Assert.Equal("card", definition.Preset);
+        Assert.False(definition.Columns.Single(static column => column.FieldKey == "id").IsImmutable);
 
         var supplier = definition.Columns.Single(static column => column.FieldKey == "supplier");
         Assert.Equal("order.supplier.name", supplier.DisplayField);
@@ -192,6 +194,7 @@ public sealed class TablePageDefinitionServiceTests : IDisposable
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.Edit));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.ConfigureColumns));
         Assert.True(definition.Capabilities.HasFlag(TablePageCapabilities.PersistFilters));
+        Assert.False(definition.Columns.Single(static column => column.FieldKey == "id").IsImmutable);
         Assert.Equal(CbsTableRowStyleKey.ContractDeadline, definition.RowStyleKey);
         Assert.True(definition.Columns.Single(static column => column.FieldKey == "is_funded").Filter.SupportsNullFilter);
         Assert.True(definition.Columns.Single(static column => column.FieldKey == "is_present").Filter.SupportsNullFilter);

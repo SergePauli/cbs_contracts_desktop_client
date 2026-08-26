@@ -2,7 +2,9 @@
     x:Class="CbsContractsDesktopClient.Views.Functional.StageFinEditView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Pauli.WinUiKit.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:functional="using:CbsContractsDesktopClient.Views.Functional"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
@@ -227,24 +229,20 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="4">
                         <TextBlock FontSize="12" Text="Внешний номер" />
-                        <ContentControl
-                            x:Name="ExternalNumberHost"
-                            HorizontalContentAlignment="Stretch" />
+                        <TextBox x:Name="ExternalNumberEditor" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="4">
                         <TextBlock FontSize="12" Text="Счет" />
-                        <ContentControl
-                            x:Name="InvoiceAtHost"
+                        <controls:CalendarInput
+                            x:Name="InvoiceAtEditor"
                             HorizontalAlignment="Left"
-                            HorizontalContentAlignment="Left"
                             VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Spacing="4">
                         <TextBlock FontSize="12" Text="Оплата" />
-                        <ContentControl
-                            x:Name="PaymentAtHost"
+                        <controls:CalendarInput
+                            x:Name="PaymentAtEditor"
                             HorizontalAlignment="Left"
-                            HorizontalContentAlignment="Left"
                             VerticalAlignment="Center" />
                     </StackPanel>
                 </Grid>
@@ -257,33 +255,31 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Spacing="4">
                         <TextBlock FontSize="12" Text="Предоплата" />
-                        <ContentControl
-                            x:Name="PrepaymentAtHost"
+                        <controls:CalendarInput
+                            x:Name="PrepaymentAtEditor"
                             HorizontalAlignment="Left"
-                            HorizontalContentAlignment="Left"
                             VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Spacing="4">
                         <TextBlock FontSize="12" Text="Бух.закрытие" />
-                        <ContentControl
-                            x:Name="FundedAtHost"
+                        <controls:CalendarInput
+                            x:Name="FundedAtEditor"
                             HorizontalAlignment="Left"
-                            HorizontalContentAlignment="Left"
                             VerticalAlignment="Center" />
                     </StackPanel>
                     <StackPanel Grid.Column="2" Spacing="4">
                         <TextBlock FontSize="12" Text="Комментарий" />
-                        <ContentControl
-                            x:Name="CommentHost"
-                            HorizontalContentAlignment="Stretch" />
+                        <TextBox x:Name="CommentEditor" />
                     </StackPanel>
                 </Grid>
             </Grid>
         </Border>
 
-        <ContentControl
-            x:Name="CommentListHost"
+        <functional:CommentBox
+            x:Name="CommentsList"
             Grid.Row="3"
-            HorizontalContentAlignment="Stretch" />
+            Height="220"
+            MaxHeight="220"
+            VerticalAlignment="Stretch" />
     </Grid>
 </UserControl>

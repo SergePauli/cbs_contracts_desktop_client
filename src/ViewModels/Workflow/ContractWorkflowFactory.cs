@@ -11,7 +11,8 @@ public sealed class ContractWorkflowFactory
 {
     private readonly IDataQueryService _dataQueryService;
     private readonly object _syncRoot = new();
-    private readonly Dictionary<ContractWorkflowSelectionKey, Task<ContractWorkflowContext>> _pending = [];
+    private CancellationTokenSource? _currentLoadCts;
+    private long _latestLoadVersion;
 
     public ContractWorkflowFactory(IDataQueryService dataQueryService)
     {
@@ -25,7 +26,7 @@ public sealed class ContractWorkflowFactory
         ArgumentNullException.ThrowIfNull(row);
 
         var key = ContractWorkflowSelectionKey.FromContractRow(row);
-        return GetOrCreateAsync(key, row, cancellationToken);
+        return CreateLatestAsync(key, row, cancellationToken);
     }
 
     public Task<ContractWorkflowContext> CreateFromStageRowAsync(
@@ -35,7 +36,7 @@ public sealed class ContractWorkflowFactory
         ArgumentNullException.ThrowIfNull(row);
 
         var key = ContractWorkflowSelectionKey.FromStageRow(row);
-        return GetOrCreateAsync(key, row, cancellationToken);
+        return CreateLatestAsync(key, row, cancellationToken);
     }
 
     public Task<ContractWorkflowContext> CreateFromRevisionRowAsync(
@@ -45,35 +46,68 @@ public sealed class ContractWorkflowFactory
         ArgumentNullException.ThrowIfNull(row);
 
         var key = ContractWorkflowSelectionKey.FromRevisionRow(row);
-        return GetOrCreateAsync(key, row, cancellationToken);
+        return CreateLatestAsync(key, row, cancellationToken);
     }
 
-    private Task<ContractWorkflowContext> GetOrCreateAsync(
+    public void CancelCurrentLoad()
+    {
+        lock (_syncRoot)
+        {
+            if (_currentLoadCts is not null)
+            {
+                _ = _currentLoadCts.CancelAsync();
+            }
+            _currentLoadCts = null;
+            _latestLoadVersion++;
+        }
+    }
+
+    public bool IsLatest(ContractWorkflowContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        lock (_syncRoot)
+        {
+            return context.LoadVersion == _latestLoadVersion;
+        }
+    }
+
+    private async Task<ContractWorkflowContext> CreateLatestAsync(
         ContractWorkflowSelectionKey key,
         TableDataRow row,
         CancellationToken cancellationToken)
     {
+        using var currentLoad = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        long loadVersion;
         lock (_syncRoot)
         {
-            if (_pending.TryGetValue(key, out var pending))
+            if (_currentLoadCts is not null)
             {
-                return pending.WaitAsync(cancellationToken);
+                _ = _currentLoadCts.CancelAsync();
             }
-
-            var task = CreateCoreAsync(key, row, CancellationToken.None);
-            _pending[key] = task;
-            _ = task.ContinueWith(
-                _ => RemovePending(key),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
-            return task.WaitAsync(cancellationToken);
+            _currentLoadCts = currentLoad;
+            loadVersion = ++_latestLoadVersion;
+        }
+        try
+        {
+            return await CreateCoreAsync(key, row, loadVersion, currentLoad.Token);
+        }
+        finally
+        {
+            lock (_syncRoot)
+            {
+                if (ReferenceEquals(_currentLoadCts, currentLoad))
+                {
+                    _currentLoadCts = null;
+                }
+            }
         }
     }
 
     private async Task<ContractWorkflowContext> CreateCoreAsync(
         ContractWorkflowSelectionKey key,
         TableDataRow selectedRow,
+        long loadVersion,
         CancellationToken cancellationToken)
     {
         var stage = "load-contract-edit";
@@ -91,7 +125,7 @@ public sealed class ContractWorkflowFactory
                 : null;
 
             stage = "create-context";
-            return new ContractWorkflowContext(key, selectedRow, contract, contragent);
+            return new ContractWorkflowContext(key, selectedRow, contract, contragent, loadVersion);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -105,14 +139,6 @@ public sealed class ContractWorkflowFactory
             throw new InvalidOperationException(
                 $"ContractWorkflowFactory.CreateCoreAsync failed at '{stage}': {ex.Message}",
                 ex);
-        }
-    }
-
-    private void RemovePending(ContractWorkflowSelectionKey key)
-    {
-        lock (_syncRoot)
-        {
-            _pending.Remove(key);
         }
     }
 
@@ -144,6 +170,14 @@ public sealed class ContractWorkflowFactory
             ?? throw new InvalidOperationException("Contract edit row was not loaded.");
         AddComputedStageNames(contract);
         return contract;
+    }
+
+    public async Task<TableDataRow> LoadContragentCardRowAsync(
+        long contragentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await LoadContragentCardAsync(contragentId, cancellationToken)
+            ?? throw new InvalidOperationException($"Contragent card row {contragentId} was not loaded.");
     }
 
     private static void AddComputedStageNames(TableDataRow contract)
@@ -210,7 +244,8 @@ public sealed record ContractWorkflowContext(
     ContractWorkflowSelectionKey Key,
     TableDataRow SelectedRow,
     TableDataRow Contract,
-    TableDataRow? Contragent)
+    TableDataRow? Contragent,
+    long LoadVersion)
 {
     public bool Matches(TableDataRow? row)
     {
