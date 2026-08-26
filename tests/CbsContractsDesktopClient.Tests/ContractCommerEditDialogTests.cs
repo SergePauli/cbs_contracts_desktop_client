@@ -150,4 +150,18 @@ public sealed class ContractCommerEditDialogTests
         Assert.Contains("UpdateAsync(StageModel", workflowCode);
         Assert.Contains("UpdateAsync(RevisionModel", workflowCode);
     }
+
+    [Fact]
+    public void EmptyRevisionsTab_OffersFirstRevisionWithoutLegacyFlags()
+    {
+        var code = File.ReadAllText(DialogPath);
+        var xaml = File.ReadAllText(ViewPath);
+
+        Assert.Contains("BuildPlaceholder(\"Нет ревизий контракта\")", code);
+        Assert.Contains("Content = \"Добавить ревизию\"", code);
+        Assert.Contains("addRevisionButton.Click += ExtAgreementBox_Checked;", code);
+        Assert.DoesNotContain("ExtAgreementHost", xaml);
+        Assert.DoesNotContain("MultiStageHost", xaml);
+        Assert.DoesNotContain("BuildFlagHost", code);
+    }
 }

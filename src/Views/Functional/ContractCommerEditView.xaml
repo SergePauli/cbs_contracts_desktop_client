@@ -112,8 +112,6 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="640" />
                         <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
-                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
 
@@ -123,17 +121,9 @@
                         Grid.Row="1"
                         HorizontalContentAlignment="Stretch" />
                     <ContentControl
-                        x:Name="ExtAgreementHost"
-                        Grid.Row="1"
-                        Grid.Column="1" />
-                    <ContentControl
-                        x:Name="MultiStageHost"
-                        Grid.Row="1"
-                        Grid.Column="2" />
-                    <ContentControl
                         x:Name="ResetChangesHost"
                         Grid.Row="1"
-                        Grid.Column="3" />
+                        Grid.Column="1" />
                 </Grid>
             </StackPanel>
         </Border>

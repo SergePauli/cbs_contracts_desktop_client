@@ -410,9 +410,7 @@ namespace CbsContractsDesktopClient.Stores.Table
                 return false;
             }
 
-            await SaveCurrentFiltersAsync(cancellationToken);
-            _lastViewportEnsureStart = -1;
-            _lastViewportEnsureEnd = -1;
+            await CompleteFilterApplyAsync(cancellationToken);
             AppendUiTrace(
                 $"FILTER VM APPLIED field={fieldKey} mode={matchMode} value={DescribeFilterValue(normalizedValue)}");
             return true;
@@ -454,8 +452,15 @@ namespace CbsContractsDesktopClient.Stores.Table
             if (_state is not null)
             {
                 await _state.SetFiltersAsync(filters, cancellationToken);
-                await SaveCurrentFiltersAsync(cancellationToken);
+                await CompleteFilterApplyAsync(cancellationToken);
             }
+        }
+
+        private async Task CompleteFilterApplyAsync(CancellationToken cancellationToken)
+        {
+            await SaveCurrentFiltersAsync(cancellationToken);
+            _lastViewportEnsureStart = -1;
+            _lastViewportEnsureEnd = -1;
         }
 
         private async Task SaveCurrentFiltersAsync(CancellationToken cancellationToken)

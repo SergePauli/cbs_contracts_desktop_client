@@ -578,7 +578,7 @@ namespace CbsContractsDesktopClient.Services
                     ? FormatTraceValue(idElement)
                     : null;
 
-                return $" model={model} preset={preset ?? "<null>"} id={id ?? "<null>"}";
+                return $" model={model} preset={preset ?? "<null>"} id={id ?? "<null>"} payload={requestPayload}";
             }
             catch (JsonException)
             {

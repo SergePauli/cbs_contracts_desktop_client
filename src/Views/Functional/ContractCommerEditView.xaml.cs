@@ -17,8 +17,6 @@ public sealed partial class ContractCommerEditView : UserControl
     public ContentControl SignedAtSlot => SignedAtHost;
     public ContentControl CostSlot => CostHost;
     public ContentControl CommentSlot => CommentHost;
-    public ContentControl ExtAgreementSlot => ExtAgreementHost;
-    public ContentControl MultiStageSlot => MultiStageHost;
     public ContentControl ResetChangesSlot => ResetChangesHost;
 
     public TabView Tabs => ContractTabs;

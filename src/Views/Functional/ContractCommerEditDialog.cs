@@ -64,8 +64,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly TextBox _revisionScanLinkBox = new();
         private readonly TextBox _revisionProtocolLinkBox = new();
         private readonly TextBox _revisionZipLinkBox = new();
-        private readonly CheckBox _extAgreementBox = new();
-        private readonly CheckBox _multiStageBox = new();
         private readonly MultiSelect _contractResponsiblesMultiSelect = new();
         private readonly Button _resetChangesButton = new();
         private AutoSuggestBox? _contragentBox;
@@ -98,7 +96,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private FrameworkElement? _initialRevisionFocusTarget;
         private readonly bool _openStagesTabOnLoad;
         private readonly bool _openRevisionsTabOnLoad;
-        private bool _isUpdatingExtAgreementBox;
         private bool _isSyncingTaskKindSelection;
         private bool _contractClosePreviewApplied;
         private bool _contractCloseCommentApplied;
@@ -276,7 +273,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             ConfigureStatusCombo();
             ConfigureSignedAtEditor();
             ConfigureCommentBox();
-            ConfigureFlagBoxes();
             ConfigureResetChangesButton();
 
             var view = new ContractCommerEditView();
@@ -294,8 +290,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.SignedAtSlot.Content = _signedAtEditor;
             view.CostSlot.Content = _costBox;
             view.CommentSlot.Content = _commentBox;
-            view.ExtAgreementSlot.Content = BuildFlagHost(_extAgreementBox, "ДС");
-            view.MultiStageSlot.Content = BuildFlagHost(_multiStageBox, "МЭ");
             view.ResetChangesSlot.Content = _isCreateMode ? null : _resetChangesButton;
             PopulateContractTab(view);
             view.StagesTabSlot.Content = BuildStagesTabContent();
@@ -662,23 +656,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             {
                 _commentBox.IsEnabled = true;
             }
-        }
-
-        private void ConfigureFlagBoxes()
-        {
-            SetExtAgreementChecked(RevisionEditors.Count > 0);
-            _extAgreementBox.Checked -= ExtAgreementBox_Checked;
-            _extAgreementBox.Unchecked -= ExtAgreementBox_Unchecked;
-            _extAgreementBox.PreviewKeyDown -= ExtAgreementBox_PreviewKeyDown;
-            _extAgreementBox.Checked += ExtAgreementBox_Checked;
-            _extAgreementBox.Unchecked += ExtAgreementBox_Unchecked;
-            _extAgreementBox.PreviewKeyDown += ExtAgreementBox_PreviewKeyDown;
-            ToolTipService.SetToolTip(_extAgreementBox, "Дополнительные соглашения");
-
-            SetMultiStageChecked(IsMultiStageContract());
-            _multiStageBox.IsHitTestVisible = false;
-            _multiStageBox.IsTabStop = false;
-            ToolTipService.SetToolTip(_multiStageBox, "Многоэтапный контракт");
         }
 
         private void ConfigureResetChangesButton()
@@ -1091,9 +1068,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             RefreshContractCostBox();
             RefreshStagesStack();
             ResetRevisionEditorsFromContract();
-            SetExtAgreementChecked(RevisionEditors.Count > 0);
             RefreshRevisionsStack();
-            SetMultiStageChecked(IsMultiStageContract());
         }
 
         private void ResetMainTabEditorsFromContract()
@@ -1138,7 +1113,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 throw new InvalidOperationException("Contract edit graph must contain at least one stage.");
             }
 
-            SetMultiStageChecked(IsMultiStageContract());
         }
 
         private void AddStage(long priority)
@@ -1153,7 +1127,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.AddStageAfter(sourceStage);
-                SetMultiStageChecked(true);
                 ApplyContractSignedDateToEmptyStageStarts();
                 ApplyContractSignedStatusToEmptyStageStatuses();
                 RefreshStagesStack();
@@ -1170,7 +1143,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.DeleteStage(stage);
-                SetMultiStageChecked(StageEditors.Count > 1);
                 RefreshStagesStack();
                 RefreshContractCostBox();
             }
@@ -1210,47 +1182,13 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ExtAgreementBox_Checked(object sender, RoutedEventArgs e)
         {
-            if (_isUpdatingExtAgreementBox || RevisionEditors.Count > 0)
+            if (RevisionEditors.Count > 0)
             {
                 return;
             }
 
             AddRevision(1);
             SelectRevisionsTab();
-        }
-
-        private void ExtAgreementBox_Unchecked(object sender, RoutedEventArgs e)
-        {
-            if (_isUpdatingExtAgreementBox)
-            {
-                return;
-            }
-
-            if (RevisionEditors.Count > 0)
-            {
-                SetExtAgreementChecked(true);
-            }
-        }
-
-        private void ExtAgreementBox_PreviewKeyDown(object sender, KeyRoutedEventArgs args)
-        {
-            if (args.Key != VirtualKey.Tab)
-            {
-                return;
-            }
-
-            FocusGovernmentalBox();
-            args.Handled = true;
-        }
-
-        private void FocusGovernmentalBox()
-        {
-            if (_tabs is not null && _contractTab is not null)
-            {
-                _tabs.SelectedItem = _contractTab;
-            }
-
-            DispatcherQueue.TryEnqueue(() => _governmentalBox.Focus(FocusState.Programmatic));
         }
 
         private void AddRevision(long number)
@@ -1265,7 +1203,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.AddRevisionAfter(sourceRevision);
-                SetExtAgreementChecked(true);
                 RefreshRevisionsStack();
             }
             catch (InvalidOperationException ex)
@@ -1279,29 +1216,12 @@ namespace CbsContractsDesktopClient.Views.Functional
             try
             {
                 _workflowStore.DeleteRevision(revision);
-                if (RevisionEditors.Count == 0)
-                {
-                    SetExtAgreementChecked(false);
-                }
-
                 RefreshRevisionsStack();
             }
             catch (InvalidOperationException ex)
             {
                 ShowErrorInfo(ex.Message);
             }
-        }
-
-        private void SetExtAgreementChecked(bool isChecked)
-        {
-            _isUpdatingExtAgreementBox = true;
-            _extAgreementBox.IsChecked = isChecked;
-            _isUpdatingExtAgreementBox = false;
-        }
-
-        private void SetMultiStageChecked(bool isChecked)
-        {
-            _multiStageBox.IsChecked = isChecked;
         }
 
         private void SelectRevisionsTab()
@@ -1316,34 +1236,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         {
             return StageEditors.Count > 1
                 || StageEditors.Any(static stage => stage.Priority > 0);
-        }
-
-        private static FrameworkElement BuildFlagHost(CheckBox checkBox, string label)
-        {
-            checkBox.VerticalAlignment = VerticalAlignment.Center;
-            checkBox.HorizontalAlignment = HorizontalAlignment.Left;
-            checkBox.HorizontalContentAlignment = HorizontalAlignment.Left;
-            checkBox.MinHeight = 0;
-            checkBox.MinWidth = 0;
-            checkBox.Width = 48;
-            checkBox.Padding = new Thickness(0);
-            checkBox.Margin = new Thickness(0);
-            checkBox.Content = new TextBlock
-            {
-                Text = label,
-                Margin = new Thickness(3, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            return new Grid
-            {
-                Width = 48,
-                VerticalAlignment = VerticalAlignment.Center,
-                Children =
-                {
-                    checkBox
-                }
-            };
         }
 
         private UIElement BuildStagesTabContent()
@@ -1722,7 +1614,14 @@ namespace CbsContractsDesktopClient.Views.Functional
             _revisionsStack.Children.Clear();
             if (RevisionEditors.Count == 0)
             {
-                _revisionsStack.Children.Add(BuildPlaceholder("Дополнительные соглашения отсутствуют."));
+                _revisionsStack.Children.Add(BuildPlaceholder("Нет ревизий контракта"));
+                var addRevisionButton = new Button
+                {
+                    Content = "Добавить ревизию",
+                    HorizontalAlignment = HorizontalAlignment.Left
+                };
+                addRevisionButton.Click += ExtAgreementBox_Checked;
+                _revisionsStack.Children.Add(addRevisionButton);
                 return;
             }
 
