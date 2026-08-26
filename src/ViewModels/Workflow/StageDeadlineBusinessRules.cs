@@ -56,6 +56,19 @@ public static class StageDeadlineBusinessRules
         };
     }
 
+    public static DateTimeOffset? ResolveStartAfterContractSigned(
+        DateTimeOffset? currentStartAt,
+        string? deadlineKind,
+        DateTimeOffset? contractSignedAt)
+    {
+        if (currentStartAt is not null || IsPaymentBasedDeadlineMode(deadlineKind))
+        {
+            return currentStartAt;
+        }
+
+        return contractSignedAt;
+    }
+
     public static DateTimeOffset? CalculateDeadline(
         string? deadlineKind,
         DateTimeOffset? startAt,

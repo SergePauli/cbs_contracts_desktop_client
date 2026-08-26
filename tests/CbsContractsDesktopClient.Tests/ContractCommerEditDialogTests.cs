@@ -79,6 +79,20 @@ public sealed class ContractCommerEditDialogTests
     }
 
     [Fact]
+    public void SignedDate_AppliesStartRuleToEveryNonDestroyedStage()
+    {
+        var code = File.ReadAllText(DialogPath);
+        var methodStart = code.IndexOf("private void ApplyContractSignedDateToEmptyStageStarts()", StringComparison.Ordinal);
+        var methodEnd = code.IndexOf("private void SyncStageDeadlineEditorsFromBusinessRules", methodStart, StringComparison.Ordinal);
+        var methodCode = code[methodStart..methodEnd];
+
+        Assert.Contains(".Where(static stage => !stage.IsDestroyed)", code);
+        Assert.Contains("foreach (var stage in StageEditors)", methodCode);
+        Assert.Contains("StageDeadlineBusinessRules.ResolveStartAfterContractSigned", methodCode);
+        Assert.DoesNotContain("stage.Used", methodCode);
+    }
+
+    [Fact]
     public void Save_KeepsDialogOpenAndReloadsCreatedContractAsEdit()
     {
         var code = File.ReadAllText(DialogPath);

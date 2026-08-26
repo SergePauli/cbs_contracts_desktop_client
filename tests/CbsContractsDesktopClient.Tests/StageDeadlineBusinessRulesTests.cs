@@ -51,6 +51,45 @@ public sealed class StageDeadlineBusinessRulesTests
     }
 
     [Fact]
+    public void ResolveStartAfterContractSigned_ForEmptyNonPaymentStageUsesSignedDate()
+    {
+        var signedAt = new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero);
+
+        var startAt = StageDeadlineBusinessRules.ResolveStartAfterContractSigned(
+            currentStartAt: null,
+            deadlineKind: StageDeadlineBusinessRules.DeadlineWorkingDays,
+            contractSignedAt: signedAt);
+
+        Assert.Equal(signedAt, startAt);
+    }
+
+    [Fact]
+    public void ResolveStartAfterContractSigned_ForFilledStagePreservesStartDate()
+    {
+        var currentStartAt = new DateTimeOffset(2026, 8, 20, 0, 0, 0, TimeSpan.Zero);
+
+        var startAt = StageDeadlineBusinessRules.ResolveStartAfterContractSigned(
+            currentStartAt,
+            StageDeadlineBusinessRules.DeadlineCalendarDays,
+            new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero));
+
+        Assert.Equal(currentStartAt, startAt);
+    }
+
+    [Theory]
+    [InlineData(StageDeadlineBusinessRules.DeadlineCalendarPrepayment)]
+    [InlineData(StageDeadlineBusinessRules.DeadlineWorkingPrepayment)]
+    public void ResolveStartAfterContractSigned_ForPrepaymentStageLeavesStartEmpty(string deadlineKind)
+    {
+        var startAt = StageDeadlineBusinessRules.ResolveStartAfterContractSigned(
+            currentStartAt: null,
+            deadlineKind,
+            contractSignedAt: new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.Zero));
+
+        Assert.Null(startAt);
+    }
+
+    [Fact]
     public void CalculateDeadline_ForCalendarDaysAddsDurationToStartDate()
     {
         var deadline = StageDeadlineBusinessRules.CalculateDeadline(

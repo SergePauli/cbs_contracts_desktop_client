@@ -600,7 +600,9 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void SignedAtEditor_DateChanged(object? sender, EventArgs e)
         {
-            ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: true);
+            ApplyContractSignedDateToEmptyStageStarts();
+            ApplyContractSignedStatusToEmptyStageStatuses();
+            ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: false);
         }
 
         private void SignedAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
@@ -1152,6 +1154,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             {
                 _workflowStore.AddStageAfter(sourceStage);
                 SetMultiStageChecked(true);
+                ApplyContractSignedDateToEmptyStageStarts();
+                ApplyContractSignedStatusToEmptyStageStatuses();
                 RefreshStagesStack();
                 RefreshContractCostBox();
             }
@@ -2337,6 +2341,30 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             RefreshStagesStack();
+        }
+
+        private void ApplyContractSignedDateToEmptyStageStarts()
+        {
+            foreach (var stage in StageEditors)
+            {
+                stage.StartAt = StageDeadlineBusinessRules.ResolveStartAfterContractSigned(
+                    stage.StartAt,
+                    stage.DeadlineKind,
+                    _signedAtEditor.Date);
+            }
+        }
+
+        private void ApplyContractSignedStatusToEmptyStageStatuses()
+        {
+            if (_signedAtEditor.Date is null)
+            {
+                return;
+            }
+
+            foreach (var stage in StageEditors)
+            {
+                stage.ApplyInProgressAfterContractSigned();
+            }
         }
 
         private void SyncStageDeadlineEditorsFromBusinessRules(
