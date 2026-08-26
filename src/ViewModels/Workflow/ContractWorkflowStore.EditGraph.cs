@@ -322,7 +322,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             SetContractRevisionEditStates(revisions);
         }
 
-        public IReadOnlyDictionary<string, object?> BuildContractCommerPayload(ContractCommerEditPayloadInput input)
+        public ContractCommerEditSavePlan BuildContractCommerSavePlan(ContractCommerEditPayloadInput input)
         {
             if (Contract is null)
             {
@@ -332,7 +332,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             var contractState = SelectedContractEditState
                 ?? throw new InvalidOperationException("Contract edit graph must contain selected contract edit state.");
 
-            return ContractCommerEditPayloadBuilder.Build(
+            return ContractCommerEditPayloadBuilder.BuildSavePlan(
                 Contract,
                 contractState,
                 input,

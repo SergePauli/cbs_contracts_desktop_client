@@ -58,9 +58,9 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly ContractCommentWorkflow _contractCommentWorkflow;
+        private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly ContractTableRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
-        private CancellationTokenSource? _detailCts;
         private bool _showContractCostFraction;
         private Button? _createButton;
         private Button? _editButton;
@@ -88,6 +88,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
+            _contractCommerSaveWorkflow = App.Services.GetRequiredService<ContractCommerSaveWorkflow>();
             _showContractCostFraction = _localUserSettingsService.Get().ShowContractCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -302,8 +303,6 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task RefreshDetailAsync()
         {
-            _detailCts?.Cancel();
-
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
                 Store.AppendUiTrace($"CONTRACT DETAIL REFRESH empty selected={DescribeDetailRow(Store.SelectedRow)}");
@@ -313,22 +312,10 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             var selectedRow = Store.SelectedRow;
             Store.AppendUiTrace($"CONTRACT DETAIL REFRESH start selected={DescribeDetailRow(selectedRow)}");
-            _contractWorkflowStore.ClearRowDetailSelection();
-            RefreshSelectedFooterText();
-
-            var cancellationTokenSource = new CancellationTokenSource();
-            _detailCts = cancellationTokenSource;
 
             try
             {
-                var context = await _contractWorkflowFactory.CreateFromContractRowAsync(
-                    selectedRow,
-                    cancellationTokenSource.Token);
-                if (cancellationTokenSource.IsCancellationRequested)
-                {
-                    Store.AppendUiTrace($"CONTRACT DETAIL REFRESH canceled selected={DescribeDetailRow(selectedRow)}");
-                    return;
-                }
+                var context = await _contractWorkflowFactory.CreateFromContractRowAsync(selectedRow);
 
                 if (!ApplyContractWorkflowContextIfCurrent(context))
                 {
@@ -346,17 +333,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
             catch
             {
-                if (!cancellationTokenSource.IsCancellationRequested)
-                {
-                    Store.AppendUiTrace($"CONTRACT DETAIL REFRESH failed selected={DescribeDetailRow(selectedRow)}");
-                    UpdateActionButtonState();
-                }
+                Store.AppendUiTrace($"CONTRACT DETAIL REFRESH failed selected={DescribeDetailRow(selectedRow)}");
+                UpdateActionButtonState();
             }
         }
 
         private bool ApplyContractWorkflowContextIfCurrent(ContractWorkflowContext context)
         {
-            if (!context.Matches(Store.SelectedRow))
+            if (!_contractWorkflowFactory.IsLatest(context)
+                || !context.Matches(Store.SelectedRow))
             {
                 return false;
             }
@@ -392,7 +377,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ClearDetailView()
         {
             Store.AppendUiTrace("CONTRACT DETAIL CLEAR");
-            _detailCts?.Cancel();
+            _contractWorkflowFactory.CancelCurrentLoad();
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();
@@ -1003,33 +988,30 @@ namespace CbsContractsDesktopClient.Views.Shell
                 try
                 {
                     var savedAsCreate = createMode;
-                    var payload = dialog.BuildPayload(_userService.CurrentUser?.ProfileId);
-                    if (!createMode && !HasUpdatePayloadChanges(payload))
+                    var savePlan = dialog.BuildSavePlan(_userService.CurrentUser?.ProfileId);
+                    if (!savePlan.HasChanges)
                     {
                         dialog.ShowErrorInfo("Нет изменений для сохранения.");
                         args.Cancel = true;
                         return;
                     }
 
-                    var savedRow = createMode
-                        ? await _modelMutationService.CreateAsync(ContractModel, payload)
-                        : await _modelMutationService.UpdateAsync(ContractModel, payload);
-                    var savedId = TryGetSelectedRowId(savedRow)
-                        ?? throw new InvalidOperationException("Saved contract response must contain id.");
+                    var saveResult = await _contractCommerSaveWorkflow.SaveAsync(savePlan);
+                    var savedId = saveResult.ContractId;
                     if (createMode)
                     {
                         dialog.AcceptCreatedContractIdentity(
                             savedId,
-                            savedRow.GetValue("list_key")?.ToString());
+                            saveResult.ContractMutationRow?.GetValue("list_key")?.ToString());
                         createMode = false;
                     }
 
-                    setSavedRow(savedRow);
                     ShowSuccessNotification(
                         savedAsCreate ? "Контракт создан" : "Контракт сохранен",
                         savedAsCreate ? "Новый контракт сохранен." : "Изменения контракта сохранены.");
                     var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(savedId);
                     dialog.ReloadAsEdit(editRow);
+                    setSavedRow(editRow);
                 }
                 catch (Exception ex)
                 {

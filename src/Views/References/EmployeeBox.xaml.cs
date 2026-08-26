@@ -25,6 +25,7 @@ namespace CbsContractsDesktopClient.Views.References
         private static readonly Brush EmployeeContactBrush = (Brush)Application.Current.Resources["ShellAccentBrush"];
         private EmployeeBoxTextMetrics _textMetrics = HighScaleTextMetrics;
         private XamlRoot? _subscribedXamlRoot;
+        private bool _isApplyingPresentation;
 
         public static readonly DependencyProperty EmployeesProperty =
             DependencyProperty.Register(
@@ -76,9 +77,30 @@ namespace CbsContractsDesktopClient.Views.References
             set => SetValue(ResponsibleEmployeeIdsProperty, value);
         }
 
+        public void SetPresentation(
+            IReadOnlyList<EmployeeBoxItem> employees,
+            IReadOnlyList<long> responsibleEmployeeIds)
+        {
+            ArgumentNullException.ThrowIfNull(employees);
+            ArgumentNullException.ThrowIfNull(responsibleEmployeeIds);
+
+            _isApplyingPresentation = true;
+            try
+            {
+                Employees = employees;
+                ResponsibleEmployeeIds = responsibleEmployeeIds;
+            }
+            finally
+            {
+                _isApplyingPresentation = false;
+            }
+
+            Render();
+        }
+
         private static void OnEmployeesChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((EmployeeBox)d).Render();
+            ((EmployeeBox)d).RequestRender();
         }
 
         private static void OnCanEditChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -88,7 +110,15 @@ namespace CbsContractsDesktopClient.Views.References
 
         private static void OnResponsibleEmployeeIdsChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
         {
-            ((EmployeeBox)d).Render();
+            ((EmployeeBox)d).RequestRender();
+        }
+
+        private void RequestRender()
+        {
+            if (!_isApplyingPresentation)
+            {
+                Render();
+            }
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)

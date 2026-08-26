@@ -201,10 +201,10 @@ namespace CbsContractsDesktopClient.Views.Functional
             return true;
         }
 
-        public IReadOnlyDictionary<string, object?> BuildPayload(int? profileId)
+        public ContractCommerEditSavePlan BuildSavePlan(int? profileId)
         {
             SyncEditorsToWorkflowStore();
-            return _workflowStore.BuildContractCommerPayload(new ContractCommerEditPayloadInput(
+            return _workflowStore.BuildContractCommerSavePlan(new ContractCommerEditPayloadInput(
                 IsCreateMode: _isCreateMode,
                 Id: TryGetLong(_contract.GetValue("id")),
                 ListKey: _contract.GetValue("list_key")?.ToString(),

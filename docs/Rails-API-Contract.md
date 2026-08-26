@@ -33,6 +33,12 @@
 - Contract responsible employees are changed only through `contract_responsibles_attributes`.
   New entries contain `list_key` and `employee_id`; removed persisted entries contain `id`, optional source `list_key`, and `_destroy: "1"`.
   Changing `contragent_id` clears the existing contract responsible composition in the same Contract mutation.
+- In the contract editor, updates to persisted `Stage` and `Revision` rows are sent as separate
+  `PUT model/Stage/{id}` and `PUT model/Revision/{id}` mutations so that each change is attributed
+  to its own model in the audit log.
+- `stages_attributes` and `revisions_attributes` in a Contract mutation are reserved for creating
+  new child rows and destroying persisted child rows. They must not contain ordinary updates to
+  persisted Stage or Revision fields.
 - Do not send expanded read-model fields such as `comments`, `contract`, `status`, `task_kind`, `tasks`, `revision`, `revisions`, `stages`.
 
 ## Stage update guard

@@ -29,8 +29,25 @@ public sealed class ContractResponsibleUiTests
     {
         var code = File.ReadAllText(ContractDetailPath);
 
-        Assert.Contains("EmployeesBox.ResponsibleEmployeeIds = contractState.ContractResponsibles", code);
+        Assert.Contains("EmployeesBox.SetPresentation(", code);
+        Assert.Contains("_contragentDetailStore.Employees", code);
+        Assert.Contains("contractState.ContractResponsibles", code);
         Assert.Contains(".Select(static responsible => responsible.EmployeeId)", code);
+    }
+
+    [Fact]
+    public void EmployeeBox_AppliesEmployeesAndResponsiblesWithOneRender()
+    {
+        var code = File.ReadAllText(EmployeeBoxPath);
+        var methodStart = code.IndexOf("public void SetPresentation(", StringComparison.Ordinal);
+        var methodEnd = code.IndexOf("private static void OnEmployeesChanged", methodStart, StringComparison.Ordinal);
+        var methodCode = code[methodStart..methodEnd];
+
+        Assert.Contains("_isApplyingPresentation = true;", methodCode);
+        Assert.Contains("Employees = employees;", methodCode);
+        Assert.Contains("ResponsibleEmployeeIds = responsibleEmployeeIds;", methodCode);
+        Assert.Equal(1, methodCode.Split("Render();", StringSplitOptions.None).Length - 1);
+        Assert.Contains("((EmployeeBox)d).RequestRender();", code);
     }
 
     [Fact]

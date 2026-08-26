@@ -115,6 +115,10 @@ namespace CbsContractsDesktopClient.Services
                     timeoutCts.Token,
                     cancellationToken);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
             {
                 EmitTrace($"STEP API 01 timeout uri={requestUri} timeout={DiagnosticRequestTimeout.TotalSeconds:0}s");
@@ -261,14 +265,23 @@ namespace CbsContractsDesktopClient.Services
         {
             var attemptedAccessToken = _userService.CurrentUser?.Token ?? string.Empty;
             using var message = createMessage();
-            EmitApiSend(message.Method, requestUri);
-            var response = await SendAsyncWithWatchdog(
-                message,
-                requestUri,
-                requestPayload,
-                completionOption,
-                timeoutToken,
-                cancellationToken);
+            EmitApiSend(message.Method, requestUri, requestPayload);
+            HttpResponseMessage response;
+            try
+            {
+                response = await SendAsyncWithWatchdog(
+                    message,
+                    requestUri,
+                    requestPayload,
+                    completionOption,
+                    timeoutToken,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                EmitApiCanceled(message.Method, requestUri, requestPayload);
+                throw;
+            }
 
             if (!ShouldRefreshAccessToken(response, requestUri, attemptedAccessToken))
             {
@@ -280,14 +293,22 @@ namespace CbsContractsDesktopClient.Services
             await _accessTokenRefreshService!.RefreshAccessTokenAsync(attemptedAccessToken, cancellationToken);
 
             using var retryMessage = createMessage();
-            EmitApiSend(retryMessage.Method, requestUri);
-            return await SendAsyncWithWatchdog(
-                retryMessage,
-                requestUri,
-                requestPayload,
-                completionOption,
-                timeoutToken,
-                cancellationToken);
+            EmitApiSend(retryMessage.Method, requestUri, requestPayload);
+            try
+            {
+                return await SendAsyncWithWatchdog(
+                    retryMessage,
+                    requestUri,
+                    requestPayload,
+                    completionOption,
+                    timeoutToken,
+                    cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                EmitApiCanceled(retryMessage.Method, requestUri, requestPayload);
+                throw;
+            }
         }
 
         private bool ShouldRefreshAccessToken(HttpResponseMessage response, string requestUri, string attemptedAccessToken)
@@ -523,9 +544,53 @@ namespace CbsContractsDesktopClient.Services
             EmitTrace($"HTTP RESPONSE uri={requestUri} body={TruncateForTrace(body)}");
         }
 
-        private static void EmitApiSend(HttpMethod method, string requestUri)
+        private static void EmitApiSend(HttpMethod method, string requestUri, string requestPayload)
         {
-            EmitTrace($"API SEND method={method.Method} uri={requestUri}");
+            EmitTrace($"API SEND method={method.Method} uri={requestUri}{FormatQueryIdentity(requestUri, requestPayload)}");
+        }
+
+        private static void EmitApiCanceled(HttpMethod method, string requestUri, string requestPayload)
+        {
+            EmitTrace($"API CANCELED method={method.Method} uri={requestUri}{FormatQueryIdentity(requestUri, requestPayload)}");
+        }
+
+        private static string FormatQueryIdentity(string requestUri, string requestPayload)
+        {
+            if (!string.Equals(requestUri, "api/index", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(requestUri, "api/count", StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                using var payload = JsonDocument.Parse(requestPayload);
+                var root = payload.RootElement;
+                var model = root.GetProperty("model").GetString()
+                    ?? throw new InvalidOperationException("Data query payload model must not be null.");
+                var preset = root.TryGetProperty("preset", out var presetElement)
+                    && presetElement.ValueKind == JsonValueKind.String
+                    ? presetElement.GetString()
+                    : null;
+                var id = root.TryGetProperty("filters", out var filters)
+                    && filters.ValueKind == JsonValueKind.Object
+                    && filters.TryGetProperty("id__eq", out var idElement)
+                    ? FormatTraceValue(idElement)
+                    : null;
+
+                return $" model={model} preset={preset ?? "<null>"} id={id ?? "<null>"}";
+            }
+            catch (JsonException)
+            {
+                return string.Empty;
+            }
+        }
+
+        private static string FormatTraceValue(JsonElement value)
+        {
+            return value.ValueKind == JsonValueKind.String
+                ? value.GetString() ?? string.Empty
+                : value.GetRawText();
         }
 
         private static string SerializeForTrace<TRequest>(TRequest request)

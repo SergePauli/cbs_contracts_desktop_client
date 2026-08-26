@@ -24,6 +24,22 @@ public sealed record ContractCommerEditPayloadInput(
     DateTimeOffset? ClosedAt,
     int? ProfileId);
 
+public sealed record ContractCommerEditSavePlan(
+    bool IsCreateMode,
+    long? ContractId,
+    IReadOnlyDictionary<string, object?> ContractPayload,
+    IReadOnlyList<IReadOnlyDictionary<string, object?>> StageUpdatePayloads,
+    IReadOnlyList<IReadOnlyDictionary<string, object?>> RevisionUpdatePayloads)
+{
+    public bool HasContractChanges => IsCreateMode || ContractPayload.Keys.Any(static key =>
+        !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
+        && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
+
+    public bool HasChanges => HasContractChanges
+        || StageUpdatePayloads.Count > 0
+        || RevisionUpdatePayloads.Count > 0;
+}
+
 public static class ContractCommerEditPayloadBuilder
 {
     public static IReadOnlyDictionary<string, object?> BuildCommentUpdate(
@@ -45,7 +61,7 @@ public static class ContractCommerEditPayloadBuilder
         return request;
     }
 
-    public static IReadOnlyDictionary<string, object?> Build(
+    public static IReadOnlyDictionary<string, object?> BuildContractPayload(
         TableDataRow sourceRow,
         ContractEditState contractState,
         ContractCommerEditPayloadInput input,
@@ -75,6 +91,46 @@ public static class ContractCommerEditPayloadBuilder
         AppendCommentAttributes(request, input.Comment, input.ProfileId);
 
         return request;
+    }
+
+    public static ContractCommerEditSavePlan BuildSavePlan(
+        TableDataRow sourceRow,
+        ContractEditState contractState,
+        ContractCommerEditPayloadInput input,
+        IReadOnlyList<StageEditState> stages,
+        IReadOnlyList<RevisionEditState> revisions)
+    {
+        var contractPayload = BuildContractPayload(sourceRow, contractState, input, stages, revisions);
+        var stageUpdates = input.IsCreateMode
+            ? []
+            : stages
+                .Where(static stage => stage.Id > 0 && !stage.IsDestroyed)
+                .Where(stage => stage.HasChanges || HasTaskChanges(stage) || !string.IsNullOrWhiteSpace(stage.Comment))
+                .Select(stage => StageCommerEditPayloadBuilder.BuildForUpdate(
+                    stage,
+                    stage.Tasks
+                        .Select(static task => task.TaskKindId)
+                        .Where(static id => id is not null)
+                        .Select(static id => id!.Value)
+                        .ToHashSet(),
+                    stage.Comment,
+                    input.ProfileId))
+                .Cast<IReadOnlyDictionary<string, object?>>()
+                .ToList();
+        var revisionUpdates = input.IsCreateMode
+            ? []
+            : revisions
+                .Where(static revision => revision.Id is > 0 && !revision.IsDestroyed && revision.HasChanges)
+                .Select(RevisionEditPayloadBuilder.BuildForUpdate)
+                .Cast<IReadOnlyDictionary<string, object?>>()
+                .ToList();
+
+        return new ContractCommerEditSavePlan(
+            input.IsCreateMode,
+            input.Id,
+            contractPayload,
+            stageUpdates,
+            revisionUpdates);
     }
 
     private static void AppendContractResponsibleAttributes(
@@ -175,7 +231,7 @@ public static class ContractCommerEditPayloadBuilder
         int? profileId)
     {
         var attributes = stages
-            .Where(stage => isCreateMode || IsNewStage(stage) || stage.HasChanges || HasTaskChanges(stage) || !string.IsNullOrWhiteSpace(stage.Comment))
+            .Where(stage => isCreateMode || IsNewStage(stage) || stage.IsDestroyed)
             .Select(stage => BuildStageAttributes(stage, profileId))
             .Where(static item => item.Count > 0)
             .ToList();
@@ -256,7 +312,7 @@ public static class ContractCommerEditPayloadBuilder
         bool isCreateMode)
     {
         var attributes = revisions
-            .Where(revision => isCreateMode || IsNewRevision(revision) || revision.HasChanges)
+            .Where(revision => isCreateMode || IsNewRevision(revision) || revision.IsDestroyed)
             .Select(BuildRevisionAttributes)
             .Where(static item => item.Count > 0)
             .ToList();

@@ -101,8 +101,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                     ContragentNameTextBlock.Text = string.Empty;
                     ContactsPanel.Children.Clear();
                     _contragentDetailStore.SetContragent(null);
-                    EmployeesBox.ResponsibleEmployeeIds = [];
-                    EmployeesBox.Employees = [];
+                    EmployeesBox.SetPresentation([], []);
                     CommentsBox.Comments = [];
                     return;
                 }
@@ -128,10 +127,11 @@ namespace CbsContractsDesktopClient.Views.Functional
                 stage = "render-employees";
                 var contractState = _contractWorkflowStore.SelectedContractEditState
                     ?? throw new InvalidOperationException("ContractDetailView.Refresh: SelectedContractEditState is not set.");
-                EmployeesBox.ResponsibleEmployeeIds = contractState.ContractResponsibles
-                    .Select(static responsible => responsible.EmployeeId)
-                    .ToList();
-                EmployeesBox.Employees = _contragentDetailStore.Employees;
+                EmployeesBox.SetPresentation(
+                    _contragentDetailStore.Employees,
+                    contractState.ContractResponsibles
+                        .Select(static responsible => responsible.EmployeeId)
+                        .ToList());
 
                 stage = "render-comments";
                 RenderComments();

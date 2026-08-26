@@ -92,7 +92,7 @@ public sealed class ContractCommerEditDialogTests
         Assert.Contains("_workflowStore.BeginContractEdit(contract);", code);
         Assert.Contains("ResetEditorsFromContract();", code);
         Assert.Contains("var createMode = isCreateMode;", hostCode);
-        Assert.Contains("var savedId = TryGetSelectedRowId(savedRow)", hostCode);
+        Assert.Contains("var savedId = saveResult.ContractId;", hostCode);
         Assert.Contains("dialog.AcceptCreatedContractIdentity(", hostCode);
         Assert.Contains("ReloadContractEditRowAsync(savedId)", hostCode);
         Assert.Contains("dialog.ReloadAsEdit(editRow);", hostCode);
@@ -115,5 +115,25 @@ public sealed class ContractCommerEditDialogTests
             handlerCode.IndexOf("ShowSuccessNotification(", StringComparison.Ordinal)
             < handlerCode.IndexOf("ReloadContractEditRowAsync(savedId)", StringComparison.Ordinal));
         Assert.DoesNotContain("dialog.ShowAsync()", handlerCode);
+    }
+
+    [Fact]
+    public void ContractDialogHosts_UseSeparatedContractStageAndRevisionSaveWorkflow()
+    {
+        var dialogCode = File.ReadAllText(DialogPath);
+        var contractHostCode = File.ReadAllText(HostPath);
+        var stageHostCode = File.ReadAllText(TestProjectPaths.FromRepositoryRoot(
+            "src", "Views", "Shell", "StageHostView.cs"));
+        var revisionHostCode = File.ReadAllText(TestProjectPaths.FromRepositoryRoot(
+            "src", "Views", "Shell", "RevisionHostView.cs"));
+        var workflowCode = File.ReadAllText(TestProjectPaths.FromRepositoryRoot(
+            "src", "ViewModels", "Workflow", "ContractCommerSaveWorkflow.cs"));
+
+        Assert.Contains("public ContractCommerEditSavePlan BuildSavePlan", dialogCode);
+        Assert.Contains("dialog.BuildSavePlan", contractHostCode);
+        Assert.Contains("dialog.BuildSavePlan", stageHostCode);
+        Assert.Contains("dialog.BuildSavePlan", revisionHostCode);
+        Assert.Contains("UpdateAsync(StageModel", workflowCode);
+        Assert.Contains("UpdateAsync(RevisionModel", workflowCode);
     }
 }

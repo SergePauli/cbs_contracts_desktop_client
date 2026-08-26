@@ -42,6 +42,13 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 request["list_key"] = state.ListKey;
             }
 
+            AppendChangedInt(request, "priority", state.Original.Priority, state.Priority);
+            if (state.Original.Used != state.Used)
+            {
+                request["used"] = state.Used;
+            }
+
+            AppendChangedLong(request, "task_kind_id", state.Original.TaskKind.Id, state.TaskKind.Id);
             AppendChangedLong(request, "status_id", state.Original.Status.Id, state.Status.Id);
             AppendChangedText(request, "deadline_kind", state.Original.DeadlineKind, state.DeadlineKind);
             AppendChangedDate(request, "deadline_at", state.Original.DeadlineAt, state.DeadlineAt);
