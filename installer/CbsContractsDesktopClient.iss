@@ -2,7 +2,7 @@
 #define AppPublisher "ООО ЦБС"
 #define AppVersion GetEnv("CBS_INSTALLER_VERSION")
 #if AppVersion == ""
-  #define AppVersion "1.0.7-beta"
+  #define AppVersion "1.0.8-beta"
 #endif
 #define AppExeName "CbsContractsDesktopClient.exe"
 #define PublishDir GetEnv("CBS_INSTALLER_PUBLISH_DIR")
@@ -23,6 +23,7 @@ OutputBaseFilename=CbsContractsDesktopClient-{#AppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+InfoBeforeFile=..\Whats_new.md
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest

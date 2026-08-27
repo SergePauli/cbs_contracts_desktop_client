@@ -38,13 +38,16 @@ machines do not require an FNS key environment variable.
 The generated installer is written to:
 
 ```text
-artifacts\installer\CbsContractsDesktopClient-1.0.7-beta-Setup.exe
+artifacts\installer\CbsContractsDesktopClient-1.0.8-beta-Setup.exe
 ```
 
 The script builds the application as framework-dependent and packages the full
 WinUI build output, including the application PRI and XBF resources. It does
 not download or package the .NET, Windows App Runtime, or Visual C++
 prerequisite installers.
+
+The installer embeds `Whats_new.md` from the repository root and displays its
+contents on the first informational page before installation.
 
 ## Installation
 
