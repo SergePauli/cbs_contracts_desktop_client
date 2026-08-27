@@ -164,4 +164,24 @@ public sealed class ContractCommerEditDialogTests
         Assert.DoesNotContain("MultiStageHost", xaml);
         Assert.DoesNotContain("BuildFlagHost", code);
     }
+
+    [Fact]
+    public void DialogLoad_DoesNotFocusContractStatus()
+    {
+        var code = File.ReadAllText(DialogPath);
+        var methodStart = code.IndexOf("private async void ContractCommerEditDialog_Loaded", StringComparison.Ordinal);
+        var methodEnd = code.IndexOf("private void FocusInitialStageEditor", methodStart, StringComparison.Ordinal);
+        var methodCode = code[methodStart..methodEnd];
+
+        Assert.DoesNotContain("_statusBox.Focus", methodCode);
+    }
+
+    [Fact]
+    public void FileRows_ProvideClearAction()
+    {
+        var code = File.ReadAllText(DialogPath);
+
+        Assert.Contains("BuildFileActionButton(\"\\ue894\", \"Очистить\")", code);
+        Assert.Contains("clearButton.Click += (_, _) => editor.Text = string.Empty;", code);
+    }
 }

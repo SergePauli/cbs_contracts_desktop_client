@@ -36,6 +36,20 @@ public sealed class ReferenceDefinitionServiceTests : IDisposable
     }
 
     [Fact]
+    public void TryGetByRoute_ReturnsOrderStatusFilterAndSortFields()
+    {
+        var service = CreateService();
+
+        var found = service.TryGetByRoute("/orders", out var definition);
+
+        Assert.True(found);
+        var statusColumn = definition.Columns.Single(static column => column.FieldKey == "status");
+        Assert.Equal("order_status_id", statusColumn.FilterField);
+        Assert.Equal("order_status_id", statusColumn.SortField);
+        Assert.Equal("OrderStatus", statusColumn.Filter.OptionsSourceKey);
+    }
+
+    [Fact]
     public void ReferenceDefinition_ToTablePageDefinition_PreservesSharedTableMetadata()
     {
         var service = CreateService();

@@ -12,6 +12,8 @@ public sealed class ContractWorkflowFactory
     private readonly IDataQueryService _dataQueryService;
     private readonly object _syncRoot = new();
     private CancellationTokenSource? _currentLoadCts;
+    private ContractWorkflowSelectionKey? _currentLoadKey;
+    private Task<ContractWorkflowContext>? _currentLoadTask;
     private long _latestLoadVersion;
 
     public ContractWorkflowFactory(IDataQueryService dataQueryService)
@@ -58,6 +60,8 @@ public sealed class ContractWorkflowFactory
                 _ = _currentLoadCts.CancelAsync();
             }
             _currentLoadCts = null;
+            _currentLoadKey = null;
+            _currentLoadTask = null;
             _latestLoadVersion++;
         }
     }
@@ -72,25 +76,53 @@ public sealed class ContractWorkflowFactory
         }
     }
 
-    private async Task<ContractWorkflowContext> CreateLatestAsync(
+    private Task<ContractWorkflowContext> CreateLatestAsync(
         ContractWorkflowSelectionKey key,
         TableDataRow row,
         CancellationToken cancellationToken)
     {
-        using var currentLoad = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        long loadVersion;
         lock (_syncRoot)
         {
+            if (_currentLoadTask is { IsCompleted: false }
+                && _currentLoadKey == key)
+            {
+                return _currentLoadTask.WaitAsync(cancellationToken);
+            }
+
             if (_currentLoadCts is not null)
             {
                 _ = _currentLoadCts.CancelAsync();
             }
+
+            var currentLoad = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var completion = new TaskCompletionSource<ContractWorkflowContext>(TaskCreationOptions.RunContinuationsAsynchronously);
             _currentLoadCts = currentLoad;
-            loadVersion = ++_latestLoadVersion;
+            _currentLoadKey = key;
+            _currentLoadTask = completion.Task;
+            var loadVersion = ++_latestLoadVersion;
+            _ = CompleteCurrentLoadAsync(key, row, loadVersion, currentLoad, completion);
+            return completion.Task;
         }
+    }
+
+    private async Task CompleteCurrentLoadAsync(
+        ContractWorkflowSelectionKey key,
+        TableDataRow row,
+        long loadVersion,
+        CancellationTokenSource currentLoad,
+        TaskCompletionSource<ContractWorkflowContext> completion)
+    {
         try
         {
-            return await CreateCoreAsync(key, row, loadVersion, currentLoad.Token);
+            completion.SetResult(await CreateCoreAsync(key, row, loadVersion, currentLoad.Token));
+        }
+        catch (OperationCanceledException exception)
+        {
+            completion.SetCanceled(exception.CancellationToken);
+        }
+        catch (Exception exception)
+        {
+            completion.SetException(exception);
         }
         finally
         {
@@ -99,8 +131,12 @@ public sealed class ContractWorkflowFactory
                 if (ReferenceEquals(_currentLoadCts, currentLoad))
                 {
                     _currentLoadCts = null;
+                    _currentLoadKey = null;
+                    _currentLoadTask = null;
                 }
             }
+
+            currentLoad.Dispose();
         }
     }
 
