@@ -1,6 +1,7 @@
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services.Orders;
+using CbsContractsDesktopClient.Services.References;
 using CbsContractsDesktopClient.Stores.Orders;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.Views.Orders;
@@ -14,6 +15,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly OrderWorkflowFactory _workflowFactory;
         private readonly OrderEditWorkflow _editWorkflow;
         private readonly StageOrderEditWorkflow _stageOrderEditWorkflow;
+        private readonly IReferenceLookupCacheService _referenceLookups;
         private readonly OrderPositionsStore _positionsStore;
         private readonly OrderPositionsTableView _positionsView;
         private CancellationTokenSource? _detailCts;
@@ -30,6 +32,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _workflowFactory = App.Services.GetRequiredService<OrderWorkflowFactory>();
             _editWorkflow = App.Services.GetRequiredService<OrderEditWorkflow>();
             _stageOrderEditWorkflow = App.Services.GetRequiredService<StageOrderEditWorkflow>();
+            _referenceLookups = App.Services.GetRequiredService<IReferenceLookupCacheService>();
             _positionsStore = App.Services.GetRequiredService<OrderPositionsStore>();
             _positionsView = new OrderPositionsTableView(_positionsStore);
             _positionsStore.PropertyChanged += (_, args) =>
@@ -78,12 +81,13 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         protected override int PrimaryHeaderActionCount => 7;
 
-        protected override Task OnRouteLoaded(TablePageDefinition definition)
+        protected override async Task OnRouteLoaded(TablePageDefinition definition)
         {
+            OptionsRegistry.Set("OrderStatus", await _referenceLookups.GetOptionsAsync("OrderStatus"));
+            TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot());
             _positionsStore.Clear();
             UpdateButtons();
             SetDetailContentVisible(true);
-            return Task.CompletedTask;
         }
 
         protected override Task OnRowSelected(TableDataRow? row)

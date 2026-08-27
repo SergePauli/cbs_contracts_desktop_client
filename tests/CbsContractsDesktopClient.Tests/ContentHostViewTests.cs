@@ -474,6 +474,29 @@ public sealed class ContentHostViewTests
     }
 
     [Fact]
+    public void OrderHostView_OwnsOrderStatusOptionsSource()
+    {
+        var orderHost = File.ReadAllText(Path.Combine(ProjectRoot, "src", "Views", "Shell", "OrderHostView.cs"));
+
+        Assert.Contains("OptionsRegistry.Set(\"OrderStatus\"", orderHost);
+        Assert.Contains("_referenceLookups.GetOptionsAsync(\"OrderStatus\")", orderHost);
+        Assert.Contains("TableView.SetFilterOptionsSources(OptionsRegistry.Snapshot())", orderHost);
+    }
+
+    [Fact]
+    public void ContractWorkflowContextLoad_IsSharedAndAppliedOncePerHost()
+    {
+        var workflowFactory = File.ReadAllText(Path.Combine(ProjectRoot, "src", "ViewModels", "Workflow", "ContractWorkflowFactory.cs"));
+        var contractHost = File.ReadAllText(Path.Combine(ProjectRoot, "src", "Views", "Shell", "ContractHostView.cs"));
+        var revisionHost = File.ReadAllText(Path.Combine(ProjectRoot, "src", "Views", "Shell", "RevisionHostView.cs"));
+
+        Assert.Contains("_currentLoadKey == key", workflowFactory);
+        Assert.Contains("return _currentLoadTask.WaitAsync(cancellationToken);", workflowFactory);
+        Assert.Contains("_appliedContractWorkflowContext?.LoadVersion == context.LoadVersion", contractHost);
+        Assert.Contains("_appliedRevisionWorkflowContext?.LoadVersion == context.LoadVersion", revisionHost);
+    }
+
+    [Fact]
     public void StageHostView_PreparesStageEditContextThroughWorkflowFactory()
     {
         var stageHost = File.ReadAllText(StageHostViewPath);

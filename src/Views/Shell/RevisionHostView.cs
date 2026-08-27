@@ -38,6 +38,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly RevisionRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
+        private ContractWorkflowContext? _appliedRevisionWorkflowContext;
         private Button? _editButton;
         private Button? _infoButton;
         private Button? _copyContractDataButton;
@@ -181,7 +182,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return false;
             }
 
+            if (_appliedRevisionWorkflowContext?.LoadVersion == context.LoadVersion)
+            {
+                return true;
+            }
+
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
+            _appliedRevisionWorkflowContext = context;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;
@@ -196,6 +203,14 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             try
             {
+                if (_appliedRevisionWorkflowContext is { } appliedContext
+                    && _contractWorkflowFactory.IsLatest(appliedContext)
+                    && appliedContext.Matches(Store.SelectedRow)
+                    && HasContractInfoSelection())
+                {
+                    return appliedContext;
+                }
+
                 var context = await _contractWorkflowFactory.CreateFromRevisionRowAsync(Store.SelectedRow);
                 return ApplyRevisionWorkflowContextIfCurrent(context)
                     ? context
@@ -212,6 +227,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private void ClearDetailView()
         {
             _contractWorkflowFactory.CancelCurrentLoad();
+            _appliedRevisionWorkflowContext = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();

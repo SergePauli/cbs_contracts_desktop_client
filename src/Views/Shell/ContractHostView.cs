@@ -61,6 +61,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly ContractTableRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
+        private ContractWorkflowContext? _appliedContractWorkflowContext;
         private bool _showContractCostFraction;
         private Button? _createButton;
         private Button? _editButton;
@@ -346,7 +347,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return false;
             }
 
+            if (_appliedContractWorkflowContext?.LoadVersion == context.LoadVersion)
+            {
+                return true;
+            }
+
             context.ApplyTo(_contractWorkflowStore, _rowDetailStrategy);
+            _appliedContractWorkflowContext = context;
             RefreshSelectedFooterText();
             UpdateActionButtonState();
             return true;
@@ -361,6 +368,14 @@ namespace CbsContractsDesktopClient.Views.Shell
 
             try
             {
+                if (_appliedContractWorkflowContext is { } appliedContext
+                    && _contractWorkflowFactory.IsLatest(appliedContext)
+                    && appliedContext.Matches(Store.SelectedRow)
+                    && HasContractInfoSelection())
+                {
+                    return appliedContext;
+                }
+
                 var context = await _contractWorkflowFactory.CreateFromContractRowAsync(Store.SelectedRow);
                 return ApplyContractWorkflowContextIfCurrent(context)
                     ? context
@@ -378,6 +393,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         {
             Store.AppendUiTrace("CONTRACT DETAIL CLEAR");
             _contractWorkflowFactory.CancelCurrentLoad();
+            _appliedContractWorkflowContext = null;
             _detailView.Visibility = Visibility.Collapsed;
             SetDetailContentVisible(false);
             _contractWorkflowStore.ClearRowDetailSelection();

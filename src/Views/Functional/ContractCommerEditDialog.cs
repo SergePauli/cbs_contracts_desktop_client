@@ -488,13 +488,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 FocusInitialRevisionEditor();
                 return;
             }
-
-            if (string.IsNullOrWhiteSpace(_taskKindBox.Text))
-            {
-                return;
-            }
-
-            DispatcherQueue.TryEnqueue(() => _statusBox.Focus(FocusState.Programmatic));
         }
 
         private void FocusInitialStageEditor()
@@ -2799,6 +2792,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
             grid.Children.Add(new TextBlock
             {
@@ -2830,6 +2824,12 @@ namespace CbsContractsDesktopClient.Views.Functional
             openButton.Click += (_, _) => OpenFilePath(editor.Text);
             Grid.SetColumn(openButton, 4);
             grid.Children.Add(openButton);
+
+            var clearButton = BuildFileActionButton("\ue894", "Очистить");
+            clearButton.IsTabStop = false;
+            clearButton.Click += (_, _) => editor.Text = string.Empty;
+            Grid.SetColumn(clearButton, 5);
+            grid.Children.Add(clearButton);
 
             return grid;
         }
