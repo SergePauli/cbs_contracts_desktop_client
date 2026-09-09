@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Shared.Formatting;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
@@ -29,7 +30,8 @@ public sealed record ContractCommerEditSavePlan(
     long? ContractId,
     IReadOnlyDictionary<string, object?> ContractPayload,
     IReadOnlyList<IReadOnlyDictionary<string, object?>> StageUpdatePayloads,
-    IReadOnlyList<IReadOnlyDictionary<string, object?>> RevisionUpdatePayloads)
+    IReadOnlyList<IReadOnlyDictionary<string, object?>> RevisionUpdatePayloads,
+    IReadOnlyList<PendingAuditEntry> AuditEntries)
 {
     public bool HasContractChanges => IsCreateMode || ContractPayload.Keys.Any(static key =>
         !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
@@ -124,13 +126,19 @@ public static class ContractCommerEditPayloadBuilder
                 .Select(RevisionEditPayloadBuilder.BuildForUpdate)
                 .Cast<IReadOnlyDictionary<string, object?>>()
                 .ToList();
+        var auditEntries = contractState.PendingAuditEntries
+            .Concat(stages
+                .Where(static stage => !stage.IsDestroyed)
+                .SelectMany(static stage => stage.PendingAuditEntries))
+            .ToList();
 
         return new ContractCommerEditSavePlan(
             input.IsCreateMode,
             input.Id,
             contractPayload,
             stageUpdates,
-            revisionUpdates);
+            revisionUpdates,
+            auditEntries);
     }
 
     private static void AppendContractResponsibleAttributes(

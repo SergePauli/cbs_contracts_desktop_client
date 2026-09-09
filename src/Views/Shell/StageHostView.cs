@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services;
@@ -400,6 +401,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                             ContractModel,
                             contractPayload);
                     }
+
+                    await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
                 }
                 catch (Exception ex)
                 {
@@ -529,6 +532,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                             ContractModel,
                             dialog.BuildContractExternalNumberPayload());
                         savedRow ??= sourceRow;
+                    }
+
+                    if (hasStageChanges)
+                    {
+                        await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
                     }
                 }
                 catch (Exception ex)
@@ -1070,6 +1078,25 @@ namespace CbsContractsDesktopClient.Views.Shell
         private Task<TableDataRow> SaveStagePayloadAsync(IReadOnlyDictionary<string, object?> payload)
         {
             return _modelMutationService.UpdateAsync(GetCurrentTableModel(), payload);
+        }
+
+        private async Task SaveAuditEntriesAsync(IReadOnlyList<PendingAuditEntry> entries)
+        {
+            if (entries.Count == 0)
+            {
+                return;
+            }
+
+            var user = _userService.CurrentUser
+                ?? throw new InvalidOperationException("Не удалось определить пользователя для аудита.");
+            var personId = user.PersonId
+                ?? throw new InvalidOperationException("Не удалось определить person_id пользователя для аудита.");
+            foreach (var entry in entries)
+            {
+                await _modelMutationService.CreateAsync(
+                    "Audit",
+                    AuditCreatePayloadBuilder.Build(entry, user.Id, personId));
+            }
         }
 
         private string GetCurrentTableModel()

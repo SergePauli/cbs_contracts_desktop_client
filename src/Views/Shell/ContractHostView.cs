@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CbsContractsDesktopClient.Models.Data;
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Models.Workspace;
 using CbsContractsDesktopClient.Services;
@@ -18,6 +19,7 @@ using CbsContractsDesktopClient.Services.Shell;
 using CbsContractsDesktopClient.Services.Workspace;
 using CbsContractsDesktopClient.Shared.Data;
 using CbsContractsDesktopClient.Shared.Dialogs;
+using CbsContractsDesktopClient.Stores.Table;
 using CbsContractsDesktopClient.ViewModels.Workflow;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using CbsContractsDesktopClient.Views.Functional;
@@ -840,6 +842,8 @@ namespace CbsContractsDesktopClient.Views.Shell
                             ContractModel,
                             contractPayload);
                     }
+
+                    await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
                 }
                 catch (Exception ex)
                 {
@@ -931,6 +935,11 @@ namespace CbsContractsDesktopClient.Views.Shell
                             ContractModel,
                             dialog.BuildContractExternalNumberPayload());
                         hasSavedContract = true;
+                    }
+
+                    if (hasStageChanges)
+                    {
+                        await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
                     }
                 }
                 catch (Exception ex)
@@ -1065,6 +1074,25 @@ namespace CbsContractsDesktopClient.Views.Shell
             return payload.Keys.Any(static key =>
                 !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
                 && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
+        }
+
+        private async Task SaveAuditEntriesAsync(IReadOnlyList<PendingAuditEntry> entries)
+        {
+            if (entries.Count == 0)
+            {
+                return;
+            }
+
+            var user = _userService.CurrentUser
+                ?? throw new InvalidOperationException("Не удалось определить пользователя для аудита.");
+            var personId = user.PersonId
+                ?? throw new InvalidOperationException("Не удалось определить person_id пользователя для аудита.");
+            foreach (var entry in entries)
+            {
+                await _modelMutationService.CreateAsync(
+                    "Audit",
+                    AuditCreatePayloadBuilder.Build(entry, user.Id, personId));
+            }
         }
 
         private async Task RefreshSelectedContractAfterStageSaveAsync(CancellationToken cancellationToken = default)

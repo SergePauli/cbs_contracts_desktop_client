@@ -28,6 +28,7 @@ public sealed class StageFinEditPayloadBuilderTests
             new StageFinEditPayloadInput(
                 Id: 15L,
                 ListKey: "stage-key",
+                StatusId: 2L,
                 PaymentAt: new DateTimeOffset(2026, 5, 14, 0, 0, 0, TimeSpan.Zero),
                 PrepaymentAt: null,
                 InvoiceAt: new DateTimeOffset(2026, 5, 12, 0, 0, 0, TimeSpan.Zero),

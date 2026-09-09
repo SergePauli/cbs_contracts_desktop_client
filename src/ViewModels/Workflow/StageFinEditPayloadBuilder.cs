@@ -8,6 +8,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow;
 public sealed record StageFinEditPayloadInput(
     long Id,
     string? ListKey,
+    long? StatusId,
     DateTimeOffset? PaymentAt,
     DateTimeOffset? PrepaymentAt,
     DateTimeOffset? InvoiceAt,
@@ -38,6 +39,7 @@ public static class StageFinEditPayloadBuilder
             request["list_key"] = state.ListKey;
         }
 
+        AppendChangedLong(request, "status_id", state.Original.Status.Id, state.Status.Id);
         AppendChangedDate(request, "payment_at", state.Original.PaymentAt, state.PaymentAt);
         AppendChangedDate(request, "prepayment_at", state.Original.PrepaymentAt, state.PrepaymentAt);
         AppendChangedDate(request, "invoice_at", state.Original.InvoiceAt, state.InvoiceAt);
@@ -69,6 +71,7 @@ public static class StageFinEditPayloadBuilder
             request["list_key"] = input.ListKey;
         }
 
+        AppendChangedLong(request, sourceRow, "status_id", input.StatusId, "status.id");
         AppendChangedDate(request, sourceRow, "payment_at", input.PaymentAt);
         AppendChangedDate(request, sourceRow, "prepayment_at", input.PrepaymentAt);
         AppendChangedDate(request, sourceRow, "invoice_at", input.InvoiceAt);
@@ -93,6 +96,33 @@ public static class StageFinEditPayloadBuilder
         bool value)
     {
         var originalValue = JsonDataReader.TryGetBool(sourceRow.GetValue(key)) ?? false;
+        if (originalValue != value)
+        {
+            request[key] = value;
+        }
+    }
+
+    private static void AppendChangedLong(
+        IDictionary<string, object?> request,
+        TableDataRow sourceRow,
+        string key,
+        long? value,
+        string fallbackKey)
+    {
+        var originalValue = JsonDataReader.TryGetLong(sourceRow.GetValue(key))
+            ?? JsonDataReader.TryGetLong(sourceRow.GetValue(fallbackKey));
+        if (originalValue != value)
+        {
+            request[key] = value;
+        }
+    }
+
+    private static void AppendChangedLong(
+        IDictionary<string, object?> request,
+        string key,
+        long? originalValue,
+        long? value)
+    {
         if (originalValue != value)
         {
             request[key] = value;

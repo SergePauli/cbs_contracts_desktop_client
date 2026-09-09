@@ -98,7 +98,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly bool _openRevisionsTabOnLoad;
         private bool _isSyncingTaskKindSelection;
         private bool _contractClosePreviewApplied;
-        private bool _contractCloseCommentApplied;
 
         public ContractCommerEditDialog(
             ContractWorkflowStore workflowStore,
@@ -587,9 +586,62 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void SignedAtEditor_DateChanged(object? sender, EventArgs e)
         {
+            var stages = StageEditors;
+            var previousValues = stages.ToDictionary(
+                static stage => stage,
+                static stage => (stage.Status.Id, stage.StartAt, stage.DeadlineAt));
             ApplyContractSignedDateToEmptyStageStarts();
             ApplyContractSignedStatusToEmptyStageStatuses();
             ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: false);
+
+            var statusChangeCount = stages.Count(stage =>
+            {
+                var previous = previousValues[stage];
+                return previous.Id != stage.Status.Id;
+            });
+            var deadlinesChanged = stages.Any(stage =>
+            {
+                var previous = previousValues[stage];
+                return !SameDate(previous.StartAt, stage.StartAt)
+                    || !SameDate(previous.DeadlineAt, stage.DeadlineAt);
+            });
+            if (statusChangeCount > 0 || deadlinesChanged)
+            {
+                var contract = _workflowStore.SelectedContractEditState
+                    ?? throw new InvalidOperationException("ContractCommerEditDialog.SignedAtEditor_DateChanged: SelectedContractEditState is not set.");
+                contract.SetAutomationCauseAudit(
+                    "signed_at",
+                    BuildContractSignedAutomationDetail(statusChangeCount, deadlinesChanged),
+                    AppFormatters.FormatDisplayDate(contract.Original.SignedAt),
+                    AppFormatters.FormatDisplayDate(_signedAtEditor.Date));
+            }
+        }
+
+        private static string BuildContractSignedAutomationDetail(int statusChangeCount, bool deadlinesChanged)
+        {
+            if (statusChangeCount == 0)
+            {
+                return "Изменение даты подписания запустило автоматическое изменение сроков этапов";
+            }
+
+            var statusText = statusChangeCount == 1 ? "статуса" : "статусов";
+            if (deadlinesChanged)
+            {
+                return $"Изменение даты подписания запустило автоматическое изменение {statusText} и сроков этапов";
+            }
+
+            var stageText = statusChangeCount == 1 ? "этапа" : "этапов";
+            return $"Изменение даты подписания запустило автоматическое изменение {statusText} {stageText}";
+        }
+
+        private static bool SameDate(DateTimeOffset? left, DateTimeOffset? right)
+        {
+            if (left is null || right is null)
+            {
+                return left is null && right is null;
+            }
+
+            return left.Value.Date == right.Value.Date;
         }
 
         private void SignedAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
@@ -1992,7 +2044,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 contract.ApplyClosedStatusPreview(stage.ClosedAt);
                 SelectContractStatus(WorkflowStatusIds.Closed);
                 _closedAtEditor.Date = stage.ClosedAt;
-                AppendContractCloseCommentIfNeeded();
                 _contractClosePreviewApplied = true;
                 return;
             }
@@ -2019,25 +2070,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             _statusBox.SelectedItem = option;
-        }
-
-        private void AppendContractCloseCommentIfNeeded()
-        {
-            if (_contractCloseCommentApplied)
-            {
-                return;
-            }
-
-            AppendAutomaticContractComment("Статус контракта был изменен автоматически на \"Закрыт\"");
-            _contractCloseCommentApplied = true;
-        }
-
-        private void AppendAutomaticContractComment(string text)
-        {
-            _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
-                ? text
-                : $"{_commentBox.Text.TrimEnd()}; {text}";
-            _commentBox.Select(_commentBox.Text.Length, 0);
         }
 
         private List<TaskKindSelectOption> BuildTaskKindOptions()
@@ -2255,7 +2287,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             foreach (var stage in StageEditors)
             {
-                stage.ApplyInProgressAfterContractSigned();
+                stage.ApplyStatusAfterContractSigned();
             }
         }
 

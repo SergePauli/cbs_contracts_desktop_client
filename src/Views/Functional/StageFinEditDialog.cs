@@ -1,3 +1,4 @@
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.References;
@@ -9,7 +10,6 @@ using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
@@ -71,6 +71,8 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     public long Id => _stage.Id;
 
+    public IReadOnlyList<PendingAuditEntry> PendingAuditEntries => _stage.PendingAuditEntries;
+
     public bool HasContractExternalNumberChanges()
     {
         return _contract?.IsExternalNumberChanged(_view.ExternalNumberInput.Text) == true;
@@ -106,8 +108,8 @@ public sealed class StageFinEditDialog : AppEditDialog
         {
             _holidays = await _holidayRecalculationService.GetHolidayCalendarDaysAsync(_lifetimeCts.Token);
             _lifetimeCts.Token.ThrowIfCancellationRequested();
-            ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: false);
-            ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: false);
+            ApplyBusinessLogicAfterPaymentChange(applyStatusTransition: false);
+            ApplyBusinessLogicAfterFundedAtChange();
             UpdateCalculatedSummary();
         }
         catch (OperationCanceledException) when (_lifetimeCts.IsCancellationRequested)
@@ -141,13 +143,10 @@ public sealed class StageFinEditDialog : AppEditDialog
 
     private void InitializeStaticView()
     {
-        _view.ContractTitleSlot.Content = BuildDialogSectionTitle(RequireContract().GetSectionTitle());
+        _view.ContractTitleValue.Text = RequireContract().GetSectionTitle();
         _view.ContragentValue.Text = FormatSummaryValue(_contract?.ContragentName ?? string.Empty);
         _view.ContractCostValue.Text = FormatSummaryValue(FormatMoney(_contract?.Cost));
-        _view.ContractStatusSlot.Content = BuildStatusBadge(
-            RequireContract().Status.Name!,
-            RequireContract().Status.Id,
-            horizontalAlignment: HorizontalAlignment.Left);
+        UpdateContractStatusBadge();
         _view.SignedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_contract?.SignedAt));
         InitializeNavigationButton(_view.PreviousButton, "Предыдущий этап", StageEditDialogNavigationDirection.Previous);
         InitializeNavigationButton(_view.NextButton, "Следующий этап", StageEditDialogNavigationDirection.Next);
@@ -291,10 +290,7 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         UpdateStageTitle();
         UpdateStageNavigationButtons();
-        _view.StageStatusSlot.Content = BuildStatusBadge(
-            _stage.Status.Name ?? string.Empty,
-            _stage.Status.Id,
-            horizontalAlignment: HorizontalAlignment.Left);
+        UpdateStageStatusBadge();
         _view.PaymentKindValue.Text = FormatSummaryValue(ResolvePaymentDeadlineKindLabel());
         _view.CompletedAtValue.Text = FormatSummaryValue(FormatDisplayDate(_stage.CompletedAt));
         _view.RideOutValue.Text = FormatSummaryValue(FormatFlagDate(_stage.IsRideOut, _stage.RideOutAt));
@@ -302,24 +298,35 @@ public sealed class StageFinEditDialog : AppEditDialog
         UpdateCalculatedSummary();
     }
 
+    private void UpdateStageStatusBadge()
+    {
+        var colors = ResolveStatusBadgeColors(_stage.Status.Id);
+        _view.StatusBadge.Background = new SolidColorBrush(colors.Background);
+        _view.StatusText.Foreground = new SolidColorBrush(colors.Foreground);
+        _view.StatusText.Text = string.IsNullOrWhiteSpace(_stage.Status.Name)
+            ? "-"
+            : _stage.Status.Name;
+    }
+
+    private void UpdateContractStatusBadge()
+    {
+        var contract = RequireContract();
+        var colors = ResolveStatusBadgeColors(contract.Status.Id);
+        _view.ContractStatusBadgeValue.Background = new SolidColorBrush(colors.Background);
+        _view.ContractStatusValue.Foreground = new SolidColorBrush(colors.Foreground);
+        _view.ContractStatusValue.Text = string.IsNullOrWhiteSpace(contract.Status.Name)
+            ? "-"
+            : contract.Status.Name;
+    }
+
     private void UpdateStageTitle()
     {
-        _view.StageTitleValue.Inlines.Clear();
         var title = _stage.GetSectionTitle(_contract);
         var accentText = _stage.GetSectionTitleAmount(_contract);
-        if (string.IsNullOrWhiteSpace(accentText))
-        {
-            _view.StageTitleValue.Text = title;
-            return;
-        }
-
-        _view.StageTitleValue.Text = string.Empty;
-        _view.StageTitleValue.Inlines.Add(new Run { Text = title + " " });
-        _view.StageTitleValue.Inlines.Add(new Run
-        {
-            Text = accentText,
-            Foreground = Application.Current.Resources["ShellAccentBrush"] as Brush
-        });
+        _view.StageTitleMain.Text = string.IsNullOrWhiteSpace(accentText)
+            ? title
+            : title + " ";
+        _view.StageTitleAmount.Text = accentText;
     }
 
     private void UpdateStageNavigationButtons()
@@ -352,8 +359,8 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         UpdateCalculatedSummary();
-        ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: false);
-        ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: false);
+        ApplyBusinessLogicAfterPaymentChange(applyStatusTransition: false);
+        ApplyBusinessLogicAfterFundedAtChange();
     }
 
     private static string FormatSummaryValue(string value)
@@ -432,23 +439,101 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
 
         _businessLogicHandlersAttached = true;
-        _view.PrepaymentAtInput.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
-        _view.PaymentAtInput.DateChanged += (_, _) => ApplyBusinessLogicAfterPaymentChange(appendAutomaticComment: true);
-        _view.FundedAtInput.DateChanged += (_, _) => ApplyBusinessLogicAfterFundedAtChange(appendAutomaticComment: true);
+        _view.PrepaymentAtInput.DateChanged += PrepaymentAtInput_DateChanged;
+        _view.PaymentAtInput.DateChanged += PaymentAtInput_DateChanged;
+        _view.FundedAtInput.DateChanged += FundedAtInput_DateChanged;
     }
 
-    private void ApplyBusinessLogicAfterPaymentChange(bool appendAutomaticComment)
+    private void PrepaymentAtInput_DateChanged(object? sender, EventArgs args)
+    {
+        var changes = ApplyBusinessLogicAfterPaymentChange(applyStatusTransition: true);
+        if (changes.StatusChanged || changes.StartAtChanged || changes.DeadlineAtChanged)
+        {
+            _stage.SetAutomationCauseAudit(
+                "prepayment_at",
+                BuildPaymentAutomationDetail("предоплаты", changes),
+                FormatDisplayDate(_stage.Original.PrepaymentAt),
+                FormatDisplayDate(_view.PrepaymentAtInput.Date));
+        }
+    }
+
+    private void PaymentAtInput_DateChanged(object? sender, EventArgs args)
+    {
+        var changes = ApplyBusinessLogicAfterPaymentChange(applyStatusTransition: true);
+        if (changes.StatusChanged || changes.StartAtChanged || changes.DeadlineAtChanged)
+        {
+            _stage.SetAutomationCauseAudit(
+                "payment_at",
+                BuildPaymentAutomationDetail("оплаты", changes),
+                FormatDisplayDate(_stage.Original.PaymentAt),
+                FormatDisplayDate(_view.PaymentAtInput.Date));
+        }
+    }
+
+    private void FundedAtInput_DateChanged(object? sender, EventArgs args)
+    {
+        if (ApplyBusinessLogicAfterFundedAtChange())
+        {
+            _stage.SetAutomationCauseAudit(
+                "funded_at",
+                "Изменение даты бухгалтерского закрытия запустило автоматический пересчёт срока оплаты этапа",
+                FormatDisplayDate(_stage.Original.FundedAt),
+                FormatDisplayDate(_view.FundedAtInput.Date));
+        }
+    }
+
+    private static string BuildPaymentAutomationDetail(
+        string sourceName,
+        (bool StatusChanged, bool StartAtChanged, bool DeadlineAtChanged) changes)
+    {
+        var changedFields = new List<string>(3);
+        if (changes.StatusChanged)
+        {
+            changedFields.Add("статуса");
+        }
+
+        if (changes.StartAtChanged)
+        {
+            changedFields.Add("даты начала");
+        }
+
+        if (changes.DeadlineAtChanged)
+        {
+            changedFields.Add("срока завершения");
+        }
+
+        var changedFieldsText = changedFields.Count switch
+        {
+            1 => changedFields[0],
+            2 => $"{changedFields[0]} и {changedFields[1]}",
+            _ => $"{changedFields[0]}, {changedFields[1]} и {changedFields[2]}"
+        };
+        return $"Изменение даты {sourceName} запустило автоматическое изменение {changedFieldsText} этапа";
+    }
+
+    private (bool StatusChanged, bool StartAtChanged, bool DeadlineAtChanged) ApplyBusinessLogicAfterPaymentChange(
+        bool applyStatusTransition)
     {
         if (_isApplyingBusinessLogic)
         {
-            return;
+            return (false, false, false);
         }
 
         _isApplyingBusinessLogic = true;
         try
         {
-            ApplyDeadlineFromPaymentBusinessLogic(appendAutomaticComment);
+            var statusChanged = false;
+            if (applyStatusTransition)
+            {
+                statusChanged = _stage.ApplyInProgressAfterPayment(
+                    _view.PaymentAtInput.Date,
+                    _view.PrepaymentAtInput.Date);
+                UpdateStageStatusBadge();
+            }
+
+            var deadlineChanges = ApplyDeadlineFromPaymentBusinessLogic();
             UpdateCalculatedSummary();
+            return (statusChanged, deadlineChanges.StartAtChanged, deadlineChanges.DeadlineAtChanged);
         }
         finally
         {
@@ -456,19 +541,20 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
     }
 
-    private void ApplyBusinessLogicAfterFundedAtChange(bool appendAutomaticComment)
+    private bool ApplyBusinessLogicAfterFundedAtChange()
     {
         if (_isApplyingBusinessLogic)
         {
-            return;
+            return false;
         }
 
         _isApplyingBusinessLogic = true;
         try
         {
             _isFunded = _view.FundedAtInput.Date is not null;
-            ApplyPaymentDeadlineBusinessLogic(appendAutomaticComment);
+            var deadlineChanged = ApplyPaymentDeadlineBusinessLogic();
             UpdateCalculatedSummary();
+            return deadlineChanged;
         }
         finally
         {
@@ -476,7 +562,7 @@ public sealed class StageFinEditDialog : AppEditDialog
         }
     }
 
-    private void ApplyDeadlineFromPaymentBusinessLogic(bool appendAutomaticComment)
+    private (bool StartAtChanged, bool DeadlineAtChanged) ApplyDeadlineFromPaymentBusinessLogic()
     {
         var calculation = StageDeadlineBusinessRules.CalculatePaymentBasedStageDeadline(
             _stage.DeadlineKind,
@@ -486,37 +572,19 @@ public sealed class StageFinEditDialog : AppEditDialog
             _holidays);
         if (calculation is null)
         {
-            return;
+            return (false, false);
         }
 
         var previousStartAt = _startAt;
         var previousDeadlineAt = _deadlineAt;
         _startAt = calculation.StartAt;
         _deadlineAt = calculation.DeadlineAt;
-
-        if (!appendAutomaticComment)
-        {
-            return;
-        }
-
-        var changes = new List<string>();
-        if (!SameDate(previousStartAt, _startAt))
-        {
-            changes.Add($"Дата начала этапа была изменена автоматически на {FormatDisplayDate(_startAt)}");
-        }
-
-        if (!SameDate(previousDeadlineAt, _deadlineAt))
-        {
-            changes.Add($"срок завершения был изменен автоматически на {FormatDisplayDate(_deadlineAt)}");
-        }
-
-        if (changes.Count > 0)
-        {
-            AppendAutomaticComment(string.Join("; ", changes));
-        }
+        return (
+            !SameDate(previousStartAt, _startAt),
+            !SameDate(previousDeadlineAt, _deadlineAt));
     }
 
-    private void ApplyPaymentDeadlineBusinessLogic(bool appendAutomaticComment)
+    private bool ApplyPaymentDeadlineBusinessLogic()
     {
         var paymentDeadline = StageDeadlineBusinessRules.CalculatePaymentDeadline(
             _stage.PaymentDeadlineKind,
@@ -525,28 +593,12 @@ public sealed class StageFinEditDialog : AppEditDialog
             _holidays);
         if (paymentDeadline is null)
         {
-            return;
+            return false;
         }
 
         var previousDeadline = _paymentDeadlineAt;
         _paymentDeadlineAt = paymentDeadline;
-        if (appendAutomaticComment && !SameDate(previousDeadline, paymentDeadline))
-        {
-            AppendAutomaticComment($"Срок оплаты был изменен автоматически на {FormatDisplayDate(paymentDeadline)}");
-        }
-    }
-
-    private void AppendAutomaticComment(string text)
-    {
-        if (!_view.CommentInput.IsEnabled)
-        {
-            return;
-        }
-
-        _view.CommentInput.Text = string.IsNullOrWhiteSpace(_view.CommentInput.Text)
-            ? text
-            : $"{_view.CommentInput.Text.TrimEnd()}; {text}";
-        _view.CommentInput.Select(_view.CommentInput.Text.Length, 0);
+        return !SameDate(previousDeadline, paymentDeadline);
     }
 
     private void UpdateCalculatedSummary()
@@ -560,6 +612,7 @@ public sealed class StageFinEditDialog : AppEditDialog
     {
         _stage.PaymentAt = _view.PaymentAtInput.Date;
         _stage.PrepaymentAt = _view.PrepaymentAtInput.Date;
+        _stage.ApplyInProgressAfterPayment(_stage.PaymentAt, _stage.PrepaymentAt);
         _stage.InvoiceAt = _view.InvoiceAtInput.Date;
         _stage.FundedAt = _view.FundedAtInput.Date;
         _stage.IsFunded = _isFunded;
