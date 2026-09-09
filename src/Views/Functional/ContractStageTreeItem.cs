@@ -22,7 +22,7 @@ public sealed class ContractStageTreeItem : INotifyPropertyChanged
     {
         _contentFactory = contentFactory;
         Children = children ?? [];
-        IsExpanded = isExpanded;
+        _isExpanded = isExpanded;
         ContentMargin = contentMargin ?? new Thickness(0);
     }
 
@@ -32,7 +32,25 @@ public sealed class ContractStageTreeItem : INotifyPropertyChanged
 
     public IReadOnlyList<ContractStageTreeItem> Children { get; }
 
-    public bool IsExpanded { get; set; }
+    private bool _isExpanded;
+
+    public bool IsExpanded
+    {
+        get => _isExpanded;
+        set
+        {
+            if (_isExpanded == value)
+            {
+                return;
+            }
+
+            _isExpanded = value;
+            ExpansionChanged?.Invoke(value);
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
+        }
+    }
+
+    public event Action<bool>? ExpansionChanged;
 
     public Thickness ContentMargin { get; }
 

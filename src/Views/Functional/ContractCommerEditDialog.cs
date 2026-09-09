@@ -1197,12 +1197,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private void SetActiveStage(StageEditState selectedStage)
-        {
-            _workflowStore.SetActiveStage(selectedStage);
-            RefreshStagesStack();
-        }
-
         private void ResetTaskKindFromContract()
         {
             var selectedCode = GetText(_contract, "task_kind.code", "code");
@@ -1317,9 +1311,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private ContractStageTreeItem BuildStageTreeItem(StageEditState stage)
         {
             ContractStageTreeItem? stageItem = null;
-            var isExpanded = _openStagesTabOnLoad
-                ? ReferenceEquals(stage, _workflowStore.SelectedStageEditState)
-                : stage.Used;
             stageItem = new ContractStageTreeItem(
                 () => BuildStageTreeHeader(GetStageTreeName(stage)),
                 [
@@ -1327,7 +1318,8 @@ namespace CbsContractsDesktopClient.Views.Functional
                     BuildStageCommentsTreeItem(stage),
                     BuildStageSupplyTreeItem(stage)
                 ],
-                isExpanded);
+                stage.Used);
+            stageItem.ExpansionChanged += isExpanded => _workflowStore.SetStageExpanded(stage, isExpanded);
             return stageItem;
         }
 
@@ -1526,7 +1518,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ColumnSpacing = 8,
                 RowSpacing = 8
             };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
@@ -1542,8 +1533,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
-            AddGridChild(grid, BuildInputLineCheckBox(BuildActiveStageCheckBox(stage), "АЭ"), 0, 0);
-            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 1);
+            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 0);
             var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem);
             var stageStatusDropdown = BuildStageStatusDropdown(stage);
             var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
@@ -1570,28 +1560,28 @@ namespace CbsContractsDesktopClient.Views.Functional
             stageDeadlineEditor.OnTab = (_, args) => FocusStageCostEditor(stageCostEditor, args);
             ApplyStageStartMode(stage, stageStartEditor);
             ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
-            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 2);
-            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 3);
-            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 4);
+            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 1);
+            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 2);
+            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 3);
             AddGridChild(grid, BuildLabeledControl(
                 "Дней",
                 stageDurationEditor,
-                spacing: 3), 0, 5);
-            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 6);
-            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 7);
-            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 8);
+                spacing: 3), 0, 4);
+            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 5);
+            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 6);
+            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 7);
 
             var paymentRow = BuildStagePaymentRow(stage);
             Grid.SetRow(paymentRow, 1);
-            Grid.SetColumnSpan(paymentRow, 10);
+            Grid.SetColumnSpan(paymentRow, 9);
             grid.Children.Add(paymentRow);
 
             var comment = BuildLabeledControl("Комментарий этапа", BuildStageCommentEditor(stage), spacing: 3);
-            AddGridChild(grid, comment, 2, 0, 8);
+            AddGridChild(grid, comment, 2, 0, 7);
 
             var separator = BuildSectionSeparator(null);
             Grid.SetRow(separator, 3);
-            Grid.SetColumnSpan(separator, 10);
+            Grid.SetColumnSpan(separator, 9);
             grid.Children.Add(separator);
 
             return grid;
@@ -1916,33 +1906,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 IsTabStop = false,
                 HorizontalAlignment = HorizontalAlignment.Stretch
             };
-        }
-
-        private CheckBox BuildActiveStageCheckBox(StageEditState stage)
-        {
-            var hasChoice = StageEditors.Count > 1;
-            var checkBox = new CheckBox
-            {
-                IsChecked = stage.Used,
-                IsEnabled = hasChoice,
-                IsTabStop = hasChoice,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                MinHeight = 0,
-                MinWidth = 0,
-                Padding = new Thickness(0),
-                Margin = new Thickness(0)
-            };
-            checkBox.Checked += (_, _) => SetActiveStage(stage);
-            checkBox.Unchecked += (_, _) =>
-            {
-                if (stage.Used)
-                {
-                    checkBox.IsChecked = true;
-                }
-            };
-
-            return checkBox;
         }
 
         private static CalendarInput BuildDateEditor(DateTimeOffset? date, Action<DateTimeOffset?>? updateDate = null)

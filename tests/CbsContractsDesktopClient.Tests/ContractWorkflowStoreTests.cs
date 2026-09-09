@@ -141,11 +141,13 @@ public sealed class ContractWorkflowStoreTests
         Assert.Equal([1, 2, 3, 4, 5], store.ContractStageEditStates.Select(static item => item.Priority));
     }
 
-    [Fact]
-    public void DeleteStage_WhenOnlyOneStageRemainsResetsItToZeroAndActive()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DeleteStage_WhenOnlyOneStageRemainsPreservesExpansion(bool isExpanded)
     {
         var store = new ContractWorkflowStore();
-        var first = StageEditState.CreateNew(0, used: true);
+        var first = StageEditState.CreateNew(0, used: isExpanded);
         store.SetContractStageEditStates([first]);
         store.AddStageAfter(first);
 
@@ -153,7 +155,7 @@ public sealed class ContractWorkflowStoreTests
 
         var remaining = Assert.Single(store.ContractStageEditStates, static item => !item.IsDestroyed);
         Assert.Equal(0, remaining.Priority);
-        Assert.True(remaining.Used);
+        Assert.Equal(isExpanded, remaining.Used);
     }
 
     [Fact]
@@ -169,18 +171,72 @@ public sealed class ContractWorkflowStoreTests
     }
 
     [Fact]
-    public void SetActiveStage_KeepsExactlyOneActiveStage()
+    public void SetStageExpanded_AllowsMultipleExpandedStagesAndCollapsingAllWithoutChangingSelection()
     {
         var store = new ContractWorkflowStore();
         var first = StageEditState.CreateNew(1, used: true);
         var second = StageEditState.CreateNew(2);
         store.SetContractStageEditStates([first, second]);
 
-        store.SetActiveStage(second);
+        store.SetStageExpanded(second, true);
+
+        Assert.True(first.Used);
+        Assert.True(second.Used);
+        Assert.Same(first, store.SelectedStageEditState);
+
+        store.SetStageExpanded(first, false);
+        store.SetStageExpanded(second, false);
 
         Assert.False(first.Used);
-        Assert.True(second.Used);
-        Assert.Same(second, store.SelectedStageEditState);
+        Assert.False(second.Used);
+        Assert.Same(first, store.SelectedStageEditState);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddStageAfter_PreservesMultipleExpandedOrAllCollapsedStages(bool isExpanded)
+    {
+        var store = new ContractWorkflowStore();
+        var first = StageEditState.CreateNew(1, used: isExpanded);
+        var second = StageEditState.CreateNew(2, used: isExpanded);
+
+        store.SetContractStageEditStates([first, second]);
+        store.AddStageAfter(second);
+
+        Assert.Equal(isExpanded, first.Used);
+        Assert.Equal(isExpanded, second.Used);
+        Assert.False(store.ContractStageEditStates.Single(stage => stage.Priority == 3).Used);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ResetEditGraph_RestoresSavedExpansionForEveryStage(bool savedExpansion)
+    {
+        var store = new ContractWorkflowStore();
+        store.BeginContractEdit(CreateRow(
+            ("id", 10L),
+            ("status", Status(1, "Подписан")),
+            ("stages", new object[]
+            {
+                new { id = 100L, priority = 1, used = savedExpansion },
+                new { id = 200L, priority = 2, used = savedExpansion }
+            })));
+        Assert.All(store.ContractStageEditStates, stage => Assert.Equal(savedExpansion, stage.Used));
+
+        foreach (var stage in store.ContractStageEditStates)
+        {
+            store.SetStageExpanded(stage, !savedExpansion);
+        }
+
+        store.ResetEditGraph();
+
+        Assert.All(store.ContractStageEditStates, stage =>
+        {
+            Assert.Equal(savedExpansion, stage.Used);
+            Assert.False(stage.HasChanges);
+        });
     }
 
     [Fact]
@@ -191,7 +247,7 @@ public sealed class ContractWorkflowStoreTests
         var second = StageEditState.CreateNew(2);
         var third = StageEditState.CreateNew(3);
         store.SetContractStageEditStates([third, first, second]);
-        store.SetActiveStage(second);
+        Assert.True(store.TrySelectAdjacentStageEditState(1));
 
         Assert.True(store.TrySelectAdjacentStageEditState(-1));
         Assert.Same(first, store.SelectedStageEditState);
@@ -203,6 +259,26 @@ public sealed class ContractWorkflowStoreTests
         Assert.True(store.TrySelectAdjacentStageEditState(1));
         Assert.Same(third, store.SelectedStageEditState);
         Assert.False(store.TrySelectAdjacentStageEditState(1));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void SetStageExpanded_SerializesOnlyChangedExpansionAndIdentity(bool isExpanded)
+    {
+        var store = new ContractWorkflowStore();
+        var stage = StageEditState.FromRow(CreateRow(
+            ("id", 100L), ("list_key", "stage-key"), ("used", !isExpanded)));
+        store.SetContractStageEditStates([stage]);
+
+        store.SetStageExpanded(stage, isExpanded);
+        var payload = StageCommerEditPayloadBuilder.BuildForUpdate(stage, [], null, null);
+
+        Assert.True(stage.HasChanges);
+        Assert.Equal(3, payload.Count);
+        Assert.Equal(100L, payload["id"]);
+        Assert.Equal("stage-key", payload["list_key"]);
+        Assert.Equal(isExpanded, payload["used"]);
     }
 
     [Fact]

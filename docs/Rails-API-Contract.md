@@ -41,6 +41,18 @@
   persisted Stage or Revision fields.
 - Do not send expanded read-model fields such as `comments`, `contract`, `status`, `task_kind`, `tasks`, `revision`, `revisions`, `stages`.
 
+## Stage expansion in the contract editor
+
+- `Stage.used` stores whether the stage branch is expanded in the contract editor.
+  Multiple stages may have `used: true`; all stages may have `used: false`.
+- Opening or rebuilding the editor reads this value without changing it. User expansion or
+  collapse changes only that stage's edit state, independently of the selected stage.
+- Expansion changes are persisted by the ordinary Save action through the existing explicit
+  Stage payload builder and `ModelMutationService`; cancellation discards unsaved changes.
+- Adding or deleting another stage must not normalize existing `used` values to a single active stage.
+- This describes the desktop client's contract; server-side acceptance of multiple `used: true`
+  values must also be maintained. `Revision.used` retains its existing meaning.
+
 ## Automatic workflow audit entries
 
 - Automatic workflow changes are recorded by creating a separate `Audit` row after the related
