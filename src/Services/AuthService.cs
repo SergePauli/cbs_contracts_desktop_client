@@ -60,6 +60,7 @@ namespace CbsContractsDesktopClient.Services
                 {
                     Id = authResponse.User.Id,
                     ProfileId = authResponse.User.GetProfileId(),
+                    PersonId = authResponse.User.GetPersonId(),
                     Username = authResponse.User.Name ?? username,
                     FullName = authResponse.User.GetFullName() ?? authResponse.User.Name ?? username,
                     Email = authResponse.User.GetEmail(),
@@ -272,6 +273,13 @@ namespace CbsContractsDesktopClient.Services
             }
 
             return null;
+        }
+
+        public int? GetPersonId()
+        {
+            return TryGetNestedProperty("person", "id", out var personId)
+                ? personId
+                : null;
         }
 
         public string? GetFullName()

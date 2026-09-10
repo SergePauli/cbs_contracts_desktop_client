@@ -59,6 +59,7 @@ public class AuthServiceTests
                 "email": "tester@example.com",
                 "role": "admin",
                 "person": {
+                  "id": 17,
                   "full_name": "Иванов Иван Иванович"
                 },
                 "department": {
@@ -80,6 +81,7 @@ public class AuthServiceTests
         Assert.True(response.Success);
         Assert.Equal("tester", response.User.Username);
         Assert.Equal("Иванов Иван Иванович", response.User.FullName);
+        Assert.Equal(17, response.User.PersonId);
         Assert.Equal("tester@example.com", response.User.Email);
         Assert.Equal(7, response.User.DepartmentId);
         Assert.Equal("Отдел продаж", response.User.DepartmentName);

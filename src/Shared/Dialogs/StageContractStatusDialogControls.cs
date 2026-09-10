@@ -13,6 +13,8 @@ public static class StageContractStatusDialogControls
 {
     public static readonly IReadOnlySet<long> StageStatusIds = new HashSet<long>
     {
+        WorkflowStatusIds.Draft,
+        WorkflowStatusIds.Signed,
         WorkflowStatusIds.InProgress,
         WorkflowStatusIds.Done,
         WorkflowStatusIds.Closed,
@@ -221,7 +223,7 @@ public static class StageContractStatusDialogControls
         {
             WorkflowStatusIds.Done or WorkflowStatusIds.Closed => (Color.FromArgb(255, 201, 233, 212), Color.FromArgb(255, 64, 64, 64)),
             WorkflowStatusIds.Annulled => (Color.FromArgb(255, 255, 205, 210), Color.FromArgb(255, 64, 64, 64)),
-            1 or WorkflowStatusIds.InProgress => (Color.FromArgb(254, 194, 237, 246), Color.FromArgb(255, 64, 64, 64)),
+            WorkflowStatusIds.Signed or WorkflowStatusIds.InProgress => (Color.FromArgb(254, 194, 237, 246), Color.FromArgb(255, 64, 64, 64)),
             3 => (Color.FromArgb(254, 246, 227, 194), Color.FromArgb(255, 64, 64, 64)),
             _ => (Color.FromArgb(255, 222, 226, 230), Color.FromArgb(255, 64, 64, 64))
         };

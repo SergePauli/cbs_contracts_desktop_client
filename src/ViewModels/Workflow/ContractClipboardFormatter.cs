@@ -1,4 +1,5 @@
 using System.Globalization;
+using CbsContractsDesktopClient.Models.References;
 using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow;
@@ -9,11 +10,22 @@ public static class ContractClipboardFormatter
 
     public static string BuildForContract(
         ContractEditState contract,
-        RevisionEditState contractRevision)
+        RevisionEditState contractRevision,
+        IReadOnlyList<EmployeeBoxItem> employees)
     {
         ArgumentNullException.ThrowIfNull(contract);
         ArgumentNullException.ThrowIfNull(contractRevision);
-        return $"{BuildContractLine(contract, contractRevision)}{Environment.NewLine}{BuildResponsibleNames(contract)}";
+        var responsibles = contract.ContractResponsibles.Select(responsible =>
+        {
+            var contacts = string.Join(", ", employees
+                .Where(employee => employee.Id == responsible.EmployeeId)
+                .SelectMany(static employee => employee.Contacts));
+            return contacts.Length == 0
+                ? responsible.FullName
+                : $"{responsible.FullName}: {contacts}";
+        });
+        return $"{BuildContractLine(contract, contractRevision)}{Environment.NewLine}"
+            + string.Join(Environment.NewLine, responsibles);
     }
 
     public static string BuildForStage(

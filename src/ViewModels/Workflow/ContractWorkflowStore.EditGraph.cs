@@ -65,7 +65,6 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         {
             ArgumentNullException.ThrowIfNull(stages);
             ContractStageEditStates = stages.OrderBy(static stage => stage.Priority ?? 0).ToList();
-            EnsureSingleActiveStage();
             SelectedStageEditState = ResolveSelectedStageEditState();
         }
 
@@ -145,22 +144,14 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             if (visibleStages.Count == 1)
             {
                 visibleStages[0].Priority = 0;
-                visibleStages[0].Used = true;
             }
 
             SetContractStageEditStates(stages);
         }
 
-        public void SetActiveStage(StageEditState selectedStage)
+        public void SetStageExpanded(StageEditState stage, bool isExpanded)
         {
-            ArgumentNullException.ThrowIfNull(selectedStage);
-
-            foreach (var stage in ContractStageEditStates.Where(static stage => !stage.IsDestroyed))
-            {
-                stage.Used = ReferenceEquals(stage, selectedStage);
-            }
-
-            SelectedStageEditState = selectedStage;
+            stage.Used = isExpanded;
         }
 
         public void SelectStageEditState(TableDataRow selectedStage)
@@ -353,22 +344,6 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             return ContractStageEditStates.FirstOrDefault(static stage => !stage.IsDestroyed);
         }
 
-        private void EnsureSingleActiveStage()
-        {
-            var visibleStages = ContractStageEditStates.Where(static stage => !stage.IsDestroyed).ToList();
-            if (visibleStages.Count == 0)
-            {
-                return;
-            }
-
-            var activeStage = visibleStages.FirstOrDefault(static stage => stage.Used)
-                ?? visibleStages.OrderBy(static stage => stage.Priority ?? 0).First();
-            foreach (var stage in visibleStages)
-            {
-                stage.Used = ReferenceEquals(stage, activeStage);
-            }
-        }
-
         private static IReadOnlyList<StageEditState> ReadStageEditStates(TableDataRow? contract)
         {
             if (contract is null || contract.IsPlaceholder)
@@ -399,7 +374,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             }
 
             wasRepaired |= !IsNewContractEditGraph();
-            var firstStage = StageEditState.CreateNew(1, used: visibleStages.All(static stage => !stage.Used));
+            var firstStage = StageEditState.CreateNew(1, used: true);
             return [firstStage, .. stages];
         }
 

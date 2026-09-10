@@ -9,6 +9,9 @@ public sealed class ContactTypeClassifierTests
     [InlineData("ivan@example.com", "Email", "mailto:ivan@example.com")]
     [InlineData("+7 999 123 45 67", "Phone", "tel:+7 999 123 45 67")]
     [InlineData("example.ru", "SiteUrl", "http://example.ru/")]
+    [InlineData("some_one.com", "SiteUrl", "http://some_one.com/")]
+    [InlineData("someone.dns-shope.ru", "SiteUrl", "http://someone.dns-shope.ru/")]
+    [InlineData("a.ru", "SiteUrl", "http://a.ru/")]
     [InlineData("@employee_support", "Telegram", "tg://resolve/?domain=employee_support")]
     public void TryClassify_RecognizesSupportedContactTypes(string value, string expectedType, string expectedUri)
     {

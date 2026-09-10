@@ -4,19 +4,24 @@ using CbsContractsDesktopClient.Views.Controls;
 using CbsContractsDesktopClient.Views.References;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Pauli.WinUiKit.Controls;
 using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
 
 namespace CbsContractsDesktopClient.Views.Orders
 {
-    public sealed class OrderEditDialog : AppEditDialog
+    public sealed partial class OrderEditDialog : AppEditDialog
     {
         private readonly OrderEditViewModel _vm;
         private readonly Dropdown _status = new();
+        private readonly Flyout _costMismatchFlyout;
 
         public OrderEditDialog(OrderEditViewModel viewModel)
         {
+            InitializeComponent();
             _vm = viewModel;
+            _costMismatchFlyout = (Flyout)Resources["CostMismatchFlyout"];
+            ((FrameworkElement)_costMismatchFlyout.Content).DataContext = viewModel;
             DataContext = viewModel;
             Title = viewModel.State.IsCreateMode ? "Создание заказа" : "Редактирование заказа";
             Resources["ContentDialogMinWidth"] = 720d;
@@ -57,6 +62,8 @@ namespace CbsContractsDesktopClient.Views.Orders
             Add(grid, BuildLabeledControl("Статус *", _status, 3), 0, 1);
             var cost = BuildMoneyInputTextBox();
             cost.SetBinding(TextBox.TextProperty, TwoWay(nameof(OrderEditViewModel.CostText)));
+            cost.GotFocus += Cost_GotFocus;
+            cost.TextChanged += (_, _) => _costMismatchFlyout.Hide();
             Add(grid, BuildLabeledControl("Сумма", cost, 3), 0, 2);
 
             var supplier = DialogLookupEditors.BuildAutoSuggestBox(
@@ -97,6 +104,38 @@ namespace CbsContractsDesktopClient.Views.Orders
             _status.IsClearButtonEnabled = false;
             _status.ItemsSource = _vm.StatusOptions;
             _status.SelectedItem = _vm.SelectedStatus;
+        }
+
+        private void Cost_GotFocus(object sender, RoutedEventArgs args)
+        {
+            if (_vm.State.IsCreateMode || _costMismatchFlyout.IsOpen) return;
+            decimal? difference;
+            try
+            {
+                difference = _vm.GetCostDifference();
+            }
+            catch (FormatException)
+            {
+                ShowErrorInfo("Введите корректную сумму заказа.");
+                return;
+            }
+            catch (OverflowException)
+            {
+                ShowErrorInfo("Сумма заказа выходит за допустимый диапазон.");
+                return;
+            }
+            if (difference == 0m) return;
+            _vm.CostDifferenceText = difference?.ToString("+0.00;-0.00;0.00") ?? "сумма заказа не указана";
+            _costMismatchFlyout.ShowAt((FrameworkElement)sender, new FlyoutShowOptions
+            {
+                ShowMode = FlyoutShowMode.Transient
+            });
+        }
+
+        private void ApplyCalculatedCost_Click(object sender, RoutedEventArgs args)
+        {
+            _vm.ApplyCalculatedCost();
+            _costMismatchFlyout.Hide();
         }
 
         private static CalendarInput DateEditor(DateTimeOffset? value, Action<DateTimeOffset?> setValue)

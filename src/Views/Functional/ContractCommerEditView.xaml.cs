@@ -34,5 +34,7 @@ public sealed partial class ContractCommerEditView : UserControl
     public ContentControl ScanLinkRowSlot => ScanLinkRowHost;
     public ContentControl ProtocolLinkRowSlot => ProtocolLinkRowHost;
     public ContentControl StagesTabSlot => StagesTabContentHost;
+    public Button ToggleStagesExpansion => ToggleStagesExpansionButton;
+    public FontIcon StagesExpansionIcon => ToggleStagesExpansionIcon;
     public ContentControl RevisionsTabSlot => RevisionsTabContentHost;
 }

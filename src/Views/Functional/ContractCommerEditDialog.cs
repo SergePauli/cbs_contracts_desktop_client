@@ -82,6 +82,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             .Where(static stage => !stage.IsDestroyed)
             .ToList();
         private TreeView? _stagesTree;
+        private IReadOnlyList<ContractStageTreeItem> _stageTreeItems = [];
         private StackPanel? _revisionsStack;
         private TabView? _tabs;
         private TabViewItem? _contractTab;
@@ -98,7 +99,6 @@ namespace CbsContractsDesktopClient.Views.Functional
         private readonly bool _openRevisionsTabOnLoad;
         private bool _isSyncingTaskKindSelection;
         private bool _contractClosePreviewApplied;
-        private bool _contractCloseCommentApplied;
 
         public ContractCommerEditDialog(
             ContractWorkflowStore workflowStore,
@@ -292,6 +292,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.CommentSlot.Content = _commentBox;
             view.ResetChangesSlot.Content = _isCreateMode ? null : _resetChangesButton;
             PopulateContractTab(view);
+            view.ToggleStagesExpansion.Click += (_, _) => ToggleAllStagesExpansion();
             view.StagesTabSlot.Content = BuildStagesTabContent();
             view.RevisionsTabSlot.Content = BuildRevisionsTabContent();
 
@@ -587,9 +588,62 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void SignedAtEditor_DateChanged(object? sender, EventArgs e)
         {
+            var stages = StageEditors;
+            var previousValues = stages.ToDictionary(
+                static stage => stage,
+                static stage => (stage.Status.Id, stage.StartAt, stage.DeadlineAt));
             ApplyContractSignedDateToEmptyStageStarts();
             ApplyContractSignedStatusToEmptyStageStatuses();
             ApplyStageDeadlineBusinessLogicToAll(applyInitialStart: false);
+
+            var statusChangeCount = stages.Count(stage =>
+            {
+                var previous = previousValues[stage];
+                return previous.Id != stage.Status.Id;
+            });
+            var deadlinesChanged = stages.Any(stage =>
+            {
+                var previous = previousValues[stage];
+                return !SameDate(previous.StartAt, stage.StartAt)
+                    || !SameDate(previous.DeadlineAt, stage.DeadlineAt);
+            });
+            if (statusChangeCount > 0 || deadlinesChanged)
+            {
+                var contract = _workflowStore.SelectedContractEditState
+                    ?? throw new InvalidOperationException("ContractCommerEditDialog.SignedAtEditor_DateChanged: SelectedContractEditState is not set.");
+                contract.SetAutomationCauseAudit(
+                    "signed_at",
+                    BuildContractSignedAutomationDetail(statusChangeCount, deadlinesChanged),
+                    AppFormatters.FormatDisplayDate(contract.Original.SignedAt),
+                    AppFormatters.FormatDisplayDate(_signedAtEditor.Date));
+            }
+        }
+
+        private static string BuildContractSignedAutomationDetail(int statusChangeCount, bool deadlinesChanged)
+        {
+            if (statusChangeCount == 0)
+            {
+                return "Изменение даты подписания запустило автоматическое изменение сроков этапов";
+            }
+
+            var statusText = statusChangeCount == 1 ? "статуса" : "статусов";
+            if (deadlinesChanged)
+            {
+                return $"Изменение даты подписания запустило автоматическое изменение {statusText} и сроков этапов";
+            }
+
+            var stageText = statusChangeCount == 1 ? "этапа" : "этапов";
+            return $"Изменение даты подписания запустило автоматическое изменение {statusText} {stageText}";
+        }
+
+        private static bool SameDate(DateTimeOffset? left, DateTimeOffset? right)
+        {
+            if (left is null || right is null)
+            {
+                return left is null && right is null;
+            }
+
+            return left.Value.Date == right.Value.Date;
         }
 
         private void SignedAtEditor_OnTab(CalendarInput editor, KeyRoutedEventArgs args)
@@ -1145,12 +1199,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private void SetActiveStage(StageEditState selectedStage)
-        {
-            _workflowStore.SetActiveStage(selectedStage);
-            RefreshStagesStack();
-        }
-
         private void ResetTaskKindFromContract()
         {
             var selectedCode = GetText(_contract, "task_kind.code", "code");
@@ -1231,6 +1279,24 @@ namespace CbsContractsDesktopClient.Views.Functional
                 || StageEditors.Any(static stage => stage.Priority > 0);
         }
 
+        private void ToggleAllStagesExpansion()
+        {
+            var isExpanded = !_stageTreeItems.All(static item => item.IsExpanded);
+            foreach (var item in _stageTreeItems)
+            {
+                item.IsExpanded = isExpanded;
+            }
+        }
+
+        private void RefreshStagesExpansionButton()
+        {
+            var allExpanded = _stageTreeItems.All(static item => item.IsExpanded);
+            var actionText = allExpanded ? "Свернуть все" : "Развернуть все";
+            _view!.StagesExpansionIcon.Glyph = allExpanded ? "\uE8B7" : "\uE838";
+            ToolTipService.SetToolTip(_view.ToggleStagesExpansion, actionText);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_view.ToggleStagesExpansion, actionText);
+        }
+
         private UIElement BuildStagesTabContent()
         {
             _stagesTree = new TreeView
@@ -1254,28 +1320,28 @@ namespace CbsContractsDesktopClient.Views.Functional
             _firstStageDeadlineKindBox = null;
             _stageCommentBoxes.Clear();
             _contractCommentsBox = null;
-            var items = StageEditors
+            _stageTreeItems = StageEditors
                 .OrderBy(static stage => stage.Priority)
                 .Select(BuildStageTreeItem)
                 .ToList();
-            items.Add(BuildContractCommentsTreeItem());
-            _stagesTree.ItemsSource = items;
+            _stagesTree.ItemsSource = _stageTreeItems.Append(BuildContractCommentsTreeItem()).ToList();
+            RefreshStagesExpansionButton();
         }
 
         private ContractStageTreeItem BuildStageTreeItem(StageEditState stage)
         {
             ContractStageTreeItem? stageItem = null;
-            var isExpanded = _openStagesTabOnLoad
-                ? ReferenceEquals(stage, _workflowStore.SelectedStageEditState)
-                : stage.Used;
+            var supplyTreeItem = BuildStageSupplyTreeItem(stage);
             stageItem = new ContractStageTreeItem(
                 () => BuildStageTreeHeader(GetStageTreeName(stage)),
                 [
-                    new ContractStageTreeItem(() => BuildStageSection(stage, stageItem!)),
+                    new ContractStageTreeItem(() => BuildStageSection(stage, stageItem!, supplyTreeItem)),
                     BuildStageCommentsTreeItem(stage),
-                    BuildStageSupplyTreeItem(stage)
+                    supplyTreeItem
                 ],
-                isExpanded);
+                stage.Used);
+            stageItem.ExpansionChanged += isExpanded => _workflowStore.SetStageExpanded(stage, isExpanded);
+            stageItem.ExpansionChanged += _ => RefreshStagesExpansionButton();
             return stageItem;
         }
 
@@ -1288,13 +1354,26 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private ContractStageTreeItem BuildStageSupplyTreeItem(StageEditState stage)
         {
-            return new ContractStageTreeItem(
+            var treeItem = new ContractStageTreeItem(
                 () => BuildStageTreeHeader("Поставка"),
                 [
                     new ContractStageTreeItem(
                         () => BuildStageSupplyContent(stage),
                         contentMargin: new Thickness(-56, 0, 0, 0))
                 ]);
+            RefreshStageSupplyVisibility(stage, treeItem);
+            return treeItem;
+        }
+
+        private static void RefreshStageSupplyVisibility(StageEditState stage, ContractStageTreeItem supplyTreeItem)
+        {
+            var isVisible = stage.TaskKind.Code == "20";
+            if (!isVisible)
+            {
+                supplyTreeItem.IsExpanded = false;
+            }
+
+            supplyTreeItem.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private FrameworkElement BuildStageSupplyContent(StageEditState stage)
@@ -1467,14 +1546,13 @@ namespace CbsContractsDesktopClient.Views.Functional
             return $"Э{priority}_{stage.TaskKind.Name}";
         }
 
-        private UIElement BuildStageSection(StageEditState stage, ContractStageTreeItem treeItem)
+        private UIElement BuildStageSection(StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
         {
             var grid = new Grid
             {
                 ColumnSpacing = 8,
                 RowSpacing = 8
             };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(46) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
@@ -1490,9 +1568,8 @@ namespace CbsContractsDesktopClient.Views.Functional
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
             var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
-            AddGridChild(grid, BuildInputLineCheckBox(BuildActiveStageCheckBox(stage), "АЭ"), 0, 0);
-            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 1);
-            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem);
+            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 0);
+            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem, supplyTreeItem);
             var stageStatusDropdown = BuildStageStatusDropdown(stage);
             var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
             if (_openStagesTabOnLoad && ReferenceEquals(stage, _workflowStore.SelectedStageEditState))
@@ -1518,28 +1595,28 @@ namespace CbsContractsDesktopClient.Views.Functional
             stageDeadlineEditor.OnTab = (_, args) => FocusStageCostEditor(stageCostEditor, args);
             ApplyStageStartMode(stage, stageStartEditor);
             ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
-            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 2);
-            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 3);
-            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 4);
+            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 1);
+            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 2);
+            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 3);
             AddGridChild(grid, BuildLabeledControl(
                 "Дней",
                 stageDurationEditor,
-                spacing: 3), 0, 5);
-            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 6);
-            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 7);
-            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 8);
+                spacing: 3), 0, 4);
+            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 5);
+            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 6);
+            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 7);
 
             var paymentRow = BuildStagePaymentRow(stage);
             Grid.SetRow(paymentRow, 1);
-            Grid.SetColumnSpan(paymentRow, 10);
+            Grid.SetColumnSpan(paymentRow, 9);
             grid.Children.Add(paymentRow);
 
             var comment = BuildLabeledControl("Комментарий этапа", BuildStageCommentEditor(stage), spacing: 3);
-            AddGridChild(grid, comment, 2, 0, 8);
+            AddGridChild(grid, comment, 2, 0, 7);
 
             var separator = BuildSectionSeparator(null);
             Grid.SetRow(separator, 3);
-            Grid.SetColumnSpan(separator, 10);
+            Grid.SetColumnSpan(separator, 9);
             grid.Children.Add(separator);
 
             return grid;
@@ -1866,33 +1943,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
         }
 
-        private CheckBox BuildActiveStageCheckBox(StageEditState stage)
-        {
-            var hasChoice = StageEditors.Count > 1;
-            var checkBox = new CheckBox
-            {
-                IsChecked = stage.Used,
-                IsEnabled = hasChoice,
-                IsTabStop = hasChoice,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                MinHeight = 0,
-                MinWidth = 0,
-                Padding = new Thickness(0),
-                Margin = new Thickness(0)
-            };
-            checkBox.Checked += (_, _) => SetActiveStage(stage);
-            checkBox.Unchecked += (_, _) =>
-            {
-                if (stage.Used)
-                {
-                    checkBox.IsChecked = true;
-                }
-            };
-
-            return checkBox;
-        }
-
         private static CalendarInput BuildDateEditor(DateTimeOffset? date, Action<DateTimeOffset?>? updateDate = null)
         {
             var editor = new CalendarInput
@@ -1910,7 +1960,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         }
 
 
-        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, ContractStageTreeItem treeItem)
+        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
         {
             var dropdown = new Dropdown
             {
@@ -1940,6 +1990,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 }
 
                 stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
+                RefreshStageSupplyVisibility(stage, supplyTreeItem);
                 treeItem.RefreshContent();
             };
 
@@ -1992,7 +2043,6 @@ namespace CbsContractsDesktopClient.Views.Functional
                 contract.ApplyClosedStatusPreview(stage.ClosedAt);
                 SelectContractStatus(WorkflowStatusIds.Closed);
                 _closedAtEditor.Date = stage.ClosedAt;
-                AppendContractCloseCommentIfNeeded();
                 _contractClosePreviewApplied = true;
                 return;
             }
@@ -2019,25 +2069,6 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             _statusBox.SelectedItem = option;
-        }
-
-        private void AppendContractCloseCommentIfNeeded()
-        {
-            if (_contractCloseCommentApplied)
-            {
-                return;
-            }
-
-            AppendAutomaticContractComment("Статус контракта был изменен автоматически на \"Закрыт\"");
-            _contractCloseCommentApplied = true;
-        }
-
-        private void AppendAutomaticContractComment(string text)
-        {
-            _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
-                ? text
-                : $"{_commentBox.Text.TrimEnd()}; {text}";
-            _commentBox.Select(_commentBox.Text.Length, 0);
         }
 
         private List<TaskKindSelectOption> BuildTaskKindOptions()
@@ -2255,7 +2286,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             foreach (var stage in StageEditors)
             {
-                stage.ApplyInProgressAfterContractSigned();
+                stage.ApplyStatusAfterContractSigned();
             }
         }
 

@@ -20,9 +20,20 @@
         </Grid.RowDefinitions>
 
         <StackPanel Spacing="12">
-            <ContentControl
-                x:Name="ContractTitleHost"
-                HorizontalAlignment="Center" />
+            <Border
+                Margin="0,2,0,0"
+                Padding="4,0"
+                HorizontalAlignment="Stretch">
+                <TextBlock
+                    x:Name="ContractTitleText"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource ShellPrimaryTextBrush}"
+                    LineHeight="18"
+                    TextAlignment="Center"
+                    TextTrimming="CharacterEllipsis"
+                    TextWrapping="NoWrap" />
+            </Border>
 
             <Grid ColumnSpacing="42" RowSpacing="6">
                 <Grid.ColumnDefinitions>
@@ -61,10 +72,25 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Статус" Foreground="{StaticResource ShellSecondaryTextBrush}" />
-                        <ContentControl
-                            x:Name="ContractStatusHost"
+                        <Border
+                            x:Name="ContractStatusBadge"
                             Grid.Column="1"
-                            HorizontalAlignment="Left" />
+                            MinHeight="18"
+                            MaxWidth="160"
+                            Padding="6,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            CornerRadius="4">
+                            <TextBlock
+                                x:Name="ContractStatusText"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                LineHeight="16"
+                                TextAlignment="Center"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap" />
+                        </Border>
                     </Grid>
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
@@ -108,7 +134,12 @@
                     Foreground="{StaticResource ShellPrimaryTextBrush}"
                     TextAlignment="Center"
                     TextTrimming="CharacterEllipsis"
-                    TextWrapping="NoWrap" />
+                    TextWrapping="NoWrap">
+                    <Run x:Name="StageTitleMainRun" />
+                    <Run
+                        x:Name="StageTitleAmountRun"
+                        Foreground="{StaticResource ShellAccentBrush}" />
+                </TextBlock>
                 <Button
                     x:Name="NextStageButton"
                     Grid.Column="3"
@@ -137,10 +168,25 @@
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
                         <TextBlock Text="Статус" Foreground="{StaticResource ShellSecondaryTextBrush}" />
-                        <ContentControl
-                            x:Name="StageStatusHost"
+                        <Border
+                            x:Name="StageStatusBadge"
                             Grid.Column="1"
-                            HorizontalAlignment="Left" />
+                            MinHeight="18"
+                            MaxWidth="160"
+                            Padding="6,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Center"
+                            CornerRadius="4">
+                            <TextBlock
+                                x:Name="StageStatusText"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                LineHeight="16"
+                                TextAlignment="Center"
+                                TextTrimming="CharacterEllipsis"
+                                TextWrapping="NoWrap" />
+                        </Border>
                     </Grid>
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>

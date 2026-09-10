@@ -19,6 +19,7 @@ Workflow rules:
 - Dialogs must not build API update payloads directly; they should collect UI input and delegate change serialization to the entity store/state payload builder.
 - Follow SRP strictly. This is especially important for asynchronous event handlers: memory cleanup, state updates, data loading, and UI invalidation must stay separate unless a single responsibility explicitly requires crossing that boundary.
 - Keep rendering and state mutation strictly separated throughout the project. Methods that render, rebuild, refresh, invalidate, or otherwise update visual controls may only read application/domain state and update view-owned UI state; they must never mutate entity edit state, stores, or API payload state. Perform state transitions only in explicit commands, user-action handlers, or store methods before requesting a render.
+- Avoid dynamically recreating XAML nodes by replacing `Content`. Define stable visual structure in XAML and update the properties of existing elements when displayed state changes.
 
 Rails API rules:
 - Treat `api/index` and `api/count` as read-only query endpoints.

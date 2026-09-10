@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Shared.Formatting;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
@@ -6,6 +7,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 
 public sealed class ContractEditState : IEditState
 {
+    private readonly List<PendingAuditEntry> _pendingAuditEntries = [];
+
     private ContractEditState(ContractEditStateSnapshot original)
     {
         Original = original;
@@ -67,6 +70,38 @@ public sealed class ContractEditState : IEditState
 
     public bool HasChanges => HasExternalNumberChanges;
 
+    public IReadOnlyList<PendingAuditEntry> PendingAuditEntries => _pendingAuditEntries;
+
+    public void SetAutomationCauseAudit(
+        string auditableField,
+        string detail,
+        string before,
+        string after)
+    {
+        if (Id <= 0)
+        {
+            return;
+        }
+
+        var entry = new PendingAuditEntry(
+            "Contract",
+            Id,
+            auditableField,
+            "updated",
+            detail,
+            before,
+            after);
+        var index = _pendingAuditEntries.FindIndex(existing =>
+            string.Equals(existing.AuditableField, auditableField, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            _pendingAuditEntries.Add(entry);
+            return;
+        }
+
+        _pendingAuditEntries[index] = entry;
+    }
+
     public void ApplyClosedStatusPreview(DateTimeOffset? closedAt)
     {
         Status = new StatusEditState(WorkflowStatusIds.Closed, "Закрыт");
@@ -95,6 +130,7 @@ public sealed class ContractEditState : IEditState
         IsMultiStage = Original.IsMultiStage;
         Stages = Original.Stages;
         ContractResponsibles = Original.ContractResponsibles;
+        _pendingAuditEntries.Clear();
     }
 
     public void SetContractResponsibles(IReadOnlyList<ContractResponsibleEditState> contractResponsibles)

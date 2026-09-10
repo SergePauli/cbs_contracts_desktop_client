@@ -97,6 +97,14 @@ namespace CbsContractsDesktopClient.Views.Shell
             return Task.CompletedTask;
         }
 
+        protected override async Task OpenEditDialogAsync(TableDataRow? row)
+        {
+            if (row is not null && Store.CanEditRows)
+            {
+                await ShowEditDialogAsync(false);
+            }
+        }
+
         protected override string BuildSelectedFooterText(TableDataRow row)
         {
             return row.GetValue("name")?.ToString()

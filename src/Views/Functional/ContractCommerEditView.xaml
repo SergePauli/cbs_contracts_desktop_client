@@ -11,6 +11,7 @@
             x:Key="StageTreeItemTemplate"
             x:DataType="functional:ContractStageTreeItem">
             <TreeViewItem
+                Visibility="{x:Bind Visibility, Mode=OneWay}"
                 IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
                 ItemsSource="{x:Bind Children}">
                 <TreeViewItem.Content>
@@ -273,10 +274,34 @@
                         <SolidColorBrush x:Key="TabViewSelectedItemBorderBrush" Color="#DCEBDF" />
                     </TabViewItem.Resources>
                     <Border Background="#EFFFF2">
-                        <ContentControl
-                            x:Name="StagesTabContentHost"
-                            HorizontalContentAlignment="Stretch"
-                            VerticalContentAlignment="Stretch" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="24" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button
+                                x:Name="ToggleStagesExpansionButton"
+                                Width="24"
+                                Height="24"
+                                MinWidth="0"
+                                MinHeight="0"
+                                Margin="0,8,0,0"
+                                Padding="0"
+                                VerticalAlignment="Top"
+                                Background="Transparent"
+                                BorderThickness="0">
+                                <FontIcon
+                                    x:Name="ToggleStagesExpansionIcon"
+                                    FontFamily="{StaticResource SymbolThemeFontFamily}"
+                                    FontSize="14"
+                                    Glyph="&#xE838;" />
+                            </Button>
+                            <ContentControl
+                                x:Name="StagesTabContentHost"
+                                Grid.Column="1"
+                                HorizontalContentAlignment="Stretch"
+                                VerticalContentAlignment="Stretch" />
+                        </Grid>
                     </Border>
                 </TabViewItem>
 

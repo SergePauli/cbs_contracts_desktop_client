@@ -50,22 +50,23 @@ public sealed class StageEditStateTests
     }
 
     [Fact]
-    public void ApplyInProgressAfterContractSigned_FillsEmptyStatusAndAppendsComment()
+    public void ApplyStatusAfterContractSigned_FillsEmptyStatusForNonPaymentStage()
     {
         var stage = StageEditState.FromRow(CreateStageRow(
             ("id", 101L),
             ("status_id", null),
             ("deadline_kind", StageDeadlineBusinessRules.DeadlineWorkingDays)));
 
-        stage.ApplyInProgressAfterContractSigned();
+        var changed = stage.ApplyStatusAfterContractSigned();
 
+        Assert.True(changed);
         Assert.Equal(WorkflowStatusIds.InProgress, stage.Status.Id);
         Assert.Equal("В работе", stage.Status.Name);
-        Assert.Equal("Статус этапа был изменен автоматически на \"В работе\"", stage.Comment);
+        Assert.Empty(stage.Comment);
     }
 
     [Fact]
-    public void ApplyInProgressAfterContractSigned_PreservesExistingStatus()
+    public void ApplyStatusAfterContractSigned_PreservesExistingStatus()
     {
         var stage = StageEditState.FromRow(CreateStageRow(
             ("id", 102L),
@@ -73,8 +74,9 @@ public sealed class StageEditStateTests
             ("status.name", "Заморожен"),
             ("deadline_kind", StageDeadlineBusinessRules.DeadlineWorkingDays)));
 
-        stage.ApplyInProgressAfterContractSigned();
+        var changed = stage.ApplyStatusAfterContractSigned();
 
+        Assert.False(changed);
         Assert.Equal(WorkflowStatusIds.Frozen, stage.Status.Id);
         Assert.Equal("Заморожен", stage.Status.Name);
         Assert.Empty(stage.Comment);
@@ -83,17 +85,53 @@ public sealed class StageEditStateTests
     [Theory]
     [InlineData(StageDeadlineBusinessRules.DeadlineCalendarPrepayment)]
     [InlineData(StageDeadlineBusinessRules.DeadlineWorkingPrepayment)]
-    public void ApplyInProgressAfterContractSigned_PreservesEmptyStatusForPrepaymentMode(string deadlineKind)
+    public void ApplyStatusAfterContractSigned_PreservesEmptyStatusForPrepaymentMode(string deadlineKind)
     {
         var stage = StageEditState.FromRow(CreateStageRow(
             ("id", 103L),
             ("status_id", null),
             ("deadline_kind", deadlineKind)));
 
-        stage.ApplyInProgressAfterContractSigned();
+        var changed = stage.ApplyStatusAfterContractSigned();
 
+        Assert.False(changed);
         Assert.Null(stage.Status.Id);
         Assert.Empty(stage.Comment);
+    }
+
+    [Fact]
+    public void ApplyStatusAfterContractSigned_ChangesDraftStatusToSigned()
+    {
+        var stage = StageEditState.FromRow(CreateStageRow(
+            ("id", 104L),
+            ("status_id", WorkflowStatusIds.Draft),
+            ("status.name", "В проекте"),
+            ("deadline_kind", StageDeadlineBusinessRules.DeadlineWorkingDays)));
+
+        var changed = stage.ApplyStatusAfterContractSigned();
+
+        Assert.True(changed);
+        Assert.Equal(WorkflowStatusIds.Signed, stage.Status.Id);
+        Assert.Equal("Подписан", stage.Status.Name);
+        Assert.Empty(stage.Comment);
+    }
+
+    [Fact]
+    public void SetAutomationCauseAudit_ReplacesEntryForSameCauseField()
+    {
+        var stage = StageEditState.FromRow(CreateStageRow(("id", 105L)));
+
+        stage.SetAutomationCauseAudit("payment_at", "Первое изменение", "-", "01.09.2026");
+        stage.SetAutomationCauseAudit("payment_at", "Изменены статус и сроки этапа", "-", "02.09.2026");
+
+        var audit = Assert.Single(stage.PendingAuditEntries);
+        Assert.Equal("Stage", audit.AuditableType);
+        Assert.Equal(105L, audit.AuditableId);
+        Assert.Equal("payment_at", audit.AuditableField);
+        Assert.Equal("updated", audit.Action);
+        Assert.Equal("Изменены статус и сроки этапа", audit.Detail);
+        Assert.Equal("-", audit.Before);
+        Assert.Equal("02.09.2026", audit.After);
     }
 
     private static TableDataRow CreateStageRow(params (string Key, object? Value)[] values)

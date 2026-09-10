@@ -1,5 +1,7 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Mutations;
+using CbsContractsDesktopClient.Stores.Table;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow;
@@ -11,11 +13,16 @@ public sealed class ContractCommerSaveWorkflow
     private const string ContractModel = "Contract";
     private const string StageModel = "Stage";
     private const string RevisionModel = "Revision";
+    private const string AuditModel = "Audit";
     private readonly IModelMutationService _modelMutationService;
+    private readonly IUserService _userService;
 
-    public ContractCommerSaveWorkflow(IModelMutationService modelMutationService)
+    public ContractCommerSaveWorkflow(
+        IModelMutationService modelMutationService,
+        IUserService userService)
     {
         _modelMutationService = modelMutationService;
+        _userService = userService;
     }
 
     public async Task<ContractCommerSaveResult> SaveAsync(
@@ -60,6 +67,21 @@ public sealed class ContractCommerSaveWorkflow
         foreach (var payload in plan.RevisionUpdatePayloads)
         {
             await _modelMutationService.UpdateAsync(RevisionModel, payload, cancellationToken);
+        }
+
+        if (plan.AuditEntries.Count > 0)
+        {
+            var user = _userService.CurrentUser
+                ?? throw new InvalidOperationException("Не удалось определить пользователя для аудита.");
+            var personId = user.PersonId
+                ?? throw new InvalidOperationException("Не удалось определить person_id пользователя для аудита.");
+            foreach (var entry in plan.AuditEntries)
+            {
+                await _modelMutationService.CreateAsync(
+                    AuditModel,
+                    AuditCreatePayloadBuilder.Build(entry, user.Id, personId),
+                    cancellationToken);
+            }
         }
 
         return new ContractCommerSaveResult(contractId, contractMutationRow);

@@ -32,14 +32,31 @@ public sealed class ContractClipboardFormatterTests
         var contract = CreateContractState(signedAt: null);
         var revision = RevisionEditState.CreateNew(0, "Дополнительное соглашение");
 
-        var text = ContractClipboardFormatter.BuildForContract(contract, revision);
+        var text = ContractClipboardFormatter.BuildForContract(contract, revision, []);
 
         Assert.Equal(
             $"ООО Ромашка Дополнительное соглашение EXT-77{Environment.NewLine}"
-            + "Иванов Иван Иванович, Петров Пётр Петрович",
+            + $"Иванов Иван Иванович{Environment.NewLine}Петров Пётр Петрович",
             text);
         Assert.DoesNotContain(" от ", text);
         Assert.DoesNotContain("Ошибочный тип", text);
+    }
+
+    [Fact]
+    public void BuildForContract_IncludesOnlyResponsibleContactsAndKeepsSeparateLines()
+    {
+        var text = ContractClipboardFormatter.BuildForContract(
+            CreateContractState(null), RevisionEditState.CreateNew(0, "Договор"),
+            [
+                new EmployeeBoxItem { Id = 999, Contacts = ["unrelated@example.com"] },
+                new EmployeeBoxItem { Id = 102, Contacts = [] },
+                new EmployeeBoxItem { Id = 101, Contacts = ["ivan@example.com", "+7 999 123 45 67"] }
+            ]);
+
+        Assert.EndsWith(
+            $"Иванов Иван Иванович: ivan@example.com, +7 999 123 45 67{Environment.NewLine}Петров Пётр Петрович",
+            text);
+        Assert.DoesNotContain("unrelated@example.com", text);
     }
 
     private static ContractEditState CreateContractState(string? signedAt)

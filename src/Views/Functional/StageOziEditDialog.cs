@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Models.Table;
 using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Services.Orders;
@@ -61,7 +62,6 @@ public sealed class StageOziEditDialog : AppEditDialog
     private readonly TreeView _branchesTree = new();
     private bool _isApplyingBusinessLogic;
     private bool _businessLogicHandlersAttached;
-    private bool _contractCloseCommentApplied;
 
     public StageOziEditDialog(
         StageEditState stage,
@@ -103,10 +103,22 @@ public sealed class StageOziEditDialog : AppEditDialog
 
     public long Id => _stage.Id;
 
+    public IReadOnlyList<PendingAuditEntry> PendingAuditEntries =>
+        _stage.PendingAuditEntries
+            .Concat(_contract?.PendingAuditEntries ?? [])
+            .ToList();
+
     public bool ShouldCloseContract()
     {
         SyncStageStateFromEditors();
-        return _shouldCloseContractAfterSelectedStageClosed();
+        var shouldCloseContract = _shouldCloseContractAfterSelectedStageClosed();
+        if (shouldCloseContract)
+        {
+            RequireContract().ApplyClosedStatusPreview(_closedAtEditor.Date);
+        }
+        UpdateContractCloseAutomationAudit(shouldCloseContract);
+
+        return shouldCloseContract;
     }
 
     public IReadOnlyDictionary<string, object?> BuildContractClosePayload()
@@ -662,7 +674,6 @@ public sealed class StageOziEditDialog : AppEditDialog
     private void SyncStageStateFromEditors()
     {
         SyncStageStateFromEditorsCore();
-        AppendContractCloseCommentIfNeeded();
     }
 
     private void ApplyContractClosePreview()
@@ -672,13 +683,30 @@ public sealed class StageOziEditDialog : AppEditDialog
         if (_shouldCloseContractAfterSelectedStageClosed())
         {
             contract.ApplyClosedStatusPreview(_closedAtEditor.Date);
+            UpdateContractCloseAutomationAudit(shouldCloseContract: true);
         }
         else
         {
             contract.RestoreStatusPreview();
+            UpdateContractCloseAutomationAudit(shouldCloseContract: false);
         }
 
         UpdateContractSummaryPanel();
+    }
+
+    private void UpdateContractCloseAutomationAudit(bool shouldCloseContract)
+    {
+        if (!shouldCloseContract)
+        {
+            _stage.RemoveAutomationCauseAudit("status");
+            return;
+        }
+
+        _stage.SetAutomationCauseAudit(
+            "status",
+            "Изменение статуса этапа запустило автоматическое изменение статуса и даты закрытия контракта",
+            _stage.Original.Status.Name ?? "-",
+            GetSelectedStatusOption()?.Label ?? "-");
     }
 
     private void SyncStageStateFromEditorsCore()
@@ -693,26 +721,6 @@ public sealed class StageOziEditDialog : AppEditDialog
         _stage.RegistryQuarter = _toRegistryBox.IsChecked == true ? TryGetInt(_registryQuarterBox.Text) : null;
         _stage.RegistryYear = _toRegistryBox.IsChecked == true ? TryGetInt(_registryYearBox.Text) : null;
         _stage.Performers = BuildSelectedPerformers();
-    }
-
-    private void AppendContractCloseCommentIfNeeded()
-    {
-        if (_contractCloseCommentApplied
-            || !_shouldCloseContractAfterSelectedStageClosed())
-        {
-            return;
-        }
-
-        AppendAutomaticComment("Статус контракта был изменен автоматически на \"Закрыт\"");
-        _contractCloseCommentApplied = true;
-    }
-
-    private void AppendAutomaticComment(string text)
-    {
-        _commentBox.Text = string.IsNullOrWhiteSpace(_commentBox.Text)
-            ? text
-            : $"{_commentBox.Text.TrimEnd()}; {text}";
-        _commentBox.Select(_commentBox.Text.Length, 0);
     }
 
     private IReadOnlyList<StagePerformerEditState> BuildSelectedPerformers()

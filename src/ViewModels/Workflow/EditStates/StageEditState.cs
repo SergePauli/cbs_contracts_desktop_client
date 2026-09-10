@@ -1,4 +1,5 @@
 using CbsContractsDesktopClient.Models.References;
+using CbsContractsDesktopClient.Models.Shell;
 using CbsContractsDesktopClient.Shared.Formatting;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
@@ -6,6 +7,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 
 public sealed class StageEditState : IEditState
 {
+    private readonly List<PendingAuditEntry> _pendingAuditEntries = [];
+
     private StageEditState(StageEditStateSnapshot original)
     {
         Original = original;
@@ -77,6 +80,8 @@ public sealed class StageEditState : IEditState
     public string Comment { get; set; } = string.Empty;
 
     public bool IsDestroyed { get; set; }
+
+    public IReadOnlyList<PendingAuditEntry> PendingAuditEntries => _pendingAuditEntries;
 
     public DateTimeOffset? PaymentBaseDate => PrepaymentAt ?? PaymentAt;
 
@@ -157,6 +162,7 @@ public sealed class StageEditState : IEditState
         Performers = Original.Performers;
         Comment = string.Empty;
         IsDestroyed = false;
+        _pendingAuditEntries.Clear();
     }
 
     public bool IsLastOpenStageIn(ContractEditState? contract, long closedStatusId)
@@ -176,18 +182,76 @@ public sealed class StageEditState : IEditState
         return Status.Id == statusId && Original.Status.Id != statusId;
     }
 
-    public void ApplyInProgressAfterContractSigned()
+    public bool ApplyStatusAfterContractSigned()
     {
+        if (Status.Id == WorkflowStatusIds.Draft)
+        {
+            Status = new StatusEditState(WorkflowStatusIds.Signed, "Подписан");
+            return true;
+        }
+
         if (Status.Id is not null || StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(DeadlineKind))
+        {
+            return false;
+        }
+
+        return ApplyInProgress();
+    }
+
+    public bool ApplyInProgressAfterPayment(
+        DateTimeOffset? paymentAt,
+        DateTimeOffset? prepaymentAt)
+    {
+        if (Status.Id is not null
+            || !StageDeadlineBusinessRules.IsPaymentBasedDeadlineMode(DeadlineKind)
+            || (prepaymentAt ?? paymentAt) is null)
+        {
+            return false;
+        }
+
+        return ApplyInProgress();
+    }
+
+    private bool ApplyInProgress()
+    {
+        Status = new StatusEditState(WorkflowStatusIds.InProgress, "В работе");
+        return true;
+    }
+
+    public void SetAutomationCauseAudit(
+        string auditableField,
+        string detail,
+        string before,
+        string after)
+    {
+        if (Id <= 0)
         {
             return;
         }
 
-        Status = new StatusEditState(WorkflowStatusIds.InProgress, "В работе");
-        const string comment = "Статус этапа был изменен автоматически на \"В работе\"";
-        Comment = string.IsNullOrWhiteSpace(Comment)
-            ? comment
-            : $"{Comment.TrimEnd()}; {comment}";
+        var entry = new PendingAuditEntry(
+            "Stage",
+            Id,
+            auditableField,
+            "updated",
+            detail,
+            before,
+            after);
+        var index = _pendingAuditEntries.FindIndex(existing =>
+            string.Equals(existing.AuditableField, auditableField, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            _pendingAuditEntries.Add(entry);
+            return;
+        }
+
+        _pendingAuditEntries[index] = entry;
+    }
+
+    public void RemoveAutomationCauseAudit(string auditableField)
+    {
+        _pendingAuditEntries.RemoveAll(existing =>
+            string.Equals(existing.AuditableField, auditableField, StringComparison.OrdinalIgnoreCase));
     }
 
     public bool ShouldCloseContract(ContractEditState? contract, long closedStatusId)
@@ -242,6 +306,7 @@ public sealed class StageEditState : IEditState
         return new StageFinEditPayloadInput(
             Id,
             ListKey,
+            Status.Id,
             PaymentAt,
             PrepaymentAt,
             InvoiceAt,

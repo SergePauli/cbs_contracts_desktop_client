@@ -51,7 +51,8 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ?? throw new InvalidOperationException("ContractDetailView.BuildClipboardText: SelectedContractEditState is not set.");
             return ContractClipboardFormatter.BuildForContract(
                 contractState,
-                _contractWorkflowStore.GetContractDocumentRevisionEditState());
+                _contractWorkflowStore.GetContractDocumentRevisionEditState(),
+                _contragentDetailStore.Employees);
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)

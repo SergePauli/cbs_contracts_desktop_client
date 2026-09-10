@@ -35,8 +35,8 @@ public sealed class StageFinEditDialogTests
         var xaml = File.ReadAllText(ViewPath);
 
         Assert.Contains("public sealed class StageFinEditDialog : AppEditDialog", code);
-        Assert.Contains("BuildDialogSectionTitle(RequireContract().GetSectionTitle())", code);
-        Assert.Contains("x:Name=\"ContractTitleHost\"", xaml);
+        Assert.Contains("_view.ContractTitleValue.Text = RequireContract().GetSectionTitle();", code);
+        Assert.Contains("x:Name=\"ContractTitleText\"", xaml);
         Assert.Contains("x:Name=\"StageTitleText\"", xaml);
         Assert.Contains("TextAlignment=\"Center\"", xaml);
         Assert.Contains("_stage.GetSectionTitleAmount(_contract)", code);
@@ -50,8 +50,9 @@ public sealed class StageFinEditDialogTests
     {
         var code = File.ReadAllText(DialogPath);
 
-        Assert.Contains("RequireContract().Status.Name!", code);
-        Assert.Contains("RequireContract().Status.Id", code);
+        Assert.Contains("var contract = RequireContract();", code);
+        Assert.Contains("ResolveStatusBadgeColors(contract.Status.Id)", code);
+        Assert.Contains(": contract.Status.Name;", code);
         Assert.Contains("_view.StartAtValue.Text = FormatSummaryValue(FormatDisplayDate(_startAt));", code);
         Assert.DoesNotContain("ResolveContractStatusName", code);
         Assert.DoesNotContain("ResolveContractStatusId", code);

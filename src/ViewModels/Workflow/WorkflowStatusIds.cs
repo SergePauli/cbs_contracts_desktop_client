@@ -2,6 +2,8 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow;
 
 public static class WorkflowStatusIds
 {
+    public const long Draft = 0;
+    public const long Signed = 1;
     public const long InProgress = 2;
     public const long Done = 4;
     public const long Closed = 5;

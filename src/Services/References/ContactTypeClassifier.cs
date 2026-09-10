@@ -78,7 +78,7 @@ namespace CbsContractsDesktopClient.Services.References
         [GeneratedRegex("""\d{1}[\- ]?\d{1}[\- ]?\d{1}[\- ]?\d{1}[\- ]?\d{1}(([\- ]?\d{1})?[\- ]?\d{1})?""", RegexOptions.IgnoreCase)]
         private static partial Regex ShortPhoneRegex();
 
-        [GeneratedRegex("""^[a-zA-Z\u0400-\u04FF0-9][a-zA-Z\u0400-\u04FF0-9-]{1,61}[a-zA-Z\u0400-\u04FF0-9](?:\.[a-zA-Z\u0400-\u04FF]{2,})+$""", RegexOptions.IgnoreCase)]
+        [GeneratedRegex("""^(?:[a-zA-Z\u0400-\u04FF0-9](?:[a-zA-Z\u0400-\u04FF0-9_-]{0,61}[a-zA-Z\u0400-\u04FF0-9])?\.)+[a-zA-Z\u0400-\u04FF]{2,}$""", RegexOptions.IgnoreCase)]
         private static partial Regex SiteUrlRegex();
 
         [GeneratedRegex(""".*\B@(?=\w{5,64}\b)[a-zA-Z0-9]+(?:_[a-zA-Z0-9]+)*.*""", RegexOptions.IgnoreCase)]

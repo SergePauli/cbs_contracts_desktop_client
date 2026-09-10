@@ -11,8 +11,10 @@ public sealed class StageContractStatusDialogControlsTests
     {
         var options = new[]
         {
+            Option(0, "Draft"),
             Option(1, "Signed"),
             Option(2, "In progress"),
+            Option(3, "Not allowed for stages"),
             Option(4, "Ready"),
             Option(5, "Closed"),
             Option(6, "Rejected"),
@@ -21,7 +23,7 @@ public sealed class StageContractStatusDialogControlsTests
 
         var result = StageContractStatusDialogControls.BuildStageStatusOptions(options);
 
-        Assert.Equal([null, 2L, 4L, 5L, 6L, 7L], result.Select(static item => item.Value).ToList());
+        Assert.Equal([null, 0L, 1L, 2L, 4L, 5L, 6L, 7L], result.Select(static item => item.Value).ToList());
     }
 
     [Fact]

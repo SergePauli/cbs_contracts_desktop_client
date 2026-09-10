@@ -15,7 +15,9 @@ public sealed class ContractSigningDialogTests
 
         Assert.Contains("ApplyContractSignedDateToEmptyStageStarts();", code);
         Assert.Contains("ApplyContractSignedStatusToEmptyStageStatuses();", code);
-        Assert.Contains("stage.ApplyInProgressAfterContractSigned();", code);
+        Assert.Contains("stage.ApplyStatusAfterContractSigned();", code);
         Assert.Contains("StageDeadlineBusinessRules.ResolveStartAfterContractSigned", code);
+        Assert.Contains("BuildContractSignedAutomationDetail", code);
+        Assert.Contains("SetAutomationCauseAudit", code);
     }
 }
