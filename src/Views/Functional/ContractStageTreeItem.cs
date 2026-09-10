@@ -32,6 +32,23 @@ public sealed class ContractStageTreeItem : INotifyPropertyChanged
 
     public IReadOnlyList<ContractStageTreeItem> Children { get; }
 
+    private Visibility _visibility = Visibility.Visible;
+
+    public Visibility Visibility
+    {
+        get => _visibility;
+        set
+        {
+            if (_visibility == value)
+            {
+                return;
+            }
+
+            _visibility = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Visibility)));
+        }
+    }
+
     private bool _isExpanded;
 
     public bool IsExpanded

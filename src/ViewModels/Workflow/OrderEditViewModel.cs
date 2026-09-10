@@ -34,6 +34,20 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         }
 
         public OrderEditState State { get; }
+        public decimal CalculatedCost { get; set; }
+        public string CalculatedCostText => CalculatedCost.ToString("N2");
+        [ObservableProperty] public partial string CostDifferenceText { get; set; } = string.Empty;
+
+        public decimal? GetCostDifference()
+        {
+            var enteredCost = string.IsNullOrWhiteSpace(CostText)
+                ? (decimal?)null
+                : decimal.Parse(CostText.Replace(',', '.'), System.Globalization.CultureInfo.InvariantCulture);
+            return enteredCost is null ? null : enteredCost.Value - CalculatedCost;
+        }
+
+        public void ApplyCalculatedCost() =>
+            CostText = CalculatedCost.ToString(System.Globalization.CultureInfo.InvariantCulture);
         public IReadOnlyList<CbsTableFilterOptionDefinition> StatusOptions { get; }
         public IReadOnlyList<string> ContragentSuggestionLabels => ContragentOptions.Select(static option => option.Label).ToList();
 

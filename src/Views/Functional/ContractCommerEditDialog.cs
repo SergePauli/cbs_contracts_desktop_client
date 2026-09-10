@@ -82,6 +82,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             .Where(static stage => !stage.IsDestroyed)
             .ToList();
         private TreeView? _stagesTree;
+        private IReadOnlyList<ContractStageTreeItem> _stageTreeItems = [];
         private StackPanel? _revisionsStack;
         private TabView? _tabs;
         private TabViewItem? _contractTab;
@@ -291,6 +292,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.CommentSlot.Content = _commentBox;
             view.ResetChangesSlot.Content = _isCreateMode ? null : _resetChangesButton;
             PopulateContractTab(view);
+            view.ToggleStagesExpansion.Click += (_, _) => ToggleAllStagesExpansion();
             view.StagesTabSlot.Content = BuildStagesTabContent();
             view.RevisionsTabSlot.Content = BuildRevisionsTabContent();
 
@@ -1277,6 +1279,24 @@ namespace CbsContractsDesktopClient.Views.Functional
                 || StageEditors.Any(static stage => stage.Priority > 0);
         }
 
+        private void ToggleAllStagesExpansion()
+        {
+            var isExpanded = !_stageTreeItems.All(static item => item.IsExpanded);
+            foreach (var item in _stageTreeItems)
+            {
+                item.IsExpanded = isExpanded;
+            }
+        }
+
+        private void RefreshStagesExpansionButton()
+        {
+            var allExpanded = _stageTreeItems.All(static item => item.IsExpanded);
+            var actionText = allExpanded ? "Свернуть все" : "Развернуть все";
+            _view!.StagesExpansionIcon.Glyph = allExpanded ? "\uE8B7" : "\uE838";
+            ToolTipService.SetToolTip(_view.ToggleStagesExpansion, actionText);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_view.ToggleStagesExpansion, actionText);
+        }
+
         private UIElement BuildStagesTabContent()
         {
             _stagesTree = new TreeView
@@ -1300,26 +1320,28 @@ namespace CbsContractsDesktopClient.Views.Functional
             _firstStageDeadlineKindBox = null;
             _stageCommentBoxes.Clear();
             _contractCommentsBox = null;
-            var items = StageEditors
+            _stageTreeItems = StageEditors
                 .OrderBy(static stage => stage.Priority)
                 .Select(BuildStageTreeItem)
                 .ToList();
-            items.Add(BuildContractCommentsTreeItem());
-            _stagesTree.ItemsSource = items;
+            _stagesTree.ItemsSource = _stageTreeItems.Append(BuildContractCommentsTreeItem()).ToList();
+            RefreshStagesExpansionButton();
         }
 
         private ContractStageTreeItem BuildStageTreeItem(StageEditState stage)
         {
             ContractStageTreeItem? stageItem = null;
+            var supplyTreeItem = BuildStageSupplyTreeItem(stage);
             stageItem = new ContractStageTreeItem(
                 () => BuildStageTreeHeader(GetStageTreeName(stage)),
                 [
-                    new ContractStageTreeItem(() => BuildStageSection(stage, stageItem!)),
+                    new ContractStageTreeItem(() => BuildStageSection(stage, stageItem!, supplyTreeItem)),
                     BuildStageCommentsTreeItem(stage),
-                    BuildStageSupplyTreeItem(stage)
+                    supplyTreeItem
                 ],
                 stage.Used);
             stageItem.ExpansionChanged += isExpanded => _workflowStore.SetStageExpanded(stage, isExpanded);
+            stageItem.ExpansionChanged += _ => RefreshStagesExpansionButton();
             return stageItem;
         }
 
@@ -1332,13 +1354,26 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private ContractStageTreeItem BuildStageSupplyTreeItem(StageEditState stage)
         {
-            return new ContractStageTreeItem(
+            var treeItem = new ContractStageTreeItem(
                 () => BuildStageTreeHeader("Поставка"),
                 [
                     new ContractStageTreeItem(
                         () => BuildStageSupplyContent(stage),
                         contentMargin: new Thickness(-56, 0, 0, 0))
                 ]);
+            RefreshStageSupplyVisibility(stage, treeItem);
+            return treeItem;
+        }
+
+        private static void RefreshStageSupplyVisibility(StageEditState stage, ContractStageTreeItem supplyTreeItem)
+        {
+            var isVisible = stage.TaskKind.Code == "20";
+            if (!isVisible)
+            {
+                supplyTreeItem.IsExpanded = false;
+            }
+
+            supplyTreeItem.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private FrameworkElement BuildStageSupplyContent(StageEditState stage)
@@ -1511,7 +1546,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             return $"Э{priority}_{stage.TaskKind.Name}";
         }
 
-        private UIElement BuildStageSection(StageEditState stage, ContractStageTreeItem treeItem)
+        private UIElement BuildStageSection(StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
         {
             var grid = new Grid
             {
@@ -1534,7 +1569,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
             AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 0);
-            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem);
+            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem, supplyTreeItem);
             var stageStatusDropdown = BuildStageStatusDropdown(stage);
             var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
             if (_openStagesTabOnLoad && ReferenceEquals(stage, _workflowStore.SelectedStageEditState))
@@ -1925,7 +1960,7 @@ namespace CbsContractsDesktopClient.Views.Functional
         }
 
 
-        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, ContractStageTreeItem treeItem)
+        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
         {
             var dropdown = new Dropdown
             {
@@ -1955,6 +1990,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 }
 
                 stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
+                RefreshStageSupplyVisibility(stage, supplyTreeItem);
                 treeItem.RefreshContent();
             };
 

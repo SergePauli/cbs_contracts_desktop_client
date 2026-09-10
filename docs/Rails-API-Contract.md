@@ -93,3 +93,10 @@
 ## Stage update guard
 
 `ModelMutationService.UpdateAsync` rejects Stage payloads that contain read-model keys before any HTTP request is sent. This is intentional: if it fails, fix the dialog payload builder instead of weakening the guard.
+
+## Order cost from positions
+
+- Creating an Order from selected needs includes `cost`, calculated as the decimal sum of the selected StageOrder `cost` values. A null position cost contributes zero; a missing or malformed field is a contract error.
+- `StageOrderNeedsPayloadBuilder` serializes the calculated cost; creation and position linking use `ModelMutationService`.
+- Editing an Order loads all its StageOrder.order positions through paginated read-only queries. Focusing the cost input compares its value with the same calculated sum.
+- A mismatch offers an explicit correction in a flyout. Accepting changes only the editor value; the ordinary Order update payload includes `cost` only when changed. No position response rows are serialized back to the API.

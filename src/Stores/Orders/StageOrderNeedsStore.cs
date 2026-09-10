@@ -125,7 +125,8 @@ namespace CbsContractsDesktopClient.Stores.Orders
             CancellationToken cancellationToken = default)
         {
             var selection = GetSelection();
-            var payload = StageOrderNeedsPayloadBuilder.BuildForNewOrder(input);
+            var cost = OrderCostCalculator.Calculate(_selectedRows.Values);
+            var payload = StageOrderNeedsPayloadBuilder.BuildForNewOrder(input, cost);
             var saved = await mutations.CreateAsync("Order", payload, cancellationToken);
             var orderId = JsonDataReader.TryGetLong(saved.GetValue("id"))
                 ?? throw new InvalidOperationException("Mutation Order не вернула идентификатор созданного заказа.");

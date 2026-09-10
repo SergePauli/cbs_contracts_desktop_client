@@ -47,7 +47,7 @@ public sealed class ContractCommerEditDialogTests
         Assert.Contains("Func<object> contentFactory", treeItemCode);
         Assert.Contains("public object Content => _contentFactory();", treeItemCode);
         Assert.Contains("Content=\"{x:Bind Content, Mode=OneWay}\"", xaml);
-        Assert.Contains("() => BuildStageSection(stage, stageItem!)", code);
+        Assert.Contains("() => BuildStageSection(stage, stageItem!, supplyTreeItem)", code);
         Assert.Contains("() => BuildStageCommentsBox(stage)", code);
         Assert.Contains("() => BuildStageSupplyContent(stage)", code);
         Assert.DoesNotContain("_stageSupplyViews", code);

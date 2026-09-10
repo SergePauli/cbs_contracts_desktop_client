@@ -1,0 +1,24 @@
+<dialogs:AppEditDialog
+    x:Class="CbsContractsDesktopClient.Views.Orders.OrderEditDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:dialogs="using:CbsContractsDesktopClient.Shared.Dialogs">
+    <dialogs:AppEditDialog.Resources>
+        <Flyout x:Key="CostMismatchFlyout" Placement="BottomEdgeAlignedRight">
+            <StackPanel Spacing="6" MaxWidth="320">
+                <TextBlock Text="Сумма заказа отличается от суммы позиций."
+                           TextWrapping="Wrap" />
+                <TextBlock>
+                    <Run Text="Расчётная сумма: " />
+                    <Run Text="{Binding CalculatedCostText}" FontWeight="SemiBold" />
+                </TextBlock>
+                <TextBlock>
+                    <Run Text="Разница (заказ − позиции): " />
+                    <Run Text="{Binding CostDifferenceText}" FontWeight="SemiBold" />
+                </TextBlock>
+                <Button Content="Исправить сумму" Padding="10,4"
+                        HorizontalAlignment="Right" Click="ApplyCalculatedCost_Click" />
+            </StackPanel>
+        </Flyout>
+    </dialogs:AppEditDialog.Resources>
+</dialogs:AppEditDialog>

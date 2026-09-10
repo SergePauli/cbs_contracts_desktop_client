@@ -437,13 +437,15 @@ namespace CbsContractsDesktopClient.Views.References
                 FontSize = textMetrics.ContactFontSize,
                 FontWeight = Microsoft.UI.Text.FontWeights.Light,
                 Foreground = EmployeeContactBrush,
+                IsTextSelectionEnabled = true,
+                VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap
             };
 
             var link = new HyperlinkButton
             {
-                Content = linkText,
+                Content = icon,
                 Padding = new Thickness(0),
                 MinWidth = 0,
                 MinHeight = 0,
@@ -452,11 +454,12 @@ namespace CbsContractsDesktopClient.Views.References
                 VerticalAlignment = VerticalAlignment.Center
             };
             link.Click += (_, _) => ContactLaunchService.Launch(ContactTypeClassifier.TryCreateLaunchUri(value, match));
+            ToolTipService.SetToolTip(link, $"Открыть {value}");
 
-            Grid.SetColumn(icon, 0);
-            Grid.SetColumn(link, 1);
-            grid.Children.Add(icon);
+            Grid.SetColumn(link, 0);
+            Grid.SetColumn(linkText, 1);
             grid.Children.Add(link);
+            grid.Children.Add(linkText);
             return grid;
         }
 
