@@ -38,7 +38,7 @@ machines do not require an FNS key environment variable.
 The generated installer is written to:
 
 ```text
-artifacts\installer\CbsContractsDesktopClient-1.0.8-beta-Setup.exe
+artifacts\installer\CbsContractsDesktopClient-1.0.9-beta-Setup.exe
 ```
 
 The script builds the application as framework-dependent and packages the full
