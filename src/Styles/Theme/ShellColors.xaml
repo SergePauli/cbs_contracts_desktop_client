@@ -38,4 +38,8 @@
     <SolidColorBrush x:Key="ShellCaptionTextBrush" Color="#FF87A0B8" />
     <SolidColorBrush x:Key="ShellAccentBrush" Color="#FF2C85CC" />
     <SolidColorBrush x:Key="ShellAccentMutedBrush" Color="#FF9BB2C7" />
+    <SolidColorBrush x:Key="ShellCommentOutBrush" Color="#e7fbd5" />
+    <SolidColorBrush x:Key="ShellCommentInBrush" Color="#fff" />
+    <SolidColorBrush x:Key="ShellCommentContractBrush" Color="#9cdcfa" />
+    <SolidColorBrush x:Key="ShellCommentAreaBrush" Color="#eef6fd" />
 </ResourceDictionary>

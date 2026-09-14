@@ -150,6 +150,21 @@ namespace CbsContractsDesktopClient.ViewModels.Data
             await RefreshAsync(cancellationToken);
         }
 
+        public DataQueryRequest CreateQuerySnapshot()
+        {
+            var query = BuildQuery();
+            var sorts = query.Sorts?.ToList() ?? [];
+            if (!sorts.Any(sort => sort.StartsWith("id ", StringComparison.OrdinalIgnoreCase)))
+                sorts.Add("id asc");
+            return new DataQueryRequest
+            {
+                Model = query.Model,
+                Preset = query.Preset,
+                Filters = query.Filters is null ? null : System.Text.Json.JsonSerializer.SerializeToElement(query.Filters),
+                Sorts = sorts.AsReadOnly()
+            };
+        }
+
         private LazyDataQuery BuildQuery()
         {
             return new LazyDataQuery

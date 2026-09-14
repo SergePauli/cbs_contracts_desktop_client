@@ -1,4 +1,9 @@
 using System.IO;
+using System.Globalization;
+using System.Text.Json;
+using CbsContractsDesktopClient.Models.Data;
+using CbsContractsDesktopClient.Models.Table;
+using CbsContractsDesktopClient.Services.Table;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
@@ -14,27 +19,23 @@ public sealed class CbsTableRowViewTests
     [Fact]
     public void CbsTableRowView_FormatsDateTimeValuesUsingCurrentCulture()
     {
-        var code = File.ReadAllText(CbsTableRowViewPath);
-
-        Assert.Contains("FormatCellValue", code);
-        Assert.Contains("column.Filter.Mode == DataFilterMode.Date", code);
-        Assert.Contains("FormatDateValue", code);
-        Assert.Contains("CultureInfo.CurrentCulture", code);
-        Assert.Contains("DateTimeOffset.TryParse", code);
-        Assert.Contains("DateTime.TryParse", code);
-        Assert.Contains("dateTimeOffset.LocalDateTime.ToString(CultureInfo.CurrentCulture)", code);
-        Assert.Contains("dateTimeOffset.LocalDateTime.ToString(\"d\", CultureInfo.CurrentCulture)", code);
+        var date = new DateTimeOffset(2026, 9, 14, 12, 30, 0, TimeSpan.Zero);
+        var column = new CbsTableColumnDefinition { FieldKey = "value", Header = "Дата" };
+        var row = CreateRow(date);
+        Assert.Equal(date.LocalDateTime.ToString(CultureInfo.CurrentCulture),
+            TableCellPresentationBuilder.GetCellText(column, row, false));
+        column = new() { FieldKey = "value", Header = "Дата", Filter = new() { Mode = DataFilterMode.Date } };
+        Assert.Equal(date.LocalDateTime.ToString("d", CultureInfo.CurrentCulture),
+            TableCellPresentationBuilder.GetCellText(column, row, false));
     }
 
     [Fact]
     public void CbsTableRowView_RendersBooleanIconAsCheckQuestionOrEmpty()
     {
-        var code = File.ReadAllText(CbsTableRowViewPath);
-
-        Assert.Contains("column.BodyMode == CbsTableBodyMode.BooleanIcon", code);
-        Assert.Contains("(\"\\u2713\", \"SystemFillColorSuccessBrush\")", code);
-        Assert.Contains("(\"?\", \"ShellSecondaryTextBrush\")", code);
-        Assert.Contains("false => (string.Empty, \"ShellPrimaryTextBrush\")", code);
+        var column = new CbsTableColumnDefinition { FieldKey = "value", Header = "Флаг", BodyMode = CbsTableBodyMode.BooleanIcon };
+        Assert.Equal("✓", TableCellPresentationBuilder.GetCellText(column, CreateRow(true), false));
+        Assert.Equal("", TableCellPresentationBuilder.GetCellText(column, CreateRow(false), false));
+        Assert.Equal("?", TableCellPresentationBuilder.GetCellText(column, CreateRow(null), false));
     }
 
     [Fact]
@@ -52,23 +53,27 @@ public sealed class CbsTableRowViewTests
     [Fact]
     public void CbsTableRowView_RendersStatusBadgeTemplateWithPrimeSeverityColors()
     {
-        var code = File.ReadAllText(CbsTableRowViewPath);
-
-        Assert.Contains("IsBadgeTemplate", code);
-        Assert.Contains("ApplyBadgeContent", code);
-        Assert.Contains("ApplyStatusBadgeContent", code);
-        Assert.Contains("StageContractStatusDialogControls.ResolveStatusBadgeColors(statusId)", code);
-        Assert.Contains("ApplyStageOrderSeverityBadgeContent", code);
+        Assert.True(TableCellPresentationBuilder.IsBadgeTemplate(new()
+            { FieldKey = "status", Header = "Статус", BodyTemplateKey = "StatusBadge" }));
+        Assert.Equal((0xFFC9E9D4u, 0xFF404040u), TableCellPresentationBuilder.GetStatusColors(4));
+        Assert.Equal((0xFFFFCDD2u, 0xFF404040u), TableCellPresentationBuilder.GetStatusColors(6));
+        Assert.Equal((0xFEC2EDF6u, 0xFF404040u), TableCellPresentationBuilder.GetStatusColors(1));
     }
 
     [Fact]
     public void CbsTableRowView_FormatsStageCostWithOptionalFraction()
     {
-        var code = File.ReadAllText(CbsTableRowViewPath);
-
-        Assert.Contains("ShowStageCostFractionProperty", code);
-        Assert.Contains("ShowStageCostFraction = showStageCostFraction;", code);
-        Assert.Contains("\"StageCost\" => FormatStageCost(value, showStageCostFraction)", code);
-        Assert.Contains("amount.ToString(showFraction ? \"N2\" : \"N0\", CultureInfo.CurrentCulture)", code);
+        var oldCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("en-US");
+        try
+        {
+            var column = new CbsTableColumnDefinition { FieldKey = "value", Header = "Сумма", BodyTemplateKey = "StageCost" };
+            Assert.Equal("1,251", TableCellPresentationBuilder.GetCellText(column, CreateRow(1250.75m), false));
+            Assert.Equal("1,250.75", TableCellPresentationBuilder.GetCellText(column, CreateRow(1250.75m), true));
+        }
+        finally { CultureInfo.CurrentCulture = oldCulture; }
     }
+
+    private static TableDataRow CreateRow(object? value) => new()
+    { Values = new() { ["value"] = JsonSerializer.SerializeToElement(value) } };
 }

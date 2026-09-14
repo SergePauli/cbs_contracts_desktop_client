@@ -69,6 +69,14 @@ namespace CbsContractsDesktopClient.Services
                 return [];
             }
 
+            if (string.Equals(apiField, "is_funded", StringComparison.OrdinalIgnoreCase)
+                && filter.MatchMode == DataFilterMatchMode.Equals
+                && value is string fundedValue
+                && string.Equals(fundedValue, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                return BuildSingle($"{apiField}__null", true);
+            }
+
             if (string.Equals(apiField, "registry_quarter_or_registry_year", StringComparison.OrdinalIgnoreCase)
                 && filter.MatchMode == DataFilterMatchMode.Contains)
             {

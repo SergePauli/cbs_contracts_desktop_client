@@ -160,6 +160,7 @@ namespace CbsContractsDesktopClient
             services.AddSingleton<AuditStore>();
             services.AddSingleton<ContragentDetailStore>();
             services.AddSingleton<TablePageStore>();
+            services.AddSingleton<CbsContractsDesktopClient.Services.Export.TableExcelExportService>();
             services.AddSingleton<ContractWorkflowStore>();
             services.AddSingleton<OrderWorkflowStore>();
             services.AddSingleton<OrderPositionsStore>();

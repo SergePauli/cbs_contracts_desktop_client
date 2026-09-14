@@ -524,13 +524,20 @@ public sealed class ContractWorkflowStoreTests
             ("status", Status(1, "Подписан")),
             ("stages", new object[]
             {
-                Stage(200, "Другой этап", used: true)
+                Stage(200, "Другой этап", used: true),
+                Stage(100, "Исполнение", used: false, priority: 3, tasks: ["Согласование"], performers: ["Иванов"])
             }));
 
         store.SetStageSelection(selectedStage, contract, contragent: null);
 
         Assert.Equal(100L, GetRowId(store.SelectedStage));
         Assert.Equal("(ID: 100) Э3 - Исполнение|Согласование|Иванов", store.SelectedFooterText);
+
+        var stageState = store.ContractStageEditStates.Single(stage => stage.Id == 100);
+        stageState.Performers = [new StagePerformerEditState(null, null, 42, "Петров", null)];
+        Assert.Equal("(ID: 100) Э3 - Исполнение|Согласование|Петров", store.BuildSelectedFooterText(selectedStage));
+        stageState.Performers = [];
+        Assert.Equal("(ID: 100) Э3 - Исполнение|Согласование|нет", store.BuildSelectedFooterText(selectedStage));
     }
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)
