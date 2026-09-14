@@ -5,7 +5,9 @@
 - Table/list/card/edit data is loaded through `api/index` and `api/count`.
 - `api/index` responses are read models. They may contain expanded objects and arrays such as `comments`, `contract`, `status`, `tasks`, `revision`, `stages`.
 - Read models must not be reused as update payloads.
+- For both Contract and Stage queries, the shared query builder converts the legacy saved filter `is_funded Equals "null"` to `is_funded__null: true` for `api/index` and `api/count`. Boolean values keep their equality semantics; the literal string `"null"` in other fields is not converted.
 - YrestAPI grouped filters use an `or` array whose entries contain `and` groups. Filters placed alongside `or` apply to the complete grouped expression.
+- Excel export uses one `api/count` followed by `api/index` batches of up to 1000 rows, with a fixed copy of the current filters and sorts. It does not call mutation endpoints. See [Table Excel Export](Table-Excel-Export.md).
 
 ## Create and update requests
 

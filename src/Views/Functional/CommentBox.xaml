@@ -11,27 +11,31 @@
             <Grid
                 MaxWidth="760"
                 Margin="0,0,0,2"
+                Opacity="1"
                 HorizontalAlignment="{Binding RowAlignment}">
                 <Border
                     Padding="3,0,3,0"
                     Background="{Binding Background}"
                     BorderBrush="{Binding BorderBrush}"
                     BorderThickness="{Binding BorderThickness}"
+                    HighContrastAdjustment="None"
                     CornerRadius="7">
-                    <StackPanel Spacing="0">
+                    <StackPanel Spacing="0" Background="{Binding Background}">
                         <TextBlock
                             Margin="0"
                             FontSize="13"
                             Foreground="{StaticResource ShellPrimaryTextBrush}"
-                            IsTextSelectionEnabled="True"
+                            IsTextSelectionEnabled="true"
                             Style="{StaticResource BodyTextBlockStyle}"
                             Text="{Binding Text}"
+                            HighContrastAdjustment="None"
                             TextWrapping="WrapWholeWords" />
 
                         <StackPanel
                             HorizontalAlignment="Right"
                             Orientation="Horizontal"
                             Spacing="4"
+
                             Visibility="{Binding MetaVisibility}">
                             <TextBlock
                                 FontSize="10"
@@ -70,22 +74,18 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Padding="4">
+    <Grid Padding="4" Background="{StaticResource ShellCommentAreaBrush}">
         <ListView
             x:Name="CommentsListView"
             HorizontalContentAlignment="Stretch"
+            HighContrastAdjustment="None"
             IsItemClickEnabled="False"
             ItemContainerStyle="{StaticResource CommentListViewItemStyle}"
             ItemTemplate="{StaticResource CommentItemTemplate}"
             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
             ScrollViewer.VerticalScrollBarVisibility="Visible"
             SelectionMode="None">
-            <ListView.Resources>
-                <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="Transparent" />
-                <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="Transparent" />
-                <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="Transparent" />
-                <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="Transparent" />
-            </ListView.Resources>
+
         </ListView>
 
         <TextBlock

@@ -53,6 +53,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _shellViewModel = App.Services.GetRequiredService<AppShellViewModel>();
 
             InitializeComponent();
+            ExportControl.Table = ReferenceTableView;
             ResetFiltersButton.Content = FilterIconFactory.BuildFilterClearIcon();
             DataContext = _viewModel;
             Loaded += OnLoaded;

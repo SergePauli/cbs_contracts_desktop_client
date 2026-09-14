@@ -2067,7 +2067,7 @@ namespace CbsContractsDesktopClient.Views.Controls
             }
         }
 
-        private static double GetColumnPixelWidth(CbsTableColumnDefinition column)
+        internal static double GetColumnPixelWidth(CbsTableColumnDefinition column)
         {
             if (TryParseWidth(column.EffectiveWidth, out var width))
             {

@@ -11,7 +11,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             return BuildSelectedFooterText(selectedRow, SelectedStage);
         }
 
-        private static string BuildSelectedFooterText(TableDataRow selectedRow, TableDataRow? stage)
+        private string BuildSelectedFooterText(TableDataRow selectedRow, TableDataRow? stage)
         {
             var id = TryGetLong(selectedRow.GetValue("id"));
             var taskKindName = FirstText(
@@ -21,7 +21,11 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 selectedRow.GetValue("task_kind.name"),
                 selectedRow.GetValue("contract.task_kind.name"));
             var tasks = ReadNameList(stage, "tasks");
-            var performers = ReadNameList(stage, "performers");
+            var performers = _selectionKind == ContractRowDetailSelectionKind.Stage
+                ? ContractStageEditStates.Single(item => item.Id == id).Performers
+                    .Select(static performer => performer.Name)
+                    .ToList()
+                : ReadNameList(stage, "performers");
             var stageTaskKindText = FormatStageTaskKindText(stage, taskKindName);
 
             return $"(ID: {FormatId(id)}) {stageTaskKindText}|{FormatNameList(tasks)}|{FormatNameList(performers)}";

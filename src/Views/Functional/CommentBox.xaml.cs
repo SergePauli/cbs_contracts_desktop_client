@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
+using Windows.UI;
 
 namespace CbsContractsDesktopClient.Views.Functional
 {
@@ -67,7 +68,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 ResolveRowAlignment(departmentId),
                 ResolveBubbleBrush(isOut, isContract),
                 ResolveBubbleBorderBrush(isContract),
-                isContract ? new Thickness(1) : new Thickness(0));
+                isContract || !isOut ? new Thickness(1) : new Thickness(0));
         }
 
         private static HorizontalAlignment ResolveRowAlignment(int? departmentId)
@@ -84,12 +85,11 @@ namespace CbsContractsDesktopClient.Views.Functional
         {
             if (isContract)
             {
-                return (Brush)Application.Current.Resources["ShellAccentPanelBackgroundBrush"];
+                return  (Brush)Application.Current.Resources["ShellCommentContractBrush"];
             }
 
-            return isOut
-                ? new SolidColorBrush(Microsoft.UI.Colors.Honeydew)
-                : new SolidColorBrush(Microsoft.UI.ColorHelper.FromArgb(255, 232, 236, 241));
+
+            return isOut ? (Brush)Application.Current.Resources["ShellCommentOutBrush"] : (Brush)Application.Current.Resources["ShellCommentInBrush"];
         }
 
         private static Brush ResolveBubbleBorderBrush(bool isContract)

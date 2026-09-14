@@ -39,6 +39,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ProgressRing _progressRing;
         private readonly InfoBar _errorInfoBar;
         private Button? _settingsButton;
+        private readonly TableExportControl _exportControl = new();
         private MenuFlyoutItem? _configureColumnsItem;
         private string? _route;
         private bool _isLoaded;
@@ -256,6 +257,8 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             _secondaryHeaderActionsPanel.Children.Add(CreateResetFiltersButton());
+            _exportControl.Table = TableView;
+            _secondaryHeaderActionsPanel.Children.Add(_exportControl);
             _secondaryHeaderActionsPanel.Children.Add(CreateSettingsButton());
             _headerActionSeparator.Visibility =
                 _primaryHeaderActionsPanel.Children.Count > 0 && _secondaryHeaderActionsPanel.Children.Count > 0
@@ -442,6 +445,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _tableHost.Children.Clear();
             TableView = CreateTableHostView();
             _tableHost.Children.Add(TableView);
+            _exportControl.Table = TableView;
             WireTableEvents();
         }
 

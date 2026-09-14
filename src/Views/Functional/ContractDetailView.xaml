@@ -61,7 +61,7 @@
                     Grid.Row="1"
                     MinHeight="138"
                     Padding="2,1,0,6"
-                    Background="{StaticResource ShellPanelBackgroundBrush}"
+                    Background="{StaticResource ShellCommentAreaBrush}"
                     BorderBrush="{StaticResource ShellPanelBorderBrush}"
                     BorderThickness="1"
                     CornerRadius="6">
@@ -70,7 +70,6 @@
                             <RowDefinition Height="Auto" />
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
-
                         <Grid>
                             <TextBlock
                                 Style="{StaticResource CaptionTextBlockStyle}"

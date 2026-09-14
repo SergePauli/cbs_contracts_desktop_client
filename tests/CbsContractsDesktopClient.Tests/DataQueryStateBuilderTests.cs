@@ -262,6 +262,18 @@ public class DataQueryStateBuilderTests
     }
 
     [Fact]
+    public void BuildFilters_NormalizesLegacyFundedNullWithoutChangingOtherText()
+    {
+        var payload = Assert.IsType<Dictionary<string, object?>>(DataQueryStateBuilder.BuildFilters(
+            [new DataFilterCriterion { FieldKey = "is_funded", MatchMode = DataFilterMatchMode.Equals, Value = "null" },
+             new DataFilterCriterion { FieldKey = "name", MatchMode = DataFilterMatchMode.Equals, Value = "null" }],
+            new Dictionary<string, string> { ["is_funded"] = "is_funded", ["name"] = "name" }));
+        Assert.Equal(true, payload["is_funded__null"]);
+        Assert.False(payload.ContainsKey("is_funded__eq"));
+        Assert.Equal("null", payload["name__eq"]);
+    }
+
+    [Fact]
     public void BuildFilters_MapsNumericCriteriaToApiPayload()
     {
         var filters = new[]
