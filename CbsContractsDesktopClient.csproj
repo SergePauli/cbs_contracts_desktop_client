@@ -5,6 +5,7 @@
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>CbsContractsDesktopClient</RootNamespace>
     <AssemblyName>CbsContractsDesktopClient</AssemblyName>
+    <Version>1.1.0</Version>
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <SelfContained>false</SelfContained>

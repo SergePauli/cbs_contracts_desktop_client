@@ -10,7 +10,7 @@ namespace CbsContractsDesktopClient.Models.Shell
             SelectedRecordText = string.Empty,
             SelectedRecordTasksText = string.Empty,
             SelectedRecordPerformersText = string.Empty,
-            VersionText = "v1.0.9-beta"
+            VersionText = "v1.1.0"
         };
 
         public string DepartmentOrRole { get; init; } = string.Empty;
