@@ -62,7 +62,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            _contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;
+            _contractWorkflowStore.DetailDataApplied += OnContractWorkflowDetailDataApplied;
             _isStoreSubscribed = true;
         }
 
@@ -73,11 +73,11 @@ namespace CbsContractsDesktopClient.Views.Functional
                 return;
             }
 
-            _contractWorkflowStore.SelectionApplied -= OnContractWorkflowSelectionApplied;
+            _contractWorkflowStore.DetailDataApplied -= OnContractWorkflowDetailDataApplied;
             _isStoreSubscribed = false;
         }
 
-        private void OnContractWorkflowSelectionApplied(object? sender, EventArgs e)
+        private void OnContractWorkflowDetailDataApplied(object? sender, EventArgs e)
         {
             Refresh();
         }

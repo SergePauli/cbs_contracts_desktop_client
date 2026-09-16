@@ -7,12 +7,9 @@ using Microsoft.UI.Xaml.Media;
 
 namespace CbsContractsDesktopClient.Views.References
 {
-    public sealed class DialogContactsEditor : UserControl
+    public sealed partial class DialogContactsEditor : UserControl
     {
         private readonly ObservableCollection<ContactViewItem> _contacts = [];
-        private readonly Grid _contactsPanel;
-        private readonly TextBox _inputBox;
-        private readonly TextBlock _messageBlock;
         private bool _isInternalUpdate;
 
         public static readonly DependencyProperty ContactsTextProperty =
@@ -24,87 +21,29 @@ namespace CbsContractsDesktopClient.Views.References
 
         public DialogContactsEditor()
         {
-            _contactsPanel = new Grid
-            {
-               RowSpacing = 0,  
-               ColumnSpacing = 0,
-               MaxHeight = 64,                
-               Width = 500,
-               MaxWidth = 650,    
-                      
-            };
-            _contactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _contactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _contactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            _contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            _contactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            
-            _inputBox = new TextBox
-            {
-                
-                Width = 250,
-                MaxWidth = 300,
-                PlaceholderText = "Введите контакт и нажмите Enter",
-                HorizontalAlignment = HorizontalAlignment.Left,
-                Height = 28,
-            };
-            _messageBlock = new TextBlock
-            {
-                Foreground = new SolidColorBrush(Microsoft.UI.Colors.Firebrick),
-                FontSize = 8,
-                TextWrapping = TextWrapping.Wrap,
-                Visibility = Visibility.Collapsed
-            };
-
-            _inputBox.KeyDown += (_, args) =>
-            {
-                if (args.Key != Windows.System.VirtualKey.Enter)
-                {
-                    return;
-                }
-
-                args.Handled = true;
-                TryAddInputContact();
-            };
-
-            var addButton = new Button
-            {
-                Content = "\uE710",
-                Width = 28,
-                Height = 28,
-                Padding = new Thickness(0),
-                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
-                FontSize = 12,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            ToolTipService.SetToolTip(addButton, "Добавить контакт");
-            addButton.Click += (_, _) => TryAddInputContact();
-
-            var inputGrid = new Grid
-            {
-                ColumnSpacing = 4
-            };
-            inputGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            inputGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            Grid.SetColumn(_inputBox, 0);
-            Grid.SetColumn(addButton, 1);
-            inputGrid.Children.Add(_inputBox);
-            inputGrid.Children.Add(addButton);
-
-            var root = new StackPanel
-            {
-                Spacing = 6,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            root.Children.Add(_contactsPanel);
-            root.Children.Add(inputGrid);
-            root.Children.Add(_messageBlock);
-            Content = root;
-
+            InitializeComponent();
             RefreshFromText(ContactsText);
         }
 
+        public ObservableCollection<ContactViewItem> Contacts => _contacts;
+
+        private void Input_KeyDown(object sender, Microsoft.UI.Xaml.Input.KeyRoutedEventArgs args)
+        {
+            if (args.Key != Windows.System.VirtualKey.Enter) return;
+            args.Handled = true;
+            TryAddInputContact();
+        }
+
+        private void Add_Click(object sender, RoutedEventArgs args) => TryAddInputContact();
+
+        private void Remove_Click(object sender, RoutedEventArgs args)
+        {
+            _contacts.Remove((ContactViewItem)((FrameworkElement)sender).DataContext);
+            PushContactsText();
+        }
+
+        private void Contact_Click(object sender, RoutedEventArgs args)
+            => ContactLaunchService.Launch(((ContactViewItem)((FrameworkElement)sender).DataContext).NavigateUri);
         public string ContactsText
         {
             get => (string)GetValue(ContactsTextProperty);
@@ -133,117 +72,7 @@ namespace CbsContractsDesktopClient.Views.References
                 }
             }
 
-            RenderContacts();
-        }
 
-        private void RenderContacts()
-        {
-            _contactsPanel.Children.Clear();
-            if (_contacts.Count == 0)
-            {
-                return;
-            }
-            int i = 0;
-            int j = 0;
-            foreach (var contact in _contacts)
-            {
-                Microsoft.UI.Xaml.FrameworkElement element = (FrameworkElement)BuildContactElement(
-                    contact.Value,
-                    contact.Match,
-                    showRemoveButton: true,
-                    (_, _) =>
-                    {
-                        _contacts.Remove(contact);
-                        PushContactsText();
-                        RenderContacts();
-                    });
-                Grid.SetColumn(element, i);
-                Grid.SetRow(element, j);
-                _contactsPanel.Children.Add(element);
-
-                i++;
-                if (i == 3)
-                {
-                    i = 0;
-                    j++;
-                }
-
-                if (j > 2)
-                {
-                    return;
-                }
-            }
-        }
-
-        private UIElement BuildContactElement(ContactViewItem contact)
-        {
-            var grid = new Grid
-            {                
-                Height = 18,
-                MinWidth = 50,
-                Padding = new Thickness(4, 0, 2, 0),
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var icon = new FontIcon
-            {
-                Glyph = contact.Glyph,
-                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
-                FontSize = 10,
-                Width = 16,
-                Foreground = (Brush)Application.Current.Resources["ShellAccentBrush"],
-                VerticalAlignment = VerticalAlignment.Center
-            };
-
-            var link = new HyperlinkButton
-            {
-                Content = contact.Value,
-                Padding = new Thickness(2, 0, 2, 0),
-                MinWidth = 0,
-                FontSize = 10,
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            link.Click += (_, _) => ContactLaunchService.Launch(contact.NavigateUri);
-
-            var removeButton = new Button
-            {
-                Content = "\uE711",
-                Width = 16,
-                Height = 16,
-                Padding = new Thickness(0),
-                FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
-                FontSize = 10,
-                Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
-                BorderThickness = new Thickness(0)
-            };
-            ToolTipService.SetToolTip(removeButton, "Удалить контакт");
-            removeButton.Click += (_, _) =>
-            {
-                _contacts.Remove(contact);
-                PushContactsText();
-                RenderContacts();
-            };
-
-            Grid.SetColumn(icon, 0);
-            Grid.SetColumn(link, 1);
-            Grid.SetColumn(removeButton, 2);
-            grid.Children.Add(icon);
-            grid.Children.Add(link);
-            grid.Children.Add(removeButton);
-            return new Border
-            {
-                Margin = new Thickness(0, 0, 4, 2),
-                Padding = new Thickness(0),
-                CornerRadius = new CornerRadius(8),
-                Background = (Brush)Application.Current.Resources["ShellAccentPanelBackgroundBrush"],
-                BorderBrush = (Brush)Application.Current.Resources["ShellPanelBorderBrush"],
-                BorderThickness = new Thickness(1),
-                Child = grid
-            };
         }
 
         public static UIElement BuildContactElement(
@@ -348,7 +177,7 @@ namespace CbsContractsDesktopClient.Views.References
             _inputBox.Text = string.Empty;
             HideMessage();
             PushContactsText();
-            RenderContacts();
+
         }
 
         private void PushContactsText()
@@ -387,7 +216,7 @@ namespace CbsContractsDesktopClient.Views.References
                 .ToList();
         }
 
-        private sealed class ContactViewItem(string value, ContactTypeMatch match)
+        public sealed class ContactViewItem(string value, ContactTypeMatch match)
         {
             public string Value { get; } = value;
 

@@ -1,0 +1,117 @@
+<UserControl x:Class="CbsContractsDesktopClient.Views.Functional.ContractStageEditorView" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:kit="using:Pauli.WinUiKit.Controls">
+    <UserControl.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="MinHeight" Value="30" />
+            <Setter Property="Padding" Value="8,5" />
+        </Style>
+        <Style TargetType="kit:Dropdown">
+            <Setter Property="FontWeight" Value="Normal" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+        <Style TargetType="kit:CalendarInput">
+            <Setter Property="MinHeight" Value="30" />
+        </Style>
+    </UserControl.Resources>
+    <StackPanel Spacing="8">
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="106" />
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="132" />
+                <ColumnDefinition Width="193" />
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="106" />
+                <ColumnDefinition Width="123" />
+                <ColumnDefinition Width="106" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="3">
+                <TextBlock Text="Начало" FontSize="12" FontWeight="Normal" />
+                <kit:CalendarInput x:Name="StartEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Text="Тип" FontSize="12" FontWeight="Normal" />
+                <kit:Dropdown x:Name="TaskKindEditor" IsClearButtonEnabled="False" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="3">
+                <TextBlock Text="Статус" FontSize="12" FontWeight="Normal" />
+                <kit:Dropdown x:Name="StatusEditor" IsClearButtonEnabled="False" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Spacing="3">
+                <TextBlock Text="Режим срока*" FontSize="12" FontWeight="Normal" />
+                <kit:Dropdown x:Name="DeadlineKindEditor" IsClearButtonEnabled="False" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Spacing="3">
+                <TextBlock Text="Дней" FontSize="12" FontWeight="Normal" />
+                <TextBox x:Name="DurationEditor" TextAlignment="Right" InputScope="Number" />
+            </StackPanel>
+            <StackPanel Grid.Column="5" Spacing="3">
+                <TextBlock Text="Срок" FontSize="12" FontWeight="Normal" />
+                <kit:CalendarInput x:Name="DeadlineEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+            <StackPanel Grid.Column="6" Spacing="3">
+                <TextBlock Text="Сумма" FontSize="12" FontWeight="Normal" />
+                <TextBox x:Name="CostEditor" TextAlignment="Right" InputScope="Number" />
+            </StackPanel>
+            <StackPanel Grid.Column="7" Spacing="3">
+                <TextBlock Text="Бух. закрытие" FontSize="12" FontWeight="Normal" />
+                <kit:CalendarInput x:Name="FundedEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+        </Grid>
+        <Grid ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="159" />
+                <ColumnDefinition Width="48" />
+                <ColumnDefinition Width="106" />
+                <ColumnDefinition Width="316" />
+                <ColumnDefinition Width="106" />
+                <ColumnDefinition Width="116" />
+                <ColumnDefinition Width="106" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Spacing="3">
+                <TextBlock Text="Режим оплаты" FontSize="12" FontWeight="Normal" />
+                <kit:Dropdown x:Name="PaymentKindEditor" IsClearButtonEnabled="False" HorizontalAlignment="Stretch" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="3">
+                <TextBlock Text="Дней" FontSize="12" FontWeight="Normal" />
+                <TextBox x:Name="PaymentDurationEditor" TextAlignment="Right" InputScope="Number" />
+            </StackPanel>
+            <StackPanel Grid.Column="2" Spacing="3">
+                <TextBlock Text="СрокОп" FontSize="12" FontWeight="Normal" />
+                <kit:CalendarInput x:Name="PaymentDeadlineEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+            <StackPanel Grid.Column="3" Spacing="3">
+                <TextBlock Text="Дополнительные задачи" FontSize="12" FontWeight="Normal" />
+                <kit:MultiSelect x:Name="TasksEditor" />
+            </StackPanel>
+            <StackPanel Grid.Column="4" Spacing="3">
+                <TextBlock Text="Выезды" FontSize="12" FontWeight="Normal" />
+                <TextBox x:Name="RideOutEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+            <StackPanel Grid.Column="5" Spacing="3">
+                <TextBlock Text="Выполнены" FontSize="12" FontWeight="Normal" />
+                <TextBox x:Name="CompletedEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+            <StackPanel Grid.Column="6" Spacing="3">
+                <TextBlock Text="Отправлены" FontSize="12" FontWeight="Normal" />
+                <TextBox x:Name="SendedEditor" IsReadOnly="True" IsTabStop="False" />
+            </StackPanel>
+        </Grid>
+        <StackPanel Spacing="3">
+            <TextBlock Text="Комментарий этапа" FontSize="12" FontWeight="Normal" />
+            <Grid ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="30" />
+                    <ColumnDefinition Width="30" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="CommentEditor" Text="{Binding Comment, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                <Button x:Name="AddStageButton" Grid.Column="1" Content="" FontFamily="{StaticResource SymbolThemeFontFamily}" Foreground="ForestGreen" Width="30" Height="30" Padding="0" ToolTipService.ToolTip="Добавить этап" />
+                <Button x:Name="DeleteStageButton" Grid.Column="2" Content="" FontFamily="{StaticResource SymbolThemeFontFamily}" Foreground="Firebrick" Width="30" Height="30" Padding="0" ToolTipService.ToolTip="Удалить этап" />
+            </Grid>
+        </StackPanel>
+        <Border Height="1" Background="{ThemeResource ShellPanelBorderBrush}" Margin="0,4" />
+    </StackPanel>
+</UserControl>

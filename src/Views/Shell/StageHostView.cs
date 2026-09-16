@@ -35,7 +35,7 @@ using Windows.System;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
-    public sealed class StageHostView : ComplexHostViewBase
+    public sealed class StageHostView : ContractWorkflowHostViewBase
     {
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
@@ -55,13 +55,12 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly ContractCommentWorkflow _contractCommentWorkflow;
-        private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly StageRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new()
         {
             AllowContractCommentsToggle = true
         };
-        private bool _isStageEditDialogOpen;
+
         private bool _showStageCostFraction;
         private Button? _editButton;
         private Button? _infoButton;
@@ -86,7 +85,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
-            _contractCommerSaveWorkflow = App.Services.GetRequiredService<ContractCommerSaveWorkflow>();
             _showStageCostFraction = _localUserSettingsService.Get().ShowStageCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -279,13 +277,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
-        {
-            UpdateDetailView(Store.SelectedRow);
-            await RefreshDetailAsync();
-        }
-
-        protected override async Task OnTableReloadedAfterSaveAsync()
+        protected override async Task LoadWorkflowDetailsAfterSaveAsync()
         {
             UpdateDetailView(Store.SelectedRow);
             await RefreshDetailAsync();
@@ -302,42 +294,27 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task ShowStageEditDialogAsync()
         {
-            var departmentId = _userService.CurrentUser?.DepartmentId;
-            if (_isStageEditDialogOpen || Store.SelectedRow is null)
+            if (Store.SelectedRow is null) return;
+            switch (_userService.CurrentUser?.DepartmentId)
             {
-                return;
-            }
-
-            _isStageEditDialogOpen = true;
-            try
-            {
-                if (departmentId == OziDepartmentId)
-                {
+                case OziDepartmentId:
                     await ShowStageOziEditDialogAsync();
-                    return;
-                }
-
-                if (departmentId == CommersDepartmentId)
-                {
+                    break;
+                case CommersDepartmentId:
                     await ShowStageContractCommerEditDialogAsync();
-                    return;
-                }
-
-                if (departmentId == FinDepartmentId)
-                {
+                    break;
+                case FinDepartmentId:
                     await ShowStageFinEditDialogAsync();
-                    return;
-                }
-
-                await ShowContractInfoDialogAsync();
-            }
-            finally
-            {
-                _isStageEditDialogOpen = false;
+                    break;
+                default:
+                    await ShowContractInfoDialogAsync();
+                    break;
             }
         }
+        private Task ShowStageOziEditDialogAsync(TableDataRow? sourceRowOverride = null)
+            => RunWorkflowDialogCommandAsync(() => ShowStageOziEditDialogCoreAsync(sourceRowOverride));
 
-        private async Task ShowStageOziEditDialogAsync(TableDataRow? sourceRowOverride = null)
+        private async Task ShowStageOziEditDialogCoreAsync(TableDataRow? sourceRowOverride = null)
         {
             var sourceRow = sourceRowOverride ?? Store.SelectedRow;
             if (sourceRow is null || sourceRow.IsPlaceholder)
@@ -377,54 +354,35 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedRow = null;
-            dialog.SaveRequestedAsync += async args =>
+            await ShowStageWorkflowDialogAsync(dialog, async () =>
             {
-                try
+                var stagePayload = dialog.BuildPayload();
+                if (!HasUpdatePayloadChanges(stagePayload))
                 {
-                    var stagePayload = dialog.BuildPayload();
-                    if (!HasUpdatePayloadChanges(stagePayload))
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    savedRow = await SaveStagePayloadAsync(stagePayload);
-
-                    var shouldCloseContract = dialog.ShouldCloseContract();
-                    Store.AppendUiTrace($"CONTRACT CLOSE CHECK {_contractWorkflowStore.BuildContractCloseDecisionTrace(shouldCloseContract)}");
-                    if (shouldCloseContract)
-                    {
-                        var contractPayload = dialog.BuildContractClosePayload();
-                        await _modelMutationService.UpdateAsync(
-                            ContractModel,
-                            contractPayload);
-                    }
-
-                    await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
+                    return null;
                 }
-                catch (Exception ex)
+
+                var savedRow = await SaveStagePayloadAsync(stagePayload);
+
+                var shouldCloseContract = dialog.ShouldCloseContract();
+                Store.AppendUiTrace($"CONTRACT CLOSE CHECK {_contractWorkflowStore.BuildContractCloseDecisionTrace(shouldCloseContract)}");
+                if (shouldCloseContract)
                 {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
+                    var contractPayload = dialog.BuildContractClosePayload();
+                    await _modelMutationService.UpdateAsync(
+                        ContractModel,
+                        contractPayload);
                 }
-            };
 
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow);
-            ShowSuccessNotification(
-                "Этап сохранен",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+                await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
+                return savedRow;
+            });
         }
 
-        private async Task ShowContractInfoDialogAsync(TableDataRow? sourceRowOverride = null)
+        private Task ShowContractInfoDialogAsync(TableDataRow? sourceRowOverride = null)
+            => RunWorkflowDialogCommandAsync(() => ShowContractInfoDialogCoreAsync(sourceRowOverride));
+
+        private async Task ShowContractInfoDialogCoreAsync(TableDataRow? sourceRowOverride = null)
         {
             var sourceRow = sourceRowOverride ?? Store.SelectedRow;
             if (sourceRow is null || sourceRow.IsPlaceholder)
@@ -469,7 +427,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             await dialog.ShowAsync();
         }
 
-        private async Task ShowStageFinEditDialogAsync(TableDataRow? sourceRowOverride = null)
+        private Task ShowStageFinEditDialogAsync(TableDataRow? sourceRowOverride = null)
+            => RunWorkflowDialogCommandAsync(() => ShowStageFinEditDialogCoreAsync(sourceRowOverride));
+
+        private async Task ShowStageFinEditDialogCoreAsync(TableDataRow? sourceRowOverride = null)
         {
             var sourceRow = sourceRowOverride ?? Store.SelectedRow;
             if (sourceRow is null || sourceRow.IsPlaceholder)
@@ -506,57 +467,35 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedRow = null;
-            dialog.SaveRequestedAsync += async args =>
+            await ShowStageWorkflowDialogAsync(dialog, async () =>
             {
-                try
+                var refreshRow = sourceRow;
+                var stagePayload = dialog.BuildPayload();
+                var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
+                var hasContractChanges = dialog.HasContractExternalNumberChanges();
+                if (!hasStageChanges && !hasContractChanges)
                 {
-                    var stagePayload = dialog.BuildPayload();
-                    var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
-                    var hasContractChanges = dialog.HasContractExternalNumberChanges();
-                    if (!hasStageChanges && !hasContractChanges)
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    if (hasStageChanges)
-                    {
-                        savedRow = await SaveStagePayloadAsync(stagePayload);
-                    }
-
-                    if (hasContractChanges)
-                    {
-                        await _modelMutationService.UpdateAsync(
-                            ContractModel,
-                            dialog.BuildContractExternalNumberPayload());
-                        savedRow ??= sourceRow;
-                    }
-
-                    if (hasStageChanges)
-                    {
-                        await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
-                    }
+                    return null;
                 }
-                catch (Exception ex)
+
+                if (hasStageChanges)
                 {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
+                    refreshRow = await SaveStagePayloadAsync(stagePayload);
                 }
-            };
 
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedRow is null)
-            {
-                return;
-            }
+                if (hasContractChanges)
+                {
+                    await _modelMutationService.UpdateAsync(
+                        ContractModel,
+                        dialog.BuildContractExternalNumberPayload());
+                }
 
-            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedRow);
-            ShowSuccessNotification(
-                "Этап сохранен",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedRow)));
+                if (hasStageChanges)
+                {
+                    await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
+                }
+                return refreshRow;
+            });
         }
 
         private void CopyStageInfo()
@@ -846,7 +785,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             return true;
         }
 
-        private async Task ShowStageContractCommerEditDialogAsync(TableDataRow? sourceRowOverride = null)
+        private Task ShowStageContractCommerEditDialogAsync(TableDataRow? sourceRowOverride = null)
+            => RunWorkflowDialogCommandAsync(() => ShowStageContractCommerEditDialogCoreAsync(sourceRowOverride));
+
+        private async Task ShowStageContractCommerEditDialogCoreAsync(TableDataRow? sourceRowOverride = null)
         {
             var sourceRow = sourceRowOverride ?? Store.SelectedRow;
             if (sourceRow is null || sourceRow.IsPlaceholder)
@@ -895,45 +837,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedContractRow = null;
-            dialog.SaveRequestedAsync += async args =>
-            {
-                try
-                {
-                    var savePlan = dialog.BuildSavePlan(_userService.CurrentUser?.ProfileId);
-                    if (!savePlan.HasChanges)
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    var saveResult = await _contractCommerSaveWorkflow.SaveAsync(savePlan);
-                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(saveResult.ContractId);
-                    dialog.ReloadAsEdit(editRow);
-                    savedContractRow = editRow;
-                }
-                catch (Exception ex)
-                {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
-                }
-            };
-
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedContractRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            _referenceLookupCacheService.Invalidate(ContractModel);
-            await RefreshTableRowAfterSaveAsync(false, sourceRow);
-
-            await RefreshDetailAsync();
-            ShowSuccessNotification(
-                "Контракт сохранен",
-                "Изменения этапов контракта сохранены.");
+            await ShowContractWorkflowDialogAsync(dialog, sourceRow);
         }
 
         private async Task<bool> PrepareStageEditContextAsync(TableDataRow sourceRow)
@@ -1127,13 +1031,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private static bool ContainsNestedAttributes(IReadOnlyDictionary<string, object?> payload)
         {
             return payload.Keys.Any(static key => key.EndsWith("_attributes", StringComparison.OrdinalIgnoreCase));
-        }
-
-        private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)
-        {
-            return payload.Keys.Any(static key =>
-                !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
         }
 
         private static string BuildReferenceNotificationMessage(string referenceTitle, long? id)

@@ -18,8 +18,8 @@ public abstract class AppEditDialog : ContentDialog
     private static readonly Windows.UI.Color FooterButtonHoverColor = ColorHelper.FromArgb(255, 232, 235, 239);
     private static readonly Windows.UI.Color FooterButtonPressedColor = ColorHelper.FromArgb(255, 220, 225, 231);
 
-    private readonly Button _saveButton;
-    private readonly Button _cancelButton;
+    private Button _saveButton;
+    private Button _cancelButton;
     private readonly TextBlock _cancelButtonLabel;
     private bool _closeAfterSave = true;
     private bool _resetSavedStateOnClose = true;
@@ -71,6 +71,19 @@ public abstract class AppEditDialog : ContentDialog
     public event Func<AppEditDialogSaveRequestedEventArgs, Task>? SaveRequestedAsync;
 
     public abstract bool Validate();
+
+    protected void ConfigureXamlFooter(Button saveButton, Button cancelButton)
+    {
+        _saveButton.Click -= SaveButton_Click;
+        _saveButton = saveButton;
+        _cancelButton = cancelButton;
+        _saveButton.Click += SaveButton_Click;
+        _cancelButton.Click += (_, _) =>
+        {
+            WasSaved = false;
+            Hide();
+        };
+    }
 
     protected void ConfigureSaveWithoutClose(string closeButtonText)
     {

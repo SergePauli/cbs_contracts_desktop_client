@@ -36,7 +36,7 @@ using Windows.System;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
-    public sealed class ContractHostView : ComplexHostViewBase
+    public sealed class ContractHostView : ContractWorkflowHostViewBase
     {
         private const int OziDepartmentId = 1;
         private const int CommersDepartmentId = 2;
@@ -60,7 +60,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
         private readonly ContractCommentWorkflow _contractCommentWorkflow;
-        private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly ContractTableRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private ContractWorkflowContext? _appliedContractWorkflowContext;
@@ -91,7 +90,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
             _contractCommentWorkflow = App.Services.GetRequiredService<ContractCommentWorkflow>();
-            _contractCommerSaveWorkflow = App.Services.GetRequiredService<ContractCommerSaveWorkflow>();
             _showContractCostFraction = _localUserSettingsService.Get().ShowContractCostFraction;
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
@@ -157,7 +155,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (Store.SelectedRow is not null && !Store.SelectedRow.IsPlaceholder)
             {
                 UpdateDetailView(Store.SelectedRow);
-                _ = RefreshDetailAsync();
+                _ = LoadAndApplyDetailDataAsync();
             }
         }
 
@@ -171,7 +169,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
 
             UpdateDetailView(row);
-            _ = RefreshDetailAsync();
+            _ = LoadAndApplyDetailDataAsync();
             return Task.CompletedTask;
         }
 
@@ -188,16 +186,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             return _contractWorkflowStore.SelectedFooterText;
         }
 
-        protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
+        protected override async Task LoadWorkflowDetailsAfterSaveAsync()
         {
             UpdateDetailView(Store.SelectedRow);
-            await RefreshDetailAsync();
-        }
-
-        protected override async Task OnTableReloadedAfterSaveAsync()
-        {
-            UpdateDetailView(Store.SelectedRow);
-            await RefreshDetailAsync();
+            await LoadAndApplyDetailDataAsync();
         }
 
         private async Task LoadContractOptionsSourcesAsync()
@@ -304,7 +296,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             _detailView.Visibility = Visibility.Visible;
         }
 
-        private async Task RefreshDetailAsync()
+        private async Task LoadAndApplyDetailDataAsync()
         {
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
@@ -500,59 +492,75 @@ namespace CbsContractsDesktopClient.Views.Shell
 
         private async Task CreateEmployeeForSelectedContractAsync()
         {
-            if (Store.SelectedRow is null)
+            var contractId = Store.SelectedRow?.GetValue("id");
+            long? contragentId = null;
+            string? contragentName = null;
+            var operation = "PrepareEmployeeEditWorkflowRequest";
+            try
             {
-                return;
-            }
-
-            if (!_referenceDefinitionService.TryGetByRoute("/employees", out var employeeDefinition))
-            {
-                await ShowErrorDialogAsync(
-                    "Не удалось создать сотрудника.",
-                    "Справочник сотрудников не подключен.");
-                return;
-            }
-
-            var contragentId =
-                TryGetLongValue(Store.SelectedRow, "contragent.id")
-                ?? TryGetLongValue(_contractWorkflowStore.Contragent, "id");
-            var contragentName =
-                JsonDataReader.TryGetText(Store.SelectedRow, "contragent.name")
-                ?? JsonDataReader.TryGetText(_contractWorkflowStore.Contragent, "name", "requisites.organization.name");
-
-            if (contragentId is null || string.IsNullOrWhiteSpace(contragentName))
-            {
-                await ShowErrorDialogAsync(
-                    "Не удалось создать сотрудника.",
-                    "В выбранном контракте отсутствует контрагент.");
-                return;
-            }
-
-            var result = await _employeeEditWorkflow.ShowAsync(
-                new EmployeeEditWorkflowRequest
+                var context = await EnsureContractWorkflowContextForDialogAsync("Добавление сотрудника");
+                if (context is null)
                 {
-                    XamlRoot = XamlRoot,
-                    IsCreateMode = true,
-                    Definition = employeeDefinition,
-                    InitialState = new EmployeeEditDialogState
+                    return;
+                }
+
+                var contragent = _contractWorkflowStore.Contragent;
+
+                if (!_referenceDefinitionService.TryGetByRoute("/employees", out var employeeDefinition))
+                {
+                    await ShowErrorDialogAsync(
+                        "Не удалось создать сотрудника.",
+                        "Справочник сотрудников не подключен.");
+                    return;
+                }
+
+                contragentId = TryGetLongValue(contragent, "id");
+                contragentName = JsonDataReader.TryGetText(contragent, "name", "requisites.organization.name");
+
+                if (contragentId is null || string.IsNullOrWhiteSpace(contragentName))
+                {
+                    await ShowErrorDialogAsync(
+                        "Не удалось создать сотрудника.",
+                        "В выбранном контракте отсутствует контрагент.");
+                    return;
+                }
+
+                operation = "EmployeeEditWorkflow.ShowAsync";
+                var result = await _employeeEditWorkflow.ShowAsync(
+                    new EmployeeEditWorkflowRequest
                     {
-                        Definition = employeeDefinition,
+                        XamlRoot = XamlRoot,
                         IsCreateMode = true,
-                        ContragentId = contragentId,
-                        ContragentName = contragentName,
-                        IsUsed = true
-                    }
-                });
+                        Definition = employeeDefinition,
+                        InitialState = new EmployeeEditDialogState
+                        {
+                            Definition = employeeDefinition,
+                            IsCreateMode = true,
+                            ContragentId = contragentId,
+                            ContragentName = contragentName,
+                            IsUsed = true
+                        }
+                    });
 
-            if (result is null)
-            {
-                return;
+                if (result is null)
+                {
+                    return;
+                }
+
+                operation = "ContractHostView.LoadAndApplyDetailDataAsync";
+                await LoadAndApplyDetailDataAsync();
+                ShowSuccessNotification(
+                    "Сотрудник создан",
+                    BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
             }
-
-            await RefreshDetailAsync();
-            ShowSuccessNotification(
-                "Сотрудник создан",
-                BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
+            catch (Exception ex)
+            {
+                DiagnosticsFileLogger.AppendBlock(
+                    "ContractHostView.CreateEmployeeForSelectedContractAsync failed",
+                    $"operation={operation}{Environment.NewLine}"
+                    + $"parameters={JsonSerializer.Serialize(new { ContractId = contractId, ContragentId = contragentId, ContragentName = contragentName, IsCreateMode = true, IsUsed = true, HasXamlRoot = XamlRoot is not null })}{Environment.NewLine}"
+                    + ex);
+            }
         }
 
         private async void DetailView_EmployeeEditRequested(object? sender, EmployeeBoxEditRequestedEventArgs e)
@@ -582,7 +590,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                     return;
                 }
 
-                await RefreshDetailAsync();
+                await LoadAndApplyDetailDataAsync();
                 ShowSuccessNotification(
                     "Изменения сотрудника сохранены",
                     BuildReferenceNotificationMessage(result.Definition.Title, TryGetSelectedRowId(result.SavedRow)));
@@ -663,7 +671,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        private async Task ShowContractCommerEditDialogAsync()
+        private Task ShowContractCommerEditDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowContractCommerEditDialogCoreAsync);
+
+        private async Task ShowContractCommerEditDialogCoreAsync()
         {
             if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
             {
@@ -707,17 +718,7 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedRow = null;
-            AttachContractCommerSaveHandler(dialog, isCreateMode: false, saved => savedRow = saved);
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(ContractModel);
-            await RefreshTableRowAfterSaveAsync(isCreateMode: false, savedRow);
-            await RefreshDetailAsync();
+            await ShowContractWorkflowDialogAsync(dialog, context.SelectedRow);
         }
 
         private async Task ShowEditDialogForCurrentUserAsync()
@@ -743,7 +744,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             await ShowContractInfoDialogAsync();
         }
 
-        private async Task ShowContractInfoDialogAsync()
+        private Task ShowContractInfoDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowContractInfoDialogCoreAsync);
+
+        private async Task ShowContractInfoDialogCoreAsync()
         {
             if (await EnsureContractWorkflowContextForDialogAsync("Информация о контракте") is null)
             {
@@ -773,9 +777,13 @@ namespace CbsContractsDesktopClient.Views.Shell
             await dialog.ShowAsync();
         }
 
-        private async Task ShowContractOziStageEditDialogAsync()
+        private Task ShowContractOziStageEditDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowContractOziStageEditDialogCoreAsync);
+
+        private async Task ShowContractOziStageEditDialogCoreAsync()
         {
-            if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
+            var sourceRow = Store.SelectedRow;
+            if (sourceRow is null || sourceRow.IsPlaceholder)
             {
                 return;
             }
@@ -818,57 +826,38 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedStageRow = null;
-            dialog.SaveRequestedAsync += async args =>
+            await ShowStageWorkflowDialogAsync(dialog, async () =>
             {
-                try
+                var stagePayload = dialog.BuildPayload();
+                if (!HasUpdatePayloadChanges(stagePayload))
                 {
-                    var stagePayload = dialog.BuildPayload();
-                    if (!HasUpdatePayloadChanges(stagePayload))
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    savedStageRow = await _modelMutationService.UpdateAsync(StageModel, stagePayload);
-
-                    var shouldCloseContract = dialog.ShouldCloseContract();
-                    Store.AppendUiTrace($"CONTRACT CLOSE CHECK {_contractWorkflowStore.BuildContractCloseDecisionTrace(shouldCloseContract)}");
-                    if (shouldCloseContract)
-                    {
-                        var contractPayload = dialog.BuildContractClosePayload();
-                        await _modelMutationService.UpdateAsync(
-                            ContractModel,
-                            contractPayload);
-                    }
-
-                    await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
+                    return null;
                 }
-                catch (Exception ex)
+
+                await _modelMutationService.UpdateAsync(StageModel, stagePayload);
+
+                var shouldCloseContract = dialog.ShouldCloseContract();
+                Store.AppendUiTrace($"CONTRACT CLOSE CHECK {_contractWorkflowStore.BuildContractCloseDecisionTrace(shouldCloseContract)}");
+                if (shouldCloseContract)
                 {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
+                    var contractPayload = dialog.BuildContractClosePayload();
+                    await _modelMutationService.UpdateAsync(
+                        ContractModel,
+                        contractPayload);
                 }
-            };
 
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedStageRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(StageModel);
-            _referenceLookupCacheService.Invalidate(ContractModel);
-            await RefreshSelectedContractAfterStageSaveAsync();
-            ShowSuccessNotification(
-                "Этап сохранен",
-                BuildReferenceNotificationMessage("Этап", TryGetSelectedRowId(savedStageRow)));
+                await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
+                return sourceRow;
+            });
         }
 
-        private async Task ShowContractFinStageEditDialogAsync()
+        private Task ShowContractFinStageEditDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowContractFinStageEditDialogCoreAsync);
+
+        private async Task ShowContractFinStageEditDialogCoreAsync()
         {
-            if (Store.SelectedRow is null || Store.SelectedRow.IsPlaceholder)
+            var sourceRow = Store.SelectedRow;
+            if (sourceRow is null || sourceRow.IsPlaceholder)
             {
                 return;
             }
@@ -908,62 +897,40 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedStageRow = null;
-            var hasSavedContract = false;
-            dialog.SaveRequestedAsync += async args =>
+            await ShowStageWorkflowDialogAsync(dialog, async () =>
             {
-                try
+                var stagePayload = dialog.BuildPayload();
+                var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
+                var hasContractChanges = dialog.HasContractExternalNumberChanges();
+                if (!hasStageChanges && !hasContractChanges)
                 {
-                    var stagePayload = dialog.BuildPayload();
-                    var hasStageChanges = HasUpdatePayloadChanges(stagePayload);
-                    var hasContractChanges = dialog.HasContractExternalNumberChanges();
-                    if (!hasStageChanges && !hasContractChanges)
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    if (hasStageChanges)
-                    {
-                        savedStageRow = await _modelMutationService.UpdateAsync(StageModel, stagePayload);
-                    }
-
-                    if (hasContractChanges)
-                    {
-                        await _modelMutationService.UpdateAsync(
-                            ContractModel,
-                            dialog.BuildContractExternalNumberPayload());
-                        hasSavedContract = true;
-                    }
-
-                    if (hasStageChanges)
-                    {
-                        await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
-                    }
+                    return null;
                 }
-                catch (Exception ex)
+
+                if (hasStageChanges)
                 {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
+                    await _modelMutationService.UpdateAsync(StageModel, stagePayload);
                 }
-            };
 
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || (savedStageRow is null && !hasSavedContract))
-            {
-                return;
-            }
+                if (hasContractChanges)
+                {
+                    await _modelMutationService.UpdateAsync(
+                        ContractModel,
+                        dialog.BuildContractExternalNumberPayload());
+                }
 
-            _referenceLookupCacheService.Invalidate(StageModel);
-            _referenceLookupCacheService.Invalidate(ContractModel);
-            await RefreshSelectedContractAfterStageSaveAsync();
-            ShowSuccessNotification(
-                "Этап сохранен",
-                BuildReferenceNotificationMessage("Этап", savedStageRow is null ? selectedStageEditState.Id : TryGetSelectedRowId(savedStageRow)));
+                if (hasStageChanges)
+                {
+                    await SaveAuditEntriesAsync(dialog.PendingAuditEntries);
+                }
+                return sourceRow;
+            });
         }
 
-        private async Task ShowContractCommerCreateDialogAsync()
+        private Task ShowContractCommerCreateDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowContractCommerCreateDialogCoreAsync);
+
+        private async Task ShowContractCommerCreateDialogCoreAsync()
         {
             if (!IsContractCreateAllowedForCurrentUser())
             {
@@ -990,60 +957,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             {
                 XamlRoot = XamlRoot
             };
-            TableDataRow? savedRow = null;
-            AttachContractCommerSaveHandler(dialog, isCreateMode: true, saved => savedRow = saved);
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(ContractModel);
-            await RefreshTableRowAfterSaveAsync(isCreateMode: true, savedRow);
-        }
-
-        private void AttachContractCommerSaveHandler(
-            ContractCommerEditDialog dialog,
-            bool isCreateMode,
-            Action<TableDataRow> setSavedRow)
-        {
-            var createMode = isCreateMode;
-            dialog.SaveRequestedAsync += async args =>
-            {
-                try
-                {
-                    var savedAsCreate = createMode;
-                    var savePlan = dialog.BuildSavePlan(_userService.CurrentUser?.ProfileId);
-                    if (!savePlan.HasChanges)
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    var saveResult = await _contractCommerSaveWorkflow.SaveAsync(savePlan);
-                    var savedId = saveResult.ContractId;
-                    if (createMode)
-                    {
-                        dialog.AcceptCreatedContractIdentity(
-                            savedId,
-                            saveResult.ContractMutationRow?.GetValue("list_key")?.ToString());
-                        createMode = false;
-                    }
-
-                    ShowSuccessNotification(
-                        savedAsCreate ? "Контракт создан" : "Контракт сохранен",
-                        savedAsCreate ? "Новый контракт сохранен." : "Изменения контракта сохранены.");
-                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(savedId);
-                    dialog.ReloadAsEdit(editRow);
-                    setSavedRow(editRow);
-                }
-                catch (Exception ex)
-                {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
-                }
-            };
+            await ShowContractWorkflowDialogAsync(dialog, sourceRow: null, isCreateMode: true);
         }
 
         private bool IsContractCreateAllowedForCurrentUser()
@@ -1069,13 +983,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             };
         }
 
-        private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)
-        {
-            return payload.Keys.Any(static key =>
-                !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
-        }
-
         private async Task SaveAuditEntriesAsync(IReadOnlyList<PendingAuditEntry> entries)
         {
             if (entries.Count == 0)
@@ -1093,18 +1000,6 @@ namespace CbsContractsDesktopClient.Views.Shell
                     "Audit",
                     AuditCreatePayloadBuilder.Build(entry, user.Id, personId));
             }
-        }
-
-        private async Task RefreshSelectedContractAfterStageSaveAsync(CancellationToken cancellationToken = default)
-        {
-            if (Store.SelectedRow is null || TryGetSelectedRowId(Store.SelectedRow) is not long contractId)
-            {
-                await RefreshDetailAsync();
-                return;
-            }
-
-            await RefreshTableRowByIdAsync(contractId, cancellationToken);
-            await RefreshDetailAsync();
         }
 
         private StageEditDialogNavigationState BuildStageNavigationState(StageEditState stage)

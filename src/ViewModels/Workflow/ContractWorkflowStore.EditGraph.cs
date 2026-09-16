@@ -154,6 +154,14 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             stage.Used = isExpanded;
         }
 
+        public void SetAllStagesExpanded(bool isExpanded)
+        {
+            foreach (var stage in ContractStageEditStates.Where(static stage => !stage.IsDestroyed))
+            {
+                SetStageExpanded(stage, isExpanded);
+            }
+        }
+
         public void SelectStageEditState(TableDataRow selectedStage)
         {
             ArgumentNullException.ThrowIfNull(selectedStage);

@@ -7,20 +7,13 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
     <UserControl.Resources>
-        <DataTemplate
-            x:Key="StageTreeItemTemplate"
-            x:DataType="functional:ContractStageTreeItem">
-            <TreeViewItem
-                Visibility="{x:Bind Visibility, Mode=OneWay}"
-                IsExpanded="{x:Bind IsExpanded, Mode=TwoWay}"
-                ItemsSource="{x:Bind Children}">
-                <TreeViewItem.Content>
-                    <ContentControl
-                        Margin="{x:Bind ContentMargin}"
-                        HorizontalContentAlignment="Stretch"
-                        Content="{x:Bind Content, Mode=OneWay}" />
-                </TreeViewItem.Content>
-            </TreeViewItem>
+        <DataTemplate x:Key="StageTreeItemTemplate">
+            <ContentControl
+                Margin="{Binding Content.ContentMargin}"
+                HorizontalContentAlignment="Stretch"
+                Loaded="StageContent_Loaded"
+                Unloaded="StageContent_Unloaded"
+                DataContextChanged="StageContent_DataContextChanged" />
         </DataTemplate>
     </UserControl.Resources>
 
@@ -296,11 +289,12 @@
                                     FontSize="14"
                                     Glyph="&#xE838;" />
                             </Button>
-                            <ContentControl
+                            <TreeView
                                 x:Name="StagesTabContentHost"
                                 Grid.Column="1"
-                                HorizontalContentAlignment="Stretch"
-                                VerticalContentAlignment="Stretch" />
+                                Margin="8"
+                                SelectionMode="None"
+                                ItemTemplate="{StaticResource StageTreeItemTemplate}" />
                         </Grid>
                     </Border>
                 </TabViewItem>
