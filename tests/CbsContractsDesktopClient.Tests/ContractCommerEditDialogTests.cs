@@ -1,3 +1,4 @@
+using CbsContractsDesktopClient.Views.Functional;
 using Xunit;
 
 namespace CbsContractsDesktopClient.Tests;
@@ -34,24 +35,44 @@ public sealed class ContractCommerEditDialogTests
         Assert.Contains("Stage read model must contain Stage.name for contract stages tree.", code);
         Assert.Contains("return \"Новый этап\";", code);
         Assert.Contains("return $\"Э{priority}_{stage.TaskKind.Name}\";", code);
-        Assert.Contains("treeItem.RefreshContent();", code);
+        Assert.Contains("treeItem.UpdateHeader(GetStageTreeName(stage));", code);
     }
 
     [Fact]
-    public void StageTreeContent_IsCreatedPerTemplateInstance()
+    public void StageTreeContent_PreservesEditorsAcrossSixExpansionCyclesFor25Stages()
     {
-        var code = File.ReadAllText(DialogPath);
-        var treeItemCode = File.ReadAllText(TreeItemPath);
-        var xaml = File.ReadAllText(ViewPath);
+        var created = 0;
+        var branches = Enumerable.Range(1, 25).Select(index =>
+            new ContractStageTreeItem($"Этап {index}",
+                [new ContractStageTreeItem(() =>
+                {
+                    created++;
+                    return new Dictionary<string, string> { ["comment"] = $"Комментарий {index}" };
+                })])).ToList();
+        Assert.All(branches, branch => Assert.Null(branch.Children[0].Content));
+        Assert.Equal(0, created);
 
-        Assert.Contains("Func<object> contentFactory", treeItemCode);
-        Assert.Contains("public object Content => _contentFactory();", treeItemCode);
-        Assert.Contains("Content=\"{x:Bind Content, Mode=OneWay}\"", xaml);
-        Assert.Contains("() => BuildStageSection(stage, stageItem!, supplyTreeItem)", code);
-        Assert.Contains("() => BuildStageCommentsBox(stage)", code);
-        Assert.Contains("() => BuildStageSupplyContent(stage)", code);
-        Assert.DoesNotContain("_stageSupplyViews", code);
-        Assert.DoesNotContain("StagesTree_Expanding", code);
+        var editors = new List<object>();
+        for (var cycle = 0; cycle < 6; cycle++)
+        {
+            for (var index = 0; index < branches.Count; index++)
+            {
+                var branch = branches[index];
+                branch.IsExpanded = true;
+                branch.PrepareVisibleContent();
+                var editor = Assert.IsType<Dictionary<string, string>>(branch.Children[0].Content);
+                if (cycle == 0)
+                {
+                    editors.Add(editor);
+                    editor["comment"] = $"Введено {index}";
+                }
+                Assert.Same(editors[index], editor);
+                Assert.Equal($"Введено {index}", editor["comment"]);
+                branch.IsExpanded = false;
+                branch.PrepareVisibleContent();
+            }
+        }
+        Assert.Equal(25, created);
     }
 
     [Fact]
@@ -60,7 +81,8 @@ public sealed class ContractCommerEditDialogTests
         var code = File.ReadAllText(DialogPath);
 
         Assert.Contains("stage.Used);", code);
-        Assert.Contains("stageItem.ExpansionChanged += isExpanded => _workflowStore.SetStageExpanded(stage, isExpanded);", code);
+        Assert.Contains("_workflowStore.SetStageExpanded(stage, isExpanded);", code);
+        Assert.Contains("_workflowStore.SetAllStagesExpanded(isExpanded);", code);
         Assert.DoesNotContain("var isExpanded = _openStagesTabOnLoad", code);
         Assert.DoesNotContain("BuildActiveStageCheckBox", code);
         Assert.DoesNotContain("\"АЭ\"", code);
@@ -97,7 +119,7 @@ public sealed class ContractCommerEditDialogTests
     public void Save_KeepsDialogOpenAndReloadsCreatedContractAsEdit()
     {
         var code = File.ReadAllText(DialogPath);
-        var hostCode = File.ReadAllText(HostPath);
+        var hostCode = File.ReadAllText(TestProjectPaths.FromRepositoryRoot("src", "Views", "Shell", "ContractWorkflowHostViewBase.cs"));
 
         Assert.Contains("ConfigureSaveWithoutClose(\"Закрыть\");", code);
         Assert.Contains("public void ReloadAsEdit(TableDataRow contract)", code);
@@ -107,31 +129,30 @@ public sealed class ContractCommerEditDialogTests
         Assert.Contains("_workflowStore.BeginContractEdit(contract);", code);
         Assert.Contains("ResetEditorsFromContract();", code);
         Assert.Contains("var createMode = isCreateMode;", hostCode);
-        Assert.Contains("var savedId = saveResult.ContractId;", hostCode);
+        Assert.Contains("var result = await _contractSaveWorkflow.SaveAsync(savePlan);", hostCode);
         Assert.Contains("dialog.AcceptCreatedContractIdentity(", hostCode);
-        Assert.Contains("ReloadContractEditRowAsync(savedId)", hostCode);
+        Assert.Contains("ReloadContractEditRowAsync(result.ContractId)", hostCode);
         Assert.Contains("dialog.ReloadAsEdit(editRow);", hostCode);
         Assert.Contains("createMode = false;", hostCode);
         Assert.True(
             hostCode.IndexOf("dialog.AcceptCreatedContractIdentity(", StringComparison.Ordinal)
-            < hostCode.IndexOf("ReloadContractEditRowAsync(savedId)", StringComparison.Ordinal));
+            < hostCode.IndexOf("ReloadContractEditRowAsync(result.ContractId)", StringComparison.Ordinal));
     }
 
     [Fact]
-    public void SaveNotification_IsShownBeforeDialogReloadAndClose()
+    public void SaveNotification_IsShownInSaveHandlerAndDetailsRefreshAfterClose()
     {
-        var hostCode = File.ReadAllText(HostPath);
-        var handlerStart = hostCode.IndexOf("private void AttachContractCommerSaveHandler", StringComparison.Ordinal);
-        var handlerEnd = hostCode.IndexOf("private bool IsContractCreateAllowedForCurrentUser", handlerStart, StringComparison.Ordinal);
+        var hostCode = File.ReadAllText(TestProjectPaths.FromRepositoryRoot(
+            "src", "Views", "Shell", "ContractWorkflowHostViewBase.cs"));
+        var handlerStart = hostCode.IndexOf("async Task SaveAsync(AppEditDialogSaveRequestedEventArgs args)", StringComparison.Ordinal);
+        var handlerEnd = hostCode.IndexOf("dialog.SaveRequestedAsync += SaveAsync;", handlerStart, StringComparison.Ordinal);
         var handlerCode = hostCode[handlerStart..handlerEnd];
-
         Assert.Contains("ShowSuccessNotification(", handlerCode);
-        Assert.True(
-            handlerCode.IndexOf("ShowSuccessNotification(", StringComparison.Ordinal)
-            < handlerCode.IndexOf("ReloadContractEditRowAsync(savedId)", StringComparison.Ordinal));
         Assert.DoesNotContain("dialog.ShowAsync()", handlerCode);
+        Assert.DoesNotContain("refreshAsync()", handlerCode);
+        Assert.True(hostCode.IndexOf("await dialog.ShowAsync()", StringComparison.Ordinal)
+            < hostCode.IndexOf("await refreshAsync()", StringComparison.Ordinal));
     }
-
     [Fact]
     public void ContractDialogHosts_UseSeparatedContractStageAndRevisionSaveWorkflow()
     {
@@ -145,9 +166,9 @@ public sealed class ContractCommerEditDialogTests
             "src", "ViewModels", "Workflow", "ContractCommerSaveWorkflow.cs"));
 
         Assert.Contains("public ContractCommerEditSavePlan BuildSavePlan", dialogCode);
-        Assert.Contains("dialog.BuildSavePlan", contractHostCode);
-        Assert.Contains("dialog.BuildSavePlan", stageHostCode);
-        Assert.Contains("dialog.BuildSavePlan", revisionHostCode);
+        Assert.Contains("ShowContractWorkflowDialogAsync(dialog,", contractHostCode);
+        Assert.Contains("ShowContractWorkflowDialogAsync(dialog,", stageHostCode);
+        Assert.Contains("ShowContractWorkflowDialogAsync(dialog,", revisionHostCode);
         Assert.Contains("UpdateAsync(StageModel", workflowCode);
         Assert.Contains("UpdateAsync(RevisionModel", workflowCode);
     }

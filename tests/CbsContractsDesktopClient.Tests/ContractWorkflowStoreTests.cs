@@ -9,6 +9,32 @@ namespace CbsContractsDesktopClient.Tests;
 public sealed class ContractWorkflowStoreTests
 {
     [Fact]
+    public void SetAllStagesExpanded_RepeatedCyclesPreserveEditsAndSelectionAndExcludeDeletedStages()
+    {
+        var store = new ContractWorkflowStore();
+        var stages = Enumerable.Range(1, 25)
+            .Select(index => StageEditState.CreateNew(index, used: index % 2 == 0)).ToList();
+        var deleted = StageEditState.CreateNew(26, used: true);
+        deleted.IsDestroyed = true;
+        store.SetContractStageEditStates(stages.Append(deleted));
+        var selected = store.SelectedStageEditState;
+        stages[17].Cost = 1234.56m;
+        stages[17].Comment = "Сохранить введённые данные";
+
+        for (var cycle = 0; cycle < 6; cycle++)
+        {
+            store.SetAllStagesExpanded(true);
+            Assert.All(stages, stage => Assert.True(stage.Used));
+            store.SetAllStagesExpanded(false);
+            Assert.All(stages, stage => Assert.False(stage.Used));
+            Assert.True(deleted.Used);
+            Assert.Same(selected, store.SelectedStageEditState);
+            Assert.Equal(1234.56m, stages[17].Cost);
+            Assert.Equal("Сохранить введённые данные", stages[17].Comment);
+        }
+    }
+
+    [Fact]
     public void SetContractSelection_PublishesOnlyCompletedStoreState()
     {
         var store = new ContractWorkflowStore();

@@ -394,7 +394,7 @@ public sealed class ContentHostViewTests
         var stageHost = File.ReadAllText(StageHostViewPath);
         var revisionHost = File.ReadAllText(RevisionHostViewPath);
 
-        Assert.Contains("_contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;", detailView);
+        Assert.Contains("_contractWorkflowStore.DetailDataApplied += OnContractWorkflowDetailDataApplied;", detailView);
         Assert.DoesNotContain("ContractRowProperty", detailView);
         Assert.DoesNotContain("ContragentRowProperty", detailView);
         Assert.DoesNotContain("RevisionRowProperty", detailView);
