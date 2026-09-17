@@ -8,6 +8,30 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class EmployeeEditPayloadBuilderTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Save_NormalizesNewEmailForNewAndExistingEmployees(bool isCreateMode)
+    {
+        var viewModel = CreateViewModel(new EmployeeEditDialogState
+        {
+            Definition = CreateDefinition(), IsCreateMode = isCreateMode,
+            Id = isCreateMode ? null : 15, PersonId = isCreateMode ? null : 20,
+            PersonName = "Иванов Иван", PositionId = 7, PositionName = "Инженер",
+            ContragentId = 9, ContragentName = "ООО Ромашка"
+        });
+        viewModel.ContactsText = "  Ivan.Petrov@EXAMPLE.COM  ";
+
+        var payload = isCreateMode
+            ? EmployeeEditPayloadBuilder.BuildForCreate(viewModel)
+            : EmployeeEditPayloadBuilder.BuildForUpdate(viewModel);
+        var person = Assert.IsType<Dictionary<string, object?>>(payload["person_attributes"]);
+        var contacts = Assert.IsAssignableFrom<IEnumerable<object?>>(person["person_contacts_attributes"]);
+        var contact = Assert.IsType<Dictionary<string, object?>>(Assert.Single(contacts));
+        var attributes = Assert.IsType<Dictionary<string, object?>>(contact["contact_attributes"]);
+        Assert.Equal("ivan.petrov@example.com", attributes["value"]);
+    }
+
     [Fact]
     public void BuildForCreate_BuildsNestedPersonPositionContragentAndContacts()
     {

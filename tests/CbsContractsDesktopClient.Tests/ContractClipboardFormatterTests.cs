@@ -8,6 +8,20 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class ContractClipboardFormatterTests
 {
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BuildForContract_UsesInternalNumberWhenExternalNumberIsBlank(string? externalNumber)
+    {
+        var contract = CreateContractState(null);
+        contract.ExternalNumber = externalNumber;
+        var text = ContractClipboardFormatter.BuildForContract(
+            contract, RevisionEditState.CreateNew(0, "Договор"), []);
+
+        Assert.StartsWith("ООО Ромашка Договор № 26/001/20", text);
+    }
+
     [Fact]
     public void BuildForStage_UsesRevisionDescriptionDatesAndResponsibleFullNames()
     {
@@ -21,7 +35,7 @@ public sealed class ContractClipboardFormatterTests
         var text = ContractClipboardFormatter.BuildForStage(contract, revision, stage);
 
         Assert.Equal(
-            $"ООО Ромашка Договор поставки EXT-77 от 03.05.2026 | работы проводятся с 04.05.2026 до 14.05.2026{Environment.NewLine}"
+            $"ООО Ромашка Договор поставки № EXT-77 от 03.05.2026 | работы проводятся с 04.05.2026 до 14.05.2026{Environment.NewLine}"
             + "Иванов Иван Иванович, Петров Пётр Петрович",
             text);
     }
@@ -35,7 +49,7 @@ public sealed class ContractClipboardFormatterTests
         var text = ContractClipboardFormatter.BuildForContract(contract, revision, []);
 
         Assert.Equal(
-            $"ООО Ромашка Дополнительное соглашение EXT-77{Environment.NewLine}"
+            $"ООО Ромашка Дополнительное соглашение № EXT-77{Environment.NewLine}"
             + $"Иванов Иван Иванович{Environment.NewLine}Петров Пётр Петрович",
             text);
         Assert.DoesNotContain(" от ", text);
@@ -63,6 +77,7 @@ public sealed class ContractClipboardFormatterTests
     {
         return ContractEditState.FromRow(CreateRow(
             ("id", 77L),
+            ("name", "26/001/20"),
             ("status_id", 1L),
             ("status.name", "Подписан"),
             ("contragent.name", "ООО Ромашка"),
