@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
@@ -83,6 +83,12 @@ namespace CbsContractsDesktopClient.Views.Functional
             .ToList();
         private TreeView? _stagesTree;
         private IReadOnlyList<ContractStageTreeItem> _stageTreeItems = [];
+        private readonly Dictionary<StageEditState, ContractStageEditorView> _stageEditorViews = [];
+        private readonly Dictionary<StageEditState, ContractStageTreeItem> _stageItems = [];
+        private readonly Dictionary<ContractStageTreeItem, TreeViewNode> _stageTreeNodes = [];
+        private ContractStageTreeItem? _contractCommentsTreeItem;
+        private bool _isUpdatingStageEditors;
+        private bool _isApplyingStagesPresentation;
         private StackPanel? _revisionsStack;
         private TabView? _tabs;
         private TabViewItem? _contractTab;
@@ -293,7 +299,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             view.ResetChangesSlot.Content = _isCreateMode ? null : _resetChangesButton;
             PopulateContractTab(view);
             view.ToggleStagesExpansion.Click += (_, _) => ToggleAllStagesExpansion();
-            view.StagesTabSlot.Content = BuildStagesTabContent();
+            InitializeStagesTree();
             view.RevisionsTabSlot.Content = BuildRevisionsTabContent();
 
             return view;
@@ -1281,13 +1287,45 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private void ToggleAllStagesExpansion()
         {
-            var isExpanded = !_stageTreeItems.All(static item => item.IsExpanded);
-            foreach (var item in _stageTreeItems)
-            {
-                item.IsExpanded = isExpanded;
-            }
+            var isExpanded = !StageEditors.All(static stage => stage.Used);
+            _workflowStore.SetAllStagesExpanded(isExpanded);
+            ApplyStagesExpansion();
         }
 
+        private void ApplyStagesExpansion()
+        {
+            _isApplyingStagesPresentation = true;
+            try
+            {
+                foreach (var (stage, item) in _stageItems)
+                {
+                    if (stage.Used) item.PrepareChildren();
+                    item.IsExpanded = stage.Used;
+                }
+                foreach (var node in _stagesTree!.RootNodes)
+                    node.IsExpanded = ((ContractStageTreeItem)node.Content).IsExpanded;
+            }
+            finally
+            {
+                _isApplyingStagesPresentation = false;
+            }
+            RefreshStagesExpansionButton();
+        }
+
+        private void StageExpansionChanged(TreeViewNode node, bool isExpanded)
+        {
+            if (_isApplyingStagesPresentation) return;
+            var item = (ContractStageTreeItem)node.Content;
+            if (isExpanded) item.PrepareChildren();
+            item.IsExpanded = isExpanded;
+            foreach (var (stage, stageItem) in _stageItems)
+            {
+                if (!ReferenceEquals(stageItem, item)) continue;
+                _workflowStore.SetStageExpanded(stage, isExpanded);
+                RefreshStagesExpansionButton();
+                break;
+            }
+        }
         private void RefreshStagesExpansionButton()
         {
             var allExpanded = _stageTreeItems.All(static item => item.IsExpanded);
@@ -1297,37 +1335,98 @@ namespace CbsContractsDesktopClient.Views.Functional
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(_view.ToggleStagesExpansion, actionText);
         }
 
-        private UIElement BuildStagesTabContent()
+        private void InitializeStagesTree()
         {
-            _stagesTree = new TreeView
-            {
-                Margin = new Thickness(8),
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                VerticalAlignment = VerticalAlignment.Stretch,
-                ItemTemplate = (DataTemplate?)_view?.Resources["StageTreeItemTemplate"]
-            };
+            _stagesTree = _view!.StagesTree;
+            _stagesTree.Expanding += (_, args) => StageExpansionChanged(args.Node, true);
+            _stagesTree.Collapsed += (_, args) => StageExpansionChanged(args.Node, false);
             RefreshStagesStack();
-            return _stagesTree;
+        }
+
+        private TreeViewNode BuildStageTreeNode(ContractStageTreeItem item)
+        {
+            var node = new TreeViewNode { Content = item };
+            _stageTreeNodes.Add(item, node);
+            foreach (var child in item.Children)
+            {
+                var childNode = BuildStageTreeNode(child);
+                if (child.Visibility == Visibility.Visible) node.Children.Add(childNode);
+            }
+            // Children must exist before expanding a node; containers only display content.
+            node.IsExpanded = item.IsExpanded;
+            return node;
+        }
+
+        private void RemoveStageTreeNodes(ContractStageTreeItem item)
+        {
+            _stageTreeNodes.Remove(item);
+            foreach (var child in item.Children) RemoveStageTreeNodes(child);
         }
 
         private void RefreshStagesStack()
         {
-            if (_stagesTree is null)
+            if (_stagesTree is null) return;
+            var stages = StageEditors.OrderBy(static stage => stage.Priority).ToList();
+            foreach (var removed in _stageItems.Keys.Except(stages).ToList())
             {
-                return;
+                RemoveStageTreeNodes(_stageItems[removed]);
+                _stageItems.Remove(removed);
+                if (_stageEditorViews.Remove(removed, out var removedEditor))
+                {
+                    if (ReferenceEquals(_firstStageDeadlineKindBox, removedEditor.DeadlineKind))
+                        _firstStageDeadlineKindBox = null;
+                    if (ReferenceEquals(_initialStageFocusTarget, removedEditor.DeadlineKind))
+                        _initialStageFocusTarget = null;
+                }
+                _stageCommentBoxes.Remove(removed.Id);
             }
-
-            _firstStageDeadlineKindBox = null;
-            _stageCommentBoxes.Clear();
-            _contractCommentsBox = null;
-            _stageTreeItems = StageEditors
-                .OrderBy(static stage => stage.Priority)
-                .Select(BuildStageTreeItem)
-                .ToList();
-            _stagesTree.ItemsSource = _stageTreeItems.Append(BuildContractCommentsTreeItem()).ToList();
-            RefreshStagesExpansionButton();
+            foreach (var stage in stages)
+            {
+                if (!_stageItems.TryGetValue(stage, out var item))
+                {
+                    item = BuildStageTreeItem(stage);
+                    _stageItems.Add(stage, item);
+                }
+                item.UpdateHeader(GetStageTreeName(stage));
+                RefreshStageSupplyVisibility(stage, item.Children[2]);
+                if (_stageEditorViews.TryGetValue(stage, out var editor))
+                {
+                    _firstStageDeadlineKindBox ??= editor.DeadlineKind;
+                    ReadStageEditorValues(stage, editor);
+                }
+            }
+            var items = stages.Select(stage => _stageItems[stage]).ToList();
+            if (!_stageTreeItems.SequenceEqual(items))
+            {
+                _stageTreeItems = items;
+                _contractCommentsBox = null;
+                _isApplyingStagesPresentation = true;
+                try
+                {
+                    if (_contractCommentsTreeItem is not null)
+                        RemoveStageTreeNodes(_contractCommentsTreeItem);
+                    _contractCommentsTreeItem = BuildContractCommentsTreeItem();
+                    var roots = items.Append(_contractCommentsTreeItem).ToList();
+                    foreach (var root in roots) root.PrepareVisibleContent();
+                    var nodes = roots.Select(item => _stageTreeNodes.TryGetValue(item, out var node)
+                        ? node : BuildStageTreeNode(item)).ToList();
+                    foreach (var obsolete in _stagesTree.RootNodes.Where(node => !nodes.Contains(node)).ToList())
+                        _stagesTree.RootNodes.Remove(obsolete);
+                    for (var index = 0; index < nodes.Count; index++)
+                    {
+                        if (index < _stagesTree.RootNodes.Count && ReferenceEquals(_stagesTree.RootNodes[index], nodes[index]))
+                            continue;
+                        _stagesTree.RootNodes.Remove(nodes[index]);
+                        _stagesTree.RootNodes.Insert(index, nodes[index]);
+                    }
+                }
+                finally
+                {
+                    _isApplyingStagesPresentation = false;
+                }
+            }
+            ApplyStagesExpansion();
         }
-
         private ContractStageTreeItem BuildStageTreeItem(StageEditState stage)
         {
             ContractStageTreeItem? stageItem = null;
@@ -1340,8 +1439,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                     supplyTreeItem
                 ],
                 stage.Used);
-            stageItem.ExpansionChanged += isExpanded => _workflowStore.SetStageExpanded(stage, isExpanded);
-            stageItem.ExpansionChanged += _ => RefreshStagesExpansionButton();
+
             return stageItem;
         }
 
@@ -1365,7 +1463,7 @@ namespace CbsContractsDesktopClient.Views.Functional
             return treeItem;
         }
 
-        private static void RefreshStageSupplyVisibility(StageEditState stage, ContractStageTreeItem supplyTreeItem)
+        private void RefreshStageSupplyVisibility(StageEditState stage, ContractStageTreeItem supplyTreeItem)
         {
             var isVisible = stage.TaskKind.Code == "20";
             if (!isVisible)
@@ -1374,6 +1472,20 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
 
             supplyTreeItem.Visibility = isVisible ? Visibility.Visible : Visibility.Collapsed;
+            // Before initial node construction only the item state exists.
+            if (_stageTreeNodes.TryGetValue(supplyTreeItem, out var supplyNode))
+            {
+                var parent = _stageTreeNodes[_stageItems[stage]];
+                if (isVisible)
+                {
+                    if (!parent.Children.Contains(supplyNode)) parent.Children.Add(supplyNode);
+                }
+                else
+                {
+                    supplyNode.IsExpanded = false;
+                    parent.Children.Remove(supplyNode);
+                }
+            }
         }
 
         private FrameworkElement BuildStageSupplyContent(StageEditState stage)
@@ -1548,121 +1660,94 @@ namespace CbsContractsDesktopClient.Views.Functional
 
         private UIElement BuildStageSection(StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
         {
-            var grid = new Grid
+            var diagnosticContext = $"ContractCommerEditDialog.BuildStageSection contract={_contract.GetValue("id")} stage={stage.Id} priority={stage.Priority} expanded={stage.Used}";
+            DiagnosticsFileLogger.AppendLine($"[{DateTimeOffset.Now:HH:mm:ss.fff}] {diagnosticContext} BEGIN");
+            var view = new ContractStageEditorView { DataContext = stage };
+            _stageEditorViews.Add(stage, view);
+            ConfigureStageTaskKindDropdown(view.TaskKind, stage, treeItem, supplyTreeItem);
+            ConfigureStageStatusDropdown(view.Status, stage);
+            ConfigureStageDeadlineKindDropdown(view.DeadlineKind, stage);
+            ConfigureStagePaymentDeadlineKindDropdown(view.PaymentKind, stage);
+            ConfigureStageDurationEditor(view.Duration, stage.Duration, value => stage.Duration = value);
+            ConfigureStageDurationEditor(view.PaymentDuration, stage.PaymentDuration, value => stage.PaymentDuration = value);
+            ConfigureStageCostEditor(view.Cost, stage);
+            ConfigureStageTasksMultiSelectEditor(view.Tasks, stage);
+            ReadStageEditorValues(stage, view);
+            view.Start.DateChanged += (_, args) =>
             {
-                ColumnSpacing = 8,
-                RowSpacing = 8
+                if (_isUpdatingStageEditors) return;
+                stage.StartAt = args.NewDate;
+                SyncStageDeadlineEditorsFromBusinessRules(stage, view.Start, view.Deadline, false);
             };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(193) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(123) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var stageStartEditor = BuildDateEditor(stage.StartAt, value => stage.StartAt = value);
-            AddGridChild(grid, BuildLabeledControl("Начало", stageStartEditor, spacing: 3), 0, 0);
-            var stageTaskKindDropdown = BuildStageTaskKindDropdown(stage, treeItem, supplyTreeItem);
-            var stageStatusDropdown = BuildStageStatusDropdown(stage);
-            var stageDeadlineKindDropdown = BuildStageDeadlineKindDropdown(stage);
+            view.Deadline.DateChanged += (_, args) => { if (!_isUpdatingStageEditors) stage.DeadlineAt = args.NewDate; };
+            view.PaymentDeadline.DateChanged += (_, args) => { if (!_isUpdatingStageEditors) stage.PaymentDeadlineAt = args.NewDate; };
+            view.TaskKind.TabTarget = view.Status;
+            view.Status.TabTarget = view.DeadlineKind;
+            view.DeadlineKind.OnTab = (dropdown, args) => StageDeadlineKind_OnTab(dropdown, stage, view.Start, view.Duration, view.Deadline, args);
+            view.DeadlineKind.SelectionChanged += (_, _) =>
+            {
+                if (_isUpdatingStageEditors) return;
+                ApplyStageStartMode(stage, view.Start);
+                ApplyStageDeadlineMode(stage, view.Duration, view.Deadline);
+                SyncStageDeadlineEditorsFromBusinessRules(stage, view.Start, view.Deadline, true);
+            };
+            view.Duration.TextChanged += (_, _) =>
+            {
+                if (!_isUpdatingStageEditors) SyncStageDeadlineEditorsFromBusinessRules(stage, view.Start, view.Deadline, false);
+            };
+            view.PaymentKind.OnTab = (dropdown, args) => StagePaymentDeadlineKind_OnTab(dropdown, stage, view.PaymentDuration, view.PaymentDeadline, args);
+            view.PaymentKind.SelectionChanged += (_, _) =>
+            {
+                if (_isUpdatingStageEditors) return;
+                ApplyStagePaymentDeadlineMode(stage, view.PaymentDuration, view.PaymentDeadline);
+                SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, view.PaymentDuration, view.PaymentDeadline);
+            };
+            view.PaymentDuration.TextChanged += (_, _) =>
+            {
+                if (!_isUpdatingStageEditors) SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, view.PaymentDuration, view.PaymentDeadline);
+            };
+            ConfigureTabTo(view.Duration, view.Cost);
+            view.Deadline.OnTab = (_, args) => FocusStageCostEditor(view.Cost, args);
+            view.Comment.KeyDown += (_, args) => StageCommentBox_KeyDown(stage, view.Comment, args);
+            view.AddStage.Click += (_, _) => AddStage((stage.Priority ?? 0) + 1);
+            view.DeleteStage.Click += (_, _) => DeleteStage(stage);
             if (_openStagesTabOnLoad && ReferenceEquals(stage, _workflowStore.SelectedStageEditState))
-            {
-                _initialStageFocusTarget = stageDeadlineKindDropdown;
-            }
-
-            var stageDurationEditor = BuildStageDurationEditor(stage.Duration, value => stage.Duration = value);
-            var stageDeadlineEditor = BuildDateEditor(stage.DeadlineAt, value => stage.DeadlineAt = value);
-            var stageCostEditor = BuildStageCostEditor(stage);
-            stageTaskKindDropdown.TabTarget = stageStatusDropdown;
-            stageStatusDropdown.TabTarget = stageDeadlineKindDropdown;
-            stageDeadlineKindDropdown.OnTab = (dropdown, args) => StageDeadlineKind_OnTab(dropdown, stage, stageStartEditor, stageDurationEditor, stageDeadlineEditor, args);
-            stageDeadlineKindDropdown.SelectionChanged += (_, _) =>
-            {
-                ApplyStageStartMode(stage, stageStartEditor);
-                ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
-                SyncStageDeadlineEditorsFromBusinessRules(stage, stageStartEditor, stageDeadlineEditor, applyInitialStart: true);
-            };
-            stageDurationEditor.TextChanged += (_, _) => SyncStageDeadlineEditorsFromBusinessRules(stage, stageStartEditor, stageDeadlineEditor, applyInitialStart: false);
-            stageStartEditor.DateChanged += (_, _) => SyncStageDeadlineEditorsFromBusinessRules(stage, stageStartEditor, stageDeadlineEditor, applyInitialStart: false);
-            ConfigureTabTo(stageDurationEditor, stageCostEditor);
-            stageDeadlineEditor.OnTab = (_, args) => FocusStageCostEditor(stageCostEditor, args);
-            ApplyStageStartMode(stage, stageStartEditor);
-            ApplyStageDeadlineMode(stage, stageDurationEditor, stageDeadlineEditor);
-            AddGridChild(grid, BuildLabeledControl("Тип", stageTaskKindDropdown, spacing: 3), 0, 1);
-            AddGridChild(grid, BuildLabeledControl("Статус", stageStatusDropdown, spacing: 3), 0, 2);
-            AddGridChild(grid, BuildLabeledControl("Режим срока*", stageDeadlineKindDropdown, spacing: 3), 0, 3);
-            AddGridChild(grid, BuildLabeledControl(
-                "Дней",
-                stageDurationEditor,
-                spacing: 3), 0, 4);
-            AddGridChild(grid, BuildLabeledControl("Срок", stageDeadlineEditor, spacing: 3), 0, 5);
-            AddGridChild(grid, BuildLabeledControl("Сумма", stageCostEditor, spacing: 3), 0, 6);
-            AddGridChild(grid, BuildLabeledControl("Бух. закрытие", BuildDateEditor(stage.FundedAt), spacing: 3), 0, 7);
-
-            var paymentRow = BuildStagePaymentRow(stage);
-            Grid.SetRow(paymentRow, 1);
-            Grid.SetColumnSpan(paymentRow, 9);
-            grid.Children.Add(paymentRow);
-
-            var comment = BuildLabeledControl("Комментарий этапа", BuildStageCommentEditor(stage), spacing: 3);
-            AddGridChild(grid, comment, 2, 0, 7);
-
-            var separator = BuildSectionSeparator(null);
-            Grid.SetRow(separator, 3);
-            Grid.SetColumnSpan(separator, 9);
-            grid.Children.Add(separator);
-
-            return grid;
+                _initialStageFocusTarget = view.DeadlineKind;
+            DiagnosticsFileLogger.AppendLine($"[{DateTimeOffset.Now:HH:mm:ss.fff}] {diagnosticContext} READY");
+            return view;
         }
 
-        private FrameworkElement BuildStagePaymentRow(StageEditState stage)
+        private void ReadStageEditorValues(StageEditState stage, ContractStageEditorView view)
         {
-            var grid = new Grid
+            _isUpdatingStageEditors = true;
+            try
             {
-                ColumnSpacing = 8
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(159) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(336) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(116) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(106) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
-            var paymentDeadlineKindDropdown = BuildStagePaymentDeadlineKindDropdown(stage);
-            var paymentDurationEditor = BuildStageDurationEditor(stage.PaymentDuration, value => stage.PaymentDuration = value);
-            var paymentDeadlineEditor = BuildDateEditor(stage.PaymentDeadlineAt, value => stage.PaymentDeadlineAt = value);
-            paymentDeadlineKindDropdown.OnTab = (dropdown, args) => StagePaymentDeadlineKind_OnTab(dropdown, stage, paymentDurationEditor, paymentDeadlineEditor, args);
-            paymentDeadlineKindDropdown.SelectionChanged += (_, _) =>
+                view.Start.Date = stage.StartAt;
+                view.Deadline.Date = stage.DeadlineAt;
+                view.Funded.Date = stage.FundedAt;
+                view.PaymentDeadline.Date = stage.PaymentDeadlineAt;
+                SyncNumberText(view.Duration, stage.Duration);
+                SyncNumberText(view.PaymentDuration, stage.PaymentDuration);
+                view.Cost.Text = FormatMoneyInput(stage.Cost);
+                view.TaskKind.IsHitTestVisible = stage.Priority != 0;
+                view.TaskKind.IsTabStop = stage.Priority != 0;
+                view.TaskKind.SelectedItem = view.TaskKind.ItemsSource!.OfType<TaskKindSelectOption>().FirstOrDefault(option => option.Code == stage.TaskKind.Code);
+                view.Status.SelectedItem = view.Status.ItemsSource!.OfType<EnumSelectOption>().FirstOrDefault(option => stage.Status.Id is not null ? option.Value == stage.Status.Id : string.Equals(option.Label, stage.Status.Name, StringComparison.CurrentCultureIgnoreCase));
+                view.DeadlineKind.SelectedItem = view.DeadlineKind.ItemsSource!.OfType<EnumSelectOption>().FirstOrDefault(option => option.Key == stage.DeadlineKind);
+                view.PaymentKind.SelectedItem = view.PaymentKind.ItemsSource!.OfType<EnumSelectOption>().FirstOrDefault(option => option.Key == stage.PaymentDeadlineKind);
+                view.RideOut.Text = FormatStageFlagText(stage.IsRideOut, stage.RideOutAt);
+                view.Completed.Text = FormatStageFlagText(stage.CompletedAt is not null, stage.CompletedAt);
+                view.Sended.Text = FormatStageFlagText(stage.IsSended, stage.SendedAt);
+                view.DeleteStage.Visibility = StageEditors.Count == 1 && stage.Priority == 0 ? Visibility.Collapsed : Visibility.Visible;
+                ApplyStageStartMode(stage, view.Start);
+                ApplyStageDeadlineMode(stage, view.Duration, view.Deadline);
+                ApplyStagePaymentDeadlineMode(stage, view.PaymentDuration, view.PaymentDeadline);
+            }
+            finally
             {
-                ApplyStagePaymentDeadlineMode(stage, paymentDurationEditor, paymentDeadlineEditor);
-                SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, paymentDurationEditor, paymentDeadlineEditor);
-            };
-            paymentDurationEditor.TextChanged += (_, _) => SyncStagePaymentDeadlineEditorsFromBusinessRules(stage, paymentDurationEditor, paymentDeadlineEditor);
-            ApplyStagePaymentDeadlineMode(stage, paymentDurationEditor, paymentDeadlineEditor);
-
-            AddGridChild(grid, BuildLabeledControl("Режим оплаты", paymentDeadlineKindDropdown, spacing: 3), 0, 0);
-            AddGridChild(grid, BuildLabeledControl(
-                "Дней",
-                paymentDurationEditor,
-                spacing: 3), 0, 1);
-            AddGridChild(grid, BuildLabeledControl("СрокОп", paymentDeadlineEditor, spacing: 3), 0, 2);
-            AddGridChild(grid, BuildLabeledControl("Дополнительные задачи", BuildStageTasksMultiSelectEditor(stage), spacing: 3), 0, 3);
-            AddGridChild(grid, BuildLabeledControl("Выезды", BuildReadonlyTextBox(FormatStageFlagText(stage.IsRideOut, stage.RideOutAt)), spacing: 3), 0, 4);
-            AddGridChild(grid, BuildLabeledControl("Выполнены", BuildReadonlyTextBox(FormatStageFlagText(stage.CompletedAt is not null, stage.CompletedAt)), spacing: 3), 0, 5);
-            AddGridChild(grid, BuildLabeledControl("Отправлены", BuildReadonlyTextBox(FormatStageFlagText(stage.IsSended, stage.SendedAt)), spacing: 3), 0, 6);
-
-            return grid;
+                _isUpdatingStageEditors = false;
+            }
         }
-
         private UIElement BuildRevisionsTabContent()
         {
             _revisionsStack = new StackPanel
@@ -1943,35 +2028,11 @@ namespace CbsContractsDesktopClient.Views.Functional
             };
         }
 
-        private static CalendarInput BuildDateEditor(DateTimeOffset? date, Action<DateTimeOffset?>? updateDate = null)
+        private void ConfigureStageTaskKindDropdown(Dropdown dropdown, StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
         {
-            var editor = new CalendarInput
-            {
-                Date = date,
-                IsReadOnly = true,
-                IsTabStop = false
-            };
-            if (updateDate is not null)
-            {
-                editor.DateChanged += (_, args) => updateDate(args.NewDate);
-            }
-
-            return editor;
-        }
-
-
-        private Dropdown BuildStageTaskKindDropdown(StageEditState stage, ContractStageTreeItem treeItem, ContractStageTreeItem supplyTreeItem)
-        {
-            var dropdown = new Dropdown
-            {
-                DisplayMemberPath = nameof(TaskKindSelectOption.Label),
-                TextMemberPath = nameof(TaskKindSelectOption.Code),
-                MatchMemberPath = nameof(TaskKindSelectOption.Code),
-                IsClearButtonEnabled = false,
-                MinWidth = 48,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-
+            dropdown.DisplayMemberPath = nameof(TaskKindSelectOption.Label);
+            dropdown.TextMemberPath = nameof(TaskKindSelectOption.Code);
+            dropdown.MatchMemberPath = nameof(TaskKindSelectOption.Code);
             var options = BuildTaskKindOptions();
             dropdown.ItemsSource = options;
             dropdown.SelectedItem = options.FirstOrDefault(option => string.Equals(option.Code, stage.TaskKind.Code, StringComparison.OrdinalIgnoreCase))
@@ -1984,6 +2045,7 @@ namespace CbsContractsDesktopClient.Views.Functional
 
             dropdown.SelectionChanged += (_, _) =>
             {
+                if (_isUpdatingStageEditors) return;
                 if (dropdown.SelectedItem is not TaskKindSelectOption option)
                 {
                     return;
@@ -1991,23 +2053,19 @@ namespace CbsContractsDesktopClient.Views.Functional
 
                 stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
                 RefreshStageSupplyVisibility(stage, supplyTreeItem);
-                treeItem.RefreshContent();
+                treeItem.UpdateHeader(GetStageTreeName(stage));
             };
 
-            return dropdown;
         }
 
-        private Dropdown BuildStageStatusDropdown(StageEditState stage)
+        private void ConfigureStageStatusDropdown(Dropdown dropdown, StageEditState stage)
         {
             var options = BuildStageStatusOptions(_stageStatusOptions);
-            var dropdown = new Dropdown
-            {
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
             var selectedStatusId = stage.Status.Id
                 ?? options.FirstOrDefault(option => string.Equals(option.Label, stage.Status.Name, StringComparison.CurrentCultureIgnoreCase))?.Value;
             ConfigureStatusDropdown(dropdown, options, selectedStatusId, option =>
             {
+                if (_isUpdatingStageEditors) return;
                 if (option is null)
                 {
                     return;
@@ -2016,7 +2074,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 stage.Status = new StatusEditState(option.Value, option.Label);
                 ApplyStageStatusBusinessLogic(stage);
             });
-            return dropdown;
+
         }
 
         private void ApplyStageStatusBusinessLogic(StageEditState stage)
@@ -2105,16 +2163,16 @@ namespace CbsContractsDesktopClient.Views.Functional
             stage.TaskKind = new TaskKindEditState(option.Id, ExtractTaskKindName(option), option.Code);
         }
 
-        private Dropdown BuildStageDeadlineKindDropdown(StageEditState stage)
+        private void ConfigureStageDeadlineKindDropdown(Dropdown dropdown, StageEditState stage)
         {
-            var dropdown = BuildEnumDropdown(DeadlineKindOptions(), stage.DeadlineKind);
+            ConfigureEnumDropdown(dropdown, DeadlineKindOptions(), stage.DeadlineKind);
             _firstStageDeadlineKindBox ??= dropdown;
             dropdown.SelectionChanged += (_, _) =>
             {
+                if (_isUpdatingStageEditors) return;
                 stage.DeadlineKind = GetSelectedDropdownKey(dropdown);
             };
 
-            return dropdown;
         }
 
         private void StageDeadlineKind_OnTab(
@@ -2199,15 +2257,15 @@ namespace CbsContractsDesktopClient.Views.Functional
             return StageDeadlineBusinessRules.IsDeadlineManualMode(deadlineKind);
         }
 
-        private static Dropdown BuildStagePaymentDeadlineKindDropdown(StageEditState stage)
+        private void ConfigureStagePaymentDeadlineKindDropdown(Dropdown dropdown, StageEditState stage)
         {
-            var dropdown = BuildEnumDropdown(PaymentDeadlineKindOptions(), stage.PaymentDeadlineKind);
+            ConfigureEnumDropdown(dropdown, PaymentDeadlineKindOptions(), stage.PaymentDeadlineKind);
             dropdown.SelectionChanged += (_, _) =>
             {
+                if (_isUpdatingStageEditors) return;
                 stage.PaymentDeadlineKind = GetSelectedDropdownKey(dropdown);
             };
 
-            return dropdown;
         }
 
         private void StagePaymentDeadlineKind_OnTab(
@@ -2389,72 +2447,20 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private static Dropdown BuildEnumDropdown(IReadOnlyList<EnumSelectOption> options, string? key)
+        private static void ConfigureEnumDropdown(Dropdown dropdown, IReadOnlyList<EnumSelectOption> options, string? key)
         {
-            var dropdown = new Dropdown
-            {
-                DisplayMemberPath = nameof(EnumSelectOption.Label),
-                TextMemberPath = nameof(EnumSelectOption.Label),
-                MatchMemberPath = nameof(EnumSelectOption.Key),
-                IsClearButtonEnabled = false,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
+            dropdown.DisplayMemberPath = nameof(EnumSelectOption.Label);
+            dropdown.TextMemberPath = nameof(EnumSelectOption.Label);
+            dropdown.MatchMemberPath = nameof(EnumSelectOption.Key);
             dropdown.ItemsSource = options;
             dropdown.SelectedItem = options.FirstOrDefault(option => string.Equals(option.Key, key, StringComparison.OrdinalIgnoreCase))
                 ?? options.FirstOrDefault();
-            return dropdown;
+
         }
 
         private static string? GetSelectedDropdownKey(Dropdown dropdown)
         {
             return (dropdown.SelectedItem as EnumSelectOption)?.Key;
-        }
-
-        private FrameworkElement BuildStageCommentEditor(StageEditState stage)
-        {
-            var grid = new Grid
-            {
-                ColumnSpacing = 6
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-            var commentBox = new TextBox
-            {
-                Text = stage.Comment,
-                HorizontalAlignment = HorizontalAlignment.Stretch
-            };
-            commentBox.TextChanged += (_, _) => stage.Comment = commentBox.Text ?? string.Empty;
-            commentBox.KeyDown += (_, args) => StageCommentBox_KeyDown(stage, commentBox, args);
-            grid.Children.Add(commentBox);
-
-            var addButton = BuildRevisionActionButton(
-                "\ue710",
-                "Добавить этап",
-                Microsoft.UI.ColorHelper.FromArgb(255, 34, 197, 94),
-                Microsoft.UI.ColorHelper.FromArgb(255, 22, 163, 74),
-                Microsoft.UI.ColorHelper.FromArgb(255, 21, 128, 61));
-            addButton.Click += (_, _) => AddStage((stage.Priority ?? 0) + 1);
-            Grid.SetColumn(addButton, 1);
-            grid.Children.Add(addButton);
-
-            if (StageEditors.Count == 1 && stage.Priority == 0)
-            {
-                return grid;
-            }
-
-            var deleteButton = BuildRevisionActionButton(
-                "\ue74d",
-                "Удалить этап",
-                Microsoft.UI.ColorHelper.FromArgb(255, 239, 68, 68),
-                Microsoft.UI.ColorHelper.FromArgb(255, 220, 38, 38),
-                Microsoft.UI.ColorHelper.FromArgb(255, 185, 28, 28));
-            deleteButton.Click += (_, _) => DeleteStage(stage);
-            Grid.SetColumn(deleteButton, 2);
-            grid.Children.Add(deleteButton);
-
-            return grid;
         }
 
         private async void StageCommentBox_KeyDown(
@@ -2502,30 +2508,30 @@ namespace CbsContractsDesktopClient.Views.Functional
             }
         }
 
-        private static TextBox BuildStageDurationEditor(int? duration, Action<int?> updateDuration)
+        private void ConfigureStageDurationEditor(TextBox textBox, int? duration, Action<int?> updateDuration)
         {
-            var textBox = BuildNumberTextBox();
             textBox.Text = FormatNullableNumber(duration);
             textBox.TextAlignment = TextAlignment.Right;
             textBox.HorizontalAlignment = HorizontalAlignment.Stretch;
-            textBox.TextChanged += (_, _) => updateDuration(TryGetInt(textBox.Text));
-            return textBox;
+            textBox.TextChanged += (_, _) => { if (!_isUpdatingStageEditors) updateDuration(TryGetInt(textBox.Text)); };
+
         }
 
-        private TextBox BuildStageCostEditor(StageEditState stage)
+        private void ConfigureStageCostEditor(TextBox textBox, StageEditState stage)
         {
-            var textBox = BuildMoneyInputTextBox(FormatMoneyInput(stage.Cost));
+            ConfigureMoneyInputTextBox(textBox);
+            textBox.Text = FormatMoneyInput(stage.Cost);
             textBox.TextChanged += (_, _) =>
             {
+                if (_isUpdatingStageEditors) return;
                 stage.Cost = TryParseMoney(textBox.Text);
                 RefreshContractCostBox();
             };
-            return textBox;
+
         }
 
-        private MultiSelect BuildStageTasksMultiSelectEditor(StageEditState stage)
+        private void ConfigureStageTasksMultiSelectEditor(MultiSelect multiSelect, StageEditState stage)
         {
-            var multiSelect = new MultiSelect();
             var taskRecords = stage.Tasks
                 .Select(static task => new StageTaskRecord(task.Id, task.ListKey, task.TaskKindId, task.Name ?? string.Empty))
                 .ToList();
@@ -2535,7 +2541,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 .Select(static id => id!.Value)
                 .ToHashSet();
             var taskOptions = StageContractTaskDialogControls.CreateTaskOptions(_stageTaskKindItems, taskRecords);
-            return StageContractTaskDialogControls.ConfigureTasksMultiSelect(
+            StageContractTaskDialogControls.ConfigureTasksMultiSelect(
                 multiSelect,
                 taskOptions,
                 selectedTaskKindIds,

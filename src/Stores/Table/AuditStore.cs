@@ -42,10 +42,10 @@ namespace CbsContractsDesktopClient.Stores.Table
             _shellViewModel = shellViewModel;
             _dataQueryService = dataQueryService;
             _contractWorkflowStore = contractWorkflowStore;
-            _contractWorkflowStore.SelectionApplied += OnContractWorkflowSelectionApplied;
+            _contractWorkflowStore.DetailDataApplied += OnContractWorkflowDetailDataApplied;
         }
 
-        private void OnContractWorkflowSelectionApplied(object? sender, EventArgs e)
+        private void OnContractWorkflowDetailDataApplied(object? sender, EventArgs e)
         {
             if (_selectedRow is not null
                 && _tablePage?.AuditModel is "Contract" or "Stage")

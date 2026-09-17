@@ -1,261 +1,97 @@
-using CbsContractsDesktopClient.ViewModels.References;
+using CbsContractsDesktopClient.Services;
 using CbsContractsDesktopClient.Shared.Dialogs;
-using static CbsContractsDesktopClient.Shared.Dialogs.AppDialogLayout;
+using CbsContractsDesktopClient.ViewModels.References;
 using CbsContractsDesktopClient.Views.Controls;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Data;
 
-namespace CbsContractsDesktopClient.Views.References
+namespace CbsContractsDesktopClient.Views.References;
+
+public sealed partial class EmployeeEditDialog : AppEditDialog
 {
-    public sealed class EmployeeEditDialog : AppEditDialog
+    private bool _isClosed;
+
+    public EmployeeEditDialog(EmployeeEditViewModel viewModel)
     {
-        public EmployeeEditDialog(EmployeeEditViewModel viewModel)
+        ViewModel = viewModel;
+        InitializeComponent();
+        DataContext = viewModel;
+        IdRow.Visibility = viewModel.State.IsCreateMode ? Visibility.Collapsed : Visibility.Visible;
+        ConfigureXamlFooter(SaveButton, CancelButton);
+        Closed += (_, _) =>
         {
-           
-            FullSizeDesired = false;
-            HorizontalAlignment = HorizontalAlignment.Center;
-            ViewModel = viewModel;
-            DataContext = viewModel;
-            Title = viewModel.DialogTitle;
-            Resources["ContentDialogMinWidth"] = 500d;
-            Resources["ContentDialogMaxWidth"] = 800d;
-            Content = BuildEditContent(BuildContent());
-            DialogChrome.Apply(this);
+            _isClosed = true;
+            ViewModel.CancelLookups();
+        };
+        DialogChrome.Apply(this);
+    }
+
+    public EmployeeEditViewModel ViewModel { get; }
+
+    public override bool Validate()
+    {
+        if (ViewModel.CanSubmit) return true;
+        ViewModel.ShowErrorInfo("Заполните обязательные поля или внесите изменения.");
+        return false;
+    }
+
+    private async void Position_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (_isClosed || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        var input = sender.Text;
+        try
+        {
+            await ViewModel.UpdatePositionOptionsAsync(input);
+            if (!_isClosed && sender.Text == input)
+                sender.IsSuggestionListOpen = ViewModel.PositionOptions.Count > 0;
         }
-
-        public EmployeeEditViewModel ViewModel { get; }
-
-        public override bool Validate()
+        catch (Exception ex)
         {
-            if (ViewModel.CanSubmit)
-            {
-                return true;
-            }
-
-            ViewModel.ShowErrorInfo("Заполните обязательные поля или внесите изменения.");
-            return false;
-        }
-
-        private FrameworkElement BuildContent()
-        {
-            var host = new Grid
-            {
-               
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-
-            var root = new Grid
-            {
-                
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-
-            var stack = new StackPanel
-            {
-                Spacing = 14
-            };
-            stack.Children.Add(BuildValidationInfoBar());
-            stack.Children.Add(BuildFieldsGrid());
-
-            root.Children.Add(new ScrollViewer
-            {
-                MaxHeight = 560,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Content = stack
-            });
-
-            host.Children.Add(root);
-            return host;
-        }
-
-        private Grid BuildFieldsGrid()
-        {
-            var grid = new Grid
-            {
-                ColumnSpacing = 12,
-                RowSpacing = 10
-            };
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = new GridLength(90)
-            });
-            grid.ColumnDefinitions.Add(new ColumnDefinition
-            {
-                Width = new GridLength(1, GridUnitType.Star)
-            });
-
-            if (!ViewModel.State.IsCreateMode)
-            {
-                AddFormRow(grid, "ID", BuildReadOnlyTextBox(nameof(EmployeeEditViewModel.Id)));
-            }
-
-            AddFormRow(grid, "ФИО", BuildTextBoxEditor(nameof(EmployeeEditViewModel.PersonName)), isRequired: true);
-            AddFormRow(grid, "Должность", BuildPositionEditor(), isRequired: true);
-            AddFormRow(grid, "Контрагент", BuildContragentEditor(), isRequired: true);
-            AddFormRow(grid, "Контакты", BuildContactsEditor(), isRequired: true);
-            AddFormRow(grid, "Актуален", BuildUsedEditor());
-            AddFormRow(grid, "Пор.", BuildTextBoxEditor(nameof(EmployeeEditViewModel.PriorityText), minWidth: 80));
-            AddFormRow(grid, "Описание", BuildDescriptionEditor());
-
-            return grid;
-        }
-
-        private InfoBar BuildValidationInfoBar()
-        {
-            var infoBar = new InfoBar
-            {
-                Severity = InfoBarSeverity.Error,
-                IsClosable = true,
-                IsOpen = false,
-                Margin = new Thickness(0, 0, 0, 4)
-            };
-            infoBar.SetBinding(InfoBar.MessageProperty, new Binding
-            {
-                Path = new PropertyPath(nameof(EmployeeEditViewModel.ErrorInfoMessage))
-            });
-            infoBar.SetBinding(InfoBar.IsOpenProperty, new Binding
-            {
-                Mode = BindingMode.TwoWay,
-                Path = new PropertyPath(nameof(EmployeeEditViewModel.IsErrorInfoVisible))
-            });
-            return infoBar;
-        }
-
-        private static TextBox BuildReadOnlyTextBox(string bindingPath)
-        {
-            var textBox = new TextBox
-            {
-                IsReadOnly = true,
-                IsTabStop = false,
-                Width = 180,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            textBox.SetBinding(TextBox.TextProperty, new Binding
-            {
-                Path = new PropertyPath(bindingPath)
-            });
-            return textBox;
-        }
-
-        private static TextBox BuildTextBoxEditor(string bindingPath, double minWidth = 360)
-        {
-            var textBox = new TextBox
-            {
-                MinWidth = minWidth,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            textBox.SetBinding(TextBox.TextProperty, new Binding
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-                Path = new PropertyPath(bindingPath)
-            });
-            return textBox;
-        }
-
-        private FrameworkElement BuildPositionEditor()
-        {
-            return DialogLookupEditors.BuildAutoSuggestBox(
-                nameof(EmployeeEditViewModel.PositionSuggestionLabels),
-                () => ViewModel.PositionInput,
-                async text => await ViewModel.UpdatePositionOptionsAsync(text),
-                TrySelectPositionSuggestion,
-                text => ViewModel.CommitPositionInput(text),
-                () => ViewModel.PositionInput,
-                minWidth: 200,
-                maxWidth: 500);
-        }
-
-        private bool TrySelectPositionSuggestion(string? label)
-        {
-            var option = ViewModel.FindPositionOption(label);
-            if (option is null)
-            {
-                return false;
-            }
-
-            ViewModel.SelectPositionOption(option);
-            return true;
-        }
-
-        private FrameworkElement BuildContragentEditor()
-        {
-            return DialogLookupEditors.BuildAutoSuggestBox(
-                nameof(EmployeeEditViewModel.ContragentSuggestionLabels),
-                () => ViewModel.ContragentInput,
-                async text => await ViewModel.UpdateContragentOptionsAsync(text),
-                TrySelectContragentSuggestion,
-                text => ViewModel.CommitContragentInput(text),
-                () => ViewModel.ContragentInput,
-                minWidth: 400,
-                maxWidth: 500,
-                maxSuggestionListHeight: 240);
-        }
-
-        private bool TrySelectContragentSuggestion(string? label)
-        {
-            var option = ViewModel.FindContragentOption(label);
-            if (option is null)
-            {
-                return false;
-            }
-
-            ViewModel.SelectContragentOption(option);
-            return true;
-        }
-
-        private static FrameworkElement BuildContactsEditor()
-        {
-            var editor = new DialogContactsEditor();
-            editor.SetBinding(DialogContactsEditor.ContactsTextProperty, new Binding
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-                Path = new PropertyPath(nameof(EmployeeEditViewModel.ContactsText))
-            });
-            return editor;
-        }
-
-        private static TextBox BuildDescriptionEditor()
-        {
-            return BuildMultilineTextBox(nameof(EmployeeEditViewModel.Description), minHeight: 76);
-        }
-
-        private static TextBox BuildMultilineTextBox(string bindingPath, double minHeight)
-        {
-            var textBox = new TextBox
-            {                
-                MaxWidth = 500,
-                MinWidth = 400,
-                MinHeight = minHeight,
-                AcceptsReturn = true,
-                TextWrapping = TextWrapping.Wrap,
-                HorizontalAlignment = HorizontalAlignment.Left
-            };
-            textBox.SetBinding(TextBox.TextProperty, new Binding
-            {
-                Mode = BindingMode.TwoWay,
-                UpdateSourceTrigger = UpdateSourceTrigger.PropertyChanged,
-                Path = new PropertyPath(bindingPath)
-            });
-            return textBox;
-        }
-
-        private FrameworkElement BuildUsedEditor()
-        {
-            var checkBox = new CheckBox
-            {
-                HorizontalAlignment = HorizontalAlignment.Left,
-                VerticalAlignment = VerticalAlignment.Center
-            };
-            checkBox.SetBinding(CheckBox.IsCheckedProperty, new Binding
-            {
-                Mode = BindingMode.TwoWay,
-                Path = new PropertyPath(nameof(EmployeeEditViewModel.IsUsed))
-            });
-            return checkBox;
+            DiagnosticsFileLogger.AppendBlock("EmployeeEditDialog.Position_TextChanged",
+                $"input={System.Text.Json.JsonSerializer.Serialize(input)}{Environment.NewLine}{ex}");
+            if (!_isClosed) ViewModel.ShowErrorInfo(ex.Message);
         }
     }
+
+    private async void Contragent_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args)
+    {
+        if (_isClosed || args.Reason != AutoSuggestionBoxTextChangeReason.UserInput) return;
+        var input = sender.Text;
+        try
+        {
+            await ViewModel.UpdateContragentOptionsAsync(input);
+            if (!_isClosed && sender.Text == input)
+                sender.IsSuggestionListOpen = ViewModel.ContragentOptions.Count > 0;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticsFileLogger.AppendBlock("EmployeeEditDialog.Contragent_TextChanged",
+                $"input={System.Text.Json.JsonSerializer.Serialize(input)}{Environment.NewLine}{ex}");
+            if (!_isClosed) ViewModel.ShowErrorInfo(ex.Message);
+        }
+    }
+
+    private void Position_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+        => ViewModel.SelectPositionOption(ViewModel.FindPositionOption((string)args.SelectedItem));
+
+    private void Contragent_SuggestionChosen(AutoSuggestBox sender, AutoSuggestBoxSuggestionChosenEventArgs args)
+        => ViewModel.SelectContragentOption(ViewModel.FindContragentOption((string)args.SelectedItem));
+
+    private void Position_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        ViewModel.CommitPositionInput(sender.Text);
+        sender.IsSuggestionListOpen = false;
+    }
+
+    private void Contragent_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
+    {
+        ViewModel.CommitContragentInput(sender.Text);
+        sender.IsSuggestionListOpen = false;
+    }
+
+    private void Position_LostFocus(object sender, RoutedEventArgs args)
+        => ViewModel.CommitPositionInput(PositionEditor.Text);
+
+    private void Contragent_LostFocus(object sender, RoutedEventArgs args)
+        => ViewModel.CommitContragentInput(ContragentEditor.Text);
 }

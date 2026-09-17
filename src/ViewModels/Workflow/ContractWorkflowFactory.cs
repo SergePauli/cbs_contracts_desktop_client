@@ -295,7 +295,14 @@ public sealed record ContractWorkflowContext(
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(strategy);
 
-        strategy.ApplySelection(store, SelectedRow, Contract, Contragent);
+        if (store.IsRowDetailSelected(Key.SelectionKind, SelectedRow))
+        {
+            strategy.ApplyDetailData(store, SelectedRow, Contract, Contragent);
+        }
+        else
+        {
+            strategy.ApplySelection(store, SelectedRow, Contract, Contragent);
+        }
     }
 }
 

@@ -128,6 +128,16 @@ namespace CbsContractsDesktopClient.ViewModels.References
             NotifyPositionStateChanged();
         }
 
+        public void CancelLookups()
+        {
+            _positionLookupCts?.Cancel();
+            _positionLookupCts?.Dispose();
+            _positionLookupCts = null;
+            _contragentLookupCts?.Cancel();
+            _contragentLookupCts?.Dispose();
+            _contragentLookupCts = null;
+        }
+
         public async Task UpdateContragentOptionsAsync(string rawInput)
         {
             _contragentLookupCts?.Cancel();

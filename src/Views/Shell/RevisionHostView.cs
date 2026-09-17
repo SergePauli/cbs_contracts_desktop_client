@@ -24,7 +24,7 @@ using Windows.ApplicationModel.DataTransfer;
 
 namespace CbsContractsDesktopClient.Views.Shell
 {
-    public sealed class RevisionHostView : ComplexHostViewBase
+    public sealed class RevisionHostView : ContractWorkflowHostViewBase
     {
         private const int CommersDepartmentId = 2;
         private const string RevisionTitle = "Дополнительное соглашение";
@@ -35,7 +35,6 @@ namespace CbsContractsDesktopClient.Views.Shell
         private readonly IContragentLookupService _contragentLookupService;
         private readonly ContractWorkflowStore _contractWorkflowStore;
         private readonly ContractWorkflowFactory _contractWorkflowFactory;
-        private readonly ContractCommerSaveWorkflow _contractCommerSaveWorkflow;
         private readonly RevisionRowDetailStrategy _rowDetailStrategy = new();
         private readonly ContractDetailView _detailView = new();
         private ContractWorkflowContext? _appliedRevisionWorkflowContext;
@@ -53,7 +52,6 @@ namespace CbsContractsDesktopClient.Views.Shell
             _contragentLookupService = App.Services.GetRequiredService<IContragentLookupService>();
             _contractWorkflowStore = App.Services.GetRequiredService<ContractWorkflowStore>();
             _contractWorkflowFactory = App.Services.GetRequiredService<ContractWorkflowFactory>();
-            _contractCommerSaveWorkflow = App.Services.GetRequiredService<ContractCommerSaveWorkflow>();
             _detailView.EmployeeEditRequested += DetailView_EmployeeEditRequested;
             SetDetailContent(_detailView, isVisible: false);
         }
@@ -250,7 +248,10 @@ namespace CbsContractsDesktopClient.Views.Shell
             await ShowContractInfoDialogAsync();
         }
 
-        private async Task ShowRevisionContractCommerEditDialogAsync()
+        private Task ShowRevisionContractCommerEditDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowRevisionContractCommerEditDialogCoreAsync);
+
+        private async Task ShowRevisionContractCommerEditDialogCoreAsync()
         {
             var context = await EnsureRevisionWorkflowContextForDialogAsync("Редактирование контракта");
             if (context is null)
@@ -292,56 +293,13 @@ namespace CbsContractsDesktopClient.Views.Shell
                 return;
             }
 
-            TableDataRow? savedContractRow = null;
-            dialog.SaveRequestedAsync += async args =>
-            {
-                try
-                {
-                    var savePlan = dialog.BuildSavePlan(_userService.CurrentUser?.ProfileId);
-                    if (!savePlan.HasChanges)
-                    {
-                        dialog.ShowErrorInfo("Нет изменений для сохранения.");
-                        args.Cancel = true;
-                        return;
-                    }
-
-                    var saveResult = await _contractCommerSaveWorkflow.SaveAsync(savePlan);
-                    var editRow = await _contractWorkflowFactory.ReloadContractEditRowAsync(saveResult.ContractId);
-                    dialog.ReloadAsEdit(editRow);
-                    savedContractRow = editRow;
-                }
-                catch (Exception ex)
-                {
-                    dialog.ShowErrorInfo(ex.Message);
-                    args.Cancel = true;
-                }
-            };
-
-            await dialog.ShowAsync();
-            if (!dialog.WasSaved || savedContractRow is null)
-            {
-                return;
-            }
-
-            _referenceLookupCacheService.Invalidate(GetCurrentTableModel());
-            await RefreshTableRowAfterSaveAsync(false, savedContractRow);
-            await RefreshDetailAsync();
-            ShowSuccessNotification(
-                "Контракт сохранен",
-                "Изменения контракта сохранены.");
+            await ShowContractWorkflowDialogAsync(dialog, context.SelectedRow);
         }
 
         private bool IsContractCommerEditAllowedForCurrentUser()
         {
             var user = _userService.CurrentUser;
             return user?.DepartmentId == CommersDepartmentId;
-        }
-
-        private static bool HasUpdatePayloadChanges(IReadOnlyDictionary<string, object?> payload)
-        {
-            return payload.Keys.Any(static key =>
-                !string.Equals(key, "id", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(key, "list_key", StringComparison.OrdinalIgnoreCase));
         }
 
         private static IReadOnlyList<CbsTableFilterOptionDefinition> BuildContractTaskKindOptions(
@@ -368,7 +326,10 @@ namespace CbsContractsDesktopClient.Views.Shell
                 : $"{normalizedCode} - {normalizedName}";
         }
 
-        private async Task ShowContractInfoDialogAsync()
+        private Task ShowContractInfoDialogAsync()
+            => RunWorkflowDialogCommandAsync(ShowContractInfoDialogCoreAsync);
+
+        private async Task ShowContractInfoDialogCoreAsync()
         {
             if (await EnsureRevisionWorkflowContextForDialogAsync("Информация о контракте") is null)
             {
@@ -452,13 +413,7 @@ namespace CbsContractsDesktopClient.Views.Shell
             }
         }
 
-        protected override async Task OnTableRowRefreshedAfterSaveAsync(TableDataRow freshRow)
-        {
-            UpdateDetailView(Store.SelectedRow);
-            await RefreshDetailAsync();
-        }
-
-        protected override async Task OnTableReloadedAfterSaveAsync()
+        protected override async Task LoadWorkflowDetailsAfterSaveAsync()
         {
             UpdateDetailView(Store.SelectedRow);
             await RefreshDetailAsync();

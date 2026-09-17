@@ -152,7 +152,7 @@ namespace CbsContractsDesktopClient.Services.References
                     Preset = "item",
                     Filters = new Dictionary<string, object?>
                     {
-                        ["name__cnt"] = normalizedSearchText
+                        ["name__start"] = normalizedSearchText
                     },
                     Sorts = ["name asc"],
                     Limit = 25

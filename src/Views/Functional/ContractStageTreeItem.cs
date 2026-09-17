@@ -12,6 +12,7 @@ public sealed class ContractStageTreeItem : INotifyPropertyChanged
         Thickness? contentMargin = null)
         : this(() => content, children, isExpanded, contentMargin)
     {
+        Content = content;
     }
 
     public ContractStageTreeItem(
@@ -28,7 +29,31 @@ public sealed class ContractStageTreeItem : INotifyPropertyChanged
 
     private readonly Func<object> _contentFactory;
 
-    public object Content => _contentFactory();
+    public object? Content { get; private set; }
+
+    public void EnsureContent()
+    {
+        if (Content is not null) return;
+        Content = _contentFactory();
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Content)));
+    }
+
+    public void PrepareVisibleContent()
+    {
+        EnsureContent();
+        if (IsExpanded)
+        {
+            PrepareChildren();
+        }
+    }
+
+    public void PrepareChildren()
+    {
+        foreach (var child in Children)
+        {
+            child.PrepareVisibleContent();
+        }
+    }
 
     public IReadOnlyList<ContractStageTreeItem> Children { get; }
 
@@ -62,19 +87,17 @@ public sealed class ContractStageTreeItem : INotifyPropertyChanged
             }
 
             _isExpanded = value;
-            ExpansionChanged?.Invoke(value);
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
         }
     }
-
-    public event Action<bool>? ExpansionChanged;
 
     public Thickness ContentMargin { get; }
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
-    public void RefreshContent()
+    public void UpdateHeader(string text)
     {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Content)));
+        EnsureContent();
+        ((Microsoft.UI.Xaml.Controls.TextBlock)Content!).Text = text;
     }
 }

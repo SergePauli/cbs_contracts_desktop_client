@@ -8,9 +8,10 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
     public partial class ContractWorkflowStore : ObservableObject
     {
         public event EventHandler? SelectionApplied;
+        public event EventHandler? DetailDataApplied;
 
         private readonly HashSet<string> _deferredPropertyNames = [];
-        private bool _isApplyingSelection;
+        private bool _isApplyingDetailData;
 
         [ObservableProperty]
         public partial TableDataRow? SelectedRevision { get; set; }
@@ -42,14 +43,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
         [ObservableProperty]
         public partial IReadOnlyList<TableDataRow> Comments { get; set; } = [];
 
-        private void NotifySelectionApplied()
-        {
-            SelectionApplied?.Invoke(this, EventArgs.Empty);
-        }
-
         protected override void OnPropertyChanged(PropertyChangedEventArgs e)
         {
-            if (_isApplyingSelection && e.PropertyName is not null)
+            if (_isApplyingDetailData && e.PropertyName is not null)
             {
                 _deferredPropertyNames.Add(e.PropertyName);
                 return;
@@ -58,32 +54,32 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             base.OnPropertyChanged(e);
         }
 
-        private void BeginSelectionApplication()
+        private void BeginDetailDataApplication()
         {
-            if (_isApplyingSelection)
+            if (_isApplyingDetailData)
             {
-                throw new InvalidOperationException("ContractWorkflowStore selection application is already in progress.");
+                throw new InvalidOperationException("ContractWorkflowStore detail data application is already in progress.");
             }
 
             _deferredPropertyNames.Clear();
-            _isApplyingSelection = true;
+            _isApplyingDetailData = true;
         }
 
-        private void CompleteSelectionApplication()
+        private void CompleteDetailDataApplication()
         {
-            _isApplyingSelection = false;
+            _isApplyingDetailData = false;
             foreach (var propertyName in _deferredPropertyNames)
             {
                 base.OnPropertyChanged(new PropertyChangedEventArgs(propertyName));
             }
 
             _deferredPropertyNames.Clear();
-            NotifySelectionApplied();
+            DetailDataApplied?.Invoke(this, EventArgs.Empty);
         }
 
-        private void CancelSelectionApplication()
+        private void CancelDetailDataApplication()
         {
-            _isApplyingSelection = false;
+            _isApplyingDetailData = false;
             _deferredPropertyNames.Clear();
         }
     }

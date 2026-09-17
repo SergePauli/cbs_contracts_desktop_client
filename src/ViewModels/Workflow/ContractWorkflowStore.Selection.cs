@@ -1,7 +1,5 @@
 using System.Text.Json;
 using CbsContractsDesktopClient.Models.Table;
-using CbsContractsDesktopClient.Services;
-using CbsContractsDesktopClient.ViewModels.Workflow.EditStates;
 using static CbsContractsDesktopClient.Shared.Data.JsonDataReader;
 
 namespace CbsContractsDesktopClient.ViewModels.Workflow
@@ -9,6 +7,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
     public partial class ContractWorkflowStore
     {
         private ContractRowDetailSelectionKind _selectionKind = ContractRowDetailSelectionKind.Contract;
+        private (ContractRowDetailSelectionKind Kind, long? Id)? _rowDetailSelection;
 
         public void SetRevisionSelection(
             TableDataRow revision,
@@ -52,6 +51,9 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
                 selectedRowHeader);
         }
 
+        public bool IsRowDetailSelected(ContractRowDetailSelectionKind kind, TableDataRow row)
+            => _rowDetailSelection == (kind, TryGetLong(row.GetValue("id")));
+
         public void SetRowDetailSelection(
             ContractRowDetailSelectionKind selectionKind,
             TableDataRow selectedRow,
@@ -59,58 +61,12 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             TableDataRow? contragent,
             string? selectedRowHeader = null)
         {
-            var stage = "begin";
-            BeginSelectionApplication();
-            try
+            var selectionChanged = !IsRowDetailSelected(selectionKind, selectedRow);
+            ApplyRowDetailData(selectionKind, selectedRow, contract, contragent, selectedRowHeader);
+            _rowDetailSelection = (selectionKind, TryGetLong(selectedRow.GetValue("id")));
+            if (selectionChanged)
             {
-                stage = "assign-selection";
-                _selectionKind = selectionKind;
-                SelectedRevision = null;
-                SelectedStage = null;
-                SelectedStageEditState = null;
-                Contract = selectionKind == ContractRowDetailSelectionKind.Contract
-                    ? contract ?? selectedRow
-                    : contract;
-
-                stage = "build-contract-edit-state";
-                SelectedContractEditState = ContractEditState.FromRow(Contract);
-                Contragent = contragent;
-                FocusedRevisionPriority = null;
-
-                stage = "resolve-selected-stage";
-                SelectedStage = ResolveSelectedStage(selectionKind, selectedRow, Contract);
-
-                stage = "reset-edit-graph";
-                ResetEditGraph();
-
-                if (selectionKind == ContractRowDetailSelectionKind.Revision)
-                {
-                    SelectedRevision = selectedRow;
-                    FocusedRevisionPriority = TryGetInt(selectedRow.GetValue("priority"));
-                }
-
-                stage = "build-selection-presentation";
-                SelectedRowHeader = selectedRowHeader ?? string.Empty;
-                SelectedFooterText = BuildSelectedFooterText(selectedRow, SelectedStage);
-                Comments = ReadSelectionComments(selectionKind, selectedRow, Contract);
-
-                stage = "publish-selection";
-                CompleteSelectionApplication();
-            }
-            catch (Exception ex)
-            {
-                CancelSelectionApplication();
-                DiagnosticsFileLogger.AppendBlock(
-                    "CONTRACT CONTEXT APPLY FAILED",
-                    $"stage={stage}{Environment.NewLine}"
-                    + $"selectionKind={selectionKind}{Environment.NewLine}"
-                    + $"selectedRowId={TryGetLong(selectedRow.GetValue("id"))?.ToString() ?? "<null>"}{Environment.NewLine}"
-                    + $"contractId={TryGetLong(contract?.GetValue("id"))?.ToString() ?? "<null>"}{Environment.NewLine}"
-                    + $"contragentId={TryGetLong(contragent?.GetValue("id"))?.ToString() ?? "<null>"}{Environment.NewLine}"
-                    + $"exception={ex}");
-                throw new InvalidOperationException(
-                    $"ContractWorkflowStore.SetRowDetailSelection failed at '{stage}': {ex.Message}",
-                    ex);
+                SelectionApplied?.Invoke(this, EventArgs.Empty);
             }
         }
 
@@ -180,7 +136,7 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
 
         public void ClearRowDetailSelection()
         {
-            BeginSelectionApplication();
+            BeginDetailDataApplication();
             _selectionKind = ContractRowDetailSelectionKind.Contract;
             SelectedRevision = null;
             SelectedStage = null;
@@ -192,7 +148,13 @@ namespace CbsContractsDesktopClient.ViewModels.Workflow
             SelectedRowHeader = string.Empty;
             SelectedFooterText = string.Empty;
             Comments = [];
-            CompleteSelectionApplication();
+            var selectionChanged = _rowDetailSelection is not null;
+            _rowDetailSelection = null;
+            CompleteDetailDataApplication();
+            if (selectionChanged)
+            {
+                SelectionApplied?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         private static TableDataRow? ResolveSelectedStage(

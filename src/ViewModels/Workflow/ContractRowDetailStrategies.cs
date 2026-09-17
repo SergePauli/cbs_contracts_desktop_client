@@ -60,6 +60,16 @@ public abstract class ContractRowDetailStrategy
             BuildSelectedRowHeader(selectedRow));
     }
 
+    public void ApplyDetailData(
+        ContractWorkflowStore store,
+        TableDataRow selectedRow,
+        TableDataRow? contract,
+        TableDataRow? contragent)
+    {
+        store.ApplyRowDetailData(
+            _selectionKind, selectedRow, contract, contragent, BuildSelectedRowHeader(selectedRow));
+    }
+
     protected abstract string BuildSelectedRowHeader(TableDataRow row);
 
     protected static string BuildTaskKindHeader(TableDataRow row)

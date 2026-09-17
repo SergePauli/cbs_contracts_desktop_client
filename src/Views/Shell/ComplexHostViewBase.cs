@@ -44,6 +44,7 @@ namespace CbsContractsDesktopClient.Views.Shell
         private string? _route;
         private bool _isLoaded;
         private bool _isStoreEventsSubscribed;
+        private (string? Model, long? Id)? _detailSelection;
 
         protected ComplexHostViewBase()
         {
@@ -557,7 +558,15 @@ namespace CbsContractsDesktopClient.Views.Shell
             if (e.PropertyName == nameof(TablePageStore.SelectedRow))
             {
                 QueueSelectedFooterTextUpdate();
-                _ = OnRowSelected(Store.SelectedRow);
+                var row = Store.SelectedRow;
+                (string? Model, long? Id)? selection = row is null || row.IsPlaceholder
+                    ? null
+                    : (CurrentDefinition?.Model, TryGetSelectedRowId(row));
+                if (_detailSelection != selection)
+                {
+                    _detailSelection = selection;
+                    _ = OnRowSelected(row);
+                }
             }
 
             if (e.PropertyName == nameof(TablePageStore.TotalCount)

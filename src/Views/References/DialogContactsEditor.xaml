@@ -1,0 +1,31 @@
+<UserControl
+    x:Class="CbsContractsDesktopClient.Views.References.DialogContactsEditor"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Spacing="6" Width="500">
+        <ScrollViewer MaxHeight="80" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{x:Bind Contacts}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnSpacing="4" Margin="0,0,0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="18" /><ColumnDefinition Width="*" /><ColumnDefinition Width="24" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="{Binding Glyph}" FontFamily="{StaticResource SymbolThemeFontFamily}" FontSize="12" Foreground="{ThemeResource ShellAccentBrush}" />
+                            <HyperlinkButton Grid.Column="1" Content="{Binding Value}" FontWeight="SemiBold" Padding="2,0" MinHeight="24" Click="Contact_Click" />
+                            <Button Grid.Column="2" Content="&#xE711;" FontFamily="{StaticResource SymbolThemeFontFamily}" FontSize="10" Width="24" Height="24" Padding="0" Click="Remove_Click" ToolTipService.ToolTip="Удалить контакт" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+        <Grid ColumnSpacing="4">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="30" /></Grid.ColumnDefinitions>
+            <TextBox x:Name="_inputBox" PlaceholderText="Введите контакт и нажмите Enter"
+                     FontSize="14" FontWeight="Normal" MinHeight="30" Padding="8,5" KeyDown="Input_KeyDown" />
+            <Button Grid.Column="1" Content="&#xE710;" FontFamily="{StaticResource SymbolThemeFontFamily}" FontSize="12"
+                    Width="30" Height="30" Padding="0" Click="Add_Click" ToolTipService.ToolTip="Добавить контакт" />
+        </Grid>
+        <TextBlock x:Name="_messageBlock" Foreground="Firebrick" FontSize="12" TextWrapping="Wrap" Visibility="Collapsed" />
+    </StackPanel>
+</UserControl>

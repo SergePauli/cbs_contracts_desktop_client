@@ -2,6 +2,7 @@
 
 ## Read requests
 
+- Employee dialog position autocomplete queries `Position` with preset `item`, filter `name__start` (starts with), sort `name asc`, and limit 25.
 - Table/list/card/edit data is loaded through `api/index` and `api/count`.
 - `api/index` responses are read models. They may contain expanded objects and arrays such as `comments`, `contract`, `status`, `tasks`, `revision`, `stages`.
 - Read models must not be reused as update payloads.
@@ -11,6 +12,7 @@
 
 ## Create and update requests
 
+- Employee create/update payloads trim email contact values and lowercase them with `ToLowerInvariant()` before serialization into `person_attributes.person_contacts_attributes[].contact_attributes.value`. Other contact types retain their case. Existing contacts are still compared without case sensitivity, so a case-only difference does not create/delete a contact.
 - Create uses `POST model/add/{Model}`.
 - Update uses `PUT model/{Model}/{id}`.
 - Mutation requests always ask Rails for `data_set: "item"` because the response is only an acknowledgement; for newly created rows the client only needs the returned `id`.

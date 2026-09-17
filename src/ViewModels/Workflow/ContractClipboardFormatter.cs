@@ -46,9 +46,17 @@ public static class ContractClipboardFormatter
         ContractEditState contract,
         RevisionEditState contractRevision)
     {
+        var number = string.IsNullOrWhiteSpace(contract.ExternalNumber)
+            ? contract.Name
+            : contract.ExternalNumber;
+        if (string.IsNullOrWhiteSpace(number))
+        {
+            throw new InvalidOperationException("Для копирования контракта требуется внешний или внутренний номер.");
+        }
+
         var identity = string.Join(
             " ",
-            new[] { contract.ContragentName, contractRevision.Description, contract.ExternalNumber }
+            new[] { contract.ContragentName, contractRevision.Description, $"№ {number.Trim()}" }
                 .Where(static value => !string.IsNullOrWhiteSpace(value))
                 .Select(static value => value!.Trim()));
         return contract.SignedAt is DateTimeOffset signedAt

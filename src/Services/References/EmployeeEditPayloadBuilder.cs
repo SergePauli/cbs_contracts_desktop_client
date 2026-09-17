@@ -282,7 +282,10 @@ namespace CbsContractsDesktopClient.Services.References
                     throw new InvalidOperationException($"Тип контакта '{value}' не определен.");
                 }
 
-                contacts.Add(new ContactDraft(value.Trim(), match.Type));
+                var normalizedValue = match.Type == "Email"
+                    ? value.Trim().ToLowerInvariant()
+                    : value.Trim();
+                contacts.Add(new ContactDraft(normalizedValue, match.Type));
             }
 
             return contacts;
