@@ -1,7 +1,7 @@
 param(
     [string]$Configuration = "Release",
     [string]$RuntimeIdentifier = "win-x64",
-    [string]$Version = "1.1.0",
+    [string]$Version = "1.1.1",
     [string]$FnsApiKey = $env:CBS_FNS_KEY,
     [string]$InnoSetupCompiler = ""
 )
