@@ -4,6 +4,41 @@ namespace CbsContractsDesktopClient.Tests;
 
 public sealed class ContractResponsibleUiTests
 {
+    [Fact]
+    public void ContractDialog_RetainsSavedEmployeesMissingFromContragentOptions()
+    {
+        var code = File.ReadAllText(ContractDialogPath);
+        Assert.Contains("selectedResponsibles.Where(item => !optionEmployeeIds.Contains(item.EmployeeId))", code);
+        Assert.Contains("responsible.IsUsed", code);
+        Assert.Contains("responsible.PositionName", code);
+        Assert.DoesNotContain("Contract responsibles contain employees absent", code);
+        Assert.Contains("_contractResponsiblesMultiSelect.OptionForeground", code);
+        Assert.Contains("Microsoft.UI.Colors.Firebrick", code);
+        Assert.Contains("PositionName[..15]", code);
+        Assert.Contains(" - сейчас уволен", code);
+    }
+
+    [Fact]
+    public void EmployeeBox_AllowsNameSelectionAndMarksDismissedPosition()
+    {
+        var code = File.ReadAllText(EmployeeBoxPath);
+        var start = code.IndexOf("var name = new TextBlock", StringComparison.Ordinal);
+        var end = code.IndexOf("var meta = new TextBlock", start, StringComparison.Ordinal);
+        Assert.Contains("IsTextSelectionEnabled = true", code[start..end]);
+        Assert.Contains("position[..15]", code);
+        Assert.Contains(" - сейчас уволен", code);
+    }
+
+    [Fact]
+    public void RevisionSignedCheckBox_UpdatesBothStates()
+    {
+        var code = File.ReadAllText(ContractDialogPath);
+        Assert.Contains("IsChecked = revision.IsSigned", code);
+        Assert.Contains("signedBox.Checked += (_, _) => revision.IsSigned = true", code);
+        Assert.Contains("signedBox.Unchecked += (_, _) => revision.IsSigned = false", code);
+        Assert.Contains("BuildInputLineCheckBox(signedBox, \"Подписано\")", code);
+    }
+
     private static readonly string EmployeeBoxPath = TestProjectPaths.FromRepositoryRoot(
         "src", "Views", "References", "EmployeeBox.xaml.cs");
     private static readonly string ContractDetailPath = TestProjectPaths.FromRepositoryRoot(

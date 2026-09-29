@@ -84,7 +84,7 @@ public sealed class ContractEditStateTests
                     id = 41L,
                     list_key = "responsible-41",
                     employee_id = 101L,
-                    employee = new { full_name = "Иванов Иван Иванович" }
+                    employee = new { used = true, full_name = "Иванов Иван Иванович" }
                 }
             }));
 
@@ -117,6 +117,40 @@ public sealed class ContractEditStateTests
         var exception = Assert.Throws<InvalidOperationException>(() => ContractEditState.FromRow(row));
 
         Assert.Equal("Contract responsible edit row must contain employee.full_name.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void FromRow_PreservesResponsibleEmploymentStatusAndPosition(bool used)
+    {
+        var row = CreateRow(("id", 20L), ("status_id", 1L), ("status.name", "Подписан"), ("contract_responsibles", new object[]
+        {
+            new { id = 41L, employee_id = 101L, employee = new
+            {
+                full_name = "Иванов Иван Иванович", used,
+                position = new { name = "Начальник отдела снабжения" }
+            } }
+        }));
+
+        var responsible = Assert.Single(ContractEditState.FromRow(row)!.ContractResponsibles);
+
+        Assert.Equal(used, responsible.IsUsed);
+        Assert.Equal("Начальник отдела снабжения", responsible.PositionName);
+        Assert.Equal(101L, responsible.EmployeeId);
+        Assert.Equal(41L, responsible.Id);
+    }
+
+    [Fact]
+    public void FromRow_RejectsResponsibleWithoutExplicitEmploymentStatus()
+    {
+        var row = CreateRow(("id", 20L), ("status_id", 1L), ("status.name", "Подписан"), ("contract_responsibles", new object[]
+        {
+            new { id = 41L, employee_id = 101L, employee = new { full_name = "Иванов" } }
+        }));
+
+        var error = Assert.Throws<InvalidOperationException>(() => ContractEditState.FromRow(row));
+        Assert.Equal("Contract responsible edit row must contain employee.used.", error.Message);
     }
 
     private static TableDataRow CreateRow(params (string Key, object? Value)[] values)

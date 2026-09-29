@@ -90,13 +90,13 @@ public sealed class ContractClipboardFormatterTests
                 {
                     id = 41L,
                     employee_id = 101L,
-                    employee = new { full_name = "Иванов Иван Иванович" }
+                    employee = new { used = true, full_name = "Иванов Иван Иванович" }
                 },
                 new
                 {
                     id = 42L,
                     employee_id = 102L,
-                    employee = new { full_name = "Петров Пётр Петрович" }
+                    employee = new { used = true, full_name = "Петров Пётр Петрович" }
                 }
             })))!;
     }

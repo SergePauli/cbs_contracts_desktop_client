@@ -100,16 +100,18 @@ namespace CbsContractsDesktopClient.Views.References
                 VerticalAlignment = VerticalAlignment.Center
             };
 
-            var link = new HyperlinkButton
+            var hyperlink = new Microsoft.UI.Xaml.Documents.Hyperlink();
+            hyperlink.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = value });
+            hyperlink.Click += (_, _) => ContactLaunchService.Launch(ContactTypeClassifier.TryCreateLaunchUri(value, match));
+            var link = new TextBlock
             {
-                Content = value,
+                IsTextSelectionEnabled = true,
                 Padding = new Thickness(2, 0, 2, 0),
-                MinWidth = 0,
                 FontSize = 10,
                 HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Center
             };
-            link.Click += (_, _) => ContactLaunchService.Launch(ContactTypeClassifier.TryCreateLaunchUri(value, match));
+            link.Inlines.Add(hyperlink);
 
             Grid.SetColumn(icon, 0);
             Grid.SetColumn(link, 1);

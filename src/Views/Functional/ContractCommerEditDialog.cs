@@ -20,6 +20,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Pauli.WinUiKit.Controls;
 using Windows.Storage.Pickers;
 using Windows.System;
@@ -851,6 +852,11 @@ namespace CbsContractsDesktopClient.Views.Functional
                 .Where(static option => option.IsSelected)
                 .ToList();
             _contractResponsiblesMultiSelect.OptionLabel = nameof(ContractResponsibleOption.FullName);
+            _contractResponsiblesMultiSelect.OptionItemLabel = static item => ((ContractResponsibleOption)item).DisplayLabel;
+            _contractResponsiblesMultiSelect.OptionForeground = static item =>
+                ((ContractResponsibleOption)item).IsUsed
+                    ? (Brush)Application.Current.Resources["ShellPrimaryTextBrush"]
+                    : new SolidColorBrush(Microsoft.UI.Colors.Firebrick);
             _contractResponsiblesMultiSelect.Display = "chip";
             _contractResponsiblesMultiSelect.MaxSelectedLabels = 4;
             _contractResponsiblesMultiSelect.Placeholder = "Ответственные от контрагента";
@@ -890,7 +896,9 @@ namespace CbsContractsDesktopClient.Views.Functional
                     option.ExistingId,
                     option.ExistingListKey,
                     option.EmployeeId,
-                    option.FullName))
+                    option.FullName,
+                    option.IsUsed,
+                    option.PositionName))
                 .ToList();
         }
 
@@ -918,21 +926,29 @@ namespace CbsContractsDesktopClient.Views.Functional
                         fullName,
                         selected?.Id,
                         selected?.ListKey,
-                        selected is not null);
+                        selected is not null,
+                        TryGetBool(employee, "used")
+                            ?? throw new InvalidOperationException("Contract contragent employee row must contain used."),
+                        TryGetObject(employee, "position") is { } position ? TryGetString(position, "name") : null);
                 })
-                .OrderByDescending(static option => option.IsSelected)
-                .ThenBy(static option => option.FullName, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
 
             var optionEmployeeIds = options.Select(static option => option.EmployeeId).ToHashSet();
-            var missingEmployeeIds = selectedByEmployeeId.Keys.Where(id => !optionEmployeeIds.Contains(id)).ToList();
-            if (missingEmployeeIds.Count > 0)
+            foreach (var responsible in selectedResponsibles.Where(item => !optionEmployeeIds.Contains(item.EmployeeId)))
             {
-                throw new InvalidOperationException(
-                    $"Contract responsibles contain employees absent from contract contragent: {string.Join(", ", missingEmployeeIds)}.");
+                options.Add(new ContractResponsibleOption(
+                    responsible.EmployeeId,
+                    responsible.FullName,
+                    responsible.Id,
+                    responsible.ListKey,
+                    true,
+                    responsible.IsUsed,
+                    responsible.PositionName));
             }
 
-            return options;
+            return options.OrderByDescending(static option => option.IsSelected)
+                .ThenBy(static option => option.FullName, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
         }
 
         private async Task UpdateContragentOptionsAsync(string rawInput)
@@ -1794,7 +1810,7 @@ namespace CbsContractsDesktopClient.Views.Functional
                 RowSpacing = 8
             };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(88) });
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(132) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(264) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(390) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -1820,8 +1836,23 @@ namespace CbsContractsDesktopClient.Views.Functional
             presentBox.Checked += (_, _) => revision.IsPresent = true;
             presentBox.Unchecked += (_, _) => revision.IsPresent = false;
             var present = BuildInputLineCheckBox(presentBox, "В наличии");
-            Grid.SetColumn(present, 1);
-            grid.Children.Add(present);
+
+            var signedBox = new CheckBox
+            {
+                IsChecked = revision.IsSigned
+            };
+            signedBox.Checked += (_, _) => revision.IsSigned = true;
+            signedBox.Unchecked += (_, _) => revision.IsSigned = false;
+            var signed = BuildInputLineCheckBox(signedBox, "Подписано");
+            var flags = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8
+            };
+            flags.Children.Add(present);
+            flags.Children.Add(signed);
+            Grid.SetColumn(flags, 1);
+            grid.Children.Add(flags);
 
             var descriptionBox = new TextBox
             {
@@ -3001,7 +3032,14 @@ namespace CbsContractsDesktopClient.Views.Functional
             string FullName,
             long? ExistingId,
             string? ExistingListKey,
-            bool IsSelected);
+            bool IsSelected,
+            bool IsUsed,
+            string? PositionName)
+        {
+            public string DisplayLabel => IsUsed
+                ? FullName
+                : $"{FullName} ({(PositionName is { Length: > 15 } ? PositionName[..15] : PositionName)} - сейчас уволен)";
+        }
 
     }
 }

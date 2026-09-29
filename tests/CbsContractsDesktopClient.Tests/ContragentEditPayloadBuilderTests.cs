@@ -339,6 +339,32 @@ public sealed class ContragentEditPayloadBuilderTests
         Assert.False(addressItem.ContainsKey("address_attributes"));
     }
 
+    [Fact]
+    public void BuildForUpdate_RegionChangeIdentifiesNestedExistingAddress()
+    {
+        var viewModel = new ContragentEditViewModel(new ContragentEditDialogState
+        {
+            Definition = Definition(), IsCreateMode = false, Id = 10,
+            Inn = "7707083893", OwnershipId = 5, Name = "Контрагент",
+            RealAddressId = 20, RealAddressListKey = "addr-link",
+            AddressRealAddressId = 76, AddressReal = "Адрес", RegionId = 77,
+            InitialAddressOption = new CbsTableFilterOptionDefinition { Value = 76L, Label = "Адрес" }
+        });
+        viewModel.SelectedRegionId = 50;
+
+        var payload = ContragentEditPayloadBuilder.BuildForUpdate(viewModel);
+
+        var links = Assert.IsType<object?[]>(payload["contragent_addresses_attributes"]);
+        var link = Assert.IsType<Dictionary<string, object?>>(Assert.Single(links));
+        Assert.Equal(20L, link["id"]);
+        Assert.Equal(76L, link["address_id"]);
+        var address = Assert.IsType<Dictionary<string, object?>>(link["address_attributes"]);
+        Assert.Equal(2, address.Count);
+        Assert.Equal(76L, address["id"]);
+        Assert.Equal(50L, address["area_id"]);
+        Assert.DoesNotContain("_destroy", link.Keys);
+    }
+
     private static ReferenceDefinition Definition()
     {
         return new ReferenceDefinition
