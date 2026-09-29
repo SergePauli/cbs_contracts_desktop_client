@@ -150,7 +150,7 @@ namespace CbsContractsDesktopClient.ViewModels.Shell
                 SelectedRecordFooterText = selectedRecordParts.FooterText,
                 SelectedRecordTasksText = selectedRecordParts.TasksText,
                 SelectedRecordPerformersText = selectedRecordParts.PerformersText,
-                VersionText = "v1.1.1"
+                VersionText = "v1.1.2"
             };
         }
 
