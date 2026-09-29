@@ -167,6 +167,19 @@ public sealed class MultiSelect : Grid
         }
     }
 
+    private Func<object, Brush>? _optionForeground;
+
+    public Func<object, Brush>? OptionForeground
+    {
+        get => _optionForeground;
+        set
+        {
+            _optionForeground = value;
+            RebuildOptions();
+            RefreshButtonContent();
+        }
+    }
+
     public event EventHandler<MultiSelectChangedEventArgs>? SelectionChanged;
 
     private static void OnOptionsChanged(DependencyObject dependencyObject, DependencyPropertyChangedEventArgs args)
@@ -303,6 +316,10 @@ public sealed class MultiSelect : Grid
                     VerticalAlignment = VerticalAlignment.Center
                 }
             };
+            if (OptionForeground is not null)
+            {
+                ((TextBlock)checkBox.Content).Foreground = OptionForeground(option);
+            }
             checkBox.Checked += OnOptionChanged;
             checkBox.Unchecked += OnOptionChanged;
             _optionsHost.Children.Add(checkBox);
@@ -363,7 +380,7 @@ public sealed class MultiSelect : Grid
             .ToList();
 
         var displayContent = string.Equals(Display, "chip", StringComparison.OrdinalIgnoreCase)
-            ? BuildChipDisplay(labels)
+            ? BuildChipDisplay(_selectedItems.Where(item => !string.IsNullOrWhiteSpace(GetOptionLabel(item))).ToList())
             : BuildTextDisplay(labels);
 
         _inputContent.Content = BuildInputContent(displayContent);
@@ -407,9 +424,9 @@ public sealed class MultiSelect : Grid
         return grid;
     }
 
-    private UIElement BuildChipDisplay(IReadOnlyList<string> labels)
+    private UIElement BuildChipDisplay(IReadOnlyList<object> items)
     {
-        if (labels.Count == 0)
+        if (items.Count == 0)
         {
             return BuildPlaceholderText();
         }
@@ -423,9 +440,9 @@ public sealed class MultiSelect : Grid
         };
 
         var visibleCount = Math.Max(0, MaxSelectedLabels);
-        foreach (var label in labels.Take(visibleCount))
+        foreach (var item in items.Take(visibleCount))
         {
-            panel.Children.Add(new Border
+            var chip = new Border
             {
                 MaxWidth = 145,
                 Padding = new Thickness(5, 0, 5, 0),
@@ -433,21 +450,27 @@ public sealed class MultiSelect : Grid
                 Background = new SolidColorBrush(Color.FromArgb(255, 235, 238, 242)),
                 Child = new TextBlock
                 {
-                    Text = label,
+                    Text = GetOptionLabel(item),
                     FontSize = ChipTextFontSize,
                     LineHeight = ChipTextLineHeight,
                     VerticalAlignment = VerticalAlignment.Center,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     TextWrapping = TextWrapping.NoWrap
                 }
-            });
+            };
+            if (OptionForeground is not null)
+            {
+                ((TextBlock)chip.Child).Foreground = OptionForeground(item);
+            }
+            ToolTipService.SetToolTip(chip, GetOptionLabel(item));
+            panel.Children.Add(chip);
         }
 
-        if (labels.Count > visibleCount)
+        if (items.Count > visibleCount)
         {
             panel.Children.Add(new TextBlock
             {
-                Text = $"+{labels.Count - visibleCount}",
+                Text = $"+{items.Count - visibleCount}",
                 FontSize = ChipTextFontSize,
                 LineHeight = ChipTextLineHeight,
                 VerticalAlignment = VerticalAlignment.Center,

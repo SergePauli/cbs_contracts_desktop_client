@@ -331,6 +331,7 @@ namespace CbsContractsDesktopClient.Views.References
             var name = new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(employee.FullName) ? "Сотрудник" : employee.FullName,
+                IsTextSelectionEnabled = true,
                 Style = (Style)Application.Current.Resources["BodyTextBlockStyle"],
                 Foreground = (Brush)Application.Current.Resources["ShellPrimaryTextBrush"],
                 FontSize = textMetrics.NameFontSize,
@@ -362,7 +363,9 @@ namespace CbsContractsDesktopClient.Views.References
         {
             var position = string.IsNullOrWhiteSpace(employee.Position) ? "должность не указана" : employee.Position;
             var visiblePosition = TruncatePosition(position);
-            return employee.IsActive ? visiblePosition : $"{visiblePosition} | {employee.StatusText}";
+            return employee.IsActive
+                ? visiblePosition
+                : $"{(position.Length > 15 ? position[..15] : position)} - сейчас уволен";
         }
 
         private static string TruncatePosition(string position)

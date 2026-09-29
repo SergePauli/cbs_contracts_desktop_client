@@ -358,6 +358,7 @@ namespace CbsContractsDesktopClient.Services.References
             {
                 attributes["address_attributes"] = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
                 {
+                    ["id"] = addressId,
                     ["area_id"] = viewModel.SelectedRegionId
                 };
             }

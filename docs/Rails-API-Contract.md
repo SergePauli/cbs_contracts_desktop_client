@@ -2,6 +2,8 @@
 
 ## Read requests
 
+- Contract edit `contract_responsibles[].employee` includes `full_name`, explicit boolean `used`, and `position.name` when a position is assigned. Saved responsibles remain available in the editor even when absent from `Contragent.card.employees`; dismissal is determined by `used: false`, not absence from that list. Contragent employee options also provide `used` and `position.name`.
+
 - Employee dialog position autocomplete queries `Position` with preset `item`, filter `name__start` (starts with), sort `name asc`, and limit 25.
 - Table/list/card/edit data is loaded through `api/index` and `api/count`.
 - `api/index` responses are read models. They may contain expanded objects and arrays such as `comments`, `contract`, `status`, `tasks`, `revision`, `stages`.
@@ -34,6 +36,7 @@
 
 - Update payloads must contain only the entity `id`, changed scalar fields, `list_key` when the source entity has it, and Rails nested attributes intentionally built by a payload builder.
 - For nested writes use `*_attributes`, for example `comments_attributes` and `tasks_attributes`.
+- When changing the region of an existing contragent address, `contragent_addresses_attributes[].address_attributes` contains the selected Address `id` and changed `area_id`; the outer `address_id` alone does not identify the nested record for update.
 - Contract responsible employees are changed only through `contract_responsibles_attributes`.
   New entries contain `list_key` and `employee_id`; removed persisted entries contain `id`, optional source `list_key`, and `_destroy: "1"`.
   Changing `contragent_id` clears the existing contract responsible composition in the same Contract mutation.

@@ -274,7 +274,10 @@ public sealed class ContractEditState : IEditState
                     id,
                     TryGetString(responsible, "list_key"),
                     employeeId,
-                    fullName);
+                    fullName,
+                    TryGetBool(employee, "used")
+                        ?? throw new InvalidOperationException("Contract responsible edit row must contain employee.used."),
+                    TryGetObject(employee, "position") is { } position ? TryGetString(position, "name") : null);
             })
             .ToList();
     }

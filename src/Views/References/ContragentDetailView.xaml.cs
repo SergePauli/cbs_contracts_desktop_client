@@ -96,7 +96,7 @@ namespace CbsContractsDesktopClient.Views.References
                 RequisitesTextBlock.Text = string.Empty;
                 DescriptionTextBlock.Text = string.Empty;
                 AddressesTextBlock.Text = string.Empty;
-                ContactsPanel.Children.Clear();
+                ContactsPanel.Inlines.Clear();
                 ContractLinksPanel.Children.Clear();
                 _contragentDetailStore.SetContragent(null);
                 EmployeesBox.Employees = [];
@@ -259,40 +259,24 @@ namespace CbsContractsDesktopClient.Views.References
 
         private void RenderContacts(string contactsText)
         {
-            ContactsPanel.Children.Clear();
-            ContactsPanel.ColumnDefinitions.Clear();
-            ContactsPanel.RowDefinitions.Clear();
-
-            ContactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            ContactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            ContactsPanel.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            ContactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            ContactsPanel.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-            var column = 0;
-            var row = 0;
+            ContactsPanel.Inlines.Clear();
             foreach (var value in DialogContactsEditor.ParseContactValues(contactsText))
             {
-                if (!ContactTypeClassifier.TryClassify(value, out var match))
+                if (ContactsPanel.Inlines.Count > 0)
                 {
-                    continue;
+                    ContactsPanel.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = "; " });
                 }
 
-                var element = (FrameworkElement)DialogContactsEditor.BuildContactElement(value, match, showRemoveButton: false);
-                Grid.SetColumn(element, column);
-                Grid.SetRow(element, row);
-                ContactsPanel.Children.Add(element);
-
-                column++;
-                if (column == 3)
+                if (ContactTypeClassifier.TryClassify(value, out var match))
                 {
-                    column = 0;
-                    row++;
+                    var link = new Microsoft.UI.Xaml.Documents.Hyperlink();
+                    link.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = value });
+                    link.Click += (_, _) => ContactLaunchService.Launch(ContactTypeClassifier.TryCreateLaunchUri(value, match));
+                    ContactsPanel.Inlines.Add(link);
                 }
-
-                if (row > 1)
+                else
                 {
-                    return;
+                    ContactsPanel.Inlines.Add(new Microsoft.UI.Xaml.Documents.Run { Text = value });
                 }
             }
         }

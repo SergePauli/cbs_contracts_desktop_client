@@ -146,6 +146,7 @@ public sealed class ContractCommerEditPayloadBuilderTests
             ("priority", 1L),
             ("description", "Старая редакция")));
         revision.Description = "Новая редакция";
+        revision.IsSigned = true;
 
         var plan = ContractCommerEditPayloadBuilder.BuildSavePlan(
             sourceRow,
@@ -164,6 +165,7 @@ public sealed class ContractCommerEditPayloadBuilderTests
         var revisionPayload = Assert.Single(plan.RevisionUpdatePayloads);
         Assert.Equal(701L, revisionPayload["id"]);
         Assert.Equal("Новая редакция", revisionPayload["description"]);
+        Assert.Equal(true, revisionPayload["is_signed"]);
         Assert.True(plan.HasChanges);
         Assert.False(plan.HasContractChanges);
     }
@@ -183,21 +185,21 @@ public sealed class ContractCommerEditPayloadBuilderTests
                     id = 41L,
                     list_key = "responsible-41",
                     employee_id = 101L,
-                    employee = new { full_name = "Иванов Иван Иванович" }
+                    employee = new { used = true, full_name = "Иванов Иван Иванович" }
                 },
                 new
                 {
                     id = 42L,
                     list_key = "responsible-42",
                     employee_id = 102L,
-                    employee = new { full_name = "Петров Пётр Петрович" }
+                    employee = new { used = true, full_name = "Петров Пётр Петрович" }
                 }
             }));
         var contractState = ContractEditState.FromRow(sourceRow)!;
         contractState.SetContractResponsibles(
         [
             contractState.ContractResponsibles[0],
-            new ContractResponsibleEditState(null, null, 103L, "Сидоров Сидор Сидорович")
+            new ContractResponsibleEditState(null, null, 103L, "Сидоров Сидор Сидорович", true, null)
         ]);
 
         var payload = ContractCommerEditPayloadBuilder.BuildContractPayload(
@@ -255,7 +257,7 @@ public sealed class ContractCommerEditPayloadBuilderTests
                 {
                     id = 41L,
                     employee_id = 101L,
-                    employee = new { full_name = "Иванов Иван Иванович" }
+                    employee = new { used = true, full_name = "Иванов Иван Иванович" }
                 }
             }));
         var contractState = ContractEditState.FromRow(sourceRow)!;
